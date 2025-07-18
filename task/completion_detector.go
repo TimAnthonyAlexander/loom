@@ -287,7 +287,7 @@ func (cd *CompletionDetector) isPureInformationalResponse(response string) bool 
 		}
 		
 		// If short response with no action words and no future work mentions, it's complete
-		if !hasActionWords && !cd.mentionsFutureWork(response) {
+		if !hasActionWords && !cd.mentionsFutureWork(strings.ToLower(response)) {
 			return true
 		}
 	}
