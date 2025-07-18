@@ -123,32 +123,32 @@ func (pe *PromptEnhancer) CreateEnhancedSystemPrompt(enableShell bool) Message {
 **CRITICAL**: You must emit tasks using JSON code blocks with triple backticks. Do NOT say "Then emit" or describe the JSON - actually output the code block.
 
 **WRONG** ❌:
-```
+` + "```" + `
 I'll read the README file to understand the project.
 📖 Reading file: README.md
-```
+` + "```" + `
 
 **CORRECT** ✅:
-```
+` + "```" + `
 I'll read the README file to understand the project.
 
-```json
+` + "```" + `json
 {
   "tasks": [
     {"type": "ReadFile", "path": "README.md", "max_lines": 200}
   ]
 }
-```
-```
+` + "```" + `
+` + "```" + `
 
-`+"```"+`json
+` + "```" + `json
 {
   "tasks": [
     {"type": "ReadFile", "path": "main.go", "max_lines": 150},
     {"type": "EditFile", "path": "LICENSE", "content": "MIT License\n\n..."}
   ]
 }
-`+"```"+`
+` + "```" + `
 
 ### Task Types:
 1. **ReadFile**: Read file contents

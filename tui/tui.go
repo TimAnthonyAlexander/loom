@@ -144,13 +144,13 @@ type model struct {
 	// Task confirmation
 	pendingConfirmation *TaskConfirmationMsg
 	showingConfirmation bool
-	
+
 	// Always-on recursive execution tracking
 	recursiveDepth     int
 	recursiveStartTime time.Time
 	lastLLMResponse    string
 	recentResponses    []string
-	
+
 	// Safety limits (hardcoded defaults)
 	maxRecursiveDepth int
 	maxRecursiveTime  time.Duration
@@ -480,7 +480,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.streamingContent != "" {
 				// Filter potentially misleading status messages
 				filteredContent := m.filterMisleadingStatusMessages(m.streamingContent)
-				
+
 				response := llm.Message{
 					Role:      "assistant",
 					Content:   filteredContent,
@@ -505,7 +505,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case TaskEventMsg:
 		return m.handleTaskEvent(msg.Event)
-		
+
 	case TestPromptMsg:
 		return m.handleTestPrompt(msg)
 
@@ -556,7 +556,7 @@ func (m model) View() string {
 
 	var taskStatus string
 	var changeStatus string
-	
+
 	if m.currentExecution != nil {
 		taskStatus = fmt.Sprintf("Tasks: %s", m.currentExecution.Status)
 	} else {
@@ -731,7 +731,7 @@ func (m model) renderTaskView() string {
 	if m.enhancedManager != nil {
 		changeSummaryMgr := m.enhancedManager.GetChangeSummaryManager()
 		recentChanges := changeSummaryMgr.GetRecentSummaries(5)
-		
+
 		if len(recentChanges) > 0 {
 			content.WriteString("📝 Recent Changes:\n")
 			for i := len(recentChanges) - 1; i >= 0; i-- {
@@ -753,7 +753,7 @@ func (m model) renderTaskView() string {
 		// Show test status
 		testDiscovery := m.enhancedManager.GetTestDiscovery()
 		testCount := testDiscovery.GetTestCount()
-		
+
 		content.WriteString("🧪 Test Status:\n")
 		if testCount > 0 {
 			content.WriteString(fmt.Sprintf("  Found %d tests\n", testCount))
@@ -904,17 +904,17 @@ func (m *model) handleLLMResponseForTasks(llmResponse string) tea.Cmd {
 	return func() tea.Msg {
 		// Store the response for recursive tracking
 		m.lastLLMResponse = llmResponse
-		
+
 		// Handle task execution with enhanced manager if available, otherwise use basic manager
 		var execution *task.TaskExecution
 		var err error
-		
+
 		if m.enhancedManager != nil {
 			execution, err = m.enhancedManager.HandleLLMResponseEnhanced(llmResponse, m.taskEventChan)
 		} else if m.taskManager != nil {
 			execution, err = m.taskManager.HandleLLMResponse(llmResponse, m.taskEventChan)
 		}
-		
+
 		if err != nil {
 			return TaskEventMsg{
 				Event: task.TaskExecutionEvent{
@@ -940,48 +940,63 @@ func (m *model) handleLLMResponseForTasks(llmResponse string) tea.Cmd {
 		// Check for action indication without tasks (fallback detection)
 		if execution == nil || len(execution.Tasks) == 0 {
 			if m.detectsActionWithoutTasks(llmResponse) {
-				// Add helpful system message to guide the LLM
-				systemMsg := llm.Message{
-					Role:      "system",
-					Content:   "TASK_GUIDANCE: You indicated you would perform an action (like reading a file) but didn't output the required JSON task format. Please output the actual JSON task block to execute the action, or clarify if this was just an explanation.",
-					Timestamp: time.Now(),
-				}
-				m.chatSession.AddMessage(systemMsg)
-				
-				// Add user prompt to request the task
-				userPrompt := llm.Message{
-					Role:      "user",
-					Content:   "Please output the actual JSON task to perform the action you described, or continue with your response if no action is needed.",
-					Timestamp: time.Now(),
-				}
-				m.chatSession.AddMessage(userPrompt)
-				
-				// Refresh display
-				m.messages = m.chatSession.GetDisplayMessages()
-				m.updateWrappedMessages()
-				
-				// Continue with LLM to get the proper task format
-				return AutoContinueMsg{
-					Depth:        m.recursiveDepth,
-					LastResponse: llmResponse,
+				// Check if we're already in a recursive loop about this issue
+				if m.recursiveDepth > 0 && m.recursiveDepth < 3 {
+					// Add helpful system message to guide the LLM
+					systemMsg := llm.Message{
+						Role:      "system",
+						Content:   "TASK_GUIDANCE: You indicated you would perform an action (like reading a file) but didn't output the required JSON task format. Please output the actual JSON task block to execute the action, or clarify if this was just an explanation.",
+						Timestamp: time.Now(),
+					}
+					m.chatSession.AddMessage(systemMsg)
+
+					// Add user prompt to request the task
+					userPrompt := llm.Message{
+						Role:      "user",
+						Content:   "Please output the actual JSON task to perform the action you described, or continue with your response if no action is needed.",
+						Timestamp: time.Now(),
+					}
+					m.chatSession.AddMessage(userPrompt)
+
+					// Refresh display
+					m.messages = m.chatSession.GetDisplayMessages()
+					m.updateWrappedMessages()
+
+					// Continue with LLM to get the proper task format
+					return AutoContinueMsg{
+						Depth:        m.recursiveDepth,
+						LastResponse: llmResponse,
+					}
+				} else if m.recursiveDepth >= 3 {
+					// We've tried multiple times - break the loop and give a clear error
+					m.recursiveDepth = 0
+					errorMsg := llm.Message{
+						Role:      "assistant",
+						Content:   "⚠️ I seem to be having trouble executing the file reading task. The AI model is not outputting the proper JSON task format. You can try asking more explicitly, like 'Read the main.go file and show me its contents', or enable debug mode with `/debug` to see what's happening.",
+						Timestamp: time.Now(),
+					}
+					m.chatSession.AddMessage(errorMsg)
+					m.messages = m.chatSession.GetDisplayMessages()
+					m.updateWrappedMessages()
+					return nil
 				}
 			}
-			
+
 			// No tasks executed - this was a Q&A response
 			// Check if it's a simple informational response that should complete
 			if m.isInformationalResponse(llmResponse) {
 				// Reset recursive state and complete naturally
 				m.recursiveDepth = 0
 				return nil
-			} else {
-				// Check if AI indicates more work is needed despite no tasks
+			} else if m.recursiveDepth < 2 {
+				// Only auto-continue for simple cases, not complex loops
 				return AutoContinueMsg{
 					Depth:        m.recursiveDepth,
 					LastResponse: llmResponse,
 				}
 			}
 		}
-		
+
 		// For task executions, don't auto-continue here - wait for task confirmation
 		return nil
 	}
@@ -990,7 +1005,7 @@ func (m *model) handleLLMResponseForTasks(llmResponse string) tea.Cmd {
 // detectsActionWithoutTasks checks if the LLM indicated it would perform an action but didn't provide tasks
 func (m *model) detectsActionWithoutTasks(response string) bool {
 	lowerResponse := strings.ToLower(response)
-	
+
 	// Look for action indicators
 	actionIndicators := []string{
 		"📖 reading file", "🔧 task", "📄 reading", "✅ reading",
@@ -999,18 +1014,18 @@ func (m *model) detectsActionWithoutTasks(response string) bool {
 		"i'll create", "i'll edit", "i'll update", "i'll modify",
 		"let me check", "let me examine", "let me create", "let me edit",
 	}
-	
+
 	for _, indicator := range actionIndicators {
 		if strings.Contains(lowerResponse, indicator) {
 			return true
 		}
 	}
-	
+
 	// Check for file-related emojis without corresponding tasks
-	if (strings.Contains(response, "📖") || strings.Contains(response, "🔧")) {
+	if strings.Contains(response, "📖") || strings.Contains(response, "🔧") {
 		return true
 	}
-	
+
 	return false
 }
 
@@ -1019,7 +1034,7 @@ func (m *model) filterMisleadingStatusMessages(content string) string {
 	lines := strings.Split(content, "\n")
 	var filteredLines []string
 	var warnings []string
-	
+
 	misleadingPatterns := []string{
 		"📖 Reading file:",
 		"📖 reading file:",
@@ -1030,10 +1045,10 @@ func (m *model) filterMisleadingStatusMessages(content string) string {
 		"✅ Reading:",
 		"✅ reading:",
 	}
-	
+
 	for _, line := range lines {
 		lineIsStatus := false
-		
+
 		// Check if this line looks like a status message
 		for _, pattern := range misleadingPatterns {
 			if strings.Contains(line, pattern) {
@@ -1045,26 +1060,26 @@ func (m *model) filterMisleadingStatusMessages(content string) string {
 				}
 			}
 		}
-		
+
 		// Keep the line if it's not a misleading status message
 		if !lineIsStatus {
 			filteredLines = append(filteredLines, line)
 		}
 	}
-	
+
 	// Add warnings about filtered messages if any
 	if len(warnings) > 0 && task.IsTaskDebugEnabled() {
 		warningMessage := fmt.Sprintf("\n\n🔧 Debug: Filtered misleading status messages:\n%s\n\nNote: Use `/debug` to toggle this debug output.", strings.Join(warnings, "\n"))
 		filteredLines = append(filteredLines, warningMessage)
 	}
-	
+
 	return strings.Join(filteredLines, "\n")
 }
 
 // isInformationalResponse checks if the response is answering a question vs. indicating work to do
 func (m *model) isInformationalResponse(response string) bool {
 	lowerResponse := strings.ToLower(response)
-	
+
 	// Signs this is an informational/Q&A response
 	qaPatterns := []string{
 		"the license", "this project uses", "according to", "based on",
@@ -1075,39 +1090,39 @@ func (m *model) isInformationalResponse(response string) bool {
 		"currently configured", "currently set up", "currently using",
 		"here's what", "here are the", "the status is", "the configuration",
 	}
-	
+
 	for _, pattern := range qaPatterns {
 		if strings.Contains(lowerResponse, pattern) {
 			return true
 		}
 	}
-	
+
 	// If response is short and doesn't mention future work, it's likely complete
 	wordCount := len(strings.Fields(response))
 	if wordCount < 50 && !m.mentionsFutureWork(response) {
 		return true
 	}
-	
+
 	return false
 }
 
 // mentionsFutureWork checks if the response indicates more work to be done
 func (m *model) mentionsFutureWork(response string) bool {
 	lowerResponse := strings.ToLower(response)
-	
+
 	futureWorkPatterns := []string{
 		"next", "then", "after", "should", "would", "could", "let me",
 		"i'll", "i will", "going to", "plan to", "need to", "want to",
 		"we should", "we could", "we need", "might want", "may want",
 		"let's", "continuing", "proceeding", "moving forward",
 	}
-	
+
 	for _, pattern := range futureWorkPatterns {
 		if strings.Contains(lowerResponse, pattern) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -1133,18 +1148,33 @@ func (m model) handleTaskEvent(event task.TaskExecutionEvent) (tea.Model, tea.Cm
 	if event.Type == "test_discovery_completed" && m.enhancedManager != nil {
 		testDiscovery := m.enhancedManager.GetTestDiscovery()
 		testCount := testDiscovery.GetTestCount()
-		
+
 		if testCount > 0 {
 			return m, func() tea.Msg {
 				return TestPromptMsg{
 					TestCount:    testCount,
-					Language:     "Go", // Could be made dynamic
+					Language:     "Go",       // Could be made dynamic
 					EditedFiles:  []string{}, // Could extract from execution
 					ShouldPrompt: true,
 				}
 			}
 		}
 	}
+
+    // Automatically continue the LLM conversation once all tasks have
+    // finished and there is no user confirmation required. This prevents
+    // the UI from stalling on a status-only message like "Reading file …"
+    // and allows the assistant to immediately respond with the follow-up
+    // answer that uses the newly-read content.
+    if event.Type == "execution_completed" && m.pendingConfirmation == nil {
+        // Trigger continuation only if the LLM adapter is available so we
+        // don’t schedule redundant work in offline mode.
+        if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
+            return m, func() tea.Msg {
+                return ContinueLLMMsg{}
+            }
+        }
+    }
 
 	return m, nil
 }
@@ -1154,7 +1184,7 @@ func (m model) handleTestPrompt(msg TestPromptMsg) (tea.Model, tea.Cmd) {
 	if !msg.ShouldPrompt || m.enhancedManager == nil {
 		return m, nil
 	}
-	
+
 	// Add test prompt to chat
 	promptContent := fmt.Sprintf(`🧪 **Test Discovery Complete**
 
@@ -1262,7 +1292,7 @@ func (m model) handleTaskConfirmation(approved bool) (tea.Model, tea.Cmd) {
 
 	// Add result message to chat
 	m.chatSession.AddMessage(resultMessage)
-	
+
 	// Update display messages
 	m.messages = m.chatSession.GetDisplayMessages()
 	m.updateWrappedMessages()
@@ -1282,69 +1312,87 @@ func (m model) handleTaskConfirmation(approved bool) (tea.Model, tea.Cmd) {
 
 // handleAutoContinuation handles always-on recursive continuation
 func (m model) handleAutoContinuation(msg AutoContinueMsg) (tea.Model, tea.Cmd) {
-	// Safety check: depth limit
-	if msg.Depth >= m.maxRecursiveDepth {
+	// Safety check: immediate depth limit for task-related loops
+	if msg.Depth >= 5 {
 		m.recursiveDepth = 0
-		m.addSystemMessage("⚠️ Reached maximum thinking depth. Stopping here.")
+		m.addSystemMessage("⚠️ Reached maximum thinking depth. Task execution may be stuck - stopping auto-continuation.")
 		return m, nil
 	}
-	
-	// Safety check: time limit  
-	if m.recursiveDepth > 0 && time.Since(m.recursiveStartTime) > m.maxRecursiveTime {
+
+	// Safety check: time limit
+	if m.recursiveDepth > 0 && time.Since(m.recursiveStartTime) > 2*time.Minute {
 		m.recursiveDepth = 0
 		m.addSystemMessage("⏰ Auto-continuation timeout reached. Stopping here.")
 		return m, nil
 	}
-	
+
 	// Track recent responses for loop detection
 	if m.recentResponses == nil {
 		m.recentResponses = make([]string, 0, 5)
 	}
-	
+
 	m.recentResponses = append(m.recentResponses, msg.LastResponse)
 	if len(m.recentResponses) > 5 {
 		m.recentResponses = m.recentResponses[1:]
 	}
-	
+
+	// Enhanced loop detection for reading tasks
+	if len(m.recentResponses) >= 2 {
+		lastTwo := strings.ToLower(strings.Join(m.recentResponses[len(m.recentResponses)-2:], " "))
+		if strings.Contains(lastTwo, "reading") && strings.Contains(lastTwo, "main.go") {
+			count := 0
+			for _, response := range m.recentResponses {
+				if strings.Contains(strings.ToLower(response), "reading") || strings.Contains(strings.ToLower(response), "read") {
+					count++
+				}
+			}
+			if count >= 2 {
+				m.recursiveDepth = 0
+				m.addSystemMessage("🔄 Detected reading task loop. The AI model seems unable to generate proper JSON tasks. Try asking differently or use '/debug' to enable task debugging.")
+				return m, nil
+			}
+		}
+	}
+
 	// Check for infinite loop pattern
 	detector := task.NewCompletionDetector()
 	if len(m.recentResponses) >= 3 && detector.HasInfiniteLoopPattern(m.recentResponses) {
 		m.recursiveDepth = 0
-		m.addSystemMessage("🔄 Detected repetitive pattern. Asking for completion status...")
-		return m, m.sendToLLMWithTasks("Are you done with this task, or is there still more work to do? Please be explicit about your completion status.")
+		m.addSystemMessage("🔄 Detected repetitive pattern. Breaking the loop.")
+		return m, nil
 	}
-	
+
 	// Check if AI signaled completion
 	if detector.IsComplete(msg.LastResponse) {
 		// Reset recursive tracking
 		m.recursiveDepth = 0
 		return m, nil // Remove the completion message
 	}
-	
-	// Continue automatically
+
+	// Continue automatically with shorter timeout
 	m.recursiveDepth = msg.Depth + 1
 	if m.recursiveDepth == 1 {
 		m.recursiveStartTime = time.Now()
 	}
-	
+
 	// Generate completion check prompt
 	completionCheckPrompt := detector.GenerateCompletionCheckPrompt()
-	
+
 	// Mark completion detector message with special prefix
 	autoMessage := llm.Message{
-		Role:      "user", 
+		Role:      "user",
 		Content:   "COMPLETION_CHECK: " + completionCheckPrompt,
 		Timestamp: time.Now(),
 	}
-	
+
 	if err := m.chatSession.AddMessage(autoMessage); err != nil {
 		return m, func() tea.Msg {
 			return StreamMsg{Error: fmt.Errorf("failed to add completion check: %w", err)}
 		}
 	}
-	
+
 	// Don't show completion check indicator to user
-	
+
 	// Check with LLM
 	return m, m.sendToLLMWithTasks(completionCheckPrompt)
 }
@@ -1356,7 +1404,7 @@ func (m *model) addSystemMessage(message string) {
 		Content:   message,
 		Timestamp: time.Now(),
 	}
-	
+
 	m.chatSession.AddMessage(systemMsg)
 	m.messages = m.chatSession.GetDisplayMessages()
 	m.updateWrappedMessages()
@@ -1504,7 +1552,14 @@ func (m *model) updateWrappedMessagesWithOptions(forceAutoScroll bool) {
 
 	// Add welcome message if no messages
 	if len(allMessages) == 0 && !m.isStreaming {
-		welcomeMsg := "Welcome to Loom!\nYou can now chat with an AI assistant about your project.\nTry asking about your code, architecture, or programming questions.\n\nSpecial commands:\n/files - Show file count\n/stats - Show detailed index statistics\n/tasks - Show task execution history\n/summary - Generate session summary\n/rationale - Show change explanations\n/quit - Exit the application\n\nPress Tab to view file tree or tasks.\nPress Ctrl+S for quick summary.\nPress Ctrl+C to exit."
+		debugStatus := ""
+		if task.IsTaskDebugEnabled() {
+			debugStatus = "\n🔧 Task debug mode is ON"
+		} else {
+			debugStatus = "\n🔧 Task debug mode is OFF (use /debug to enable)"
+		}
+
+		welcomeMsg := "Welcome to Loom!\nYou can now chat with an AI assistant about your project.\nTry asking about your code, architecture, or programming questions.\n\nSpecial commands:\n/files - Show file count\n/stats - Show detailed index statistics\n/tasks - Show task execution history\n/summary - Generate session summary\n/rationale - Show change explanations\n/debug - Toggle task debugging\n/quit - Exit the application" + debugStatus + "\n\nPress Tab to view file tree or tasks.\nPress Ctrl+S for quick summary.\nPress Ctrl+C to exit."
 		allMessages = append(allMessages, welcomeMsg)
 	}
 
@@ -1586,7 +1641,7 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 
 	// Initialize session with recovery checking
 	var chatSession *chat.Session
-	
+
 	// Check for session recovery needs if not explicitly loading a specific session
 	if options.SessionID == "" && !options.ContinueLatest {
 		recoveryMgr, err := session.NewRecoveryManager(workspacePath)
@@ -1599,7 +1654,7 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 			} else if recoveryOptions != nil {
 				// Show recovery report
 				fmt.Println(recoveryMgr.GenerateRecoveryReport(recoveryOptions))
-				
+
 				// Auto-recover if available and no corruption detected
 				if recoveryOptions.AutoRecoveryAvailable && len(recoveryOptions.CorruptedSessions) == 0 {
 					fmt.Println("Auto-recovering most recent session...")
@@ -1609,8 +1664,8 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 						for _, msg := range sessionState.Messages {
 							chatSession.AddMessage(msg)
 						}
-						
-						recoveryMgr.AddRecoveryMessage(sessionState, "AUTO_RECOVERY", 
+
+						recoveryMgr.AddRecoveryMessage(sessionState, "AUTO_RECOVERY",
 							"Automatically recovered from most recent session")
 						fmt.Println("✅ Session recovered successfully")
 					} else {
@@ -1689,7 +1744,7 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 		taskHistory:     make([]string, 0),
 		width:           80, // Default width until window size is received
 		height:          24, // Default height until window size is received
-		
+
 		// Initialize recursive tracking with safety defaults
 		recentResponses:   make([]string, 0, 5),
 		maxRecursiveDepth: 15,
@@ -1764,7 +1819,7 @@ func (m *model) generateSummary(summaryType string) tea.Cmd {
 func (m *model) showRationale() tea.Cmd {
 	return func() tea.Msg {
 		var rationaleContent string
-		
+
 		// Use enhanced manager if available for real rationale data
 		if m.enhancedManager != nil {
 			rationaleContent = m.enhancedManager.GetChangeSummaries()
@@ -1819,7 +1874,7 @@ To enable:
 func (m *model) showTestSummary() tea.Cmd {
 	return func() tea.Msg {
 		var testContent string
-		
+
 		// Use enhanced manager if available for real test data
 		if m.enhancedManager != nil {
 			testContent = m.enhancedManager.GetTestSummary()

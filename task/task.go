@@ -103,14 +103,13 @@ func ParseTasks(llmResponse string) (*TaskList, error) {
 				fmt.Printf("   Found action indicators: %v\n", foundActions)
 				fmt.Printf("   Response (first 200 chars): %s...\n", llmResponse[:min(len(llmResponse), 200)])
 				fmt.Printf("   ✅ Expected: JSON code block like:\n")
-				fmt.Printf(`   ```json
-   {
-     "tasks": [
-       {"type": "ReadFile", "path": "README.md", "max_lines": 100}
-     ]
-   }
-   ```
-`)
+				fmt.Printf("   " + "```" + "json\n")
+				fmt.Printf("   {\n")
+				fmt.Printf("     \"tasks\": [\n")
+				fmt.Printf("       {\"type\": \"ReadFile\", \"path\": \"README.md\", \"max_lines\": 100}\n")
+				fmt.Printf("     ]\n")
+				fmt.Printf("   }\n")
+				fmt.Printf("   " + "```" + "\n")
 				fmt.Printf("   💡 The LLM may need better prompting to output actual task JSON.\n\n")
 			} else {
 				fmt.Printf("✅ DEBUG: No JSON tasks found - this appears to be a regular Q&A response.\n")
