@@ -903,12 +903,77 @@ func (m *model) handleLLMResponseForTasks(llmResponse string) tea.Cmd {
 			}
 		}
 
-		// ALWAYS check for auto-continuation after tasks complete
-		return AutoContinueMsg{
-			Depth:        m.recursiveDepth,
-			LastResponse: llmResponse,
+		// Only continue for Q&A responses that need clarification
+		// For task execution, we'll continue after task confirmation instead
+		if execution == nil || len(execution.Tasks) == 0 {
+			// No tasks executed - this was a Q&A response
+			// Check if it's a simple informational response that should complete
+			if m.isInformationalResponse(llmResponse) {
+				// Reset recursive state and complete naturally
+				m.recursiveDepth = 0
+				return nil
+			} else {
+				// Check if AI indicates more work is needed despite no tasks
+				return AutoContinueMsg{
+					Depth:        m.recursiveDepth,
+					LastResponse: llmResponse,
+				}
+			}
+		}
+		
+		// For task executions, don't auto-continue here - wait for task confirmation
+		return nil
+	}
+}
+
+// isInformationalResponse checks if the response is answering a question vs. indicating work to do
+func (m *model) isInformationalResponse(response string) bool {
+	lowerResponse := strings.ToLower(response)
+	
+	// Signs this is an informational/Q&A response
+	qaPatterns := []string{
+		"the license", "this project uses", "according to", "based on",
+		"the answer is", "to answer your question", "in response to",
+		"the file shows", "the code shows", "looking at", "from what i can see",
+		"the current", "this appears to be", "it looks like", "it seems",
+		"the project", "the workspace", "the repository", "this codebase",
+		"currently configured", "currently set up", "currently using",
+		"here's what", "here are the", "the status is", "the configuration",
+	}
+	
+	for _, pattern := range qaPatterns {
+		if strings.Contains(lowerResponse, pattern) {
+			return true
 		}
 	}
+	
+	// If response is short and doesn't mention future work, it's likely complete
+	wordCount := len(strings.Fields(response))
+	if wordCount < 50 && !m.mentionsFutureWork(response) {
+		return true
+	}
+	
+	return false
+}
+
+// mentionsFutureWork checks if the response indicates more work to be done
+func (m *model) mentionsFutureWork(response string) bool {
+	lowerResponse := strings.ToLower(response)
+	
+	futureWorkPatterns := []string{
+		"next", "then", "after", "should", "would", "could", "let me",
+		"i'll", "i will", "going to", "plan to", "need to", "want to",
+		"we should", "we could", "we need", "might want", "may want",
+		"let's", "continuing", "proceeding", "moving forward",
+	}
+	
+	for _, pattern := range futureWorkPatterns {
+		if strings.Contains(lowerResponse, pattern) {
+			return true
+		}
+	}
+	
+	return false
 }
 
 // handleTaskEvent processes task execution events
@@ -1067,7 +1132,7 @@ func (m model) handleTaskConfirmation(approved bool) (tea.Model, tea.Cmd) {
 	m.messages = m.chatSession.GetDisplayMessages()
 	m.updateWrappedMessages()
 
-	// Continue LLM conversation to get feedback/acknowledgment
+	// Check if the task is complete by asking the AI
 	if shouldContinue && m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
 		return m, func() tea.Msg {
 			return AutoContinueMsg{
@@ -1111,7 +1176,7 @@ func (m model) handleAutoContinuation(msg AutoContinueMsg) (tea.Model, tea.Cmd) 
 	if len(m.recentResponses) >= 3 && detector.HasInfiniteLoopPattern(m.recentResponses) {
 		m.recursiveDepth = 0
 		m.addSystemMessage("🔄 Detected repetitive pattern. Asking for completion status...")
-		return m, m.sendToLLMWithTasks("Please provide a clear completion status or final summary.")
+		return m, m.sendToLLMWithTasks("Are you done with this task, or is there still more work to do? Please be explicit about your completion status.")
 	}
 	
 	// Check if AI signaled completion
@@ -1128,27 +1193,27 @@ func (m model) handleAutoContinuation(msg AutoContinueMsg) (tea.Model, tea.Cmd) 
 		m.recursiveStartTime = time.Now()
 	}
 	
-	// Generate continuation prompt
-	continuePrompt := detector.GenerateContinuePrompt()
+	// Generate completion check prompt
+	completionCheckPrompt := detector.GenerateCompletionCheckPrompt()
 	
 	// Add auto-generated message
 	autoMessage := llm.Message{
 		Role:      "user", 
-		Content:   continuePrompt,
+		Content:   completionCheckPrompt,
 		Timestamp: time.Now(),
 	}
 	
 	if err := m.chatSession.AddMessage(autoMessage); err != nil {
 		return m, func() tea.Msg {
-			return StreamMsg{Error: fmt.Errorf("failed to add auto-continuation: %w", err)}
+			return StreamMsg{Error: fmt.Errorf("failed to add completion check: %w", err)}
 		}
 	}
 	
-	// Show auto-continuation indicator
-	m.addSystemMessage(fmt.Sprintf("🔄 Continuing automatically... (step %d)", m.recursiveDepth))
+	// Show completion check indicator
+	m.addSystemMessage(fmt.Sprintf("🔄 Checking completion... (step %d)", m.recursiveDepth))
 	
-	// Continue with LLM
-	return m, m.sendToLLMWithTasks(continuePrompt)
+	// Check with LLM
+	return m, m.sendToLLMWithTasks(completionCheckPrompt)
 }
 
 // addSystemMessage helper method to add system messages to chat

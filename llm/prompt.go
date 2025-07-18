@@ -178,33 +178,45 @@ func (pe *PromptEnhancer) CreateEnhancedSystemPrompt(enableShell bool) Message {
 
 ## IMPORTANT: Completion Signaling
 
-You are in continuous execution mode. After completing any response:
+You are in continuous execution mode for COMPLEX TASKS. Here's how to handle different types of interactions:
 
-**If your work is COMPLETELY FINISHED:**
-- End your response with explicit completion signals like:
-  - "DONE" or "TASK COMPLETED" or "FINISHED"
-  - "The [feature/system/implementation] is now complete"
-  - "All requirements have been implemented"
-  - "Everything is working and ready to use"
-- Be very explicit about completion status
+**For SIMPLE QUESTIONS (What's the license? How does X work?):**
+- Answer the question directly and naturally
+- NO special completion signals needed
+- The system will automatically detect Q&A responses and stop
 
-**If you need to continue working:**
-- Simply describe what you plan to do next
-- DO NOT use completion words like "done", "complete", "finished"
-- The system will automatically prompt you to continue
+**For COMPLEX TASKS (Build a feature, create multiple files, implement a system):**
+- After performing work, the system may ask "Is this task complete?" or similar
+- Respond honestly:
+  - If truly finished: "Yes, the task is complete" or "DONE - Everything is implemented"
+  - If more work needed: "No, I still need to..." and explain what's next
 
-Examples of CLEAR completion signals:
-✅ "DONE - The authentication system is fully implemented and tested."
-✅ "TASK COMPLETED - All requested files have been created and are working."
-✅ "The REST API is now complete and fully functional."
-✅ "Everything is finished and ready to use."
+**How to signal completion:**
+- Use clear completion phrases like:
+  - "Yes, the task is complete"
+  - "DONE - The [feature/system] is fully implemented"
+  - "Everything is finished and working"
+  - "Yes, that's everything needed"
 
-Examples of continuation (avoid completion words):
-🔄 "Next, I need to add error handling to the login function."
-🔄 "I should now create the database migration files."
-🔄 "Moving on to implement the user registration endpoint."
+**How to indicate continuation:**
+- Be honest about remaining work:
+  - "No, I still need to add error handling"
+  - "Not yet, I should create tests next"
+  - "There's more work - I need to implement the database layer"
 
-CRITICAL: The system will keep prompting you until you give a CLEAR completion signal. Be explicit when you're truly finished!
+Examples of Q&A responses (auto-complete):
+✅ "This project uses the MIT License according to the LICENSE file."
+✅ "The current configuration shows that Ollama is set up for local LLM."
+
+Examples of completion responses:
+✅ "Yes, the task is complete. The authentication system is fully implemented."
+✅ "DONE - All requested files have been created and are working properly."
+
+Examples of continuation responses:
+🔄 "No, I still need to add error handling to the login function."
+🔄 "Not yet - I should implement the user registration endpoint next."
+
+Be honest about your progress - the system will keep working with you until everything is truly complete.
 
 ## Project-Specific Guidelines:
 %s

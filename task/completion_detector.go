@@ -42,6 +42,13 @@ func (cd *CompletionDetector) IsComplete(response string) bool {
 		"project completed", "feature completed", "feature finished",
 		"system completed", "system finished", "api completed",
 		"api finished", "completed the", "finished the",
+		// Responses to completion check questions
+		"yes, the task is complete", "yes, i'm finished", "yes, everything is done",
+		"yes, it's complete", "yes, that's everything", "yes, we're done",
+		"yes, finished", "yes, all done", "yes, complete",
+		"the task is complete", "i'm finished", "everything is done",
+		"that's everything", "we're done", "nothing else needed",
+		"no more work needed", "all requirements met", "fully functional",
 	}
 	
 	for _, signal := range completionSignals {
@@ -127,9 +134,163 @@ func (cd *CompletionDetector) IsComplete(response string) bool {
 		}
 	}
 	
+	// Check for Q&A completion patterns (when answering questions)
+	qaCompletionPatterns := []string{
+		"this project uses", "the license is", "according to the",
+		"based on the", "the answer is", "to answer your question",
+		"the current setup", "the configuration shows", "this is configured",
+		"the file indicates", "looking at the", "from what i can see",
+		"it appears to be", "it looks like", "the status is",
+		"this codebase", "the workspace", "the repository",
+		"currently using", "currently configured", "currently set",
+		"you need to run", "you can run", "you should run",
+		"the system uses", "the code uses", "authentication system uses",
+		"according to", "based on", "looking at",
+	}
+	
+	for _, pattern := range qaCompletionPatterns {
+		if strings.Contains(lowerResponse, pattern) {
+			if debugMode {
+				fmt.Printf("🔍 DEBUG: Found Q&A pattern '%s'\n", pattern)
+			}
+			// If it's a Q&A response and doesn't mention future work, it's complete
+			if !cd.mentionsFutureWork(lowerResponse) {
+				if debugMode {
+					fmt.Printf("✅ DEBUG: Found Q&A completion pattern: '%s'\n", pattern)
+				}
+				return true
+			} else {
+				if debugMode {
+					fmt.Printf("❌ DEBUG: Q&A pattern found but mentions future work\n")
+				}
+			}
+		}
+	}
+	
+	// Check for "No" responses indicating more work is needed
+	continuationSignals := []string{
+		"no, i still need", "no, i need to", "no, there's more",
+		"not yet", "not finished", "not complete", "not done",
+		"no, i should", "no, we need", "no, the task",
+		"still need to", "still working on", "more work",
+		"not everything", "incomplete", "unfinished",
+	}
+	
+	for _, signal := range continuationSignals {
+		if strings.Contains(lowerResponse, signal) {
+			if debugMode {
+				fmt.Printf("❌ DEBUG: Found continuation signal: '%s'\n", signal)
+			}
+			return false // Explicitly not complete
+		}
+	}
+	
+	// Check if this is a pure informational response (no action words)
+	if cd.isPureInformationalResponse(lowerResponse) {
+		if debugMode {
+			fmt.Printf("✅ DEBUG: Pure informational response detected\n")
+		}
+		return true
+	}
+	
 	if debugMode {
 		fmt.Printf("❌ DEBUG: No completion signals found\n")
 	}
+	return false
+}
+
+// mentionsFutureWork checks if response mentions future actions (helper for completion detector)
+func (cd *CompletionDetector) mentionsFutureWork(response string) bool {
+	debugMode := false // Temporary debug
+	
+	// First-person future work indicators (AI saying it will do something)
+	firstPersonFuture := []string{
+		"i'll", "i will", "let me", "i should", "i need to", "i want to",
+		"i'm going to", "i plan to", "let's", "i could", "i would",
+	}
+	
+	for _, phrase := range firstPersonFuture {
+		if strings.Contains(response, phrase) {
+			if debugMode {
+				fmt.Printf("🔍 DEBUG: Found first-person future: '%s'\n", phrase)
+			}
+			return true
+		}
+	}
+	
+	// Action-oriented future indicators (suggesting work to be done)
+	actionFuture := []string{
+		"next step", " then ", "after that", "continuing", "proceeding",
+		"moving forward", "we should", "we could", "we need", "we might",
+		"should implement", "should add", "should create", "should build",
+	}
+	
+	for _, phrase := range actionFuture {
+		if strings.Contains(response, phrase) {
+			if debugMode {
+				fmt.Printf("🔍 DEBUG: Found action future: '%s'\n", phrase)
+			}
+			return true
+		}
+	}
+	
+	// Check for "then" at start/end of sentence (word boundaries)
+	if strings.HasPrefix(response, "then ") || strings.HasSuffix(response, " then") || 
+	   strings.Contains(response, ". then ") || strings.Contains(response, ", then ") {
+		if debugMode {
+			fmt.Printf("🔍 DEBUG: Found 'then' as complete word\n")
+		}
+		return true
+	}
+	
+	// General future words, but only if they're in action context
+	generalFuture := []string{"next", "then", "after"}
+	for _, word := range generalFuture {
+		if strings.Contains(response, word) {
+			// Check if it's in an action context
+			if strings.Contains(response, word+" ") || strings.Contains(response, word+",") {
+				if debugMode {
+					fmt.Printf("🔍 DEBUG: Found general future in action context: '%s'\n", word)
+				}
+				return true
+			}
+		}
+	}
+	
+	if debugMode {
+		fmt.Printf("🔍 DEBUG: No future work patterns found\n")
+	}
+	return false
+}
+
+// isPureInformationalResponse checks if response is purely informational with no action intent
+func (cd *CompletionDetector) isPureInformationalResponse(response string) bool {
+	// Count words
+	wordCount := len(strings.Fields(response))
+	
+	// If it's a short response with no action words, it's likely informational
+	if wordCount < 30 {
+		actionWords := []string{
+			"create", "add", "implement", "build", "make", "write", "edit",
+			"modify", "update", "change", "fix", "improve", "enhance",
+			"install", "setup", "configure", "deploy", "run", "execute",
+			"start", "begin", "initiate", "proceed", "continue",
+		}
+		
+		hasActionWords := false
+		for _, action := range actionWords {
+			if strings.Contains(response, action) {
+				hasActionWords = true
+				break
+			}
+		}
+		
+		// If short response with no action words and no future work mentions, it's complete
+		if !hasActionWords && !cd.mentionsFutureWork(response) {
+			return true
+		}
+	}
+	
 	return false
 }
 
@@ -141,22 +302,27 @@ func (cd *CompletionDetector) truncateForDebug(text string, maxLen int) string {
 	return "..." + text[len(text)-maxLen:]
 }
 
-// GenerateContinuePrompt creates a prompt to continue the work
-func (cd *CompletionDetector) GenerateContinuePrompt() string {
+// GenerateContinuePrompt creates a prompt to check if work is complete
+func (cd *CompletionDetector) GenerateCompletionCheckPrompt() string {
 	prompts := []string{
-		"Continue with the next step.",
-		"What's next?", 
-		"Please proceed.",
-		"Keep going.",
-		"Continue the work.",
-		"Please continue.",
-		"What should we do next?",
-		"Proceed with the implementation.",
+		"Is this task complete?",
+		"Are you finished with this work?", 
+		"Is there anything else you need to do?",
+		"Have you completed everything that was requested?",
+		"Is this implementation finished?",
+		"Are you done, or is there more work to do?",
+		"Is the task fully complete?",
+		"Do you need to do anything else?",
 	}
 	
 	// Use time-based seeding for variety
 	rand.Seed(time.Now().UnixNano())
 	return prompts[rand.Intn(len(prompts))]
+}
+
+// GenerateContinuePrompt creates a prompt to continue the work (legacy - kept for compatibility)
+func (cd *CompletionDetector) GenerateContinuePrompt() string {
+	return cd.GenerateCompletionCheckPrompt()
 }
 
 // HasInfiniteLoopPattern detects if recent responses show repetitive behavior
