@@ -8,6 +8,7 @@ import (
 	contextMgr "loom/context"
 	"loom/indexer"
 	"loom/llm"
+	"loom/session"
 	"loom/task"
 	"sort"
 	"strings"
@@ -87,6 +88,13 @@ type TaskConfirmationMsg struct {
 	Preview  string
 }
 
+type TestPromptMsg struct {
+	TestCount    int
+	Language     string
+	EditedFiles  []string
+	ShouldPrompt bool
+}
+
 // ContinueLLMMsg indicates that LLM should continue the conversation after task completion
 type ContinueLLMMsg struct{}
 
@@ -121,6 +129,7 @@ type model struct {
 
 	// Task execution
 	taskManager      *task.Manager
+	enhancedManager  *task.EnhancedManager
 	taskExecutor     *task.Executor
 	currentExecution *task.TaskExecution
 	taskHistory      []string
@@ -296,6 +305,67 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					// Show change summaries and rationales
 					return m, m.showRationale()
+				} else if userInput == "/test" {
+					// Add user command to chat session
+					userMessage := llm.Message{
+						Role:      "user",
+						Content:   userInput,
+						Timestamp: time.Now(),
+					}
+					m.chatSession.AddMessage(userMessage)
+
+					// Show test discovery and results
+					return m, m.showTestSummary()
+				} else if (userInput == "yes" || userInput == "y") && m.enhancedManager != nil {
+					// Check if this is a response to a test prompt
+					testDiscovery := m.enhancedManager.GetTestDiscovery()
+					if testDiscovery.GetTestCount() > 0 {
+						// Add user response to chat
+						userMessage := llm.Message{
+							Role:      "user",
+							Content:   userInput,
+							Timestamp: time.Now(),
+						}
+						m.chatSession.AddMessage(userMessage)
+
+						// Run tests
+						return m, m.runTestsFromPrompt("Go")
+					}
+
+					// Otherwise proceed with normal LLM handling
+					if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
+						return m, m.sendToLLMWithTasks(userInput)
+					}
+				} else if (userInput == "no" || userInput == "n") && m.enhancedManager != nil {
+					// Check if this is a response to a test prompt
+					testDiscovery := m.enhancedManager.GetTestDiscovery()
+					if testDiscovery.GetTestCount() > 0 {
+						// Add user response to chat
+						userMessage := llm.Message{
+							Role:      "user",
+							Content:   userInput,
+							Timestamp: time.Now(),
+						}
+						m.chatSession.AddMessage(userMessage)
+
+						// Add acknowledgment message
+						skipMessage := llm.Message{
+							Role:      "assistant",
+							Content:   "Tests skipped. You can run them later with the `/test` command.",
+							Timestamp: time.Now(),
+						}
+						m.chatSession.AddMessage(skipMessage)
+
+						// Refresh display
+						m.messages = m.chatSession.GetDisplayMessages()
+						m.updateWrappedMessages()
+						return m, nil
+					}
+
+					// Otherwise proceed with normal LLM handling
+					if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
+						return m, m.sendToLLMWithTasks(userInput)
+					}
 				} else {
 					// Send to LLM with task execution
 					if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
@@ -385,6 +455,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case TaskEventMsg:
 		return m.handleTaskEvent(msg.Event)
+		
+	case TestPromptMsg:
+		return m.handleTestPrompt(msg)
 
 	case TaskConfirmationMsg:
 		m.pendingConfirmation = &msg
@@ -428,20 +501,36 @@ func (m model) View() string {
 	}
 
 	var taskStatus string
+	var changeStatus string
+	
 	if m.currentExecution != nil {
 		taskStatus = fmt.Sprintf("Tasks: %s", m.currentExecution.Status)
 	} else {
 		taskStatus = "Tasks: Ready"
 	}
 
+	// Add change summary information if enhanced manager is available
+	if m.enhancedManager != nil {
+		changeSummaryMgr := m.enhancedManager.GetChangeSummaryManager()
+		recentChanges := changeSummaryMgr.GetRecentSummaries(1)
+		if len(recentChanges) > 0 {
+			changeStatus = fmt.Sprintf("Changes: %d", len(changeSummaryMgr.GetSummaries()))
+		} else {
+			changeStatus = "Changes: None"
+		}
+	} else {
+		changeStatus = "Changes: N/A"
+	}
+
 	info := infoStyle.Render(fmt.Sprintf(
-		"Workspace: %s\nModel: %s\nShell: %t\nFiles: %d %s\n%s",
+		"Workspace: %s\nModel: %s\nShell: %t\nFiles: %d %s\n%s\n%s",
 		m.workspacePath,
 		modelStatus,
 		m.config.EnableShell,
 		stats.TotalFiles,
 		langSummary,
 		taskStatus,
+		changeStatus,
 	))
 
 	var mainContent string
@@ -525,7 +614,7 @@ func (m model) View() string {
 	var helpText string
 	switch m.currentView {
 	case viewChat:
-		helpText = "Tab: File Tree/Tasks | ↑↓: Scroll | Enter: Send | Ctrl+S: Summary | Ctrl+C: Quit"
+		helpText = "Tab: File Tree/Tasks | ↑↓: Scroll | Enter: Send | Ctrl+S: Summary | /test: Tests | /rationale: Changes | Ctrl+C: Quit"
 	case viewFileTree:
 		helpText = "Tab: Chat/Tasks | Ctrl+C: Quit"
 	case viewTasks:
@@ -565,39 +654,80 @@ func (m model) renderConfirmationDialog() string {
 // renderTaskView renders the task execution view
 func (m model) renderTaskView() string {
 	var content strings.Builder
-	content.WriteString("🔧 Task Execution\n\n")
+	content.WriteString("🔧 Task Execution & Changes\n\n")
 
-	if m.currentExecution == nil {
-		content.WriteString("No task execution in progress.\n")
-		content.WriteString("Tasks will appear here when the AI needs to read files, make edits, or run commands.")
-		return content.String()
-	}
-
-	// Show execution summary
-	content.WriteString(fmt.Sprintf("Status: %s\n", m.currentExecution.Status))
-	content.WriteString(fmt.Sprintf("Tasks: %d\n", len(m.currentExecution.Tasks)))
-	if !m.currentExecution.StartTime.IsZero() {
-		if m.currentExecution.EndTime.IsZero() {
-			duration := time.Since(m.currentExecution.StartTime)
-			content.WriteString(fmt.Sprintf("Duration: %v (ongoing)\n", duration.Round(time.Second)))
-		} else {
-			duration := m.currentExecution.EndTime.Sub(m.currentExecution.StartTime)
-			content.WriteString(fmt.Sprintf("Duration: %v\n", duration.Round(time.Second)))
+	// Show current execution status
+	if m.currentExecution != nil {
+		content.WriteString("📊 Current Execution:\n")
+		content.WriteString(fmt.Sprintf("  Status: %s\n", m.currentExecution.Status))
+		content.WriteString(fmt.Sprintf("  Tasks: %d\n", len(m.currentExecution.Tasks)))
+		if !m.currentExecution.StartTime.IsZero() {
+			if m.currentExecution.EndTime.IsZero() {
+				duration := time.Since(m.currentExecution.StartTime)
+				content.WriteString(fmt.Sprintf("  Duration: %v (ongoing)\n", duration.Round(time.Second)))
+			} else {
+				duration := m.currentExecution.EndTime.Sub(m.currentExecution.StartTime)
+				content.WriteString(fmt.Sprintf("  Duration: %v\n", duration.Round(time.Second)))
+			}
 		}
+		content.WriteString("\n")
 	}
-	content.WriteString("\n")
+
+	// Show recent changes if enhanced manager is available
+	if m.enhancedManager != nil {
+		changeSummaryMgr := m.enhancedManager.GetChangeSummaryManager()
+		recentChanges := changeSummaryMgr.GetRecentSummaries(5)
+		
+		if len(recentChanges) > 0 {
+			content.WriteString("📝 Recent Changes:\n")
+			for i := len(recentChanges) - 1; i >= 0; i-- {
+				change := recentChanges[i]
+				content.WriteString(fmt.Sprintf("  • %s\n", change.Summary))
+				if change.FilePath != "" {
+					content.WriteString(fmt.Sprintf("    📁 %s\n", change.FilePath))
+				}
+				if change.Rationale != "" && len(change.Rationale) < 80 {
+					content.WriteString(fmt.Sprintf("    💭 %s\n", change.Rationale))
+				}
+				content.WriteString("\n")
+			}
+		} else {
+			content.WriteString("📝 Recent Changes:\n")
+			content.WriteString("  No changes recorded in this session\n\n")
+		}
+
+		// Show test status
+		testDiscovery := m.enhancedManager.GetTestDiscovery()
+		testCount := testDiscovery.GetTestCount()
+		
+		content.WriteString("🧪 Test Status:\n")
+		if testCount > 0 {
+			content.WriteString(fmt.Sprintf("  Found %d tests\n", testCount))
+			goTests := testDiscovery.GetTestsByLanguage("Go")
+			if len(goTests) > 0 {
+				content.WriteString(fmt.Sprintf("  Go tests: %d files\n", len(goTests)))
+			}
+		} else {
+			content.WriteString("  No tests discovered\n")
+		}
+		content.WriteString("\n")
+	}
 
 	// Show task history
 	if len(m.taskHistory) > 0 {
-		content.WriteString("Recent tasks:\n")
-		// Show last 10 tasks
-		start := len(m.taskHistory) - 10
+		content.WriteString("📋 Task History:\n")
+		// Show last 8 tasks to leave room for other info
+		start := len(m.taskHistory) - 8
 		if start < 0 {
 			start = 0
 		}
 		for i := start; i < len(m.taskHistory); i++ {
 			content.WriteString(fmt.Sprintf("  %s\n", m.taskHistory[i]))
 		}
+	} else {
+		content.WriteString("📋 Task History:\n")
+		content.WriteString("  No tasks executed yet\n")
+		content.WriteString("  Tasks will appear here when AI performs actions\n")
 	}
 
 	return content.String()
@@ -718,17 +848,24 @@ func (m *model) continueLLMAfterTasks() tea.Cmd {
 // handleLLMResponseForTasks processes the LLM response for task execution
 func (m *model) handleLLMResponseForTasks(llmResponse string) tea.Cmd {
 	return func() tea.Msg {
-		// Handle task execution if task manager is available
-		if m.taskManager != nil {
-			execution, err := m.taskManager.HandleLLMResponse(llmResponse, m.taskEventChan)
-			if err != nil {
-				return TaskEventMsg{
-					Event: task.TaskExecutionEvent{
-						Type:    "execution_failed",
-						Message: fmt.Sprintf("Task execution failed: %v", err),
-					},
-				}
+		// Handle task execution with enhanced manager if available, otherwise use basic manager
+		var execution *task.TaskExecution
+		var err error
+		
+		if m.enhancedManager != nil {
+			execution, err = m.enhancedManager.HandleLLMResponseEnhanced(llmResponse, m.taskEventChan)
+		} else if m.taskManager != nil {
+			execution, err = m.taskManager.HandleLLMResponse(llmResponse, m.taskEventChan)
+		}
+		
+		if err != nil {
+			return TaskEventMsg{
+				Event: task.TaskExecutionEvent{
+					Type:    "execution_failed",
+					Message: fmt.Sprintf("Task execution failed: %v", err),
+				},
 			}
+		}
 
 			if execution != nil {
 				m.currentExecution = execution
@@ -771,6 +908,59 @@ func (m model) handleTaskEvent(event task.TaskExecutionEvent) (tea.Model, tea.Cm
 			}
 		}
 	}
+
+	// Handle test discovery completion - prompt user to run tests
+	if event.Type == "test_discovery_completed" && m.enhancedManager != nil {
+		testDiscovery := m.enhancedManager.GetTestDiscovery()
+		testCount := testDiscovery.GetTestCount()
+		
+		if testCount > 0 {
+			return m, func() tea.Msg {
+				return TestPromptMsg{
+					TestCount:    testCount,
+					Language:     "Go", // Could be made dynamic
+					EditedFiles:  []string{}, // Could extract from execution
+					ShouldPrompt: true,
+				}
+			}
+		}
+	}
+
+	return m, nil
+}
+
+// handleTestPrompt handles test execution prompts
+func (m model) handleTestPrompt(msg TestPromptMsg) (tea.Model, tea.Cmd) {
+	if !msg.ShouldPrompt || m.enhancedManager == nil {
+		return m, nil
+	}
+	
+	// Add test prompt to chat
+	promptContent := fmt.Sprintf(`🧪 **Test Discovery Complete**
+
+Found %d tests in the workspace. Would you like to run them to verify your recent changes?
+
+You can:
+• Type "yes" to run all %s tests now
+• Type "no" to skip testing for now  
+• Use "/test" command anytime to see test details
+• Tests will run automatically after future code changes
+
+Run tests now?`, msg.TestCount, msg.Language)
+
+	testPrompt := llm.Message{
+		Role:      "assistant",
+		Content:   promptContent,
+		Timestamp: time.Now(),
+	}
+
+	if err := m.chatSession.AddMessage(testPrompt); err != nil {
+		fmt.Printf("Warning: failed to add test prompt: %v\n", err)
+	}
+
+	// Refresh display
+	m.messages = m.chatSession.GetDisplayMessages()
+	m.updateWrappedMessages()
 
 	return m, nil
 }
@@ -1022,38 +1212,82 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 		llmAdapter = adapter
 	}
 
-	// Initialize chat session based on options
+	// Initialize session with recovery checking
 	var chatSession *chat.Session
-
-	if options.SessionID != "" {
-		// Load specific session by ID
-		session, sessionErr := chat.LoadSessionByID(workspacePath, options.SessionID, 50)
-		if sessionErr != nil {
-			fmt.Printf("Warning: Failed to load session %s: %v\n", options.SessionID, sessionErr)
-			fmt.Println("Creating new session instead...")
-			chatSession = chat.NewSession(workspacePath, 50)
+	
+	// Check for session recovery needs if not explicitly loading a specific session
+	if options.SessionID == "" && !options.ContinueLatest {
+		recoveryMgr, err := session.NewRecoveryManager(workspacePath)
+		if err != nil {
+			fmt.Printf("Warning: Failed to initialize recovery manager: %v\n", err)
 		} else {
-			chatSession = session
+			recoveryOptions, err := recoveryMgr.CheckForRecovery()
+			if err != nil {
+				fmt.Printf("Warning: Failed to check for recovery: %v\n", err)
+			} else if recoveryOptions != nil {
+				// Show recovery report
+				fmt.Println(recoveryMgr.GenerateRecoveryReport(recoveryOptions))
+				
+				// Auto-recover if available and no corruption detected
+				if recoveryOptions.AutoRecoveryAvailable && len(recoveryOptions.CorruptedSessions) == 0 {
+					fmt.Println("Auto-recovering most recent session...")
+					if sessionState, err := recoveryMgr.AutoRecover(); err == nil {
+						// Convert SessionState to chat.Session (simplified)
+						chatSession = chat.NewSession(workspacePath, 50)
+						for _, msg := range sessionState.Messages {
+							chatSession.AddMessage(msg)
+						}
+						
+						recoveryMgr.AddRecoveryMessage(sessionState, "AUTO_RECOVERY", 
+							"Automatically recovered from most recent session")
+						fmt.Println("✅ Session recovered successfully")
+					} else {
+						fmt.Printf("⚠️  Auto-recovery failed: %v\n", err)
+						fmt.Println("Starting new session...")
+						chatSession = chat.NewSession(workspacePath, 50)
+					}
+				} else {
+					fmt.Println("⚠️  Manual recovery recommended - starting new session for now")
+					chatSession = chat.NewSession(workspacePath, 50)
+				}
+			}
 		}
-	} else if options.ContinueLatest {
-		// Continue from latest session
-		session, sessionErr := chat.LoadLatestSession(workspacePath, 50)
-		if sessionErr != nil {
-			return fmt.Errorf("failed to load latest session: %w", sessionErr)
-		}
-		chatSession = session
-	} else {
-		// Create new session (default behavior)
-		chatSession = chat.NewSession(workspacePath, 50)
 	}
 
-	// Initialize task system
+	// Fall back to original session loading logic if no recovery happened
+	if chatSession == nil {
+		if options.SessionID != "" {
+			// Load specific session by ID
+			session, sessionErr := chat.LoadSessionByID(workspacePath, options.SessionID, 50)
+			if sessionErr != nil {
+				fmt.Printf("Warning: Failed to load session %s: %v\n", options.SessionID, sessionErr)
+				fmt.Println("Creating new session instead...")
+				chatSession = chat.NewSession(workspacePath, 50)
+			} else {
+				chatSession = session
+			}
+		} else if options.ContinueLatest {
+			// Continue from latest session
+			session, sessionErr := chat.LoadLatestSession(workspacePath, 50)
+			if sessionErr != nil {
+				return fmt.Errorf("failed to load latest session: %w", sessionErr)
+			}
+			chatSession = session
+		} else {
+			// Create new session (default behavior)
+			chatSession = chat.NewSession(workspacePath, 50)
+		}
+	}
+
+	// Initialize task system with enhanced M6 features
 	taskExecutor := task.NewExecutor(workspacePath, cfg.EnableShell, cfg.MaxFileSize)
 	var taskManager *task.Manager
+	var enhancedManager *task.EnhancedManager
 	var taskEventChan chan task.TaskExecutionEvent
 
 	if llmAdapter != nil {
-		taskManager = task.NewManager(taskExecutor, llmAdapter, chatSession)
+		enhancedManager = task.NewEnhancedManager(taskExecutor, llmAdapter, chatSession, idx)
+		taskManager = enhancedManager.Manager // For compatibility
 		taskEventChan = make(chan task.TaskExecutionEvent, 10)
 	}
 
@@ -1067,21 +1301,22 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 	}
 
 	m := model{
-		workspacePath: workspacePath,
-		config:        cfg,
-		index:         idx,
-		input:         "",
-		messages:      chatSession.GetDisplayMessages(),
-		currentView:   viewChat,
-		llmAdapter:    llmAdapter,
-		chatSession:   chatSession,
-		llmError:      llmError,
-		taskManager:   taskManager,
-		taskExecutor:  taskExecutor,
-		taskEventChan: taskEventChan,
-		taskHistory:   make([]string, 0),
-		width:         80, // Default width until window size is received
-		height:        24, // Default height until window size is received
+		workspacePath:   workspacePath,
+		config:          cfg,
+		index:           idx,
+		input:           "",
+		messages:        chatSession.GetDisplayMessages(),
+		currentView:     viewChat,
+		llmAdapter:      llmAdapter,
+		chatSession:     chatSession,
+		llmError:        llmError,
+		taskManager:     taskManager,
+		enhancedManager: enhancedManager,
+		taskExecutor:    taskExecutor,
+		taskEventChan:   taskEventChan,
+		taskHistory:     make([]string, 0),
+		width:           80, // Default width until window size is received
+		height:          24, // Default height until window size is received
 	}
 
 	// Initialize wrapped messages
@@ -1151,14 +1386,15 @@ func (m *model) generateSummary(summaryType string) tea.Cmd {
 // showRationale displays change summaries and rationales
 func (m *model) showRationale() tea.Cmd {
 	return func() tea.Msg {
-		// For now, show placeholder content
-		// In a full implementation, this would access a change summary manager
-		rationaleContent := `📋 Change Summaries & Rationale
+		var rationaleContent string
+		
+		// Use enhanced manager if available for real rationale data
+		if m.enhancedManager != nil {
+			rationaleContent = m.enhancedManager.GetChangeSummaries()
+			if rationaleContent == "No change summaries available." {
+				rationaleContent = `📋 Change Summaries & Rationale
 
-This feature displays explanations for code changes made during the session.
-
-Recent Changes:
-- No changes recorded yet in this session
+No changes have been made in this session yet.
 
 To see rationales for changes:
 1. Make code edits through the AI
@@ -1170,6 +1406,18 @@ This helps you understand:
 • What impact they have
 • Testing recommendations
 • Architectural decisions`
+			}
+		} else {
+			// Fallback for when enhanced manager isn't available
+			rationaleContent = `📋 Change Summaries & Rationale
+
+Enhanced rationale features are not available in this session.
+
+To enable:
+1. Restart Loom with an LLM configured
+2. Make code changes through the AI
+3. View detailed explanations with /rationale`
+		}
 
 		// Add rationale response to chat session
 		response := llm.Message{
@@ -1180,6 +1428,50 @@ This helps you understand:
 
 		if err := m.chatSession.AddMessage(response); err != nil {
 			return StreamMsg{Error: fmt.Errorf("failed to save rationale: %w", err)}
+		}
+
+		// Refresh display
+		m.messages = m.chatSession.GetDisplayMessages()
+		m.updateWrappedMessages()
+
+		return StreamMsg{Content: "", Done: true}
+	}
+}
+
+// showTestSummary displays test discovery and execution information
+func (m *model) showTestSummary() tea.Cmd {
+	return func() tea.Msg {
+		var testContent string
+		
+		// Use enhanced manager if available for real test data
+		if m.enhancedManager != nil {
+			testContent = m.enhancedManager.GetTestSummary()
+		} else {
+			// Fallback for when enhanced manager isn't available
+			testContent = `🧪 Test Discovery & Execution
+
+Enhanced test features are not available in this session.
+
+To enable:
+1. Restart Loom with an LLM configured
+2. Ensure test files exist in your workspace
+3. Use /test to see discovered tests and run them
+
+Supported test patterns:
+• Go: *_test.go
+• JavaScript/TypeScript: *.test.js, *.spec.js
+• Python: test_*.py, *_test.py`
+		}
+
+		// Add test response to chat session
+		response := llm.Message{
+			Role:      "assistant",
+			Content:   testContent,
+			Timestamp: time.Now(),
+		}
+
+		if err := m.chatSession.AddMessage(response); err != nil {
+			return StreamMsg{Error: fmt.Errorf("failed to save test summary: %w", err)}
 		}
 
 		// Refresh display
@@ -1301,5 +1593,87 @@ Start by asking what the user would like to accomplish!`,
 		Role:      "system",
 		Content:   prompt,
 		Timestamp: time.Now(),
+	}
+}
+
+// runTestsFromPrompt runs tests when user responds to a test prompt
+func (m *model) runTestsFromPrompt(language string) tea.Cmd {
+	return func() tea.Msg {
+		if m.enhancedManager == nil {
+			return StreamMsg{Error: fmt.Errorf("enhanced manager not available")}
+		}
+
+		// Run tests manually
+		testResult, err := m.enhancedManager.RunTestsManually(language)
+		if err != nil {
+			errorMsg := llm.Message{
+				Role:      "assistant",
+				Content:   fmt.Sprintf("❌ Failed to run tests: %v", err),
+				Timestamp: time.Now(),
+			}
+			m.chatSession.AddMessage(errorMsg)
+			m.messages = m.chatSession.GetDisplayMessages()
+			m.updateWrappedMessages()
+			return StreamMsg{Error: err}
+		}
+
+		// Format and display test results
+		resultContent := func() string {
+			if testResult.Success {
+				return "✅ All tests passed! Your changes look good."
+			} else {
+				return fmt.Sprintf("❌ %d test(s) failed. The AI can help analyze and fix these issues.", testResult.TestsFailed)
+			}
+		}()
+
+		resultSummary := fmt.Sprintf(`🧪 **Test Results**
+
+%s
+
+%s`, testResult.Output, resultContent)
+
+		resultMsg := llm.Message{
+			Role:      "assistant",
+			Content:   resultSummary,
+			Timestamp: time.Now(),
+		}
+
+		if err := m.chatSession.AddMessage(resultMsg); err != nil {
+			return StreamMsg{Error: fmt.Errorf("failed to save test results: %w", err)}
+		}
+
+		// If tests failed, ask AI to analyze
+		if !testResult.Success && testResult.TestsFailed > 0 {
+			analysisPrompt := fmt.Sprintf(`The tests failed after running them. Here are the results:
+
+%s
+
+Please analyze why the tests failed and suggest how to fix them.`, testResult.Output)
+
+			analysisMsg := llm.Message{
+				Role:      "user",
+				Content:   analysisPrompt,
+				Timestamp: time.Now(),
+			}
+
+			if err := m.chatSession.AddMessage(analysisMsg); err != nil {
+				return StreamMsg{Error: fmt.Errorf("failed to add analysis request: %w", err)}
+			}
+
+			// Refresh display and trigger AI analysis
+			m.messages = m.chatSession.GetDisplayMessages()
+			m.updateWrappedMessages()
+
+			// Send to AI for analysis
+			if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
+				return m.sendToLLMWithTasks(analysisPrompt)()
+			}
+		}
+
+		// Refresh display
+		m.messages = m.chatSession.GetDisplayMessages()
+		m.updateWrappedMessages()
+
+		return StreamMsg{Content: "", Done: true}
 	}
 }

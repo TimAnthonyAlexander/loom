@@ -304,6 +304,9 @@ go build -o loom .
 - `/files` - Show file count and language breakdown
 - `/stats` - Show detailed project statistics  
 - `/tasks` - Show task execution history
+- `/test` - Show test discovery, run tests, and see results
+- `/summary` - Generate AI-powered session summary (also Ctrl+S)
+- `/rationale` - Show change summaries and explanations
 - `/git` - Display Git repository status
 - `/commit "message"` - Commit staged changes with specified message
 - `/undo` - Undo the last applied action
@@ -316,6 +319,10 @@ go build -o loom .
 - **Chat History**: Persistent history across sessions (stored in `.loom/history/`)
 - **Smart Memory**: Automatic message trimming while preserving important context
 - **Task Execution**: AI can read files, make edits, list directories, and run commands
+- **Test Integration**: Automatic test discovery and execution with AI feedback on failures
+- **Change Tracking**: Every code change comes with natural language summaries and rationale
+- **Session Recovery**: Automatic detection and recovery from incomplete sessions or crashes
+- **Enhanced Error Handling**: Graceful recovery from errors with detailed explanations
 - **Safe Operations**: All destructive operations require explicit user confirmation
 
 ### Task Capabilities

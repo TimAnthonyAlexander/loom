@@ -3,9 +3,11 @@ package task
 import (
 	"fmt"
 	"loom/indexer"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -479,11 +481,14 @@ func (td *TestDiscovery) FormatSummary() string {
 // Helper functions
 
 func (td *TestDiscovery) readFileContent(filePath string) (string, error) {
-	// This is a simplified version - in practice you'd want proper file reading
-	return "", fmt.Errorf("file reading not implemented in this example")
+	fullPath := filepath.Join(td.index.WorkspacePath, filePath)
+	content, err := os.ReadFile(fullPath)
+	if err != nil {
+		return "", err
+	}
+	return string(content), nil
 }
 
 func parseIntSafe(s string) (int, error) {
-	// Simple integer parsing - would use strconv.Atoi in practice
-	return 0, fmt.Errorf("parsing not implemented in this example")
+	return strconv.Atoi(s)
 }
