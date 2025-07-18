@@ -1183,8 +1183,7 @@ func (m model) handleAutoContinuation(msg AutoContinueMsg) (tea.Model, tea.Cmd) 
 	if detector.IsComplete(msg.LastResponse) {
 		// Reset recursive tracking
 		m.recursiveDepth = 0
-		m.addSystemMessage("✅ Task completed!")
-		return m, nil
+		return m, nil // Remove the completion message
 	}
 	
 	// Continue automatically
@@ -1196,10 +1195,10 @@ func (m model) handleAutoContinuation(msg AutoContinueMsg) (tea.Model, tea.Cmd) 
 	// Generate completion check prompt
 	completionCheckPrompt := detector.GenerateCompletionCheckPrompt()
 	
-	// Add auto-generated message
+	// Mark completion detector message with special prefix
 	autoMessage := llm.Message{
 		Role:      "user", 
-		Content:   completionCheckPrompt,
+		Content:   "COMPLETION_CHECK: " + completionCheckPrompt,
 		Timestamp: time.Now(),
 	}
 	
@@ -1209,8 +1208,7 @@ func (m model) handleAutoContinuation(msg AutoContinueMsg) (tea.Model, tea.Cmd) 
 		}
 	}
 	
-	// Show completion check indicator
-	m.addSystemMessage(fmt.Sprintf("🔄 Checking completion... (step %d)", m.recursiveDepth))
+	// Don't show completion check indicator to user
 	
 	// Check with LLM
 	return m, m.sendToLLMWithTasks(completionCheckPrompt)

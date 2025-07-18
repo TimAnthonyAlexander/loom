@@ -8,6 +8,7 @@ import (
 	"loom/llm"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -242,6 +243,11 @@ func (s *Session) GetDisplayMessages() []string {
 
 			// Filter task result messages to show only status, not actual content
 			content := s.filterTaskResultForDisplay(msg.Content)
+			
+			// Skip empty content (like completion detector interactions)
+			if strings.TrimSpace(content) == "" {
+				continue
+			}
 
 			display = append(display, fmt.Sprintf("%s: %s", role, content))
 		}
@@ -251,6 +257,14 @@ func (s *Session) GetDisplayMessages() []string {
 
 // filterTaskResultForDisplay filters task result messages to show only status messages to users
 func (s *Session) filterTaskResultForDisplay(content string) string {
+	// First check if this contains JSON task blocks - filter those out
+	content = s.filterJSONTaskBlocks(content)
+	
+	// Check if this is a completion detector interaction - hide those entirely
+	if s.isCompletionDetectorInteraction(content) {
+		return "" // Return empty to hide these interactions
+	}
+	
 	// Check if this is a task result message
 	if !strings.HasPrefix(content, "🔧 Task Result:") {
 		return content // Not a task result, return as is
@@ -314,6 +328,157 @@ func (s *Session) filterTaskResultForDisplay(content string) string {
 	}
 
 	return strings.Join(filteredLines, "\n")
+}
+
+// filterJSONTaskBlocks removes JSON task blocks from LLM responses and replaces with clean descriptions
+func (s *Session) filterJSONTaskBlocks(content string) string {
+	// Find JSON code blocks using regex
+	re := regexp.MustCompile("(?s)```(?:json)?\n?(.*?)\n?```")
+	matches := re.FindAllStringSubmatch(content, -1)
+	
+	if len(matches) == 0 {
+		return content // No JSON blocks found
+	}
+	
+	// Try to extract task information from JSON blocks
+	var taskDescriptions []string
+	
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		
+		jsonStr := strings.TrimSpace(match[1])
+		if jsonStr == "" {
+			continue
+		}
+		
+		// Parse the JSON to extract task information
+		var data map[string]interface{}
+		if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
+			continue // Skip invalid JSON
+		}
+		
+		// Look for tasks array
+		tasksData, ok := data["tasks"]
+		if !ok {
+			continue
+		}
+		
+		tasks, ok := tasksData.([]interface{})
+		if !ok {
+			continue
+		}
+		
+		// Extract task descriptions
+		for _, taskInterface := range tasks {
+			taskMap, ok := taskInterface.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			
+			taskType, hasType := taskMap["type"].(string)
+			path, hasPath := taskMap["path"].(string)
+			command, hasCommand := taskMap["command"].(string)
+			
+			if !hasType {
+				continue
+			}
+			
+			// Generate clean description based on task type
+			switch taskType {
+			case "ReadFile":
+				if hasPath && path != "" {
+					taskDescriptions = append(taskDescriptions, "📖 Reading file: "+path)
+				} else {
+					taskDescriptions = append(taskDescriptions, "📖 Reading file")
+				}
+			case "EditFile":
+				if hasPath && path != "" {
+					taskDescriptions = append(taskDescriptions, "✏️ Editing file: "+path)
+				} else {
+					taskDescriptions = append(taskDescriptions, "✏️ Editing file")
+				}
+			case "ListDir":
+				if hasPath && path != "" && path != "." {
+					taskDescriptions = append(taskDescriptions, "📁 Listing directory: "+path)
+				} else {
+					taskDescriptions = append(taskDescriptions, "📁 Listing current directory")
+				}
+			case "RunShell":
+				if hasCommand && command != "" {
+					taskDescriptions = append(taskDescriptions, "⚡ Running command: "+command)
+				} else {
+					taskDescriptions = append(taskDescriptions, "⚡ Running shell command")
+				}
+			default:
+				taskDescriptions = append(taskDescriptions, "🔧 Executing task: "+taskType)
+			}
+		}
+	}
+	
+	// If we found tasks, create a clean summary
+	if len(taskDescriptions) > 0 {
+		taskSummary := ""
+		if len(taskDescriptions) == 1 {
+			taskSummary = taskDescriptions[0]
+		} else {
+			taskSummary = fmt.Sprintf("🔧 Executing %d tasks:\n%s", len(taskDescriptions), strings.Join(taskDescriptions, "\n"))
+		}
+		
+		// Replace all JSON blocks with the clean task summary
+		filteredContent := re.ReplaceAllString(content, "\n"+taskSummary)
+		return filteredContent
+	}
+	
+	// If no valid tasks found, just remove the JSON blocks
+	return re.ReplaceAllString(content, "\n🔧 Executing tasks...")
+}
+
+// isCompletionDetectorInteraction checks if content is from completion detector
+func (s *Session) isCompletionDetectorInteraction(content string) bool {
+	// Check for explicit completion check prefix
+	if strings.HasPrefix(content, "COMPLETION_CHECK:") {
+		return true
+	}
+	
+	lowerContent := strings.ToLower(content)
+	
+	// Completion detector question patterns
+	completionQuestions := []string{
+		"is this task complete?",
+		"are you finished with this work?",
+		"is there anything else you need to do?",
+		"have you completed everything that was requested?",
+		"is this implementation finished?",
+		"are you done, or is there more work to do?",
+		"is the task fully complete?",
+		"do you need to do anything else?",
+	}
+	
+	for _, question := range completionQuestions {
+		if strings.Contains(lowerContent, question) {
+			return true
+		}
+	}
+	
+	// Completion detector response patterns
+	completionResponses := []string{
+		"yes, the task is complete",
+		"yes, i'm finished",
+		"yes, everything is done",
+		"no, i still need",
+		"not yet, i should",
+		"there's more work",
+	}
+	
+	for _, response := range completionResponses {
+		if strings.Contains(lowerContent, response) {
+			return true
+		}
+	}
+	
+	return false
 }
 
 // CreateSystemPrompt creates an enhanced system prompt with project information and conventions
