@@ -1168,7 +1168,7 @@ func (m model) handleTaskEvent(event task.TaskExecutionEvent) (tea.Model, tea.Cm
     // answer that uses the newly-read content.
     if event.Type == "execution_completed" && m.pendingConfirmation == nil {
         // Trigger continuation only if the LLM adapter is available so we
-        // don’t schedule redundant work in offline mode.
+        // don't schedule redundant work in offline mode.
         if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
             return m, func() tea.Msg {
                 return ContinueLLMMsg{}
@@ -1755,6 +1755,17 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 	m.updateWrappedMessages()
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
+
+    // Forward task execution events from the manager to the TUI update loop.
+    if taskEventChan != nil {
+        go func() {
+            for ev := range taskEventChan {
+                // Forward TaskEventMsg; Send has no return value.
+                p.Send(TaskEventMsg{Event: ev})
+            }
+        }()
+    }
+
 	_, err = p.Run()
 	return err
 }

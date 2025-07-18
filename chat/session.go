@@ -257,7 +257,15 @@ func (s *Session) GetDisplayMessages() []string {
 
 // filterTaskResultForDisplay filters task result messages to show only status messages to users
 func (s *Session) filterTaskResultForDisplay(content string) string {
-	// First check if this contains JSON task blocks - filter those out
+	// If this is a Task Result for a ReadFile operation, we want to show the
+	// actual file contents to the user (they explicitly asked to read the
+	// file). Skip the aggressive filtering that hides content.
+	if strings.HasPrefix(content, "🔧 Task Result:") && strings.Contains(content, "Read ") {
+		// The executor already redacts secrets and truncates to a safe number
+		// of lines (default 200), so it’s safe to display as-is.
+		return content
+	}
+    // First check if this contains JSON task blocks - filter those out
 	content = s.filterJSONTaskBlocks(content)
 	
 	// Check if this is a completion detector interaction - hide those entirely
