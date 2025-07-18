@@ -181,23 +181,30 @@ func (pe *PromptEnhancer) CreateEnhancedSystemPrompt(enableShell bool) Message {
 You are in continuous execution mode. After completing any response:
 
 **If your work is COMPLETELY FINISHED:**
-- End your response with "DONE" or "TASK COMPLETED" 
-- Be explicit: "DONE - All files created and feature implemented."
+- End your response with explicit completion signals like:
+  - "DONE" or "TASK COMPLETED" or "FINISHED"
+  - "The [feature/system/implementation] is now complete"
+  - "All requirements have been implemented"
+  - "Everything is working and ready to use"
+- Be very explicit about completion status
 
 **If you need to continue working:**
 - Simply describe what you plan to do next
-- DO NOT say "done" or "complete" 
+- DO NOT use completion words like "done", "complete", "finished"
 - The system will automatically prompt you to continue
 
-Examples of completion:
+Examples of CLEAR completion signals:
 ✅ "DONE - The authentication system is fully implemented and tested."
-✅ "TASK COMPLETED - All requested files have been created."
+✅ "TASK COMPLETED - All requested files have been created and are working."
+✅ "The REST API is now complete and fully functional."
+✅ "Everything is finished and ready to use."
 
-Examples of continuation:
+Examples of continuation (avoid completion words):
 🔄 "Next, I need to add error handling to the login function."
 🔄 "I should now create the database migration files."
+🔄 "Moving on to implement the user registration endpoint."
 
-The system will keep prompting you until you signal completion.
+CRITICAL: The system will keep prompting you until you give a CLEAR completion signal. Be explicit when you're truly finished!
 
 ## Project-Specific Guidelines:
 %s
