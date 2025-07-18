@@ -240,10 +240,80 @@ func (s *Session) GetDisplayMessages() []string {
 				continue
 			}
 
-			display = append(display, fmt.Sprintf("%s: %s", role, msg.Content))
+			// Filter task result messages to show only status, not actual content
+			content := s.filterTaskResultForDisplay(msg.Content)
+
+			display = append(display, fmt.Sprintf("%s: %s", role, content))
 		}
 	}
 	return display
+}
+
+// filterTaskResultForDisplay filters task result messages to show only status messages to users
+func (s *Session) filterTaskResultForDisplay(content string) string {
+	// Check if this is a task result message
+	if !strings.HasPrefix(content, "🔧 Task Result:") {
+		return content // Not a task result, return as is
+	}
+
+	lines := strings.Split(content, "\n")
+	var filteredLines []string
+
+	for i := 0; i < len(lines); i++ {
+		line := strings.TrimSpace(lines[i])
+
+		// Always keep these status lines
+		if strings.HasPrefix(line, "🔧 Task Result:") ||
+			strings.HasPrefix(line, "✅ Status:") ||
+			strings.HasPrefix(line, "❌ Status:") ||
+			strings.HasPrefix(line, "💥 Error:") ||
+			strings.HasPrefix(line, "👍 User approved") {
+			filteredLines = append(filteredLines, line)
+		} else if strings.HasPrefix(line, "📄 Output:") {
+			// Check if the next line contains a user-friendly status message
+			if i+1 < len(lines) {
+				nextLine := strings.TrimSpace(lines[i+1])
+				if strings.HasPrefix(nextLine, "Reading file:") ||
+					strings.HasPrefix(nextLine, "Reading folder structure:") ||
+					strings.HasPrefix(nextLine, "Editing file:") ||
+					strings.HasPrefix(nextLine, "File read successfully") ||
+					strings.HasPrefix(nextLine, "Directory listing completed") ||
+					strings.HasPrefix(nextLine, "File edit prepared") {
+					// This is a user-friendly status, keep it
+					filteredLines = append(filteredLines, line)
+					filteredLines = append(filteredLines, nextLine)
+					i++ // Skip the next line as we already processed it
+				} else {
+					// This contains actual content, replace with generic message
+					filteredLines = append(filteredLines, line)
+
+					// Determine what type of task this was based on the task description
+					taskDescription := ""
+					for _, prevLine := range filteredLines {
+						if strings.HasPrefix(prevLine, "🔧 Task Result:") {
+							taskDescription = prevLine
+							break
+						}
+					}
+
+					if strings.Contains(taskDescription, "Read ") {
+						filteredLines = append(filteredLines, "File content read successfully")
+					} else if strings.Contains(taskDescription, "List directory") {
+						filteredLines = append(filteredLines, "Directory structure read successfully")
+					} else if strings.Contains(taskDescription, "Edit ") {
+						filteredLines = append(filteredLines, "File changes prepared successfully")
+					} else {
+						filteredLines = append(filteredLines, "Task completed successfully")
+					}
+					// Skip all remaining lines as they contain actual content
+					break
+				}
+			}
+		}
+		// Skip other lines that might contain actual content
+	}
+
+	return strings.Join(filteredLines, "\n")
 }
 
 // CreateSystemPrompt creates a system prompt with project information

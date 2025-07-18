@@ -162,20 +162,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.messages = m.chatSession.GetDisplayMessages()
 			}
 		case "up":
-			if m.currentView == viewFileTree && m.fileTreeScroll > 0 {
-				m.fileTreeScroll--
-			}
+			// File tree scrolling removed since we no longer show file lists
 		case "down":
-			if m.currentView == viewFileTree {
-				files := m.index.GetFileList()
-				maxScroll := len(files) - 10 // Show 10 files at a time
-				if maxScroll < 0 {
-					maxScroll = 0
-				}
-				if m.fileTreeScroll < maxScroll {
-					m.fileTreeScroll++
-				}
-			}
+			// File tree scrolling removed since we no longer show file lists
 		case "enter":
 			if m.currentView == viewChat && strings.TrimSpace(m.input) != "" && !m.isStreaming {
 				userInput := strings.TrimSpace(m.input)
@@ -443,7 +432,7 @@ func (m model) View() string {
 	case viewChat:
 		helpText = "Tab: File Tree/Tasks | Enter: Send | Ctrl+C: Quit"
 	case viewFileTree:
-		helpText = "Tab: Chat/Tasks | ↑↓: Scroll | Ctrl+C: Quit"
+		helpText = "Tab: Chat/Tasks | Ctrl+C: Quit"
 	case viewTasks:
 		helpText = "Tab: Chat/File Tree | Ctrl+C: Quit"
 	}
@@ -519,7 +508,7 @@ func (m model) renderTaskView() string {
 	return content.String()
 }
 
-// renderFileTree renders the file tree view (unchanged from original)
+// renderFileTree renders the file tree view (modified to hide actual structure)
 func (m model) renderFileTree() string {
 	files := m.index.GetFileList()
 
@@ -527,42 +516,43 @@ func (m model) renderFileTree() string {
 		return "No files indexed yet."
 	}
 
-	sort.Strings(files)
+	stats := m.index.GetStats()
 
 	var lines []string
-	lines = append(lines, "📁 Indexed Files:")
+	lines = append(lines, "📁 File Tree Available")
+	lines = append(lines, "")
+	lines = append(lines, fmt.Sprintf("Total files: %d", stats.TotalFiles))
+	lines = append(lines, fmt.Sprintf("Total size: %.2f MB", float64(stats.TotalSize)/1024/1024))
 	lines = append(lines, "")
 
-	// Show files with pagination
-	start := m.fileTreeScroll
-	end := start + 10
-	if end > len(files) {
-		end = len(files)
-	}
+	// Show language breakdown instead of file names
+	if len(stats.LanguagePercent) > 0 {
+		lines = append(lines, "Language breakdown:")
 
-	for i := start; i < end; i++ {
-		file := files[i]
-		meta := m.index.Files[file]
-
-		// Format file size
-		var sizeStr string
-		if meta.Size < 1024 {
-			sizeStr = fmt.Sprintf("%dB", meta.Size)
-		} else if meta.Size < 1024*1024 {
-			sizeStr = fmt.Sprintf("%.1fKB", float64(meta.Size)/1024)
-		} else {
-			sizeStr = fmt.Sprintf("%.1fMB", float64(meta.Size)/1024/1024)
+		type langPair struct {
+			name    string
+			percent float64
 		}
 
-		lines = append(lines, fmt.Sprintf("  %s (%s, %s)",
-			file, sizeStr, meta.Language))
+		var langs []langPair
+		for name, percent := range stats.LanguagePercent {
+			if percent > 0 {
+				langs = append(langs, langPair{name, percent})
+			}
+		}
+
+		sort.Slice(langs, func(i, j int) bool {
+			return langs[i].percent > langs[j].percent
+		})
+
+		for _, lang := range langs {
+			lines = append(lines, fmt.Sprintf("  %s: %.1f%%", lang.name, lang.percent))
+		}
 	}
 
-	if len(files) > 10 {
-		lines = append(lines, "")
-		lines = append(lines, fmt.Sprintf("Showing %d-%d of %d files",
-			start+1, end, len(files)))
-	}
+	lines = append(lines, "")
+	lines = append(lines, "File structure is indexed and available to the AI")
+	lines = append(lines, "but hidden from this view for privacy.")
 
 	return strings.Join(lines, "\n")
 }

@@ -253,8 +253,8 @@ func (se *StagedExecutor) GetStagingPreview(execution *ActionPlanExecution) stri
 	// Show staged edits
 	for i, edit := range execution.StagedEdits {
 		preview.WriteString(fmt.Sprintf("--- File %d: %s ---\n", i+1, edit.FilePath))
-		preview.WriteString(edit.DiffPreview)
-		preview.WriteString("\n\n")
+		preview.WriteString("Changes prepared for approval\n")
+		preview.WriteString("\n")
 	}
 
 	// Show shell commands that will be executed

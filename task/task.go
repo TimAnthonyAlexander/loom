@@ -48,11 +48,12 @@ type TaskList struct {
 
 // TaskResponse represents the result of executing a task
 type TaskResponse struct {
-	Task     Task   `json:"task"`
-	Success  bool   `json:"success"`
-	Output   string `json:"output,omitempty"`
-	Error    string `json:"error,omitempty"`
-	Approved bool   `json:"approved,omitempty"` // For tasks requiring confirmation
+	Task          Task   `json:"task"`
+	Success       bool   `json:"success"`
+	Output        string `json:"output,omitempty"`         // Display message for user
+	ActualContent string `json:"actual_content,omitempty"` // Actual content for LLM (hidden from user)
+	Error         string `json:"error,omitempty"`
+	Approved      bool   `json:"approved,omitempty"` // For tasks requiring confirmation
 }
 
 // ParseTasks extracts and parses task JSON blocks from LLM response

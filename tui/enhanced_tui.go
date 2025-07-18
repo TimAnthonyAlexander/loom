@@ -356,7 +356,8 @@ func (em *EnhancedModel) renderBatchApproval() string {
 				style = style.BorderForeground(lipgloss.Color("226")).Bold(true)
 			}
 
-			editContent := fmt.Sprintf("File: %s\n%s", edit.FilePath, edit.DiffPreview)
+			// Show only file name and status, not the actual diff preview
+			editContent := fmt.Sprintf("File: %s\nChanges prepared for approval", edit.FilePath)
 			content.WriteString(style.Render(editContent))
 			content.WriteString("\n")
 		}

@@ -212,7 +212,10 @@ func (m *Manager) formatTaskResult(task *Task, response *TaskResponse) string {
 
 	if response.Success {
 		result.WriteString("✅ Status: Success\n")
-		if response.Output != "" {
+		// Use ActualContent for LLM if available, otherwise fall back to Output
+		if response.ActualContent != "" {
+			result.WriteString(fmt.Sprintf("📄 Output:\n%s\n", response.ActualContent))
+		} else if response.Output != "" {
 			result.WriteString(fmt.Sprintf("📄 Output:\n%s\n", response.Output))
 		}
 		if response.Approved {

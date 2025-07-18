@@ -139,11 +139,15 @@ func (e *Executor) executeReadFile(task *Task) *TaskResponse {
 		return response
 	}
 
-	// Redact secrets
-	output := e.redactSecrets(content.String())
+	// Redact secrets from the actual content for LLM
+	actualContent := e.redactSecrets(content.String())
+
+	// Store actual content for LLM (will be used internally)
+	response.ActualContent = actualContent
 
 	response.Success = true
-	response.Output = fmt.Sprintf("File: %s (%d lines read)\n\n%s", task.Path, linesRead, output)
+	// Show only status message to user, not the actual content
+	response.Output = fmt.Sprintf("Reading file: %s (%d lines)", task.Path, linesRead)
 	return response
 }
 
@@ -211,9 +215,12 @@ func (e *Executor) applyDiff(task *Task, fullPath string) *TaskResponse {
 	diff := dmp.DiffMain(originalContent, newContent, false)
 	preview := dmp.DiffPrettyText(diff)
 
+	// Store actual diff preview for LLM
+	response.ActualContent = fmt.Sprintf("Diff preview for %s:\n\n%s\n\nReady to apply changes.", task.Path, preview)
+
 	response.Success = true
-	response.Output = fmt.Sprintf("Diff preview for %s:\n\n%s\n\nReady to apply changes.",
-		task.Path, preview)
+	// Show only status message to user, not the actual diff
+	response.Output = fmt.Sprintf("Editing file: %s (diff preview prepared)", task.Path)
 
 	// Store the new content for later application
 	response.Task.Content = newContent
@@ -240,9 +247,12 @@ func (e *Executor) replaceContent(task *Task, fullPath string) *TaskResponse {
 	diff := dmp.DiffMain(originalContent, task.Content, false)
 	preview := dmp.DiffPrettyText(diff)
 
+	// Store actual preview for LLM
+	response.ActualContent = fmt.Sprintf("Content replacement preview for %s:\n\n%s\n\nReady to apply changes.", task.Path, preview)
+
 	response.Success = true
-	response.Output = fmt.Sprintf("Content replacement preview for %s:\n\n%s\n\nReady to apply changes.",
-		task.Path, preview)
+	// Show only status message to user, not the actual diff
+	response.Output = fmt.Sprintf("Editing file: %s (content replacement prepared)", task.Path)
 
 	return response
 }
@@ -294,6 +304,7 @@ func (e *Executor) executeListDir(task *Task) *TaskResponse {
 	var output strings.Builder
 	output.WriteString(fmt.Sprintf("Directory listing for %s:\n\n", task.Path))
 
+	fileCount := 0
 	if task.Recursive {
 		err = filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
@@ -307,6 +318,7 @@ func (e *Executor) executeListDir(task *Task) *TaskResponse {
 				size := e.formatFileSize(info.Size())
 				output.WriteString(fmt.Sprintf("📄 %s (%s)\n", relPath, size))
 			}
+			fileCount++
 			return nil
 		})
 	} else {
@@ -324,11 +336,20 @@ func (e *Executor) executeListDir(task *Task) *TaskResponse {
 				size := e.formatFileSize(info.Size())
 				output.WriteString(fmt.Sprintf("📄 %s (%s)\n", entry.Name(), size))
 			}
+			fileCount++
 		}
 	}
 
+	// Store actual directory listing for LLM
+	response.ActualContent = output.String()
+
 	response.Success = true
-	response.Output = output.String()
+	// Show only status message to user, not the actual directory listing
+	if task.Recursive {
+		response.Output = fmt.Sprintf("Reading folder structure: %s (recursive, %d items)", task.Path, fileCount)
+	} else {
+		response.Output = fmt.Sprintf("Reading folder structure: %s (%d items)", task.Path, fileCount)
+	}
 	return response
 }
 
