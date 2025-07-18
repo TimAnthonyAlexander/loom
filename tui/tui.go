@@ -29,15 +29,10 @@ var (
 			Padding(1, 2)
 
 	inputStyle = lipgloss.NewStyle().
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color("#04B575")).
 			Padding(0, 1)
 
 	messageStyle = lipgloss.NewStyle().
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color("#F25D94")).
-			Padding(1, 2).
-			Height(10)
+			Padding(0, 1)
 
 	fileTreeStyle = lipgloss.NewStyle().
 			BorderStyle(lipgloss.NormalBorder()).
@@ -111,12 +106,12 @@ type model struct {
 	streamChan       chan llm.StreamChunk
 
 	// Task execution
-	taskManager     *task.Manager
-	taskExecutor    *task.Executor
+	taskManager      *task.Manager
+	taskExecutor     *task.Executor
 	currentExecution *task.TaskExecution
-	taskHistory     []string
-	taskEventChan   chan task.TaskExecutionEvent
-	
+	taskHistory      []string
+	taskEventChan    chan task.TaskExecutionEvent
+
 	// Task confirmation
 	pendingConfirmation *TaskConfirmationMsg
 	showingConfirmation bool
@@ -154,6 +149,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.currentView = viewTasks
 			case viewTasks:
 				m.currentView = viewChat
+				// Refresh messages when returning to chat view to ensure sync
+				m.messages = m.chatSession.GetDisplayMessages()
 			}
 		case "up":
 			if m.currentView == viewFileTree && m.fileTreeScroll > 0 {
@@ -180,32 +177,98 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, tea.Quit
 				} else if userInput == "/files" {
 					stats := m.index.GetStats()
-					m.messages = append(m.messages, fmt.Sprintf("> %s", userInput))
-					m.messages = append(m.messages, fmt.Sprintf("Indexed %d files", stats.TotalFiles))
+					// Add user command to chat session
+					userMessage := llm.Message{
+						Role:      "user",
+						Content:   userInput,
+						Timestamp: time.Now(),
+					}
+					m.chatSession.AddMessage(userMessage)
+
+					// Add response to chat session
+					response := llm.Message{
+						Role:      "assistant",
+						Content:   fmt.Sprintf("Indexed %d files", stats.TotalFiles),
+						Timestamp: time.Now(),
+					}
+					m.chatSession.AddMessage(response)
+
+					// Refresh display from chat session
+					m.messages = m.chatSession.GetDisplayMessages()
 				} else if userInput == "/stats" {
-					m.messages = append(m.messages, fmt.Sprintf("> %s", userInput))
-					m.messages = append(m.messages, m.getIndexStatsMessage())
+					// Add user command to chat session
+					userMessage := llm.Message{
+						Role:      "user",
+						Content:   userInput,
+						Timestamp: time.Now(),
+					}
+					m.chatSession.AddMessage(userMessage)
+
+					// Add response to chat session
+					response := llm.Message{
+						Role:      "assistant",
+						Content:   m.getIndexStatsMessage(),
+						Timestamp: time.Now(),
+					}
+					m.chatSession.AddMessage(response)
+
+					// Refresh display from chat session
+					m.messages = m.chatSession.GetDisplayMessages()
 				} else if userInput == "/tasks" {
+					// Add user command to chat session
+					userMessage := llm.Message{
+						Role:      "user",
+						Content:   userInput,
+						Timestamp: time.Now(),
+					}
+					m.chatSession.AddMessage(userMessage)
+
+					var responseContent string
 					if m.currentExecution != nil {
 						history := m.taskManager.GetTaskHistory(m.currentExecution)
-						m.messages = append(m.messages, fmt.Sprintf("> %s", userInput))
-						m.messages = append(m.messages, fmt.Sprintf("Task history:\n%s", strings.Join(history, "\n")))
+						responseContent = fmt.Sprintf("Task history:\n%s", strings.Join(history, "\n"))
 					} else {
-						m.messages = append(m.messages, fmt.Sprintf("> %s", userInput))
-						m.messages = append(m.messages, "No task execution in progress")
+						responseContent = "No task execution in progress"
 					}
+
+					// Add response to chat session
+					response := llm.Message{
+						Role:      "assistant",
+						Content:   responseContent,
+						Timestamp: time.Now(),
+					}
+					m.chatSession.AddMessage(response)
+
+					// Refresh display from chat session
+					m.messages = m.chatSession.GetDisplayMessages()
 				} else {
 					// Send to LLM with task execution
-					m.messages = append(m.messages, fmt.Sprintf("> %s", userInput))
-
 					if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
 						return m, m.sendToLLMWithTasks(userInput)
 					} else {
+						// Add user message to chat session first
+						userMessage := llm.Message{
+							Role:      "user",
+							Content:   userInput,
+							Timestamp: time.Now(),
+						}
+						m.chatSession.AddMessage(userMessage)
+
 						errorMsg := "LLM not available. Please configure your model and API key."
 						if m.llmError != nil {
 							errorMsg = fmt.Sprintf("LLM error: %v", m.llmError)
 						}
-						m.messages = append(m.messages, fmt.Sprintf("Loom: %s", errorMsg))
+
+						// Add error response to chat session
+						errorResponse := llm.Message{
+							Role:      "assistant",
+							Content:   errorMsg,
+							Timestamp: time.Now(),
+						}
+						m.chatSession.AddMessage(errorResponse)
+
+						// Refresh display from chat session
+						m.messages = m.chatSession.GetDisplayMessages()
 					}
 				}
 			}
@@ -223,6 +286,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.isStreaming = true
 		m.streamingContent = ""
 		m.streamChan = msg.chunks
+		// Refresh messages to show user input immediately
+		m.messages = m.chatSession.GetDisplayMessages()
 		return m, m.waitForStream()
 
 	case StreamMsg:
@@ -246,6 +311,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if err := m.chatSession.AddMessage(response); err != nil {
 					fmt.Printf("Warning: failed to save assistant message: %v\n", err)
 				}
+
+				// Refresh display messages from chat session to ensure sync
+				m.messages = m.chatSession.GetDisplayMessages()
 
 				// Process LLM response for tasks
 				return m, m.handleLLMResponseForTasks(m.streamingContent)
@@ -315,13 +383,6 @@ func (m model) View() string {
 
 	switch m.currentView {
 	case viewChat:
-		// Input area
-		inputPrefix := "Input: "
-		if m.isStreaming {
-			inputPrefix = "Input (streaming...): "
-		}
-		input := inputStyle.Render(fmt.Sprintf("%s%s", inputPrefix, m.input))
-
 		// Messages area - include streaming content
 		allMessages := make([]string, len(m.messages))
 		copy(allMessages, m.messages)
@@ -336,7 +397,14 @@ func (m model) View() string {
 		}
 		messages := messageStyle.Render(messageText)
 
-		mainContent = lipgloss.JoinVertical(lipgloss.Left, input, "", messages)
+		// Input area at the bottom
+		inputPrefix := "> "
+		if m.isStreaming {
+			inputPrefix = "> (streaming...) "
+		}
+		input := inputStyle.Render(fmt.Sprintf("%s%s", inputPrefix, m.input))
+
+		mainContent = lipgloss.JoinVertical(lipgloss.Left, messages, "", input)
 
 	case viewFileTree:
 		// File tree view
@@ -379,13 +447,13 @@ func (m model) renderConfirmationDialog() string {
 	var content strings.Builder
 	content.WriteString(fmt.Sprintf("⚠️  TASK CONFIRMATION REQUIRED\n\n"))
 	content.WriteString(fmt.Sprintf("Task: %s\n\n", task.Description()))
-	
+
 	if response.Output != "" {
 		content.WriteString("Preview:\n")
 		content.WriteString(response.Output)
 		content.WriteString("\n\n")
 	}
-	
+
 	content.WriteString("Do you want to proceed with this task?\n")
 	content.WriteString("Press 'y' to approve, 'n' to cancel")
 
@@ -495,6 +563,9 @@ func (m *model) sendToLLMWithTasks(userInput string) tea.Cmd {
 			return StreamMsg{Error: fmt.Errorf("failed to save user message: %w", err)}
 		}
 
+		// Refresh display messages from chat session
+		m.messages = m.chatSession.GetDisplayMessages()
+
 		// Create context with timeout
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 
@@ -519,9 +590,6 @@ func (m *model) sendToLLMWithTasks(userInput string) tea.Cmd {
 // handleLLMResponseForTasks processes the LLM response for task execution
 func (m *model) handleLLMResponseForTasks(llmResponse string) tea.Cmd {
 	return func() tea.Msg {
-		// Add response to messages display
-		m.messages = append(m.messages, fmt.Sprintf("Loom: %s", llmResponse))
-
 		// Handle task execution if task manager is available
 		if m.taskManager != nil {
 			execution, err := m.taskManager.HandleLLMResponse(llmResponse, m.taskEventChan)
@@ -536,7 +604,7 @@ func (m *model) handleLLMResponseForTasks(llmResponse string) tea.Cmd {
 
 			if execution != nil {
 				m.currentExecution = execution
-				
+
 				// Check if there's a pending confirmation
 				if pendingTask, pendingResponse := execution.GetPendingTask(); pendingTask != nil {
 					return TaskConfirmationMsg{
@@ -576,7 +644,7 @@ func (m model) handleTaskEvent(event task.TaskExecutionEvent) (tea.Model, tea.Cm
 // handleTaskConfirmation handles user confirmation for destructive tasks
 func (m model) handleTaskConfirmation(approved bool) (tea.Model, tea.Cmd) {
 	m.showingConfirmation = false
-	
+
 	if m.pendingConfirmation == nil {
 		return m, nil
 	}
@@ -670,7 +738,7 @@ func (m model) getIndexStatsMessage() string {
 
 	if len(stats.LanguagePercent) > 0 {
 		result.WriteString("\nLanguages:\n")
-		
+
 		type langPair struct {
 			name    string
 			percent float64
@@ -734,19 +802,19 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index) erro
 	}
 
 	m := model{
-		workspacePath:    workspacePath,
-		config:           cfg,
-		index:            idx,
-		input:            "",
-		messages:         chatSession.GetDisplayMessages(),
-		currentView:      viewChat,
-		llmAdapter:       llmAdapter,
-		chatSession:      chatSession,
-		llmError:         llmError,
-		taskManager:      taskManager,
-		taskExecutor:     taskExecutor,
-		taskEventChan:    taskEventChan,
-		taskHistory:      make([]string, 0),
+		workspacePath: workspacePath,
+		config:        cfg,
+		index:         idx,
+		input:         "",
+		messages:      chatSession.GetDisplayMessages(),
+		currentView:   viewChat,
+		llmAdapter:    llmAdapter,
+		chatSession:   chatSession,
+		llmError:      llmError,
+		taskManager:   taskManager,
+		taskExecutor:  taskExecutor,
+		taskEventChan: taskEventChan,
+		taskHistory:   make([]string, 0),
 	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
@@ -801,7 +869,7 @@ Current workspace summary:
 
 You can emit tasks to interact with the workspace. Use JSON code blocks like this:
 
-` + "```" + `json
+`+"```"+`json
 {
   "tasks": [
     {"type": "ReadFile", "path": "main.go", "max_lines": 150},
@@ -810,26 +878,26 @@ You can emit tasks to interact with the workspace. Use JSON code blocks like thi
     {"type": "RunShell", "command": "go build", "timeout": 10}
   ]
 }
-` + "```" + `
+`+"```"+`
 
 ### Task Types:
 1. **ReadFile**: Read file contents with optional line limits
-   - `path`: File path (required)
-   - `max_lines`: Max lines to read (default: 200)
-   - `start_line`, `end_line`: Read specific line range
+   - path: File path (required)
+   - max_lines: Max lines to read (default: 200)
+   - start_line, end_line: Read specific line range
 
 2. **EditFile**: Apply file changes (requires user confirmation)
-   - `path`: File path (required) 
-   - `diff`: Unified diff format, OR
-   - `content`: Complete file replacement
+   - path: File path (required) 
+   - diff: Unified diff format, OR
+   - content: Complete file replacement
 
 3. **ListDir**: List directory contents
-   - `path`: Directory path (default: ".")
-   - `recursive`: Include subdirectories (default: false)
+   - path: Directory path (default: ".")
+   - recursive: Include subdirectories (default: false)
 
 4. **RunShell**: Execute shell commands (requires user confirmation, %s)
-   - `command`: Shell command (required)
-   - `timeout`: Timeout in seconds (default: 3)
+   - command: Shell command (required)
+   - timeout: Timeout in seconds (default: 3)
 
 ## Security & Constraints:
 - All file paths must be within the workspace

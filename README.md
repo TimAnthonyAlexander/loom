@@ -2,6 +2,53 @@
 
 Loom is a terminal-based, AI-driven coding assistant written in Go. It runs inside any project folder and gives developers a conversational interface to modify and extend their codebase.
 
+## Milestone 5 - Complete ✅
+
+### Advanced Context, Smart Edits, and Git Integration
+
+All Milestone 5 features have been successfully implemented:
+
+#### 1. Contextual Prompt and File Chunking ✅
+- ✅ **Context Management**: Efficiently include only relevant file snippets in LLM prompt window (±30 lines around changes)
+- ✅ **Token Usage Tracking**: Auto-truncate older messages and summaries with smart context optimization
+- ✅ **File References**: Use file summaries instead of raw code when files are unchanged
+- ✅ **Chat History Summarization**: Automatically summarize older chat messages when context is long
+- ✅ **Chunking for Large Files**: Support for "paging in" more context as needed
+
+#### 2. Multi-file Edit Coordination ✅
+- ✅ **Action Plans**: Coordinate multiple file edits as a single "action plan" with batch approval
+- ✅ **Staged Edits**: Changes are prepared but not written until user approves all diffs
+- ✅ **Batch Diff Preview**: TUI interface for reviewing all changes before applying
+- ✅ **Test-First Policy**: Configurable option to require tests before implementation changes
+- ✅ **Multi-file Validation**: Prevent conflicting operations on the same files
+
+#### 3. Tight Git Integration ✅
+- ✅ **Git Status Tracking**: Real-time Git status display in TUI and status bar
+- ✅ **Auto-staging**: Stage affected files automatically after user approval of edits
+- ✅ **Commit Functionality**: CLI and chat commands for creating commits with user-supplied messages
+- ✅ **Status Awareness**: Prevent destructive edits if files are dirty and not staged/committed
+- ✅ **Branch and Remote Info**: Display current branch, ahead/behind status, and remote information
+
+#### 4. Enhanced Security and Undo ✅
+- ✅ **Comprehensive Secret Detection**: 25+ patterns covering API keys, passwords, cloud credentials, PII
+- ✅ **Auto-backup System**: Automatic backups of files before any changes
+- ✅ **Undo Feature**: `/undo` command and Ctrl+Z hotkey to revert last changes
+- ✅ **Undo Stack Persistence**: Undo history preserved across sessions
+- ✅ **Enhanced Secret Patterns**: Expanded regex patterns for AWS, GitHub, Slack, database URIs, etc.
+
+#### 5. Enhanced TUI and Usability ✅
+- ✅ **Batch Diff Approval Pane**: Interactive interface for reviewing and approving multiple file changes
+- ✅ **Enhanced Views**: Action Plan view (Ctrl+P), Git Status view (Ctrl+G), Undo History view (Ctrl+U)
+- ✅ **Session Persistence**: Save full context and undo stack to disk with crash recovery
+- ✅ **Auto-save**: Automatic session saving every 30 seconds with safe (secret-free) backups
+- ✅ **Enhanced Status Bar**: Shows Git status, action plan status, context info, and security status
+
+#### 6. Advanced Chat Commands ✅
+- ✅ **Git Commands**: `/git` for status, `/commit "message"` for commits
+- ✅ **Undo Commands**: `/undo` to revert last action
+- ✅ **Session Commands**: Session import/export for backup and sharing
+- ✅ **Enhanced Navigation**: Multiple keyboard shortcuts for different views and operations
+
 ## Milestone 4 - Complete ✅
 
 ### Task Planning, Tool Execution, and Recursive Chat Loop
@@ -197,21 +244,35 @@ go build -o loom .
 ./loom
 ```
 
-### TUI Interface
-- **Chat View**: Type messages, chat with AI about your project
+### Enhanced TUI Interface
+- **Chat View**: Type messages, chat with AI about your project with advanced context management
 - **File Tree View**: Press `Tab` to switch, use `↑↓` to scroll through indexed files  
-- **Task Execution View**: Press `Tab` to view task status and execution history
-- **Navigation**: 
-  - `Tab` - Switch between chat, file tree, and task views
-  - `↑↓` - Scroll in file tree view
-  - `Enter` - Send message in chat view
-  - `y`/`n` - Approve/cancel destructive tasks when prompted
-  - `Ctrl+C` or `/quit` - Exit safely
-- **Special Commands**:
-  - `/files` - Show file count
-  - `/stats` - Show detailed project statistics
-  - `/tasks` - Show task execution history
-  - `/quit` - Exit the application
+- **Action Plan View**: Press `Ctrl+P` to view current multi-file action plans and execution status
+- **Batch Approval View**: Interactive interface for reviewing and approving multiple file changes
+- **Git Status View**: Press `Ctrl+G` to view detailed Git repository status
+- **Undo History View**: Press `Ctrl+U` to view and manage undo history
+
+#### Enhanced Navigation: 
+- `Tab` - Switch between chat, file tree, and task views
+- `Ctrl+P` - Action Plan view
+- `Ctrl+G` - Git Status view  
+- `Ctrl+U` - Undo History view
+- `Ctrl+Z` - Quick undo last action
+- `↑↓` - Scroll in views and navigate edits in batch approval
+- `Enter` - Send message in chat, approve selected edit in batch mode
+- `A` - Approve all changes in batch approval mode
+- `R` - Reject all changes in batch approval mode
+- `y`/`n` - Approve/cancel individual tasks when prompted
+- `Ctrl+C` or `/quit` - Exit safely
+
+#### Enhanced Commands:
+- `/files` - Show file count and language breakdown
+- `/stats` - Show detailed project statistics  
+- `/tasks` - Show task execution history
+- `/git` - Display Git repository status
+- `/commit "message"` - Commit staged changes with specified message
+- `/undo` - Undo the last applied action
+- `/quit` - Exit the application
 
 ### Chat Features
 - **AI Conversation**: Ask questions about your code, architecture, or programming concepts
@@ -240,16 +301,25 @@ Loom's AI can now perform actual coding tasks through structured JSON commands:
 - EditFile and RunShell require user confirmation (y/n prompt)
 - File size limits prevent reading oversized files
 
-### Configuration
+### Enhanced Configuration
 ```json
 {
   "model": "openai:gpt-4o",
   "enable_shell": false,
   "max_file_size": 512000,
+  "max_context_tokens": 6000,
+  "enable_test_first": false,
+  "auto_save_interval": "30s",
   "api_key": "your-api-key-here",
   "base_url": "https://api.openai.com/v1"
 }
 ```
+
+#### New Configuration Options:
+- `max_context_tokens` - Maximum tokens for LLM context window (default: 6000)
+- `enable_test_first` - Require tests before implementation changes (default: false)  
+- `auto_save_interval` - Session auto-save interval (default: "30s")
+- Enhanced secret detection with 25+ patterns automatically enabled
 
 ### Model Examples
 ```bash
@@ -310,17 +380,17 @@ The main function now includes proper error logging before exiting. The changes 
 - This provides better debugging information when the application fails
 ```
 
-### Project Structure
+### Enhanced Project Structure
 ```
 loom/
 ├── main.go                 # Entry point
 ├── cmd/
-│   ├── root.go            # Root command with indexer integration
+│   ├── root.go            # Root command with enhanced integrations
 │   ├── init.go            # Init command
 │   ├── config.go          # Config management commands
 │   └── index.go           # Index rebuild command
 ├── config/
-│   └── config.go          # Config system with LLM settings
+│   └── config.go          # Config system with enhanced settings
 ├── workspace/
 │   └── workspace.go       # Workspace detection and .loom setup
 ├── indexer/
@@ -331,19 +401,39 @@ loom/
 │   ├── openai.go          # OpenAI implementation
 │   ├── ollama.go          # Ollama implementation
 │   └── factory.go         # Adapter factory
+├── context/
+│   └── context.go         # Context management and token optimization
 ├── chat/
-│   └── session.go         # Chat session management with task audit
+│   └── session.go         # Chat session management with enhanced audit
 ├── task/
 │   ├── task.go            # Task protocol and parsing
 │   ├── executor.go        # Task execution engine
+│   ├── staged_executor.go # Multi-file staging and coordination
+│   ├── action_plan.go     # Action plan management
 │   ├── manager.go         # Task orchestration and recursive chat
 │   └── task_test.go       # Comprehensive task tests
+├── git/
+│   └── git.go             # Git integration and status management
+├── security/
+│   └── secrets.go         # Enhanced secret detection and redaction
+├── undo/
+│   └── undo.go            # Undo system with backup management
+├── session/
+│   └── persistence.go     # Session persistence and crash recovery
 ├── tui/
-│   └── tui.go             # Enhanced TUI with task execution support
+│   ├── tui.go             # Base TUI implementation
+│   └── enhanced_tui.go    # Enhanced TUI with batch approval
 └── .loom/
     ├── config.json        # Local configuration
     ├── index.cache        # Compressed file index cache
-    └── history/           # Chat history files with task audit
+    ├── sessions/          # Session persistence files
+    │   ├── session_*.json # Complete session state
+    │   └── *.safe.json    # Sanitized session backups
+    ├── undo/              # Undo stack and backups
+    │   ├── stack.json     # Undo action history
+    │   └── *.backup       # File backups
+    ├── staging/           # Temporary staging area
+    └── history/           # Chat history files with enhanced audit
         └── 2024-01-15-1430.jsonl
 ```
 
@@ -374,24 +464,34 @@ rm .loom/config.json
 - **LLM Streaming**: Real-time response chunks with <100ms latency
 
 ## Next Steps (Future Milestones)
-- Advanced code analysis with syntax tree parsing
-- Integration with Git for version control operations
-- Plugin system for custom task types
-- Code refactoring tools and automated testing
+- Advanced code analysis with syntax tree parsing and AST manipulation
+- Plugin system for custom task types and integrations
+- Code refactoring tools with automated testing support
 - IDE integration and language server protocol support
-- Multi-file search and replace operations
-- Project templates and scaffolding
+- Multi-file search and replace with pattern matching
+- Project templates and scaffolding with customizable generators
 - Integration with CI/CD pipelines and development workflows
+- Real-time collaboration features and shared sessions
+- Advanced debugging and profiling integration
+- Code quality metrics and automated code review
 
-## After Milestone 4
-Loom is now a true AI coding agent that can:
-- ✅ Chat about your codebase and architecture
-- ✅ Read and analyze files with intelligent filtering
-- ✅ Make targeted file edits with diff previews
-- ✅ List and explore directory structures
-- ✅ Run shell commands with safety constraints
-- ✅ Stream task results back to the AI for recursive improvement
-- ✅ Maintain complete audit trails of all operations
-- ✅ Require explicit user confirmation for destructive changes
+## After Milestone 5
+Loom is now a sophisticated AI coding agent that can:
+- ✅ Chat about your codebase with intelligent context management
+- ✅ Coordinate multi-file edits as cohesive action plans
+- ✅ Provide batch diff approval with comprehensive previews
+- ✅ Integrate seamlessly with Git workflows (status, staging, commits)
+- ✅ Track and undo any changes with automatic backups
+- ✅ Detect and redact 25+ types of secrets and credentials
+- ✅ Persist sessions with crash recovery and state preservation
+- ✅ Optimize context for large codebases with smart chunking
+- ✅ Support test-first development workflows
+- ✅ Provide enhanced TUI with multiple specialized views
 
-The user stays in full control with clear summaries, diffs, and approval workflows for every action. 
+The user maintains complete control with:
+- Clear summaries and diffs for all changes
+- Batch approval workflows for multi-file edits
+- Comprehensive undo system with persistent history
+- Git integration with automatic staging and commit support
+- Session persistence with crash recovery
+- Enhanced security with comprehensive secret detection 
