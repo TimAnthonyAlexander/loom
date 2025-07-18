@@ -100,6 +100,70 @@ func LoadLatestSession(workspacePath string, maxMessages int) (*Session, error) 
 	return session, nil
 }
 
+// LoadSessionByID loads a specific session by ID (timestamp format)
+func LoadSessionByID(workspacePath string, sessionID string, maxMessages int) (*Session, error) {
+	historyDir := filepath.Join(workspacePath, ".loom", "history")
+
+	// Ensure history directory exists
+	if err := os.MkdirAll(historyDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create history directory: %w", err)
+	}
+
+	// Construct the expected filename
+	historyFile := filepath.Join(historyDir, fmt.Sprintf("%s.jsonl", sessionID))
+
+	// Check if the file exists
+	if _, err := os.Stat(historyFile); os.IsNotExist(err) {
+		return nil, fmt.Errorf("session not found: %s", sessionID)
+	}
+
+	session := &Session{
+		workspacePath: workspacePath,
+		messages:      make([]llm.Message, 0),
+		maxMessages:   maxMessages,
+		historyFile:   historyFile,
+		taskAudit:     make([]TaskAuditEntry, 0),
+	}
+
+	if err := session.loadFromFile(); err != nil {
+		return nil, fmt.Errorf("failed to load session %s: %w", sessionID, err)
+	}
+
+	return session, nil
+}
+
+// ListAvailableSessions returns a list of available session IDs
+func ListAvailableSessions(workspacePath string) ([]string, error) {
+	historyDir := filepath.Join(workspacePath, ".loom", "history")
+
+	// Ensure history directory exists
+	if err := os.MkdirAll(historyDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create history directory: %w", err)
+	}
+
+	// Read all files in the history directory
+	files, err := os.ReadDir(historyDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read history directory: %w", err)
+	}
+
+	var sessions []string
+	for _, file := range files {
+		if strings.HasSuffix(file.Name(), ".jsonl") {
+			// Remove the .jsonl extension to get the session ID
+			sessionID := strings.TrimSuffix(file.Name(), ".jsonl")
+			sessions = append(sessions, sessionID)
+		}
+	}
+
+	// Sort sessions (newest first)
+	sort.Slice(sessions, func(i, j int) bool {
+		return sessions[i] > sessions[j]
+	})
+
+	return sessions, nil
+}
+
 // AddMessage adds a message to the session
 func (s *Session) AddMessage(message llm.Message) error {
 	s.messages = append(s.messages, message)

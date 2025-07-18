@@ -11,6 +11,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	continueSession bool
+	sessionID       string
+)
+
 var rootCmd = &cobra.Command{
 	Use:   "loom",
 	Short: "Loom is a terminal-based, AI-driven coding assistant",
@@ -67,8 +72,12 @@ interface to modify and extend their codebase.`,
 		}
 		defer idx.StopWatching()
 
-		// Start TUI
-		if err := tui.StartTUI(workspacePath, cfg, idx); err != nil {
+		// Start TUI with session options
+		sessionOptions := tui.SessionOptions{
+			ContinueLatest: continueSession,
+			SessionID:      sessionID,
+		}
+		if err := tui.StartTUI(workspacePath, cfg, idx, sessionOptions); err != nil {
 			fmt.Printf("Error starting TUI: %v\n", err)
 			os.Exit(1)
 		}
@@ -77,6 +86,11 @@ interface to modify and extend their codebase.`,
 
 func Execute() error {
 	return rootCmd.Execute()
+}
+
+func init() {
+	rootCmd.Flags().BoolVarP(&continueSession, "continue", "c", false, "Continue from the latest chat session")
+	rootCmd.Flags().StringVarP(&sessionID, "session", "s", "", "Continue from a specific session ID")
 }
 
 func init() {

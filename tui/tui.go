@@ -86,6 +86,15 @@ type TaskConfirmationMsg struct {
 	Preview  string
 }
 
+// ContinueLLMMsg indicates that LLM should continue the conversation after task completion
+type ContinueLLMMsg struct{}
+
+// SessionOptions controls how chat sessions are loaded/created
+type SessionOptions struct {
+	ContinueLatest bool   // If true, continue from latest session
+	SessionID      string // Specific session ID to load (overrides ContinueLatest)
+}
+
 type model struct {
 	workspacePath  string
 	config         *config.Config
@@ -330,6 +339,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case TaskConfirmationMsg:
 		m.pendingConfirmation = &msg
 		m.showingConfirmation = true
+		return m, nil
+
+	case ContinueLLMMsg:
+		// Continue LLM conversation after task completion
+		if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
+			// Refresh messages from chat session to include task results
+			m.messages = m.chatSession.GetDisplayMessages()
+			return m, m.continueLLMAfterTasks()
+		}
 		return m, nil
 
 	case tea.WindowSizeMsg:
@@ -587,6 +605,30 @@ func (m *model) sendToLLMWithTasks(userInput string) tea.Cmd {
 	}
 }
 
+// continueLLMAfterTasks continues LLM conversation after task completion
+func (m *model) continueLLMAfterTasks() tea.Cmd {
+	return func() tea.Msg {
+		// Create context with timeout
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+
+		// Get all messages for the LLM (including task results)
+		messages := m.chatSession.GetMessages()
+
+		// Create a channel for streaming
+		chunks := make(chan llm.StreamChunk, 10)
+
+		// Start streaming in a goroutine
+		go func() {
+			defer cancel()
+			if err := m.llmAdapter.Stream(ctx, messages, chunks); err != nil {
+				chunks <- llm.StreamChunk{Error: err}
+			}
+		}()
+
+		return StreamStartMsg{chunks: chunks}
+	}
+}
+
 // handleLLMResponseForTasks processes the LLM response for task execution
 func (m *model) handleLLMResponseForTasks(llmResponse string) tea.Cmd {
 	return func() tea.Msg {
@@ -612,6 +654,12 @@ func (m *model) handleLLMResponseForTasks(llmResponse string) tea.Cmd {
 						Response: pendingResponse,
 						Preview:  pendingResponse.Output,
 					}
+				}
+
+				// If execution completed successfully without needing confirmation,
+				// trigger LLM continuation to explain the results
+				if execution.Status == "completed" {
+					return ContinueLLMMsg{}
 				}
 			}
 		}
@@ -764,7 +812,7 @@ func (m model) getIndexStatsMessage() string {
 }
 
 // StartTUI initializes and starts the TUI interface with task execution support
-func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index) error {
+func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, options SessionOptions) error {
 	// Initialize LLM adapter
 	var llmAdapter llm.LLMAdapter
 	var llmError error
@@ -777,10 +825,29 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index) erro
 		llmAdapter = adapter
 	}
 
-	// Initialize chat session
-	chatSession, err := chat.LoadLatestSession(workspacePath, 50)
-	if err != nil {
-		return fmt.Errorf("failed to initialize chat session: %w", err)
+	// Initialize chat session based on options
+	var chatSession *chat.Session
+
+	if options.SessionID != "" {
+		// Load specific session by ID
+		session, sessionErr := chat.LoadSessionByID(workspacePath, options.SessionID, 50)
+		if sessionErr != nil {
+			fmt.Printf("Warning: Failed to load session %s: %v\n", options.SessionID, sessionErr)
+			fmt.Println("Creating new session instead...")
+			chatSession = chat.NewSession(workspacePath, 50)
+		} else {
+			chatSession = session
+		}
+	} else if options.ContinueLatest {
+		// Continue from latest session
+		session, sessionErr := chat.LoadLatestSession(workspacePath, 50)
+		if sessionErr != nil {
+			return fmt.Errorf("failed to load latest session: %w", sessionErr)
+		}
+		chatSession = session
+	} else {
+		// Create new session (default behavior)
+		chatSession = chat.NewSession(workspacePath, 50)
 	}
 
 	// Initialize task system
