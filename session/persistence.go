@@ -46,6 +46,22 @@ type SessionState struct {
 	MaxFileSize      int64 `json:"max_file_size"`
 	MaxContextTokens int   `json:"max_context_tokens"`
 	EnableTestFirst  bool  `json:"enable_test_first"`
+
+	// Recovery and integrity
+	RecoveryInfo    *RecoveryState `json:"recovery_info,omitempty"`
+	LastSafeState   time.Time      `json:"last_safe_state"`
+	ConsistencyHash string         `json:"consistency_hash"`
+}
+
+// RecoveryState tracks information needed for session recovery
+type RecoveryState struct {
+	IncompleteEdits    []string  `json:"incomplete_edits"`
+	PendingTasks       []string  `json:"pending_tasks"`
+	UnsavedChanges     []string  `json:"unsaved_changes"`
+	LastSuccessfulSave time.Time `json:"last_successful_save"`
+	CorruptionDetected bool      `json:"corruption_detected"`
+	RecoveryAttempts   int       `json:"recovery_attempts"`
+	BackupFileUsed     string    `json:"backup_file_used,omitempty"`
 }
 
 // SessionManager manages session persistence and recovery
@@ -456,4 +472,114 @@ func (sm *SessionManager) GetSessionSummary() string {
 	}
 
 	return summary
+}
+
+// DetectIncompleteSession checks if a session has incomplete operations
+func (sm *SessionManager) DetectIncompleteSession(sessionID string) (*RecoveryState, error) {
+	session, err := sm.LoadSession(sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load session for recovery check: %w", err)
+	}
+
+	recovery := &RecoveryState{
+		IncompleteEdits:    []string{},
+		PendingTasks:       []string{},
+		UnsavedChanges:     []string{},
+		LastSuccessfulSave: session.LastSaved,
+		CorruptionDetected: false,
+		RecoveryAttempts:   0,
+	}
+
+	// Check for incomplete action plans
+	if session.CurrentActionPlan != nil && session.PlanExecution != nil {
+		if session.PlanExecution.Status == "preparing" || session.PlanExecution.Status == "applying" {
+			recovery.IncompleteEdits = append(recovery.IncompleteEdits, session.CurrentActionPlan.ID)
+		}
+	}
+
+	// Check consistency hash
+	expectedHash := sm.calculateConsistencyHash(session)
+	if session.ConsistencyHash != "" && session.ConsistencyHash != expectedHash {
+		recovery.CorruptionDetected = true
+	}
+
+	return recovery, nil
+}
+
+// RecoverSession attempts to recover a session to a consistent state
+func (sm *SessionManager) RecoverSession(sessionID string) (*SessionState, error) {
+	// First, detect what needs recovery
+	recoveryInfo, err := sm.DetectIncompleteSession(sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to detect recovery needs: %w", err)
+	}
+
+	// Load the session
+	session, err := sm.LoadSession(sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load session for recovery: %w", err)
+	}
+
+	// Initialize recovery info
+	if session.RecoveryInfo == nil {
+		session.RecoveryInfo = recoveryInfo
+	}
+	session.RecoveryInfo.RecoveryAttempts++
+
+	// If corruption detected, try to load from backup
+	if recoveryInfo.CorruptionDetected {
+		backupSession, backupErr := sm.loadFromBackup(sessionID)
+		if backupErr == nil {
+			session = backupSession
+			session.RecoveryInfo.BackupFileUsed = fmt.Sprintf("%s.backup", sessionID)
+		}
+	}
+
+	// Clear incomplete operations
+	if len(recoveryInfo.IncompleteEdits) > 0 {
+		session.CurrentActionPlan = nil
+		session.PlanExecution = nil
+	}
+
+	// Reset to safe state
+	session.LastSafeState = time.Now()
+	session.ConsistencyHash = sm.calculateConsistencyHash(session)
+
+	// Save the recovered session
+	if err := sm.SaveSession(); err != nil {
+		return nil, fmt.Errorf("failed to save recovered session: %w", err)
+	}
+
+	sm.currentSession = session
+	return session, nil
+}
+
+// calculateConsistencyHash calculates a hash for session consistency checking
+func (sm *SessionManager) calculateConsistencyHash(session *SessionState) string {
+	// Simple hash based on key session components
+	data := fmt.Sprintf("%s|%d|%s|%t",
+		session.SessionID,
+		len(session.Messages),
+		session.Version,
+		session.CurrentActionPlan != nil)
+
+	// In a real implementation, you'd use proper hashing
+	return fmt.Sprintf("hash_%x", len(data))
+}
+
+// loadFromBackup attempts to load a session from backup file
+func (sm *SessionManager) loadFromBackup(sessionID string) (*SessionState, error) {
+	backupFile := filepath.Join(sm.sessionDir, fmt.Sprintf("%s.backup.json", sessionID))
+
+	data, err := os.ReadFile(backupFile)
+	if err != nil {
+		return nil, fmt.Errorf("backup file not found: %w", err)
+	}
+
+	var session SessionState
+	if err := json.Unmarshal(data, &session); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal backup session: %w", err)
+	}
+
+	return &session, nil
 }

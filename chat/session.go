@@ -316,60 +316,10 @@ func (s *Session) filterTaskResultForDisplay(content string) string {
 	return strings.Join(filteredLines, "\n")
 }
 
-// CreateSystemPrompt creates a system prompt with project information
-func (s *Session) CreateSystemPrompt(index *indexer.Index) llm.Message {
-	stats := index.GetStats()
-
-	// Get language breakdown
-	var langBreakdown []string
-	type langPair struct {
-		name    string
-		percent float64
-	}
-
-	var langs []langPair
-	for name, percent := range stats.LanguagePercent {
-		if percent > 0 {
-			langs = append(langs, langPair{name, percent})
-		}
-	}
-
-	sort.Slice(langs, func(i, j int) bool {
-		return langs[i].percent > langs[j].percent
-	})
-
-	for i, lang := range langs {
-		if i >= 5 { // Show top 5 languages
-			break
-		}
-		langBreakdown = append(langBreakdown, fmt.Sprintf("%s (%.1f%%)", lang.name, lang.percent))
-	}
-
-	prompt := fmt.Sprintf(`You are Loom, an AI coding assistant. You have read-only access to the workspace file index and can answer programming questions and discuss project structure.
-
-Current workspace summary:
-- Total files: %d
-- Total size: %.2f MB
-- Last updated: %s
-- Primary languages: %s
-
-You can help with:
-- Explaining code structure and architecture
-- Discussing programming concepts and best practices
-- Answering questions about the project
-- Providing coding advice and suggestions
-
-Note: In this milestone, you have read-only access to the file index. You cannot modify files or execute tasks yet.`,
-		stats.TotalFiles,
-		float64(stats.TotalSize)/1024/1024,
-		index.LastUpdated.Format("15:04:05"),
-		strings.Join(langBreakdown, ", "))
-
-	return llm.Message{
-		Role:      "system",
-		Content:   prompt,
-		Timestamp: time.Now(),
-	}
+// CreateSystemPrompt creates an enhanced system prompt with project information and conventions
+func (s *Session) CreateSystemPrompt(index *indexer.Index, enableShell bool) llm.Message {
+	promptEnhancer := llm.NewPromptEnhancer(s.workspacePath, index)
+	return promptEnhancer.CreateEnhancedSystemPrompt(enableShell)
 }
 
 // loadFromFile loads messages from the history file

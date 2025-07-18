@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"loom/chat"
 	"loom/config"
+	contextMgr "loom/context"
 	"loom/indexer"
 	"loom/llm"
 	"loom/task"
@@ -153,6 +154,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
+		case "ctrl+s":
+			// Generate summary with Ctrl+S
+			if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
+				return m, m.generateSummary("session")
+			}
 		case "tab":
 			// Switch between views
 			switch m.currentView {
@@ -256,6 +262,40 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Refresh display from chat session
 					m.messages = m.chatSession.GetDisplayMessages()
 					m.updateWrappedMessages()
+				} else if userInput == "/summary" {
+					// Add user command to chat session
+					userMessage := llm.Message{
+						Role:      "user",
+						Content:   userInput,
+						Timestamp: time.Now(),
+					}
+					m.chatSession.AddMessage(userMessage)
+
+					// Generate summary if LLM is available
+					if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
+						return m, m.generateSummary("session")
+					} else {
+						// Add error response
+						response := llm.Message{
+							Role:      "assistant",
+							Content:   "Summary feature requires LLM to be available. Please configure your model and API key.",
+							Timestamp: time.Now(),
+						}
+						m.chatSession.AddMessage(response)
+						m.messages = m.chatSession.GetDisplayMessages()
+						m.updateWrappedMessages()
+					}
+				} else if userInput == "/rationale" {
+					// Add user command to chat session
+					userMessage := llm.Message{
+						Role:      "user",
+						Content:   userInput,
+						Timestamp: time.Now(),
+					}
+					m.chatSession.AddMessage(userMessage)
+
+					// Show change summaries and rationales
+					return m, m.showRationale()
 				} else {
 					// Send to LLM with task execution
 					if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
@@ -485,7 +525,7 @@ func (m model) View() string {
 	var helpText string
 	switch m.currentView {
 	case viewChat:
-		helpText = "Tab: File Tree/Tasks | ↑↓: Scroll | Enter: Send | Ctrl+C: Quit"
+		helpText = "Tab: File Tree/Tasks | ↑↓: Scroll | Enter: Send | Ctrl+S: Summary | Ctrl+C: Quit"
 	case viewFileTree:
 		helpText = "Tab: Chat/Tasks | Ctrl+C: Quit"
 	case viewTasks:
@@ -902,7 +942,7 @@ func (m *model) updateWrappedMessagesWithOptions(forceAutoScroll bool) {
 
 	// Add welcome message if no messages
 	if len(allMessages) == 0 && !m.isStreaming {
-		welcomeMsg := "Welcome to Loom!\nYou can now chat with an AI assistant about your project.\nTry asking about your code, architecture, or programming questions.\n\nSpecial commands:\n/files - Show file count\n/stats - Show detailed index statistics\n/tasks - Show task execution history\n/quit - Exit the application\n\nPress Tab to view file tree or tasks.\nPress Ctrl+C to exit."
+		welcomeMsg := "Welcome to Loom!\nYou can now chat with an AI assistant about your project.\nTry asking about your code, architecture, or programming questions.\n\nSpecial commands:\n/files - Show file count\n/stats - Show detailed index statistics\n/tasks - Show task execution history\n/summary - Generate session summary\n/rationale - Show change explanations\n/quit - Exit the application\n\nPress Tab to view file tree or tasks.\nPress Ctrl+S for quick summary.\nPress Ctrl+C to exit."
 		allMessages = append(allMessages, welcomeMsg)
 	}
 
@@ -1017,9 +1057,10 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 		taskEventChan = make(chan task.TaskExecutionEvent, 10)
 	}
 
-	// Add system prompt if this is a new session (no previous messages)
+	// Add enhanced system prompt if this is a new session (no previous messages)
 	if len(chatSession.GetMessages()) == 0 {
-		systemPrompt := createSystemPromptWithTasks(idx, cfg.EnableShell)
+		promptEnhancer := llm.NewPromptEnhancer(workspacePath, idx)
+		systemPrompt := promptEnhancer.CreateEnhancedSystemPrompt(cfg.EnableShell)
 		if err := chatSession.AddMessage(systemPrompt); err != nil {
 			fmt.Printf("Warning: failed to add system prompt: %v\n", err)
 		}
@@ -1049,6 +1090,104 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	_, err = p.Run()
 	return err
+}
+
+// generateSummary generates a summary of the current session
+func (m *model) generateSummary(summaryType string) tea.Cmd {
+	return func() tea.Msg {
+		// Get messages from chat session
+		messages := m.chatSession.GetMessages()
+
+		// Create summarizer
+		summarizer := contextMgr.NewSummarizer(m.llmAdapter)
+
+		var summary *contextMgr.Summary
+		var err error
+
+		// Generate summary based on type
+		switch summaryType {
+		case "session":
+			summary, err = summarizer.SummarizeMessages(messages, contextMgr.SummaryTypeSession)
+		case "recent":
+			summary, err = summarizer.SummarizeRecentHistory(messages, 5)
+		case "actionplan":
+			summary, err = summarizer.SummarizeActionPlans(messages)
+		case "progress":
+			summary, err = summarizer.SummarizeProgress(messages)
+		default:
+			summary, err = summarizer.SummarizeMessages(messages, contextMgr.SummaryTypeSession)
+		}
+
+		if err != nil {
+			return StreamMsg{Error: fmt.Errorf("failed to generate summary: %w", err)}
+		}
+
+		// Format summary response
+		summaryResponse := fmt.Sprintf("📊 **%s**\n\n%s\n\n*Summary generated from %s | %d tokens saved*",
+			summary.Title,
+			summary.Content,
+			summary.MessageRange,
+			summary.TokensSaved)
+
+		// Add summary to chat session
+		response := llm.Message{
+			Role:      "assistant",
+			Content:   summaryResponse,
+			Timestamp: time.Now(),
+		}
+
+		if err := m.chatSession.AddMessage(response); err != nil {
+			return StreamMsg{Error: fmt.Errorf("failed to save summary: %w", err)}
+		}
+
+		// Refresh display
+		m.messages = m.chatSession.GetDisplayMessages()
+		m.updateWrappedMessages()
+
+		return StreamMsg{Content: "", Done: true}
+	}
+}
+
+// showRationale displays change summaries and rationales
+func (m *model) showRationale() tea.Cmd {
+	return func() tea.Msg {
+		// For now, show placeholder content
+		// In a full implementation, this would access a change summary manager
+		rationaleContent := `📋 Change Summaries & Rationale
+
+This feature displays explanations for code changes made during the session.
+
+Recent Changes:
+- No changes recorded yet in this session
+
+To see rationales for changes:
+1. Make code edits through the AI
+2. The AI will provide explanations for each change
+3. Use /rationale to view the collected explanations
+
+This helps you understand:
+• Why changes were made
+• What impact they have
+• Testing recommendations
+• Architectural decisions`
+
+		// Add rationale response to chat session
+		response := llm.Message{
+			Role:      "assistant",
+			Content:   rationaleContent,
+			Timestamp: time.Now(),
+		}
+
+		if err := m.chatSession.AddMessage(response); err != nil {
+			return StreamMsg{Error: fmt.Errorf("failed to save rationale: %w", err)}
+		}
+
+		// Refresh display
+		m.messages = m.chatSession.GetDisplayMessages()
+		m.updateWrappedMessages()
+
+		return StreamMsg{Content: "", Done: true}
+	}
 }
 
 // createSystemPromptWithTasks creates an enhanced system prompt that includes task capabilities

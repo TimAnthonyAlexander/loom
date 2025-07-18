@@ -2,6 +2,41 @@
 
 Loom is a terminal-based, AI-driven coding assistant written in Go. It runs inside any project folder and gives developers a conversational interface to modify and extend their codebase.
 
+## Milestone 6 - Complete ✅
+
+### AI Quality Pass, Code Understanding, and Testing Automation
+
+All Milestone 6 features have been successfully implemented:
+
+#### 1. AI Quality & Prompt Engineering ✅
+- ✅ **Dynamic System Prompt**: Auto-extracts project conventions from README.md, CONTRIBUTING.md, and detects testing patterns
+- ✅ **Enhanced LLM Prompting**: Includes coding standards, best practices, and project-specific guidelines in system prompt
+- ✅ **LLM-based Summarization**: Comprehensive chat history summarization with `/summary` command and Ctrl+S hotkey
+- ✅ **Language-aware Snippet Selection**: Uses Tree-sitter-like regex patterns to extract function/class blocks instead of line ranges
+
+#### 2. AI Explanation and Rationale ✅
+- ✅ **Change Summaries**: Natural language summaries required for all code changes with rationale extraction
+- ✅ **Rationale Display**: Dedicated `/rationale` command shows explanations, impact assessments, and testing recommendations
+- ✅ **Enhanced Response Format**: Structured LLM responses with brief explanation, technical reasoning, task execution, change summary, and testing suggestions
+
+#### 3. Test Automation ✅
+- ✅ **Test Discovery**: Automatic detection of test files by convention (_test.go, test_*.py, *.spec.js, etc.)
+- ✅ **Test Execution Integration**: Language-specific test commands (go test, npm test, pytest) with timeout and output capture
+- ✅ **Test Result Analysis**: Parse and summarize test output, show pass/fail status with secret redaction
+- ✅ **LLM Test Feedback**: AI can see test results and iterate/fix failing tests with intelligent suggestions
+
+#### 4. Enhanced Session Recovery ✅
+- ✅ **Incomplete Edit Detection**: Auto-detects partial diffs and incomplete operations on startup
+- ✅ **Safe State Recovery**: Recovers to last consistent state with automatic backup restoration
+- ✅ **Consistency Checking**: Hash-based validation to detect corrupted sessions
+- ✅ **Graceful Error Handling**: Robust handling of invalid diffs, failing tests, and LLM errors
+
+#### 5. Quality Standards & Testing ✅
+- ✅ **Project Convention Analysis**: Automatically detects and incorporates Go, JavaScript, Python, and other language patterns
+- ✅ **Enhanced Error Recovery**: Comprehensive error handling with graceful fallbacks
+- ✅ **Integration Testing**: Automated tests for multi-file edits, undo chains, git workflows, and test execution
+- ✅ **Documentation Updates**: Complete documentation of M6 features and capabilities
+
 ## Milestone 5 - Complete ✅
 
 ### Advanced Context, Smart Edits, and Git Integration

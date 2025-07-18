@@ -52,11 +52,12 @@ type FileSnippet struct {
 
 // ContextManager manages context optimization for LLM interactions
 type ContextManager struct {
-	tokenEstimator *TokenEstimator
-	maxTokens      int
-	snippetPadding int // Lines to include before/after target lines
-	index          *indexer.Index
-	fileCache      map[string]*FileReference // Cache of file references
+	tokenEstimator   *TokenEstimator
+	maxTokens        int
+	snippetPadding   int // Lines to include before/after target lines
+	index            *indexer.Index
+	fileCache        map[string]*FileReference // Cache of file references
+	snippetExtractor *SnippetExtractor         // Language-aware snippet extraction
 }
 
 // NewContextManager creates a new context manager
@@ -66,11 +67,12 @@ func NewContextManager(index *indexer.Index, maxTokens int) *ContextManager {
 	}
 
 	return &ContextManager{
-		tokenEstimator: NewTokenEstimator(),
-		maxTokens:      maxTokens,
-		snippetPadding: 30, // ±30 lines around target
-		index:          index,
-		fileCache:      make(map[string]*FileReference),
+		tokenEstimator:   NewTokenEstimator(),
+		maxTokens:        maxTokens,
+		snippetPadding:   30, // ±30 lines around target
+		index:            index,
+		fileCache:        make(map[string]*FileReference),
+		snippetExtractor: NewSnippetExtractor(index),
 	}
 }
 
@@ -296,6 +298,17 @@ func (cm *ContextManager) generateFileSummary(filePath string, fileMeta *indexer
 		cm.estimateLineCount(fileMeta.Size)))
 
 	return summary.String()
+}
+
+// CreateEnhancedFileSnippet creates a language-aware file snippet
+func (cm *ContextManager) CreateEnhancedFileSnippet(filePath string, targetLine int, context string) (*FileSnippet, error) {
+	// Use the snippet extractor to get a contextual snippet
+	return cm.snippetExtractor.GetContextualSnippet(filePath, targetLine, cm.snippetPadding)
+}
+
+// GetCodeStructures returns all code structures in a file
+func (cm *ContextManager) GetCodeStructures(filePath string) ([]*CodeStructure, error) {
+	return cm.snippetExtractor.ExtractStructures(filePath)
 }
 
 // estimateLineCount estimates line count based on file size
