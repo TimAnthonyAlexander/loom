@@ -98,6 +98,12 @@ type TestPromptMsg struct {
 // ContinueLLMMsg indicates that LLM should continue the conversation after task completion
 type ContinueLLMMsg struct{}
 
+// AutoContinueMsg triggers automatic continuation of LLM conversation
+type AutoContinueMsg struct {
+	Depth        int
+	LastResponse string
+}
+
 // SessionOptions controls how chat sessions are loaded/created
 type SessionOptions struct {
 	ContinueLatest bool   // If true, continue from latest session
@@ -138,6 +144,16 @@ type model struct {
 	// Task confirmation
 	pendingConfirmation *TaskConfirmationMsg
 	showingConfirmation bool
+	
+	// Always-on recursive execution tracking
+	recursiveDepth     int
+	recursiveStartTime time.Time
+	lastLLMResponse    string
+	recentResponses    []string
+	
+	// Safety limits (hardcoded defaults)
+	maxRecursiveDepth int
+	maxRecursiveTime  time.Duration
 }
 
 func (m model) Init() tea.Cmd {
@@ -473,6 +489,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.continueLLMAfterTasks()
 		}
 		return m, nil
+
+	case AutoContinueMsg:
+		// Handle always-on recursive continuation
+		return m.handleAutoContinuation(msg)
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -848,6 +868,9 @@ func (m *model) continueLLMAfterTasks() tea.Cmd {
 // handleLLMResponseForTasks processes the LLM response for task execution
 func (m *model) handleLLMResponseForTasks(llmResponse string) tea.Cmd {
 	return func() tea.Msg {
+		// Store the response for recursive tracking
+		m.lastLLMResponse = llmResponse
+		
 		// Handle task execution with enhanced manager if available, otherwise use basic manager
 		var execution *task.TaskExecution
 		var err error
@@ -878,15 +901,13 @@ func (m *model) handleLLMResponseForTasks(llmResponse string) tea.Cmd {
 					Preview:  pendingResponse.Output,
 				}
 			}
-
-			// If execution completed successfully without needing confirmation,
-			// trigger LLM continuation to explain the results
-			if execution.Status == "completed" {
-				return ContinueLLMMsg{}
-			}
 		}
 
-		return nil
+		// ALWAYS check for auto-continuation after tasks complete
+		return AutoContinueMsg{
+			Depth:        m.recursiveDepth,
+			LastResponse: llmResponse,
+		}
 	}
 }
 
@@ -1049,11 +1070,98 @@ func (m model) handleTaskConfirmation(approved bool) (tea.Model, tea.Cmd) {
 	// Continue LLM conversation to get feedback/acknowledgment
 	if shouldContinue && m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
 		return m, func() tea.Msg {
-			return ContinueLLMMsg{}
+			return AutoContinueMsg{
+				Depth:        m.recursiveDepth,
+				LastResponse: formattedResult,
+			}
 		}
 	}
 
 	return m, nil
+}
+
+// handleAutoContinuation handles always-on recursive continuation
+func (m model) handleAutoContinuation(msg AutoContinueMsg) (tea.Model, tea.Cmd) {
+	// Safety check: depth limit
+	if msg.Depth >= m.maxRecursiveDepth {
+		m.recursiveDepth = 0
+		m.addSystemMessage("⚠️ Reached maximum thinking depth. Stopping here.")
+		return m, nil
+	}
+	
+	// Safety check: time limit  
+	if m.recursiveDepth > 0 && time.Since(m.recursiveStartTime) > m.maxRecursiveTime {
+		m.recursiveDepth = 0
+		m.addSystemMessage("⏰ Auto-continuation timeout reached. Stopping here.")
+		return m, nil
+	}
+	
+	// Track recent responses for loop detection
+	if m.recentResponses == nil {
+		m.recentResponses = make([]string, 0, 5)
+	}
+	
+	m.recentResponses = append(m.recentResponses, msg.LastResponse)
+	if len(m.recentResponses) > 5 {
+		m.recentResponses = m.recentResponses[1:]
+	}
+	
+	// Check for infinite loop pattern
+	detector := task.NewCompletionDetector()
+	if len(m.recentResponses) >= 3 && detector.HasInfiniteLoopPattern(m.recentResponses) {
+		m.recursiveDepth = 0
+		m.addSystemMessage("🔄 Detected repetitive pattern. Asking for completion status...")
+		return m, m.sendToLLMWithTasks("Please provide a clear completion status or final summary.")
+	}
+	
+	// Check if AI signaled completion
+	if detector.IsComplete(msg.LastResponse) {
+		// Reset recursive tracking
+		m.recursiveDepth = 0
+		m.addSystemMessage("✅ Task completed!")
+		return m, nil
+	}
+	
+	// Continue automatically
+	m.recursiveDepth = msg.Depth + 1
+	if m.recursiveDepth == 1 {
+		m.recursiveStartTime = time.Now()
+	}
+	
+	// Generate continuation prompt
+	continuePrompt := detector.GenerateContinuePrompt()
+	
+	// Add auto-generated message
+	autoMessage := llm.Message{
+		Role:      "user", 
+		Content:   continuePrompt,
+		Timestamp: time.Now(),
+	}
+	
+	if err := m.chatSession.AddMessage(autoMessage); err != nil {
+		return m, func() tea.Msg {
+			return StreamMsg{Error: fmt.Errorf("failed to add auto-continuation: %w", err)}
+		}
+	}
+	
+	// Show auto-continuation indicator
+	m.addSystemMessage(fmt.Sprintf("🔄 Continuing automatically... (step %d)", m.recursiveDepth))
+	
+	// Continue with LLM
+	return m, m.sendToLLMWithTasks(continuePrompt)
+}
+
+// addSystemMessage helper method to add system messages to chat
+func (m *model) addSystemMessage(message string) {
+	systemMsg := llm.Message{
+		Role:      "system",
+		Content:   message,
+		Timestamp: time.Now(),
+	}
+	
+	m.chatSession.AddMessage(systemMsg)
+	m.messages = m.chatSession.GetDisplayMessages()
+	m.updateWrappedMessages()
 }
 
 // waitForStream waits for the next streaming chunk (unchanged from original)
@@ -1383,6 +1491,11 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 		taskHistory:     make([]string, 0),
 		width:           80, // Default width until window size is received
 		height:          24, // Default height until window size is received
+		
+		// Initialize recursive tracking with safety defaults
+		recentResponses:   make([]string, 0, 5),
+		maxRecursiveDepth: 15,
+		maxRecursiveTime:  30 * time.Minute,
 	}
 
 	// Initialize wrapped messages

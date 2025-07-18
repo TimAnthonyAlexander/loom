@@ -176,6 +176,29 @@ func (pe *PromptEnhancer) CreateEnhancedSystemPrompt(enableShell bool) Message {
 - EditFile and RunShell tasks require user confirmation (but don't let this stop you from calling them)
 - File size limits apply (large files are truncated)
 
+## IMPORTANT: Completion Signaling
+
+You are in continuous execution mode. After completing any response:
+
+**If your work is COMPLETELY FINISHED:**
+- End your response with "DONE" or "TASK COMPLETED" 
+- Be explicit: "DONE - All files created and feature implemented."
+
+**If you need to continue working:**
+- Simply describe what you plan to do next
+- DO NOT say "done" or "complete" 
+- The system will automatically prompt you to continue
+
+Examples of completion:
+✅ "DONE - The authentication system is fully implemented and tested."
+✅ "TASK COMPLETED - All requested files have been created."
+
+Examples of continuation:
+🔄 "Next, I need to add error handling to the login function."
+🔄 "I should now create the database migration files."
+
+The system will keep prompting you until you signal completion.
+
 ## Project-Specific Guidelines:
 %s
 
