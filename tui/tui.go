@@ -867,23 +867,22 @@ func (m *model) handleLLMResponseForTasks(llmResponse string) tea.Cmd {
 			}
 		}
 
-			if execution != nil {
-				m.currentExecution = execution
+		if execution != nil {
+			m.currentExecution = execution
 
-				// Check if there's a pending confirmation
-				if pendingTask, pendingResponse := execution.GetPendingTask(); pendingTask != nil {
-					return TaskConfirmationMsg{
-						Task:     pendingTask,
-						Response: pendingResponse,
-						Preview:  pendingResponse.Output,
-					}
+			// Check if there's a pending confirmation
+			if pendingTask, pendingResponse := execution.GetPendingTask(); pendingTask != nil {
+				return TaskConfirmationMsg{
+					Task:     pendingTask,
+					Response: pendingResponse,
+					Preview:  pendingResponse.Output,
 				}
+			}
 
-				// If execution completed successfully without needing confirmation,
-				// trigger LLM continuation to explain the results
-				if execution.Status == "completed" {
-					return ContinueLLMMsg{}
-				}
+			// If execution completed successfully without needing confirmation,
+			// trigger LLM continuation to explain the results
+			if execution.Status == "completed" {
+				return ContinueLLMMsg{}
 			}
 		}
 
@@ -976,15 +975,82 @@ func (m model) handleTaskConfirmation(approved bool) (tea.Model, tea.Cmd) {
 	task := m.pendingConfirmation.Task
 	m.pendingConfirmation = nil
 
+	// Add user confirmation decision to chat
+	confirmationMessage := ""
 	if approved {
-		// Apply the task
-		if err := m.taskManager.ConfirmTask(task, true); err != nil {
-			m.taskHistory = append(m.taskHistory, fmt.Sprintf("❌ Failed to apply %s: %v", task.Description(), err))
-		} else {
-			m.taskHistory = append(m.taskHistory, fmt.Sprintf("✅ Applied %s", task.Description()))
-		}
+		confirmationMessage = "User approved the task."
 	} else {
+		confirmationMessage = "User rejected the task."
+	}
+
+	userConfirmationMsg := llm.Message{
+		Role:      "system",
+		Content:   fmt.Sprintf("TASK_CONFIRMATION: %s Task: %s", confirmationMessage, task.Description()),
+		Timestamp: time.Now(),
+	}
+	m.chatSession.AddMessage(userConfirmationMsg)
+
+	var resultMessage llm.Message
+	var shouldContinue bool = false
+
+	var err error
+	if approved {
+		// Apply the task using the appropriate manager
+		if m.enhancedManager != nil {
+			// Use enhanced manager if available
+			err = m.enhancedManager.ConfirmTask(task, true)
+		} else if m.taskManager != nil {
+			// Fall back to basic manager
+			err = m.taskManager.ConfirmTask(task, true)
+		} else {
+			err = fmt.Errorf("no task manager available")
+		}
+	}
+
+	// Format result message using the manager's formatting method
+	var formattedResult string
+	if m.taskManager != nil {
+		formattedResult = m.taskManager.FormatConfirmationResult(task, approved, err)
+	} else {
+		// Fallback formatting if no manager available
+		if !approved {
+			formattedResult = fmt.Sprintf("Task cancelled: %s", task.Description())
+		} else if err != nil {
+			formattedResult = fmt.Sprintf("Task failed: %s - Error: %v", task.Description(), err)
+		} else {
+			formattedResult = fmt.Sprintf("Task completed: %s", task.Description())
+		}
+	}
+
+	// Update task history for display
+	if !approved {
 		m.taskHistory = append(m.taskHistory, fmt.Sprintf("❌ Cancelled %s", task.Description()))
+	} else if err != nil {
+		m.taskHistory = append(m.taskHistory, fmt.Sprintf("❌ Failed to apply %s: %v", task.Description(), err))
+	} else {
+		m.taskHistory = append(m.taskHistory, fmt.Sprintf("✅ Applied %s", task.Description()))
+	}
+
+	// Create result message for LLM
+	resultMessage = llm.Message{
+		Role:      "system",
+		Content:   formattedResult,
+		Timestamp: time.Now(),
+	}
+	shouldContinue = true // Always continue to let LLM know about the result
+
+	// Add result message to chat
+	m.chatSession.AddMessage(resultMessage)
+	
+	// Update display messages
+	m.messages = m.chatSession.GetDisplayMessages()
+	m.updateWrappedMessages()
+
+	// Continue LLM conversation to get feedback/acknowledgment
+	if shouldContinue && m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
+		return m, func() tea.Msg {
+			return ContinueLLMMsg{}
+		}
 	}
 
 	return m, nil

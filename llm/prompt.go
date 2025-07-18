@@ -124,8 +124,22 @@ Execute tasks using JSON code blocks:
 
 2. **EditFile**: Apply file changes (requires user confirmation)
    - path: File path (required) 
-   - diff: Unified diff format, OR
-   - content: Complete file replacement
+   - **Either** diff: Unified diff format **OR** content: Complete file replacement
+   
+   **Important EditFile Guidelines:**
+   - Always read the file first before editing to understand current state
+   - For small changes, use "diff" with unified diff format
+   - For new files or complete rewrites, use "content"
+   - Provide clear descriptions of what changes you're making
+   - You will receive confirmation whether the edit succeeded or failed
+   
+   **EditFile Examples:**
+   `+"```"+`json
+   {"type": "EditFile", "path": "main.go", "content": "package main\n\nfunc main() {\n\tfmt.Println(\"Hello World\")\n}"}
+   `+"```"+`
+   `+"```"+`json
+   {"type": "EditFile", "path": "config.go", "diff": "@@ -1,3 +1,4 @@\n package config\n \n+import \"fmt\"\n import \"os\""}
+   `+"```"+`
 
 3. **ListDir**: List directory contents
    - path: Directory path (default: ".")
@@ -136,6 +150,13 @@ Execute tasks using JSON code blocks:
    - timeout: Timeout in seconds (default: 30)
 
 ## Enhanced Interaction Guidelines
+
+### File Editing Workflow:
+1. **Always read files first** before editing to understand current state
+2. **Explain your planned changes** clearly before executing tasks
+3. **Use tasks for all file operations** - don't just suggest changes
+4. **Wait for confirmation** - you'll receive feedback on whether edits succeeded or failed
+5. **Respond to feedback** - acknowledge successful edits or address failures
 
 ### Code Changes Must Include:
 1. **Natural Language Summary**: Always explain what and why for every change
@@ -148,8 +169,9 @@ When making code changes, structure responses as:
 1. **Brief explanation** of what you're going to do
 2. **Technical reasoning** for the approach
 3. **Task execution** with clear descriptions
-4. **Change summary** with rationale
-5. **Testing suggestions** if applicable
+4. **Wait for task completion feedback**
+5. **Change summary** with rationale (after edits are confirmed)
+6. **Testing suggestions** if applicable
 
 ### Quality Standards:
 - Write idiomatic, well-documented code following project conventions

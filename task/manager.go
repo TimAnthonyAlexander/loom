@@ -231,6 +231,27 @@ func (m *Manager) formatTaskResult(task *Task, response *TaskResponse) string {
 	return result.String()
 }
 
+// FormatConfirmationResult formats the result of a task confirmation for LLM feedback
+func (m *Manager) FormatConfirmationResult(task *Task, approved bool, err error) string {
+	var result strings.Builder
+	
+	result.WriteString(fmt.Sprintf("🔧 Task Confirmation: %s\n", task.Description()))
+	
+	if !approved {
+		result.WriteString("❌ Status: Cancelled by user\n")
+		result.WriteString("📄 Result: Task was not applied\n")
+	} else if err != nil {
+		result.WriteString("❌ Status: Application failed\n")
+		result.WriteString(fmt.Sprintf("💥 Error: %s\n", err.Error()))
+		result.WriteString("📄 Result: Changes were not applied due to error\n")
+	} else {
+		result.WriteString("✅ Status: Successfully applied\n")
+		result.WriteString("📄 Result: File has been modified as requested\n")
+	}
+	
+	return result.String()
+}
+
 // createTaskSummary creates a summary of all tasks in an execution
 func (m *Manager) createTaskSummary(execution *TaskExecution) string {
 	var summary strings.Builder
