@@ -106,6 +106,10 @@ type model struct {
 	currentView    viewMode
 	fileTreeScroll int
 
+	// Chat scrolling and display
+	messageScroll int      // New field for message scrolling
+	messageLines  []string // Wrapped message lines for proper scrolling
+
 	// LLM integration
 	llmAdapter       llm.LLMAdapter
 	chatSession      *chat.Session
@@ -160,11 +164,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.currentView = viewChat
 				// Refresh messages when returning to chat view to ensure sync
 				m.messages = m.chatSession.GetDisplayMessages()
+				m.updateWrappedMessages()
 			}
 		case "up":
-			// File tree scrolling removed since we no longer show file lists
+			// Scroll up in chat view
+			if m.currentView == viewChat && m.messageScroll > 0 {
+				m.messageScroll--
+			}
 		case "down":
-			// File tree scrolling removed since we no longer show file lists
+			// Scroll down in chat view
+			if m.currentView == viewChat {
+				maxScroll := len(m.messageLines) - m.getAvailableMessageHeight()
+				if maxScroll > 0 && m.messageScroll < maxScroll {
+					m.messageScroll++
+				}
+			}
 		case "enter":
 			if m.currentView == viewChat && strings.TrimSpace(m.input) != "" && !m.isStreaming {
 				userInput := strings.TrimSpace(m.input)
@@ -193,6 +207,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					// Refresh display from chat session
 					m.messages = m.chatSession.GetDisplayMessages()
+					m.updateWrappedMessages()
 				} else if userInput == "/stats" {
 					// Add user command to chat session
 					userMessage := llm.Message{
@@ -212,6 +227,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					// Refresh display from chat session
 					m.messages = m.chatSession.GetDisplayMessages()
+					m.updateWrappedMessages()
 				} else if userInput == "/tasks" {
 					// Add user command to chat session
 					userMessage := llm.Message{
@@ -239,6 +255,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					// Refresh display from chat session
 					m.messages = m.chatSession.GetDisplayMessages()
+					m.updateWrappedMessages()
 				} else {
 					// Send to LLM with task execution
 					if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
@@ -267,6 +284,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 						// Refresh display from chat session
 						m.messages = m.chatSession.GetDisplayMessages()
+						m.updateWrappedMessages()
 					}
 				}
 			}
@@ -286,6 +304,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.streamChan = msg.chunks
 		// Refresh messages to show user input immediately
 		m.messages = m.chatSession.GetDisplayMessages()
+		m.updateWrappedMessages()
 		return m, m.waitForStream()
 
 	case StreamMsg:
@@ -293,6 +312,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.isStreaming = false
 			m.streamChan = nil
 			m.messages = append(m.messages, fmt.Sprintf("Loom: Error: %v", msg.Error))
+			m.updateWrappedMessages()
 			return m, nil
 		}
 
@@ -312,6 +332,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				// Refresh display messages from chat session to ensure sync
 				m.messages = m.chatSession.GetDisplayMessages()
+				m.updateWrappedMessages()
 
 				// Process LLM response for tasks
 				return m, m.handleLLMResponseForTasks(m.streamingContent)
@@ -335,6 +356,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
 			// Refresh messages from chat session to include task results
 			m.messages = m.chatSession.GetDisplayMessages()
+			m.updateWrappedMessages()
 			return m, m.continueLLMAfterTasks()
 		}
 		return m, nil
@@ -342,6 +364,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		// Update wrapped messages when window size changes
+		m.updateWrappedMessages()
 	}
 
 	return m, nil
@@ -390,26 +414,53 @@ func (m model) View() string {
 
 	switch m.currentView {
 	case viewChat:
-		// Messages area - include streaming content
-		allMessages := make([]string, len(m.messages))
-		copy(allMessages, m.messages)
+		// Update wrapped messages when needed
+		m.updateWrappedMessages()
 
-		if m.isStreaming && m.streamingContent != "" {
-			allMessages = append(allMessages, fmt.Sprintf("Loom: %s", m.streamingContent))
+		// Calculate available height for messages
+		availableHeight := m.getAvailableMessageHeight()
+
+		// Get visible message lines based on scroll position
+		var visibleLines []string
+		if len(m.messageLines) > 0 {
+			start := m.messageScroll
+			end := m.messageScroll + availableHeight
+
+			if start < 0 {
+				start = 0
+			}
+			if end > len(m.messageLines) {
+				end = len(m.messageLines)
+			}
+
+			if start < len(m.messageLines) {
+				visibleLines = m.messageLines[start:end]
+			}
 		}
 
-		messageText := strings.Join(allMessages, "\n")
-		if messageText == "" && !m.isStreaming {
-			messageText = "Welcome to Loom!\nYou can now chat with an AI assistant about your project.\nTry asking about your code, architecture, or programming questions.\n\nSpecial commands:\n/files - Show file count\n/stats - Show detailed index statistics\n/tasks - Show task execution history\n/quit - Exit the application\n\nPress Tab to view file tree or tasks.\nPress Ctrl+C to exit."
+		// Join visible lines and apply style with width constraint
+		messageText := strings.Join(visibleLines, "\n")
+		messageWidth := m.width - 6 // Account for padding
+		if messageWidth < 40 {
+			messageWidth = 40
 		}
-		messages := messageStyle.Render(messageText)
+
+		messages := messageStyle.Width(messageWidth).Render(messageText)
+
+		// Show scroll indicator if there are more messages
+		var scrollIndicator string
+		if len(m.messageLines) > availableHeight {
+			scrollIndicator = fmt.Sprintf(" [%d/%d]",
+				m.messageScroll+1,
+				len(m.messageLines)-availableHeight+1)
+		}
 
 		// Input area at the bottom
 		inputPrefix := "> "
 		if m.isStreaming {
 			inputPrefix = "> (streaming...) "
 		}
-		input := inputStyle.Render(fmt.Sprintf("%s%s", inputPrefix, m.input))
+		input := inputStyle.Render(fmt.Sprintf("%s%s%s", inputPrefix, m.input, scrollIndicator))
 
 		mainContent = lipgloss.JoinVertical(lipgloss.Left, messages, "", input)
 
@@ -430,7 +481,7 @@ func (m model) View() string {
 	var helpText string
 	switch m.currentView {
 	case viewChat:
-		helpText = "Tab: File Tree/Tasks | Enter: Send | Ctrl+C: Quit"
+		helpText = "Tab: File Tree/Tasks | ↑↓: Scroll | Enter: Send | Ctrl+C: Quit"
 	case viewFileTree:
 		helpText = "Tab: Chat/Tasks | Ctrl+C: Quit"
 	case viewTasks:
@@ -573,6 +624,7 @@ func (m *model) sendToLLMWithTasks(userInput string) tea.Cmd {
 
 		// Refresh display messages from chat session
 		m.messages = m.chatSession.GetDisplayMessages()
+		m.updateWrappedMessages()
 
 		// Create context with timeout
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -766,6 +818,95 @@ func (m model) getLanguageSummary(stats indexer.IndexStats) string {
 	return fmt.Sprintf("(%s)", strings.Join(summary, ", "))
 }
 
+// getAvailableMessageHeight calculates how many lines are available for messages
+func (m model) getAvailableMessageHeight() int {
+	// Calculate used height: title (3), info panel (~7), input (3), help (3), spacing (4)
+	usedHeight := 20
+	availableHeight := m.height - usedHeight
+	if availableHeight < 5 {
+		return 5 // Minimum height
+	}
+	return availableHeight
+}
+
+// wrapText wraps text to fit within the given width
+func (m model) wrapText(text string, width int) []string {
+	if width <= 0 {
+		width = 80 // Default width
+	}
+
+	var lines []string
+	for _, line := range strings.Split(text, "\n") {
+		if len(line) <= width {
+			lines = append(lines, line)
+			continue
+		}
+
+		// Wrap long lines
+		for len(line) > width {
+			// Try to break at word boundary
+			breakPoint := width
+			if spaceIndex := strings.LastIndex(line[:width], " "); spaceIndex > width/2 {
+				breakPoint = spaceIndex
+			}
+
+			lines = append(lines, line[:breakPoint])
+			line = line[breakPoint:]
+			if strings.HasPrefix(line, " ") {
+				line = line[1:]
+			}
+		}
+		if len(line) > 0 {
+			lines = append(lines, line)
+		}
+	}
+	return lines
+}
+
+// updateWrappedMessages updates the wrapped message lines when content changes
+func (m *model) updateWrappedMessages() {
+	if m.width <= 0 {
+		m.width = 80 // Default width
+	}
+
+	// Calculate available width (accounting for padding and borders)
+	messageWidth := m.width - 6 // Padding and potential borders
+	if messageWidth < 40 {
+		messageWidth = 40
+	}
+
+	var allLines []string
+
+	// Wrap each message
+	allMessages := make([]string, len(m.messages))
+	copy(allMessages, m.messages)
+
+	// Add streaming content if active
+	if m.isStreaming && m.streamingContent != "" {
+		allMessages = append(allMessages, fmt.Sprintf("Loom: %s", m.streamingContent))
+	}
+
+	// Add welcome message if no messages
+	if len(allMessages) == 0 && !m.isStreaming {
+		welcomeMsg := "Welcome to Loom!\nYou can now chat with an AI assistant about your project.\nTry asking about your code, architecture, or programming questions.\n\nSpecial commands:\n/files - Show file count\n/stats - Show detailed index statistics\n/tasks - Show task execution history\n/quit - Exit the application\n\nPress Tab to view file tree or tasks.\nPress Ctrl+C to exit."
+		allMessages = append(allMessages, welcomeMsg)
+	}
+
+	for _, message := range allMessages {
+		wrapped := m.wrapText(message, messageWidth)
+		allLines = append(allLines, wrapped...)
+	}
+
+	m.messageLines = allLines
+
+	// Auto-scroll to bottom when new content is added, unless user has scrolled up
+	availableHeight := m.getAvailableMessageHeight()
+	maxScroll := len(m.messageLines) - availableHeight
+	if maxScroll > 0 && m.messageScroll >= maxScroll-3 { // Auto-scroll if near bottom
+		m.messageScroll = maxScroll
+	}
+}
+
 func (m model) getIndexStatsMessage() string {
 	stats := m.index.GetStats()
 
@@ -872,7 +1013,12 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 		taskExecutor:  taskExecutor,
 		taskEventChan: taskEventChan,
 		taskHistory:   make([]string, 0),
+		width:         80, // Default width until window size is received
+		height:        24, // Default height until window size is received
 	}
+
+	// Initialize wrapped messages
+	m.updateWrappedMessages()
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	_, err = p.Run()
