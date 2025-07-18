@@ -26,6 +26,25 @@ func (cd *CompletionDetector) IsComplete(response string) bool {
 	// Debug output can be enabled by setting environment variable
 	debugMode := false // Set to true for debugging
 	
+	// Check for "No" responses indicating more work is needed FIRST
+	continuationSignals := []string{
+		"no, i still need", "no, i need to", "no, there's more",
+		"not yet", "not finished", "not complete", "not done",
+		"no, i should", "no, we need", "no, the task",
+		"still need to", "still working on", "more work",
+		"not everything", "incomplete", "unfinished",
+		"no, the", "not all", "still have to",
+	}
+	
+	for _, signal := range continuationSignals {
+		if strings.Contains(lowerResponse, signal) {
+			if debugMode {
+				fmt.Printf("❌ DEBUG: Found continuation signal: '%s'\n", signal)
+			}
+			return false // Explicitly not complete
+		}
+	}
+	
 	// Explicit completion signals - expanded list
 	completionSignals := []string{
 		"done", "task completed", "finished", "complete", 
@@ -164,24 +183,6 @@ func (cd *CompletionDetector) IsComplete(response string) bool {
 					fmt.Printf("❌ DEBUG: Q&A pattern found but mentions future work\n")
 				}
 			}
-		}
-	}
-	
-	// Check for "No" responses indicating more work is needed
-	continuationSignals := []string{
-		"no, i still need", "no, i need to", "no, there's more",
-		"not yet", "not finished", "not complete", "not done",
-		"no, i should", "no, we need", "no, the task",
-		"still need to", "still working on", "more work",
-		"not everything", "incomplete", "unfinished",
-	}
-	
-	for _, signal := range continuationSignals {
-		if strings.Contains(lowerResponse, signal) {
-			if debugMode {
-				fmt.Printf("❌ DEBUG: Found continuation signal: '%s'\n", signal)
-			}
-			return false // Explicitly not complete
 		}
 	}
 	
