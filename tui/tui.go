@@ -1,11 +1,15 @@
 package tui
 
 import (
+	"context"
 	"fmt"
+	"loom/chat"
 	"loom/config"
 	"loom/indexer"
+	"loom/llm"
 	"sort"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -48,6 +52,18 @@ const (
 	viewFileTree
 )
 
+// StreamMsg represents a streaming message chunk from LLM
+type StreamMsg struct {
+	Content string
+	Error   error
+	Done    bool
+}
+
+// StreamStartMsg indicates streaming has started
+type StreamStartMsg struct {
+	chunks chan llm.StreamChunk
+}
+
 type model struct {
 	workspacePath  string
 	config         *config.Config
@@ -58,6 +74,14 @@ type model struct {
 	height         int
 	currentView    viewMode
 	fileTreeScroll int
+
+	// LLM integration
+	llmAdapter       llm.LLMAdapter
+	chatSession      *chat.Session
+	streamingContent string
+	isStreaming      bool
+	llmError         error
+	streamChan       chan llm.StreamChunk
 }
 
 func (m model) Init() tea.Cmd {
@@ -68,7 +92,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "q":
+		case "ctrl+c":
 			return m, tea.Quit
 		case "tab":
 			// Switch between views
@@ -93,29 +117,82 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case "enter":
-			if m.currentView == viewChat && strings.TrimSpace(m.input) != "" {
-				m.messages = append(m.messages, fmt.Sprintf("> %s", m.input))
+			if m.currentView == viewChat && strings.TrimSpace(m.input) != "" && !m.isStreaming {
+				userInput := strings.TrimSpace(m.input)
+				m.input = ""
 
 				// Handle special commands
-				if m.input == "/files" {
+				if userInput == "/quit" {
+					return m, tea.Quit
+				} else if userInput == "/files" {
 					stats := m.index.GetStats()
+					m.messages = append(m.messages, fmt.Sprintf("> %s", userInput))
 					m.messages = append(m.messages, fmt.Sprintf("Indexed %d files", stats.TotalFiles))
-				} else if m.input == "/stats" {
+				} else if userInput == "/stats" {
+					m.messages = append(m.messages, fmt.Sprintf("> %s", userInput))
 					m.messages = append(m.messages, m.getIndexStatsMessage())
 				} else {
-					m.messages = append(m.messages, "Echo: "+m.input+" (No chat logic yet)")
+					// Send to LLM
+					m.messages = append(m.messages, fmt.Sprintf("> %s", userInput))
+
+					if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
+						return m, m.sendToLLM(userInput)
+					} else {
+						errorMsg := "LLM not available. Please configure your model and API key."
+						if m.llmError != nil {
+							errorMsg = fmt.Sprintf("LLM error: %v", m.llmError)
+						}
+						m.messages = append(m.messages, fmt.Sprintf("Loom: %s", errorMsg))
+					}
 				}
-				m.input = ""
 			}
 		case "backspace":
-			if m.currentView == viewChat && len(m.input) > 0 {
+			if m.currentView == viewChat && len(m.input) > 0 && !m.isStreaming {
 				m.input = m.input[:len(m.input)-1]
 			}
 		default:
-			if m.currentView == viewChat {
+			if m.currentView == viewChat && !m.isStreaming {
 				m.input += msg.String()
 			}
 		}
+
+	case StreamStartMsg:
+		m.isStreaming = true
+		m.streamingContent = ""
+		m.streamChan = msg.chunks
+		return m, m.waitForStream()
+
+	case StreamMsg:
+		if msg.Error != nil {
+			m.isStreaming = false
+			m.streamChan = nil
+			m.messages = append(m.messages, fmt.Sprintf("Loom: Error: %v", msg.Error))
+			return m, nil
+		}
+
+		if msg.Done {
+			m.isStreaming = false
+			m.streamChan = nil
+			// Add the complete response to chat history
+			if m.streamingContent != "" {
+				response := llm.Message{
+					Role:      "assistant",
+					Content:   m.streamingContent,
+					Timestamp: time.Now(),
+				}
+				if err := m.chatSession.AddMessage(response); err != nil {
+					// Log error but continue
+					fmt.Printf("Warning: failed to save assistant message: %v\n", err)
+				}
+				m.messages = append(m.messages, fmt.Sprintf("Loom: %s", m.streamingContent))
+				m.streamingContent = ""
+			}
+			return m, nil
+		}
+
+		m.streamingContent += msg.Content
+		return m, m.waitForStream()
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -133,10 +210,17 @@ func (m model) View() string {
 	langSummary := m.getLanguageSummary(stats)
 
 	// Workspace info
+	var modelStatus string
+	if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
+		modelStatus = m.config.Model + " ✓"
+	} else {
+		modelStatus = m.config.Model + " ✗"
+	}
+
 	info := infoStyle.Render(fmt.Sprintf(
 		"Workspace: %s\nModel: %s\nShell: %t\nFiles: %d %s",
 		m.workspacePath,
-		m.config.Model,
+		modelStatus,
 		m.config.EnableShell,
 		stats.TotalFiles,
 		langSummary,
@@ -146,12 +230,23 @@ func (m model) View() string {
 
 	if m.currentView == viewChat {
 		// Input area
-		input := inputStyle.Render(fmt.Sprintf("Input: %s", m.input))
+		inputPrefix := "Input: "
+		if m.isStreaming {
+			inputPrefix = "Input (streaming...): "
+		}
+		input := inputStyle.Render(fmt.Sprintf("%s%s", inputPrefix, m.input))
 
-		// Messages area
-		messageText := strings.Join(m.messages, "\n")
-		if messageText == "" {
-			messageText = "Welcome to Loom!\nType something and press Enter to test.\nTry: /files or /stats\nPress Tab to view file tree.\nPress Ctrl+C or 'q' to exit."
+		// Messages area - include streaming content
+		allMessages := make([]string, len(m.messages))
+		copy(allMessages, m.messages)
+
+		if m.isStreaming && m.streamingContent != "" {
+			allMessages = append(allMessages, fmt.Sprintf("Loom: %s", m.streamingContent))
+		}
+
+		messageText := strings.Join(allMessages, "\n")
+		if messageText == "" && !m.isStreaming {
+			messageText = "Welcome to Loom!\nYou can now chat with an AI assistant about your project.\nTry asking about your code, architecture, or programming questions.\n\nSpecial commands:\n/files - Show file count\n/stats - Show detailed index statistics\n/quit - Exit the application\n\nPress Tab to view file tree.\nPress Ctrl+C to exit."
 		}
 		messages := messageStyle.Render(messageText)
 
@@ -166,9 +261,13 @@ func (m model) View() string {
 	// Help
 	var helpText string
 	if m.currentView == viewChat {
-		helpText = "Press Tab for file tree • Ctrl+C or 'q' to quit • Enter to send message"
+		if m.isStreaming {
+			helpText = "Press Tab for file tree • Ctrl+C to quit • Streaming response..."
+		} else {
+			helpText = "Press Tab for file tree • Ctrl+C or '/quit' to quit • Enter to send message"
+		}
 	} else {
-		helpText = "Press Tab for chat • ↑↓ to scroll • Ctrl+C or 'q' to quit"
+		helpText = "Press Tab for chat • ↑↓ to scroll • Ctrl+C to quit"
 	}
 
 	help := lipgloss.NewStyle().
@@ -311,18 +410,111 @@ func (m model) renderFileTree() string {
 	return strings.Join(lines, "\n")
 }
 
+// sendToLLM sends a message to the LLM and returns a command to start streaming
+func (m *model) sendToLLM(userInput string) tea.Cmd {
+	return func() tea.Msg {
+		// Add user message to chat session
+		userMessage := llm.Message{
+			Role:      "user",
+			Content:   userInput,
+			Timestamp: time.Now(),
+		}
+
+		if err := m.chatSession.AddMessage(userMessage); err != nil {
+			return StreamMsg{Error: fmt.Errorf("failed to save user message: %w", err)}
+		}
+
+		// Create context with timeout
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+
+		// Get all messages for the LLM
+		messages := m.chatSession.GetMessages()
+
+		// Create a channel for streaming
+		chunks := make(chan llm.StreamChunk, 10)
+
+		// Start streaming in a goroutine
+		go func() {
+			defer cancel()
+			if err := m.llmAdapter.Stream(ctx, messages, chunks); err != nil {
+				chunks <- llm.StreamChunk{Error: err}
+			}
+		}()
+
+		return StreamStartMsg{chunks: chunks}
+	}
+}
+
+// waitForStream waits for the next streaming chunk
+func (m *model) waitForStream() tea.Cmd {
+	return func() tea.Msg {
+		if m.streamChan == nil {
+			return StreamMsg{Done: true}
+		}
+
+		select {
+		case chunk, ok := <-m.streamChan:
+			if !ok {
+				return StreamMsg{Done: true}
+			}
+
+			if chunk.Error != nil {
+				return StreamMsg{Error: chunk.Error}
+			}
+
+			if chunk.Done {
+				return StreamMsg{Done: true}
+			}
+
+			return StreamMsg{Content: chunk.Content}
+		case <-time.After(100 * time.Millisecond):
+			// Timeout to prevent blocking - continue waiting
+			return StreamMsg{Content: ""}
+		}
+	}
+}
+
 // StartTUI initializes and starts the TUI interface
 func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index) error {
+	// Initialize LLM adapter
+	var llmAdapter llm.LLMAdapter
+	var llmError error
+
+	adapter, err := llm.CreateAdapter(cfg.Model, cfg.APIKey, cfg.BaseURL)
+	if err != nil {
+		llmError = err
+		fmt.Printf("Warning: LLM not available: %v\n", err)
+	} else {
+		llmAdapter = adapter
+	}
+
+	// Initialize chat session
+	chatSession, err := chat.LoadLatestSession(workspacePath, 50)
+	if err != nil {
+		return fmt.Errorf("failed to initialize chat session: %w", err)
+	}
+
+	// Add system prompt if this is a new session (no previous messages)
+	if len(chatSession.GetMessages()) == 0 {
+		systemPrompt := chatSession.CreateSystemPrompt(idx)
+		if err := chatSession.AddMessage(systemPrompt); err != nil {
+			fmt.Printf("Warning: failed to add system prompt: %v\n", err)
+		}
+	}
+
 	m := model{
 		workspacePath: workspacePath,
 		config:        cfg,
 		index:         idx,
 		input:         "",
-		messages:      []string{},
+		messages:      chatSession.GetDisplayMessages(),
 		currentView:   viewChat,
+		llmAdapter:    llmAdapter,
+		chatSession:   chatSession,
+		llmError:      llmError,
 	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
-	_, err := p.Run()
+	_, err = p.Run()
 	return err
 }

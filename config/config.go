@@ -14,6 +14,8 @@ type Config struct {
 	Model       string `json:"model"`
 	EnableShell bool   `json:"enable_shell"`
 	MaxFileSize int64  `json:"max_file_size"` // Maximum file size to index in bytes
+	APIKey      string `json:"api_key"`       // API key for LLM providers
+	BaseURL     string `json:"base_url"`      // Base URL for LLM providers (optional)
 }
 
 // DefaultConfig returns a config with default values
@@ -156,6 +158,12 @@ func SaveLocalConfig(workspacePath string, cfg *Config) error {
 func mergeCfg(dst, src *Config) {
 	if src.Model != "" {
 		dst.Model = src.Model
+	}
+	if src.APIKey != "" {
+		dst.APIKey = src.APIKey
+	}
+	if src.BaseURL != "" {
+		dst.BaseURL = src.BaseURL
 	}
 	// EnableShell is a bool, so we need to check if it was explicitly set
 	// For simplicity, we'll always take the source value if the source exists
