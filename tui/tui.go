@@ -332,6 +332,37 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					// Show test discovery and results
 					return m, m.showTestSummary()
+				} else if userInput == "/debug" {
+					// Toggle debug mode for task parsing
+					if task.IsTaskDebugEnabled() {
+						task.DisableTaskDebug()
+						response := llm.Message{
+							Role:      "assistant",
+							Content:   "🔧 Task debug mode disabled.\n\nDebug output for task parsing is now off.",
+							Timestamp: time.Now(),
+						}
+						m.chatSession.AddMessage(response)
+					} else {
+						task.EnableTaskDebug()
+						response := llm.Message{
+							Role:      "assistant",
+							Content:   "🔧 Task debug mode enabled.\n\nYou'll now see detailed output when the LLM fails to output proper task JSON format. This helps identify when the AI suggests actions but doesn't provide executable tasks.\n\nTry asking the AI to read or edit files to see the debug output.",
+							Timestamp: time.Now(),
+						}
+						m.chatSession.AddMessage(response)
+					}
+
+					// Add user command to chat session
+					userMessage := llm.Message{
+						Role:      "user",
+						Content:   userInput,
+						Timestamp: time.Now(),
+					}
+					m.chatSession.AddMessage(userMessage)
+
+					// Refresh display
+					m.messages = m.chatSession.GetDisplayMessages()
+					m.updateWrappedMessages()
 				} else if (userInput == "yes" || userInput == "y") && m.enhancedManager != nil {
 					// Check if this is a response to a test prompt
 					testDiscovery := m.enhancedManager.GetTestDiscovery()
@@ -447,9 +478,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.streamChan = nil
 			// Add the complete response to chat history
 			if m.streamingContent != "" {
+				// Filter potentially misleading status messages
+				filteredContent := m.filterMisleadingStatusMessages(m.streamingContent)
+				
 				response := llm.Message{
 					Role:      "assistant",
-					Content:   m.streamingContent,
+					Content:   filteredContent,
 					Timestamp: time.Now(),
 				}
 				if err := m.chatSession.AddMessage(response); err != nil {
@@ -460,7 +494,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.messages = m.chatSession.GetDisplayMessages()
 				m.updateWrappedMessages()
 
-				// Process LLM response for tasks
+				// Process LLM response for tasks (use original content for task parsing)
 				return m, m.handleLLMResponseForTasks(m.streamingContent)
 			}
 			return m, nil
@@ -634,7 +668,7 @@ func (m model) View() string {
 	var helpText string
 	switch m.currentView {
 	case viewChat:
-		helpText = "Tab: File Tree/Tasks | ↑↓: Scroll | Enter: Send | Ctrl+S: Summary | /test: Tests | /rationale: Changes | Ctrl+C: Quit"
+		helpText = "Tab: File Tree/Tasks | ↑↓: Scroll | Enter: Send | Ctrl+S: Summary | /test: Tests | /debug: Task Debug | /rationale: Changes | Ctrl+C: Quit"
 	case viewFileTree:
 		helpText = "Tab: Chat/Tasks | Ctrl+C: Quit"
 	case viewTasks:
@@ -903,9 +937,36 @@ func (m *model) handleLLMResponseForTasks(llmResponse string) tea.Cmd {
 			}
 		}
 
-		// Only continue for Q&A responses that need clarification
-		// For task execution, we'll continue after task confirmation instead
+		// Check for action indication without tasks (fallback detection)
 		if execution == nil || len(execution.Tasks) == 0 {
+			if m.detectsActionWithoutTasks(llmResponse) {
+				// Add helpful system message to guide the LLM
+				systemMsg := llm.Message{
+					Role:      "system",
+					Content:   "TASK_GUIDANCE: You indicated you would perform an action (like reading a file) but didn't output the required JSON task format. Please output the actual JSON task block to execute the action, or clarify if this was just an explanation.",
+					Timestamp: time.Now(),
+				}
+				m.chatSession.AddMessage(systemMsg)
+				
+				// Add user prompt to request the task
+				userPrompt := llm.Message{
+					Role:      "user",
+					Content:   "Please output the actual JSON task to perform the action you described, or continue with your response if no action is needed.",
+					Timestamp: time.Now(),
+				}
+				m.chatSession.AddMessage(userPrompt)
+				
+				// Refresh display
+				m.messages = m.chatSession.GetDisplayMessages()
+				m.updateWrappedMessages()
+				
+				// Continue with LLM to get the proper task format
+				return AutoContinueMsg{
+					Depth:        m.recursiveDepth,
+					LastResponse: llmResponse,
+				}
+			}
+			
 			// No tasks executed - this was a Q&A response
 			// Check if it's a simple informational response that should complete
 			if m.isInformationalResponse(llmResponse) {
@@ -924,6 +985,80 @@ func (m *model) handleLLMResponseForTasks(llmResponse string) tea.Cmd {
 		// For task executions, don't auto-continue here - wait for task confirmation
 		return nil
 	}
+}
+
+// detectsActionWithoutTasks checks if the LLM indicated it would perform an action but didn't provide tasks
+func (m *model) detectsActionWithoutTasks(response string) bool {
+	lowerResponse := strings.ToLower(response)
+	
+	// Look for action indicators
+	actionIndicators := []string{
+		"📖 reading file", "🔧 task", "📄 reading", "✅ reading",
+		"reading file:", "creating file:", "editing file:", "updating file:",
+		"let me read", "i'll read", "i'll check", "i'll examine",
+		"i'll create", "i'll edit", "i'll update", "i'll modify",
+		"let me check", "let me examine", "let me create", "let me edit",
+	}
+	
+	for _, indicator := range actionIndicators {
+		if strings.Contains(lowerResponse, indicator) {
+			return true
+		}
+	}
+	
+	// Check for file-related emojis without corresponding tasks
+	if (strings.Contains(response, "📖") || strings.Contains(response, "🔧")) {
+		return true
+	}
+	
+	return false
+}
+
+// filterMisleadingStatusMessages filters out status messages that indicate actions without actual tasks
+func (m *model) filterMisleadingStatusMessages(content string) string {
+	lines := strings.Split(content, "\n")
+	var filteredLines []string
+	var warnings []string
+	
+	misleadingPatterns := []string{
+		"📖 Reading file:",
+		"📖 reading file:",
+		"🔧 Task:",
+		"🔧 task:",
+		"📄 Reading:",
+		"📄 reading:",
+		"✅ Reading:",
+		"✅ reading:",
+	}
+	
+	for _, line := range lines {
+		lineIsStatus := false
+		
+		// Check if this line looks like a status message
+		for _, pattern := range misleadingPatterns {
+			if strings.Contains(line, pattern) {
+				// Check if there are actual tasks in the response
+				if !strings.Contains(content, "```json") || !strings.Contains(content, "\"tasks\"") {
+					warnings = append(warnings, fmt.Sprintf("⚠️  Status message without task: %s", strings.TrimSpace(line)))
+					lineIsStatus = true
+					break
+				}
+			}
+		}
+		
+		// Keep the line if it's not a misleading status message
+		if !lineIsStatus {
+			filteredLines = append(filteredLines, line)
+		}
+	}
+	
+	// Add warnings about filtered messages if any
+	if len(warnings) > 0 && task.IsTaskDebugEnabled() {
+		warningMessage := fmt.Sprintf("\n\n🔧 Debug: Filtered misleading status messages:\n%s\n\nNote: Use `/debug` to toggle this debug output.", strings.Join(warnings, "\n"))
+		filteredLines = append(filteredLines, warningMessage)
+	}
+	
+	return strings.Join(filteredLines, "\n")
 }
 
 // isInformationalResponse checks if the response is answering a question vs. indicating work to do

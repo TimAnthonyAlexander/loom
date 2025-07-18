@@ -11,6 +11,21 @@ import (
 // Global debug flag for task parsing - can be enabled with environment variable
 var debugTaskParsing = os.Getenv("LOOM_DEBUG_TASKS") == "1"
 
+// EnableTaskDebug enables debug output for task parsing (for troubleshooting)
+func EnableTaskDebug() {
+	debugTaskParsing = true
+}
+
+// DisableTaskDebug disables debug output for task parsing
+func DisableTaskDebug() {
+	debugTaskParsing = false
+}
+
+// IsTaskDebugEnabled returns whether task debug mode is enabled
+func IsTaskDebugEnabled() bool {
+	return debugTaskParsing
+}
+
 // TaskType represents the type of task to execute
 type TaskType string
 
@@ -67,14 +82,38 @@ func ParseTasks(llmResponse string) (*TaskList, error) {
 	matches := re.FindAllStringSubmatch(llmResponse, -1)
 
 	if len(matches) == 0 {
-		// Debug: Check if the response mentions tasks or actions that should trigger task execution
+		// Enhanced debug: Check if the response mentions tasks or actions that should trigger task execution
 		if debugTaskParsing {
 			lowerResponse := strings.ToLower(llmResponse)
-			if strings.Contains(lowerResponse, "create") || strings.Contains(lowerResponse, "edit") || 
-			   strings.Contains(lowerResponse, "file") || strings.Contains(lowerResponse, "license") ||
-			   strings.Contains(lowerResponse, "i'll") || strings.Contains(lowerResponse, "i will") {
-				// This looks like it should have had tasks, but no JSON blocks found
-				fmt.Printf("DEBUG: LLM response suggests action but no JSON tasks found. Response contains action words but no code blocks.\n")
+			actionWords := []string{
+				"reading file", "📖", "🔧", "creating", "editing", "modifying",
+				"create", "edit", "file", "license", "i'll", "i will", "let me",
+				"executing", "running", "applying", "writing to", "updating",
+			}
+			
+			foundActions := []string{}
+			for _, word := range actionWords {
+				if strings.Contains(lowerResponse, word) {
+					foundActions = append(foundActions, word)
+				}
+			}
+			
+			if len(foundActions) > 0 {
+				fmt.Printf("🚨 DEBUG: LLM response suggests action but no JSON tasks found!\n")
+				fmt.Printf("   Found action indicators: %v\n", foundActions)
+				fmt.Printf("   Response (first 200 chars): %s...\n", llmResponse[:min(len(llmResponse), 200)])
+				fmt.Printf("   ✅ Expected: JSON code block like:\n")
+				fmt.Printf(`   ```json
+   {
+     "tasks": [
+       {"type": "ReadFile", "path": "README.md", "max_lines": 100}
+     ]
+   }
+   ```
+`)
+				fmt.Printf("   💡 The LLM may need better prompting to output actual task JSON.\n\n")
+			} else {
+				fmt.Printf("✅ DEBUG: No JSON tasks found - this appears to be a regular Q&A response.\n")
 			}
 		}
 		// No JSON blocks found - this is normal for regular chat responses

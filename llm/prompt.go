@@ -105,15 +105,41 @@ func (pe *PromptEnhancer) CreateEnhancedSystemPrompt(enableShell bool) Message {
 
 **ALWAYS USE TASKS FOR FILE OPERATIONS** - When the user asks you to create, edit, read, or examine files, you MUST use JSON task blocks immediately. Don't just explain what you would do - DO IT.
 
+### MANDATORY Task Rules:
+1. **NEVER say "Reading file X" without actually emitting the task JSON**
+2. **NEVER use status emojis (📖, 🔧) unless you're outputting the actual task JSON**
+3. **IMMEDIATELY output the JSON code block** - don't describe it first
+4. **Don't say "Let me read" or "I'll check" - just output the JSON task**
+
 ### When to Execute Tasks Immediately:
 - User says "create a file", "edit this", "make the change", "do it", "apply the changes"
 - User asks to read/examine specific files  
 - User requests any file or directory operations
 - When you need to understand current code before making changes
+- **ANY TIME you mention reading, creating, or editing files**
 
 ### Task Execution Format:
 
 **CRITICAL**: You must emit tasks using JSON code blocks with triple backticks. Do NOT say "Then emit" or describe the JSON - actually output the code block.
+
+**WRONG** ❌:
+```
+I'll read the README file to understand the project.
+📖 Reading file: README.md
+```
+
+**CORRECT** ✅:
+```
+I'll read the README file to understand the project.
+
+```json
+{
+  "tasks": [
+    {"type": "ReadFile", "path": "README.md", "max_lines": 200}
+  ]
+}
+```
+```
 
 `+"```"+`json
 {
