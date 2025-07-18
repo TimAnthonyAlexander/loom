@@ -1,7 +1,6 @@
 package task
 
 import (
-	"context"
 	"fmt"
 	"loom/chat"
 	"loom/indexer"
@@ -74,7 +73,6 @@ func (em *EnhancedManager) HandleLLMResponseEnhanced(llmResponse string, eventCh
 		// Extract change summaries for each task
 		for i, task := range execution.Tasks {
 			if i < len(execution.Responses) {
-				response := execution.Responses[i]
 				summary := em.rationaleExtractor.ExtractChangeSummary(llmResponse, &task)
 				if summary.Summary != "" {
 					em.changeSummaryMgr.AddSummary(llmResponse, &task)
