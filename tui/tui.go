@@ -304,7 +304,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.streamChan = msg.chunks
 		// Refresh messages to show user input immediately
 		m.messages = m.chatSession.GetDisplayMessages()
-		m.updateWrappedMessages()
+		m.updateWrappedMessagesWithOptions(true) // Force auto-scroll when starting stream
 		return m, m.waitForStream()
 
 	case StreamMsg:
@@ -414,8 +414,12 @@ func (m model) View() string {
 
 	switch m.currentView {
 	case viewChat:
-		// Update wrapped messages when needed
-		m.updateWrappedMessages()
+		// Update wrapped messages when needed - force auto-scroll during streaming
+		if m.isStreaming {
+			m.updateWrappedMessagesWithOptions(true)
+		} else {
+			m.updateWrappedMessages()
+		}
 
 		// Calculate available height for messages
 		availableHeight := m.getAvailableMessageHeight()
@@ -865,9 +869,19 @@ func (m model) wrapText(text string, width int) []string {
 
 // updateWrappedMessages updates the wrapped message lines when content changes
 func (m *model) updateWrappedMessages() {
+	m.updateWrappedMessagesWithOptions(false)
+}
+
+// updateWrappedMessagesWithOptions updates the wrapped message lines with auto-scroll options
+func (m *model) updateWrappedMessagesWithOptions(forceAutoScroll bool) {
 	if m.width <= 0 {
 		m.width = 80 // Default width
 	}
+
+	// Remember if user was at bottom before update
+	availableHeight := m.getAvailableMessageHeight()
+	oldMaxScroll := len(m.messageLines) - availableHeight
+	wasAtBottom := oldMaxScroll <= 0 || m.messageScroll >= oldMaxScroll-1
 
 	// Calculate available width (accounting for padding and borders)
 	messageWidth := m.width - 6 // Padding and potential borders
@@ -899,11 +913,23 @@ func (m *model) updateWrappedMessages() {
 
 	m.messageLines = allLines
 
-	// Auto-scroll to bottom when new content is added, unless user has scrolled up
-	availableHeight := m.getAvailableMessageHeight()
-	maxScroll := len(m.messageLines) - availableHeight
-	if maxScroll > 0 && m.messageScroll >= maxScroll-3 { // Auto-scroll if near bottom
-		m.messageScroll = maxScroll
+	// Auto-scroll to bottom logic
+	newMaxScroll := len(m.messageLines) - availableHeight
+	if newMaxScroll > 0 {
+		if forceAutoScroll || m.isStreaming || wasAtBottom {
+			// During streaming or if user was at bottom, follow the content
+			m.messageScroll = newMaxScroll
+		} else if m.messageScroll >= newMaxScroll-3 {
+			// User is near bottom but not streaming - gentle auto-scroll
+			m.messageScroll = newMaxScroll
+		}
+
+		// Ensure scroll position is within bounds
+		if m.messageScroll > newMaxScroll {
+			m.messageScroll = newMaxScroll
+		}
+	} else {
+		m.messageScroll = 0
 	}
 }
 
