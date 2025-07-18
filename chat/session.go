@@ -13,12 +13,25 @@ import (
 	"time"
 )
 
+// TaskAuditEntry represents a task execution in the audit trail
+type TaskAuditEntry struct {
+	TaskID      string    `json:"task_id"`
+	TaskType    string    `json:"task_type"`
+	Description string    `json:"description"`
+	Success     bool      `json:"success"`
+	Output      string    `json:"output,omitempty"`
+	Error       string    `json:"error,omitempty"`
+	Approved    bool      `json:"approved,omitempty"`
+	Timestamp   time.Time `json:"timestamp"`
+}
+
 // Session represents a chat session with message history
 type Session struct {
 	workspacePath string
 	messages      []llm.Message
 	maxMessages   int
 	historyFile   string
+	taskAudit     []TaskAuditEntry // Task execution audit trail
 }
 
 // NewSession creates a new chat session
@@ -36,6 +49,7 @@ func NewSession(workspacePath string, maxMessages int) *Session {
 		messages:      make([]llm.Message, 0),
 		maxMessages:   maxMessages,
 		historyFile:   historyFile,
+		taskAudit:     make([]TaskAuditEntry, 0),
 	}
 }
 
@@ -67,6 +81,7 @@ func LoadLatestSession(workspacePath string, maxMessages int) (*Session, error) 
 		workspacePath: workspacePath,
 		messages:      make([]llm.Message, 0),
 		maxMessages:   maxMessages,
+		taskAudit:     make([]TaskAuditEntry, 0),
 	}
 
 	if latestFile != "" {
@@ -116,6 +131,31 @@ func (s *Session) AddMessage(message llm.Message) error {
 	return s.saveToFile(message)
 }
 
+// AddTaskAuditEntry adds a task execution entry to the audit trail
+func (s *Session) AddTaskAuditEntry(entry TaskAuditEntry) error {
+	s.taskAudit = append(s.taskAudit, entry)
+
+	// Also save as a special message for persistence
+	auditMessage := llm.Message{
+		Role:      "system",
+		Content:   fmt.Sprintf("TASK_AUDIT: %s", s.formatTaskAuditEntry(entry)),
+		Timestamp: entry.Timestamp,
+	}
+
+	return s.saveToFile(auditMessage)
+}
+
+// formatTaskAuditEntry formats a task audit entry for storage
+func (s *Session) formatTaskAuditEntry(entry TaskAuditEntry) string {
+	data, _ := json.Marshal(entry)
+	return string(data)
+}
+
+// GetTaskAuditTrail returns the task execution audit trail
+func (s *Session) GetTaskAuditTrail() []TaskAuditEntry {
+	return s.taskAudit
+}
+
 // GetMessages returns all messages in the session
 func (s *Session) GetMessages() []llm.Message {
 	return s.messages
@@ -130,6 +170,12 @@ func (s *Session) GetDisplayMessages() []string {
 			if msg.Role == "assistant" {
 				role = "Loom"
 			}
+
+			// Skip task audit messages in display
+			if strings.HasPrefix(msg.Content, "TASK_AUDIT:") {
+				continue
+			}
+
 			display = append(display, fmt.Sprintf("%s: %s", role, msg.Content))
 		}
 	}
@@ -213,6 +259,15 @@ func (s *Session) loadFromFile() error {
 		}
 
 		s.messages = append(s.messages, message)
+
+		// Extract task audit entries from system messages
+		if message.Role == "system" && strings.HasPrefix(message.Content, "TASK_AUDIT:") {
+			auditData := strings.TrimPrefix(message.Content, "TASK_AUDIT: ")
+			var entry TaskAuditEntry
+			if err := json.Unmarshal([]byte(auditData), &entry); err == nil {
+				s.taskAudit = append(s.taskAudit, entry)
+			}
+		}
 	}
 
 	return scanner.Err()

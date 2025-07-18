@@ -2,6 +2,49 @@
 
 Loom is a terminal-based, AI-driven coding assistant written in Go. It runs inside any project folder and gives developers a conversational interface to modify and extend their codebase.
 
+## Milestone 4 - Complete ✅
+
+### Task Planning, Tool Execution, and Recursive Chat Loop
+
+All Milestone 4 features have been successfully implemented:
+
+#### 1. Task Protocol & Parsing ✅
+- ✅ **JSON Task Block Parsing**: Extracts structured tasks from LLM responses using regex pattern matching
+- ✅ **Task Types**: ReadFile, EditFile, ListDir, RunShell with comprehensive validation
+- ✅ **Security Validation**: Path sanitization, workspace containment, and parameter validation
+- ✅ **Error Handling**: Graceful handling of malformed JSON and invalid task parameters
+
+#### 2. Tool Execution Layer ✅
+- ✅ **ReadFile Executor**: Reads files with line limits, binary detection, and secret redaction
+- ✅ **EditFile Executor**: Applies unified diffs with preview generation and atomic file operations
+- ✅ **ListDir Executor**: Lists directory contents with recursive option and size formatting
+- ✅ **RunShell Executor**: Executes shell commands with timeout and output capture (configurable)
+- ✅ **Security Constraints**: All operations restricted to workspace, binary file protection
+
+#### 3. Recursive Chat/Task Loop ✅
+- ✅ **Task Manager**: Orchestrates task execution with event streaming and confirmation handling
+- ✅ **LLM Integration**: Processes LLM responses, executes tasks, and feeds results back for continuation
+- ✅ **Task Execution Events**: Real-time status updates with detailed progress tracking
+- ✅ **Result Streaming**: Task outputs streamed back to LLM context for informed decision making
+
+#### 4. TUI Enhancements ✅
+- ✅ **Task Execution View**: Dedicated task view showing execution status and history
+- ✅ **Confirmation Dialogs**: Interactive y/n confirmations for destructive operations
+- ✅ **Task Status Display**: Real-time task progress with success/failure indicators
+- ✅ **Three-Panel UI**: Chat, File Tree, and Task views accessible via Tab navigation
+
+#### 5. Chat History and Audit ✅
+- ✅ **Task Audit Trail**: Complete logging of all task executions with timestamps
+- ✅ **Action Markers**: Special markers in chat history for task approvals and results
+- ✅ **Persistent Storage**: Task history saved to .jsonl files with session management
+- ✅ **Display Integration**: Task results formatted for clear chat display
+
+#### 6. Enhanced System Prompt ✅
+- ✅ **Task Instructions**: Comprehensive task documentation in system prompt
+- ✅ **JSON Examples**: Clear examples of task syntax and usage patterns
+- ✅ **Security Guidelines**: Explicit constraints and confirmation requirements
+- ✅ **Capability Awareness**: LLM knows exactly what tasks are available and how to use them
+
 ## Milestone 3 - Complete ✅
 
 ### LLM Adapter & Chat Engine Foundation
@@ -156,15 +199,18 @@ go build -o loom .
 
 ### TUI Interface
 - **Chat View**: Type messages, chat with AI about your project
-- **File Tree View**: Press `Tab` to switch, use `↑↓` to scroll through indexed files
+- **File Tree View**: Press `Tab` to switch, use `↑↓` to scroll through indexed files  
+- **Task Execution View**: Press `Tab` to view task status and execution history
 - **Navigation**: 
-  - `Tab` - Switch between chat and file tree views
+  - `Tab` - Switch between chat, file tree, and task views
   - `↑↓` - Scroll in file tree view
   - `Enter` - Send message in chat view
+  - `y`/`n` - Approve/cancel destructive tasks when prompted
   - `Ctrl+C` or `/quit` - Exit safely
 - **Special Commands**:
   - `/files` - Show file count
   - `/stats` - Show detailed project statistics
+  - `/tasks` - Show task execution history
   - `/quit` - Exit the application
 
 ### Chat Features
@@ -173,6 +219,26 @@ go build -o loom .
 - **Streaming Responses**: Real-time response streaming for immediate feedback
 - **Chat History**: Persistent history across sessions (stored in `.loom/history/`)
 - **Smart Memory**: Automatic message trimming while preserving important context
+- **Task Execution**: AI can read files, make edits, list directories, and run commands
+- **Safe Operations**: All destructive operations require explicit user confirmation
+
+### Task Capabilities
+Loom's AI can now perform actual coding tasks through structured JSON commands:
+
+#### File Operations
+- **Read Files**: `{"type": "ReadFile", "path": "main.go", "max_lines": 100}`
+- **Edit Files**: `{"type": "EditFile", "path": "main.go", "content": "new content"}`
+- **List Directories**: `{"type": "ListDir", "path": "src/", "recursive": true}`
+
+#### Shell Commands (Optional)
+- **Run Commands**: `{"type": "RunShell", "command": "go build", "timeout": 10}`
+
+#### Security Features
+- All file paths restricted to workspace directory
+- Binary files automatically detected and protected
+- Secrets redacted from file content using regex patterns
+- EditFile and RunShell require user confirmation (y/n prompt)
+- File size limits prevent reading oversized files
 
 ### Configuration
 ```json
@@ -200,18 +266,48 @@ go build -o loom .
 
 ### Example Chat Session
 ```
-> How is this project structured?
+> Add error handling to the main function
 
-Loom: This is a Go-based project with 156 files across several key packages:
+Loom: I'll help you add error handling to the main function. Let me first read the current main.go file to understand its structure.
 
-- **cmd/**: Command-line interface with root, init, config, and index commands
-- **config/**: Configuration management system
-- **indexer/**: File system indexing with .gitignore support
-- **tui/**: Terminal user interface using Bubble Tea
-- **llm/**: LLM adapter system for OpenAI and Ollama
-- **chat/**: Chat session and message management
+🔧 Task: Read main.go (max 200 lines)
+✅ Status: Success
+📄 Output: File: main.go (13 lines read)
 
-The project follows a clean modular architecture with clear separation of concerns...
+package main
+
+import (
+	"loom/cmd"
+	"os"
+)
+
+func main() {
+	if err := cmd.Execute(); err != nil {
+		os.Exit(1)
+	}
+}
+
+I can see the main function already has basic error handling, but we can improve it with logging. Let me enhance it:
+
+🔧 Task: Edit main.go (apply diff)  
+⚠️  TASK CONFIRMATION REQUIRED
+
+Task: Edit main.go (apply diff)
+
+Preview:
+[Diff shows addition of fmt import and error logging before os.Exit(1)]
+
+Do you want to proceed with this task?
+Press 'y' to approve, 'n' to cancel
+
+> y
+
+✅ Applied Edit main.go (apply diff)
+
+The main function now includes proper error logging before exiting. The changes add:
+- Import of the fmt package for error output
+- fmt.Fprintf to log errors to stderr before exiting
+- This provides better debugging information when the application fails
 ```
 
 ### Project Structure
@@ -236,13 +332,18 @@ loom/
 │   ├── ollama.go          # Ollama implementation
 │   └── factory.go         # Adapter factory
 ├── chat/
-│   └── session.go         # Chat session management
+│   └── session.go         # Chat session management with task audit
+├── task/
+│   ├── task.go            # Task protocol and parsing
+│   ├── executor.go        # Task execution engine
+│   ├── manager.go         # Task orchestration and recursive chat
+│   └── task_test.go       # Comprehensive task tests
 ├── tui/
-│   └── tui.go             # Enhanced TUI with LLM chat
+│   └── tui.go             # Enhanced TUI with task execution support
 └── .loom/
     ├── config.json        # Local configuration
     ├── index.cache        # Compressed file index cache
-    └── history/           # Chat history files
+    └── history/           # Chat history files with task audit
         └── 2024-01-15-1430.jsonl
 ```
 
@@ -273,8 +374,24 @@ rm .loom/config.json
 - **LLM Streaming**: Real-time response chunks with <100ms latency
 
 ## Next Steps (Future Milestones)
-- File content search and analysis using the indexed data
-- Code modification capabilities with LLM-generated file edits
-- Multi-step task execution with file system operations
-- Advanced code understanding with syntax tree analysis
-- Integration with development tools and workflows 
+- Advanced code analysis with syntax tree parsing
+- Integration with Git for version control operations
+- Plugin system for custom task types
+- Code refactoring tools and automated testing
+- IDE integration and language server protocol support
+- Multi-file search and replace operations
+- Project templates and scaffolding
+- Integration with CI/CD pipelines and development workflows
+
+## After Milestone 4
+Loom is now a true AI coding agent that can:
+- ✅ Chat about your codebase and architecture
+- ✅ Read and analyze files with intelligent filtering
+- ✅ Make targeted file edits with diff previews
+- ✅ List and explore directory structures
+- ✅ Run shell commands with safety constraints
+- ✅ Stream task results back to the AI for recursive improvement
+- ✅ Maintain complete audit trails of all operations
+- ✅ Require explicit user confirmation for destructive changes
+
+The user stays in full control with clear summaries, diffs, and approval workflows for every action. 
