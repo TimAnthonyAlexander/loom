@@ -1,0 +1,8 @@
+# Test .gitignore for Loom
+*.tmp
+test/
+debug.log
+build/
+*.pyc
+.DS_Store 
+loom

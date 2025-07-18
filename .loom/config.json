@@ -1,4 +1,5 @@
 {
   "model": "openai:gpt-4o",
-  "enable_shell": true
+  "enable_shell": true,
+  "max_file_size": 1000000
 }

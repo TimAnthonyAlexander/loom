@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"loom/config"
+	"loom/indexer"
 	"loom/tui"
 	"loom/workspace"
 	"os"
@@ -38,8 +39,36 @@ interface to modify and extend their codebase.`,
 			os.Exit(1)
 		}
 
+		// Initialize or load index
+		idx, err := indexer.LoadFromCache(workspacePath, cfg.MaxFileSize)
+		if err != nil {
+			// Create new index if cache doesn't exist or is invalid
+			fmt.Println("Building workspace index...")
+			idx = indexer.NewIndex(workspacePath, cfg.MaxFileSize)
+			err = idx.BuildIndex()
+			if err != nil {
+				fmt.Printf("Error building index: %v\n", err)
+				os.Exit(1)
+			}
+
+			// Save to cache
+			err = idx.SaveToCache()
+			if err != nil {
+				fmt.Printf("Error saving index cache: %v\n", err)
+				// Continue anyway
+			}
+		}
+
+		// Start file watching
+		err = idx.StartWatching()
+		if err != nil {
+			fmt.Printf("Warning: Could not start file watching: %v\n", err)
+			// Continue anyway
+		}
+		defer idx.StopWatching()
+
 		// Start TUI
-		if err := tui.StartTUI(workspacePath, cfg); err != nil {
+		if err := tui.StartTUI(workspacePath, cfg, idx); err != nil {
 			fmt.Printf("Error starting TUI: %v\n", err)
 			os.Exit(1)
 		}
@@ -53,4 +82,5 @@ func Execute() error {
 func init() {
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(configCmd)
+	rootCmd.AddCommand(indexCmd)
 }

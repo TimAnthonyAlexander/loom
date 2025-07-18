@@ -6,12 +6,14 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 )
 
 // Config represents the loom configuration
 type Config struct {
 	Model       string `json:"model"`
 	EnableShell bool   `json:"enable_shell"`
+	MaxFileSize int64  `json:"max_file_size"` // Maximum file size to index in bytes
 }
 
 // DefaultConfig returns a config with default values
@@ -19,6 +21,7 @@ func DefaultConfig() *Config {
 	return &Config{
 		Model:       "openai:gpt-4o",
 		EnableShell: false,
+		MaxFileSize: 500 * 1024, // 500 KB default
 	}
 }
 
@@ -86,6 +89,15 @@ func (c *Config) Set(key string, value interface{}) error {
 					}
 				}
 				return fmt.Errorf("expected 'true' or 'false' for %s", key)
+			case reflect.Int64:
+				if str, ok := value.(string); ok {
+					// Parse string to int64
+					if val, err := strconv.ParseInt(str, 10, 64); err == nil {
+						fieldValue.SetInt(val)
+						return nil
+					}
+				}
+				return fmt.Errorf("expected numeric value for %s", key)
 			default:
 				return fmt.Errorf("unsupported field type for %s", key)
 			}
