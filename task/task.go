@@ -3,9 +3,13 @@ package task
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 )
+
+// Global debug flag for task parsing - can be enabled with environment variable
+var debugTaskParsing = os.Getenv("LOOM_DEBUG_TASKS") == "1"
 
 // TaskType represents the type of task to execute
 type TaskType string
@@ -63,6 +67,16 @@ func ParseTasks(llmResponse string) (*TaskList, error) {
 	matches := re.FindAllStringSubmatch(llmResponse, -1)
 
 	if len(matches) == 0 {
+		// Debug: Check if the response mentions tasks or actions that should trigger task execution
+		if debugTaskParsing {
+			lowerResponse := strings.ToLower(llmResponse)
+			if strings.Contains(lowerResponse, "create") || strings.Contains(lowerResponse, "edit") || 
+			   strings.Contains(lowerResponse, "file") || strings.Contains(lowerResponse, "license") ||
+			   strings.Contains(lowerResponse, "i'll") || strings.Contains(lowerResponse, "i will") {
+				// This looks like it should have had tasks, but no JSON blocks found
+				fmt.Printf("DEBUG: LLM response suggests action but no JSON tasks found. Response contains action words but no code blocks.\n")
+			}
+		}
 		// No JSON blocks found - this is normal for regular chat responses
 		return nil, nil
 	}
@@ -77,9 +91,17 @@ func ParseTasks(llmResponse string) (*TaskList, error) {
 			continue
 		}
 
+		// Debug: Print what we're trying to parse
+		if debugTaskParsing {
+			fmt.Printf("DEBUG: Attempting to parse JSON task block: %s\n", jsonStr[:min(len(jsonStr), 100)])
+		}
+
 		// Try to parse as TaskList
 		var taskList TaskList
 		if err := json.Unmarshal([]byte(jsonStr), &taskList); err != nil {
+			if debugTaskParsing {
+				fmt.Printf("DEBUG: Failed to parse JSON task block: %v\n", err)
+			}
 			continue // Skip invalid JSON blocks
 		}
 
@@ -88,10 +110,21 @@ func ParseTasks(llmResponse string) (*TaskList, error) {
 			return nil, fmt.Errorf("invalid tasks: %w", err)
 		}
 
+		if debugTaskParsing {
+			fmt.Printf("DEBUG: Successfully parsed %d tasks\n", len(taskList.Tasks))
+		}
 		return &taskList, nil
 	}
 
 	return nil, nil
+}
+
+// Helper function for debug output
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // validateTasks performs basic validation on tasks

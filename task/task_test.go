@@ -252,3 +252,72 @@ func TestTaskRequiresConfirmation(t *testing.T) {
 		t.Error("RunShell should require confirmation")
 	}
 }
+
+func TestParseTasksDebugMode(t *testing.T) {
+	// Test response that should trigger debug warning (action words but no tasks)
+	llmResponse := "I'll create the LICENSE file for you. Let me write this file now."
+
+	taskList, err := ParseTasks(llmResponse)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if taskList != nil {
+		t.Fatal("Expected nil task list for response without JSON blocks")
+	}
+
+	// Note: Debug output will only appear if LOOM_DEBUG_TASKS=1 is set
+}
+
+func TestParseTasksWithRealEditFileTask(t *testing.T) {
+	// Test the exact format the AI should use for creating a LICENSE file
+	llmResponse := `I'll create the LICENSE file with the MIT License for you.
+
+` + "```json\n" + `{
+  "tasks": [
+    {"type": "EditFile", "path": "LICENSE", "content": "MIT License\n\nCopyright (c) 2024\n\nPermission is hereby granted..."}
+  ]
+}
+` + "```"
+
+	taskList, err := ParseTasks(llmResponse)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if taskList == nil {
+		t.Fatal("Expected task list, got nil")
+	}
+
+	if len(taskList.Tasks) != 1 {
+		t.Fatalf("Expected 1 task, got %d", len(taskList.Tasks))
+	}
+
+	task := taskList.Tasks[0]
+	if task.Type != TaskTypeEditFile {
+		t.Errorf("Expected EditFile, got %s", task.Type)
+	}
+	if task.Path != "LICENSE" {
+		t.Errorf("Expected LICENSE, got %s", task.Path)
+	}
+	if task.Content == "" {
+		t.Error("Expected content for LICENSE file")
+	}
+}
+
+func TestParseTasksRejectsLiteralEmitText(t *testing.T) {
+	// Test response where AI says "Then emit" instead of actually emitting JSON
+	llmResponse := `I'll create the LICENSE file with the MIT License for you.
+Then emit: {"tasks": [{"type": "EditFile", "path": "LICENSE", "content": "MIT License..."}]}`
+
+	taskList, err := ParseTasks(llmResponse)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if taskList != nil {
+		t.Fatal("Expected nil task list when AI says 'Then emit' instead of using proper JSON code blocks")
+	}
+
+	// This should not parse because "Then emit:" is not in a proper JSON code block
+}

@@ -267,6 +267,29 @@ loom/
 - **Ollama connection**: Ensure Ollama is running with `ollama serve`
 - **Model not found**: For Ollama, run `ollama pull <model-name>` first
 
+### Task Execution Issues
+- **AI explains but doesn't act**: The AI might not be following task execution instructions
+  - Enable debug mode: `export LOOM_DEBUG_TASKS=1` before running `./loom`
+  - Check if the AI is outputting JSON task blocks in its responses
+  - Try being more explicit: "Do it now", "Execute the task", "Create the file"
+  - Restart Loom to reload the enhanced system prompt
+
+- **Tasks not being parsed**: If debug mode shows action words but no tasks:
+  - The AI is not following the JSON task format in the system prompt
+  - Try a different model or adjust the system prompt
+  - Example correct format:
+    ```json
+    {
+      "tasks": [
+        {"type": "EditFile", "path": "LICENSE", "content": "MIT License\n\n..."}
+      ]
+    }
+    ```
+
+- **EditFile tasks require confirmation**: This is by design for safety
+  - The AI should still propose the task - you'll be asked to approve it
+  - If the AI is avoiding EditFile tasks entirely, try explicit commands
+
 ### Configuration
 ```bash
 # Check current configuration
