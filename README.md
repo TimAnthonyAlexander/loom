@@ -5,6 +5,8 @@ A sophisticated terminal-based AI coding assistant written in Go that provides a
 
 *Written by Tim Anthony Alexander. I am not a professional Go developer, so bear with me.*
 
+[![CI/CD Pipeline](https://github.com/TimAnthonyAlexander/loom/actions/workflows/ci.yml/badge.svg)](https://github.com/TimAnthonyAlexander/loom/actions/workflows/ci.yml)
+
 ---
 
 ## Core Capabilities
