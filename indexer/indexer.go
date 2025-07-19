@@ -130,7 +130,7 @@ func (idx *Index) BuildIndex() error {
 	// Close file channel and wait for workers
 	close(fileChan)
 	wg.Wait()
-	
+
 	// Close result channel and wait for result collector
 	close(resultChan)
 	resultWg.Wait()
