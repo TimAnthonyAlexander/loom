@@ -3,6 +3,7 @@
 test/
 debug.log
 build/
+dist/
 *.pyc
 .DS_Store
 loom
