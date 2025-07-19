@@ -89,11 +89,11 @@ func Execute() error {
 }
 
 func init() {
+	// Configure command line flags
 	rootCmd.Flags().BoolVarP(&continueSession, "continue", "c", false, "Continue from the latest chat session")
 	rootCmd.Flags().StringVarP(&sessionID, "session", "s", "", "Continue from a specific session ID")
-}
-
-func init() {
+	
+	// Add subcommands
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(indexCmd)

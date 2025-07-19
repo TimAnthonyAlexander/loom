@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strconv"
 )
 
@@ -49,64 +48,60 @@ func LoadConfig(workspacePath string) (*Config, error) {
 
 // Get retrieves a configuration value by key
 func (c *Config) Get(key string) (interface{}, error) {
-	v := reflect.ValueOf(c).Elem()
-	t := reflect.TypeOf(c).Elem()
-
-	for i := 0; i < v.NumField(); i++ {
-		field := t.Field(i)
-		jsonTag := field.Tag.Get("json")
-		if jsonTag == key {
-			return v.Field(i).Interface(), nil
-		}
+	switch key {
+	case "model":
+		return c.Model, nil
+	case "enable_shell":
+		return c.EnableShell, nil
+	case "max_file_size":
+		return c.MaxFileSize, nil
+	case "api_key":
+		return c.APIKey, nil
+	case "base_url":
+		return c.BaseURL, nil
+	default:
+		return nil, fmt.Errorf("unknown config key: %s", key)
 	}
-
-	return nil, fmt.Errorf("unknown config key: %s", key)
 }
 
 // Set updates a configuration value by key
 func (c *Config) Set(key string, value interface{}) error {
-	v := reflect.ValueOf(c).Elem()
-	t := reflect.TypeOf(c).Elem()
-
-	for i := 0; i < v.NumField(); i++ {
-		field := t.Field(i)
-		jsonTag := field.Tag.Get("json")
-		if jsonTag == key {
-			fieldValue := v.Field(i)
-			switch fieldValue.Kind() {
-			case reflect.String:
-				if str, ok := value.(string); ok {
-					fieldValue.SetString(str)
-					return nil
-				}
-				return fmt.Errorf("expected string value for %s", key)
-			case reflect.Bool:
-				if str, ok := value.(string); ok {
-					if str == "true" {
-						fieldValue.SetBool(true)
-						return nil
-					} else if str == "false" {
-						fieldValue.SetBool(false)
-						return nil
-					}
-				}
-				return fmt.Errorf("expected 'true' or 'false' for %s", key)
-			case reflect.Int64:
-				if str, ok := value.(string); ok {
-					// Parse string to int64
-					if val, err := strconv.ParseInt(str, 10, 64); err == nil {
-						fieldValue.SetInt(val)
-						return nil
-					}
-				}
-				return fmt.Errorf("expected numeric value for %s", key)
-			default:
-				return fmt.Errorf("unsupported field type for %s", key)
-			}
-		}
+	// Convert value to string (CLI input is always string)
+	str, ok := value.(string)
+	if !ok {
+		return fmt.Errorf("expected string value for %s", key)
 	}
 
-	return fmt.Errorf("unknown config key: %s", key)
+	switch key {
+	case "model":
+		c.Model = str
+		return nil
+	case "enable_shell":
+		switch str {
+		case "true":
+			c.EnableShell = true
+		case "false":
+			c.EnableShell = false
+		default:
+			return fmt.Errorf("expected 'true' or 'false' for enable_shell, got: %s", str)
+		}
+		return nil
+	case "max_file_size":
+		val, err := strconv.ParseInt(str, 10, 64)
+		if err != nil {
+			return fmt.Errorf("expected numeric value for max_file_size, got: %s", str)
+		}
+		c.MaxFileSize = val
+		return nil
+	case "api_key":
+		c.APIKey = str
+		return nil
+	case "base_url":
+		c.BaseURL = str
+		return nil
+	default:
+		return fmt.Errorf("unknown config key: %s", key)
+	}
 }
 
 // loadGlobalConfig loads configuration from ~/.loom/config.json

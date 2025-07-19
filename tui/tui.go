@@ -1025,78 +1025,28 @@ func (m *model) handleLLMResponseForTasks(llmResponse string) tea.Cmd {
 	}
 }
 
-// detectsActionWithoutTasks checks if the LLM indicated it would perform an action but didn't provide tasks
+// detectsActionWithoutTasks checks if the LLM indicated an action but didn't provide tasks (simplified)
 func (m *model) detectsActionWithoutTasks(response string) bool {
 	lowerResponse := strings.ToLower(response)
-
-	// Look for action indicators
-	actionIndicators := []string{
-		"📖 reading file", "🔧 task", "📄 reading", "✅ reading",
-		"reading file:", "creating file:", "editing file:", "updating file:",
-		"let me read", "i'll read", "i'll check", "i'll examine",
-		"i'll create", "i'll edit", "i'll update", "i'll modify",
-		"let me check", "let me examine", "let me create", "let me edit",
-	}
-
-	for _, indicator := range actionIndicators {
-		if strings.Contains(lowerResponse, indicator) {
-			return true
+	
+	// Simple check for common action phrases
+	actionPhrases := []string{"let me read", "i'll read", "reading file"}
+	
+	for _, phrase := range actionPhrases {
+		if strings.Contains(lowerResponse, phrase) {
+			// Check if there are actual JSON tasks
+			return !strings.Contains(response, "```json")
 		}
 	}
-
-	// Check for file-related emojis without corresponding tasks
-	if strings.Contains(response, "📖") || strings.Contains(response, "🔧") {
-		return true
-	}
-
+	
 	return false
 }
 
-// filterMisleadingStatusMessages filters out status messages that indicate actions without actual tasks
+// filterMisleadingStatusMessages filters out misleading status messages (simplified)
 func (m *model) filterMisleadingStatusMessages(content string) string {
-	lines := strings.Split(content, "\n")
-	var filteredLines []string
-	var warnings []string
-
-	misleadingPatterns := []string{
-		"📖 Reading file:",
-		"📖 reading file:",
-		"🔧 Task:",
-		"🔧 task:",
-		"📄 Reading:",
-		"📄 reading:",
-		"✅ Reading:",
-		"✅ reading:",
-	}
-
-	for _, line := range lines {
-		lineIsStatus := false
-
-		// Check if this line looks like a status message
-		for _, pattern := range misleadingPatterns {
-			if strings.Contains(line, pattern) {
-				// Check if there are actual tasks in the response
-				if !strings.Contains(content, "```json") || !strings.Contains(content, "\"tasks\"") {
-					warnings = append(warnings, fmt.Sprintf("⚠️  Status message without task: %s", strings.TrimSpace(line)))
-					lineIsStatus = true
-					break
-				}
-			}
-		}
-
-		// Keep the line if it's not a misleading status message
-		if !lineIsStatus {
-			filteredLines = append(filteredLines, line)
-		}
-	}
-
-	// Add warnings about filtered messages if any
-	if len(warnings) > 0 && task.IsTaskDebugEnabled() {
-		warningMessage := fmt.Sprintf("\n\n🔧 Debug: Filtered misleading status messages:\n%s\n\nNote: Use `/debug` to toggle this debug output.", strings.Join(warnings, "\n"))
-		filteredLines = append(filteredLines, warningMessage)
-	}
-
-	return strings.Join(filteredLines, "\n")
+	// Simplified: just return content as-is for better transparency
+	// The user can see what the AI actually said
+	return content
 }
 
 // isInformationalResponse checks if the response is answering a question vs. indicating work to do
@@ -1333,78 +1283,41 @@ func (m model) handleTaskConfirmation(approved bool) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleAutoContinuation handles always-on recursive continuation
+// handleAutoContinuation handles simplified auto-continuation
 func (m model) handleAutoContinuation(msg AutoContinueMsg) (tea.Model, tea.Cmd) {
-	// Safety check: immediate depth limit for task-related loops
-	if msg.Depth >= 5 {
+	// Simple depth check - avoid excessive loops
+	if msg.Depth >= 3 {
 		m.recursiveDepth = 0
-		m.addSystemMessage("⚠️ Reached maximum thinking depth. Task execution may be stuck - stopping auto-continuation.")
 		return m, nil
 	}
 
-	// Safety check: time limit
-	if m.recursiveDepth > 0 && time.Since(m.recursiveStartTime) > 2*time.Minute {
+	// Simple time check
+	if m.recursiveDepth > 0 && time.Since(m.recursiveStartTime) > 1*time.Minute {
 		m.recursiveDepth = 0
-		m.addSystemMessage("⏰ Auto-continuation timeout reached. Stopping here.")
 		return m, nil
 	}
 
-	// Track recent responses for loop detection
-	if m.recentResponses == nil {
-		m.recentResponses = make([]string, 0, 5)
-	}
-
-	m.recentResponses = append(m.recentResponses, msg.LastResponse)
-	if len(m.recentResponses) > 5 {
-		m.recentResponses = m.recentResponses[1:]
-	}
-
-	// Enhanced loop detection for reading tasks
-	if len(m.recentResponses) >= 2 {
-		lastTwo := strings.ToLower(strings.Join(m.recentResponses[len(m.recentResponses)-2:], " "))
-		if strings.Contains(lastTwo, "reading") && strings.Contains(lastTwo, "main.go") {
-			count := 0
-			for _, response := range m.recentResponses {
-				if strings.Contains(strings.ToLower(response), "reading") || strings.Contains(strings.ToLower(response), "read") {
-					count++
-				}
-			}
-			if count >= 2 {
-				m.recursiveDepth = 0
-				m.addSystemMessage("🔄 Detected reading task loop. The AI model seems unable to generate proper JSON tasks. Try asking differently or use '/debug' to enable task debugging.")
-				return m, nil
-			}
-		}
-	}
-
-	// Check for infinite loop pattern
-	detector := task.NewCompletionDetector()
-	if len(m.recentResponses) >= 3 && detector.HasInfiniteLoopPattern(m.recentResponses) {
+	// Check if this looks like a completion signal
+	lowerResponse := strings.ToLower(msg.LastResponse)
+	if strings.Contains(lowerResponse, "complete") || 
+	   strings.Contains(lowerResponse, "done") ||
+	   strings.Contains(lowerResponse, "finished") {
 		m.recursiveDepth = 0
-		m.addSystemMessage("🔄 Detected repetitive pattern. Breaking the loop.")
 		return m, nil
 	}
 
-	// Check if AI signaled completion
-	if detector.IsComplete(msg.LastResponse) {
-		// Reset recursive tracking
-		m.recursiveDepth = 0
-		return m, nil // Remove the completion message
-	}
-
-	// Continue automatically with shorter timeout
+	// Continue automatically
 	m.recursiveDepth = msg.Depth + 1
 	if m.recursiveDepth == 1 {
 		m.recursiveStartTime = time.Now()
 	}
 
-	// Generate completion check prompt
-	completionCheckPrompt := detector.GenerateCompletionCheckPrompt()
+	// Simple completion check prompt
+	completionPrompt := "Is this task complete?"
 
-	// Mark completion detector message with special prefix
 	autoMessage := llm.Message{
 		Role:      "user",
-		Content:   "COMPLETION_CHECK: " + completionCheckPrompt,
+		Content:   completionPrompt,
 		Timestamp: time.Now(),
 	}
 
@@ -1414,10 +1327,7 @@ func (m model) handleAutoContinuation(msg AutoContinueMsg) (tea.Model, tea.Cmd) 
 		}
 	}
 
-	// Don't show completion check indicator to user
-
-	// Check with LLM
-	return m, m.sendToLLMWithTasks(completionCheckPrompt)
+	return m, m.sendToLLMWithTasks(completionPrompt)
 }
 
 // addSystemMessage helper method to add system messages to chat

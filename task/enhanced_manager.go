@@ -5,9 +5,6 @@ import (
 	"loom/chat"
 	"loom/indexer"
 	"loom/llm"
-	"os"
-	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -36,36 +33,18 @@ func NewEnhancedManager(executor *Executor, llmAdapter llm.LLMAdapter, chatSessi
 	}
 }
 
-// HandleLLMResponseEnhanced processes LLM responses with M6 enhancements
+// HandleLLMResponseEnhanced processes LLM responses with enhanced features
 func (em *EnhancedManager) HandleLLMResponseEnhanced(llmResponse string, eventChan chan<- TaskExecutionEvent) (*TaskExecution, error) {
-	// Enhanced error recovery wrapper
-	defer func() {
-		if r := recover(); r != nil {
-			eventChan <- TaskExecutionEvent{
-				Type:    "panic_recovery",
-				Message: fmt.Sprintf("Recovered from panic in task execution: %v", r),
-			}
-		}
-	}()
+	// Extract change summary and rationale from LLM response
+	changeSummary := em.rationaleExtractor.ExtractChangeSummary(llmResponse, nil)
+	if changeSummary.Summary != "" {
+		em.changeSummaryMgr.AddSummary(llmResponse, nil)
+	}
 
-	// Extract change summary and rationale from LLM response with error handling
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				fmt.Printf("Warning: Failed to extract change summary: %v\n", r)
-			}
-		}()
-		
-		changeSummary := em.rationaleExtractor.ExtractChangeSummary(llmResponse, nil)
-		if changeSummary.Summary != "" {
-			em.changeSummaryMgr.AddSummary(llmResponse, nil)
-		}
-	}()
-
-	// Handle task execution with the base manager and enhanced error recovery
-	execution, err := em.handleTaskExecutionWithRecovery(llmResponse, eventChan)
+	// Handle task execution with the base manager
+	execution, err := em.Manager.HandleLLMResponse(llmResponse, eventChan)
 	if err != nil {
-		return em.handleExecutionError(err, eventChan)
+		return nil, err
 	}
 
 	// If there was an execution (tasks were found)
@@ -317,188 +296,4 @@ func (em *EnhancedManager) GetChangeSummaries() string {
 	return em.changeSummaryMgr.FormatSummariesForDisplay()
 }
 
-// handleTaskExecutionWithRecovery executes tasks with enhanced error recovery
-func (em *EnhancedManager) handleTaskExecutionWithRecovery(llmResponse string, eventChan chan<- TaskExecutionEvent) (*TaskExecution, error) {
-	// Attempt primary execution
-	execution, err := em.Manager.HandleLLMResponse(llmResponse, eventChan)
-	if err != nil {
-		// Log the error for analysis
-		eventChan <- TaskExecutionEvent{
-			Type:    "execution_error",
-			Message: fmt.Sprintf("Primary execution failed: %v", err),
-		}
-		
-		// Attempt to recover by parsing tasks differently or retrying
-		if strings.Contains(err.Error(), "failed to parse tasks") {
-			return em.attemptTaskParsingRecovery(llmResponse, eventChan)
-		}
-		
-		return nil, err
-	}
-	
-	return execution, nil
-}
-
-// handleExecutionError handles execution errors with graceful recovery
-func (em *EnhancedManager) handleExecutionError(err error, eventChan chan<- TaskExecutionEvent) (*TaskExecution, error) {
-	eventChan <- TaskExecutionEvent{
-		Type:    "error_recovery_attempted",
-		Message: fmt.Sprintf("Attempting to recover from error: %v", err),
-	}
-
-	// For certain types of errors, we can create a minimal execution to keep things moving
-	if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "context") {
-		// Create a minimal execution that represents the error state
-		recovery := &TaskExecution{
-			Tasks:     []Task{},
-			Responses: []TaskResponse{},
-			StartTime: time.Now(),
-			EndTime:   time.Now(),
-			Status:    "error_recovered",
-		}
-		
-		eventChan <- TaskExecutionEvent{
-			Type:    "error_recovery_success",
-			Message: "Recovered from timeout error - continuing with reduced functionality",
-		}
-		
-		return recovery, nil
-	}
-	
-	// For other errors, we fail gracefully but provide helpful information
-	eventChan <- TaskExecutionEvent{
-		Type:    "error_recovery_failed",
-		Message: fmt.Sprintf("Could not recover from error: %v", err),
-	}
-	
-	return nil, err
-}
-
-// attemptTaskParsingRecovery attempts to recover from task parsing errors
-func (em *EnhancedManager) attemptTaskParsingRecovery(llmResponse string, eventChan chan<- TaskExecutionEvent) (*TaskExecution, error) {
-	eventChan <- TaskExecutionEvent{
-		Type:    "parsing_recovery_attempted",
-		Message: "Attempting to recover from task parsing error",
-	}
-
-	// Try to find JSON blocks more aggressively
-	jsonPattern := regexp.MustCompile(`(?s)\{[^{}]*"tasks"[^{}]*\[[^\]]*\][^{}]*\}`)
-	matches := jsonPattern.FindAllString(llmResponse, -1)
-	
-	if len(matches) > 0 {
-		// Try to parse the first match
-		for _, match := range matches {
-			if taskList, err := ParseTasks(match); err == nil && taskList != nil {
-				eventChan <- TaskExecutionEvent{
-					Type:    "parsing_recovery_success",
-					Message: "Successfully recovered and parsed tasks",
-				}
-				
-				// Create a minimal execution
-				execution := &TaskExecution{
-					Tasks:     taskList.Tasks,
-					Responses: make([]TaskResponse, 0),
-					StartTime: time.Now(),
-					Status:    "parsing_recovered",
-				}
-				
-				return execution, nil
-			}
-		}
-	}
-	
-	eventChan <- TaskExecutionEvent{
-		Type:    "parsing_recovery_failed",
-		Message: "Could not recover from parsing error - no valid JSON found",
-	}
-	
-	return nil, fmt.Errorf("parsing recovery failed")
-}
-
-// RecoverFromFailedExecution attempts to recover from a failed execution
-func (em *EnhancedManager) RecoverFromFailedExecution(execution *TaskExecution, eventChan chan<- TaskExecutionEvent) error {
-	if execution == nil {
-		return fmt.Errorf("no execution to recover")
-	}
-
-	eventChan <- TaskExecutionEvent{
-		Type:    "execution_recovery_started",
-		Message: "Attempting to recover failed execution",
-	}
-
-	// Identify failed tasks
-	var failedTasks []Task
-	for i, response := range execution.Responses {
-		if !response.Success && i < len(execution.Tasks) {
-			failedTasks = append(failedTasks, execution.Tasks[i])
-		}
-	}
-
-	if len(failedTasks) == 0 {
-		eventChan <- TaskExecutionEvent{
-			Type:    "execution_recovery_complete",
-			Message: "No failed tasks found - execution is actually healthy",
-		}
-		return nil
-	}
-
-	// Try to recover each failed task
-	recoveredCount := 0
-	for _, task := range failedTasks {
-		if em.attemptTaskRecovery(&task, eventChan) {
-			recoveredCount++
-		}
-	}
-
-	if recoveredCount > 0 {
-		eventChan <- TaskExecutionEvent{
-			Type:    "execution_recovery_partial",
-			Message: fmt.Sprintf("Recovered %d out of %d failed tasks", recoveredCount, len(failedTasks)),
-		}
-	} else {
-		eventChan <- TaskExecutionEvent{
-			Type:    "execution_recovery_failed",
-			Message: "Could not recover any failed tasks",
-		}
-	}
-
-	return nil
-}
-
-// attemptTaskRecovery attempts to recover a specific failed task
-func (em *EnhancedManager) attemptTaskRecovery(task *Task, eventChan chan<- TaskExecutionEvent) bool {
-	switch task.Type {
-	case TaskTypeReadFile:
-		// For read failures, check if file exists and is readable
-		fullPath := filepath.Join(em.executor.workspacePath, task.Path)
-		if _, err := os.Stat(fullPath); err == nil {
-			eventChan <- TaskExecutionEvent{
-				Type:    "task_recovery_success",
-				Message: fmt.Sprintf("File %s is accessible - read task should work", task.Path),
-			}
-			return true
-		}
-		
-	case TaskTypeEditFile:
-		// For edit failures, check file permissions and create backup
-		fullPath := filepath.Join(em.executor.workspacePath, task.Path)
-		if dir := filepath.Dir(fullPath); dir != "" {
-			os.MkdirAll(dir, 0755) // Ensure directory exists
-		}
-		eventChan <- TaskExecutionEvent{
-			Type:    "task_recovery_success",
-			Message: fmt.Sprintf("Ensured directory structure for %s", task.Path),
-		}
-		return true
-		
-	case TaskTypeRunShell:
-		// For shell failures, we can't easily recover, but we can suggest alternatives
-		eventChan <- TaskExecutionEvent{
-			Type:    "task_recovery_suggestion",
-			Message: fmt.Sprintf("Shell command failed: %s - consider checking permissions or dependencies", task.Command),
-		}
-		return false
-	}
-	
-	return false
-} 
+ 
