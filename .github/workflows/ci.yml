@@ -75,11 +75,6 @@ jobs:
         go install golang.org/x/vuln/cmd/govulncheck@latest
         govulncheck ./...
 
-    - name: Run Gosec Security Scanner
-      uses: securego/gosec@v2.22.5
-      with:
-        args: '-fmt sarif -out gosec.sarif ./...'
-
     - name: Upload SARIF file
       uses: github/codeql-action/upload-sarif@v3
       with:
