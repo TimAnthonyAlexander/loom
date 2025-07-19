@@ -143,12 +143,15 @@ type model struct {
 	streamChan       chan llm.StreamChunk
 
 	// Task execution
-	taskManager      *task.Manager
-	enhancedManager  *task.EnhancedManager
-	taskExecutor     *task.Executor
-	currentExecution *task.TaskExecution
-	taskHistory      []string
-	taskEventChan    chan task.TaskExecutionEvent
+	taskManager       *task.Manager
+	enhancedManager   *task.EnhancedManager
+	sequentialManager *task.SequentialTaskManager
+	taskExecutor      *task.Executor
+	currentExecution  *task.TaskExecution
+	taskHistory       []string
+	taskEventChan     chan task.TaskExecutionEvent
+	
+
 
 	// Task confirmation
 	pendingConfirmation *TaskConfirmationMsg
@@ -380,6 +383,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Refresh display
 					m.messages = m.chatSession.GetDisplayMessages()
 					m.updateWrappedMessages()
+
 				} else if (userInput == "yes" || userInput == "y") && m.enhancedManager != nil {
 					// Check if this is a response to a test prompt
 					testDiscovery := m.enhancedManager.GetTestDiscovery()
@@ -877,6 +881,20 @@ func (m *model) sendToLLMWithTasks(userInput string) tea.Cmd {
 		m.messages = m.chatSession.GetDisplayMessages()
 		m.updateWrappedMessages()
 
+		// For exploration queries, use the sequential system prompt
+		if m.sequentialManager != nil && m.isExplorationQuery(userInput) {
+			// Replace the system message temporarily with sequential prompt
+			messages := m.chatSession.GetMessages()
+			
+			// Replace or update the first system message
+			if len(messages) > 0 && messages[0].Role == "system" {
+				sequentialPrompt := m.sequentialManager.CreateSequentialSystemMessage()
+				messages[0] = sequentialPrompt
+			}
+			
+			// Continue with normal streaming but with sequential system prompt
+		}
+
 		// Create context with timeout
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 
@@ -928,99 +946,34 @@ func (m *model) handleLLMResponseForTasks(llmResponse string) tea.Cmd {
 		// Store the response for recursive tracking
 		m.lastLLMResponse = llmResponse
 
-		// Handle task execution with enhanced manager if available, otherwise use basic manager
-		var execution *task.TaskExecution
-		var err error
-
-		if m.enhancedManager != nil {
-			execution, err = m.enhancedManager.HandleLLMResponseEnhanced(llmResponse, m.taskEventChan)
-		} else if m.taskManager != nil {
-			execution, err = m.taskManager.HandleLLMResponse(llmResponse, m.taskEventChan)
-		}
-
-		if err != nil {
-			return TaskEventMsg{
-				Event: task.TaskExecutionEvent{
-					Type:    "execution_failed",
-					Message: fmt.Sprintf("Task execution failed: %v", err),
-				},
+		// Use sequential task parsing to handle single tasks
+		if m.sequentialManager != nil {
+			task, _, err := m.sequentialManager.ParseSingleTask(llmResponse)
+			if err != nil {
+				return StreamMsg{Error: fmt.Errorf("failed to parse task: %w", err)}
 			}
-		}
-
-		if execution != nil {
-			m.currentExecution = execution
-
-			// Check if there's a pending confirmation
-			if pendingTask, pendingResponse := execution.GetPendingTask(); pendingTask != nil {
-				return TaskConfirmationMsg{
-					Task:     pendingTask,
-					Response: pendingResponse,
-					Preview:  pendingResponse.Output,
+			
+			if task != nil {
+				// Execute the single task
+				response := m.taskExecutor.Execute(task)
+				
+				// Add task result to chat session for LLM to see
+				taskResultMsg := m.formatTaskResultForLLM(task, response)
+				if err := m.chatSession.AddMessage(taskResultMsg); err != nil {
+					fmt.Printf("Warning: failed to add task result to chat: %v\n", err)
 				}
+				
+				// Refresh display and continue with LLM
+				m.messages = m.chatSession.GetDisplayMessages()
+				m.updateWrappedMessages()
+				
+				// Continue the conversation for next step
+				return m.continueLLMAfterTasks()()
 			}
 		}
 
-		// Check for action indication without tasks (fallback detection)
-		if execution == nil || len(execution.Tasks) == 0 {
-			if m.detectsActionWithoutTasks(llmResponse) {
-				// Check if we're already in a recursive loop about this issue
-				if m.recursiveDepth > 0 && m.recursiveDepth < 3 {
-					// Add helpful system message to guide the LLM
-					systemMsg := llm.Message{
-						Role:      "system",
-						Content:   "TASK_GUIDANCE: You indicated you would perform an action (like reading a file) but didn't output the required JSON task format. Please output the actual JSON task block to execute the action, or clarify if this was just an explanation.",
-						Timestamp: time.Now(),
-					}
-					m.chatSession.AddMessage(systemMsg)
-
-					// Add user prompt to request the task
-					userPrompt := llm.Message{
-						Role:      "user",
-						Content:   "Please output the actual JSON task to perform the action you described, or continue with your response if no action is needed.",
-						Timestamp: time.Now(),
-					}
-					m.chatSession.AddMessage(userPrompt)
-
-					// Refresh display
-					m.messages = m.chatSession.GetDisplayMessages()
-					m.updateWrappedMessages()
-
-					// Continue with LLM to get the proper task format
-					return AutoContinueMsg{
-						Depth:        m.recursiveDepth,
-						LastResponse: llmResponse,
-					}
-				} else if m.recursiveDepth >= 3 {
-					// We've tried multiple times - break the loop and give a clear error
-					m.recursiveDepth = 0
-					errorMsg := llm.Message{
-						Role:      "assistant",
-						Content:   "⚠️ I seem to be having trouble executing the file reading task. The AI model is not outputting the proper JSON task format. You can try asking more explicitly, like 'Read the main.go file and show me its contents', or enable debug mode with `/debug` to see what's happening.",
-						Timestamp: time.Now(),
-					}
-					m.chatSession.AddMessage(errorMsg)
-					m.messages = m.chatSession.GetDisplayMessages()
-					m.updateWrappedMessages()
-					return nil
-				}
-			}
-
-			// No tasks executed - this was a Q&A response
-			// Check if it's a simple informational response that should complete
-			if m.isInformationalResponse(llmResponse) {
-				// Reset recursive state and complete naturally
-				m.recursiveDepth = 0
-				return nil
-			} else if m.recursiveDepth < 2 {
-				// Only auto-continue for simple cases, not complex loops
-				return AutoContinueMsg{
-					Depth:        m.recursiveDepth,
-					LastResponse: llmResponse,
-				}
-			}
-		}
-
-		// For task executions, don't auto-continue here - wait for task confirmation
+		// No tasks found - this is a regular Q&A response
+		m.recursiveDepth = 0
 		return nil
 	}
 }
@@ -1656,11 +1609,13 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 	taskExecutor := task.NewExecutor(workspacePath, cfg.EnableShell, cfg.MaxFileSize)
 	var taskManager *task.Manager
 	var enhancedManager *task.EnhancedManager
+	var sequentialManager *task.SequentialTaskManager
 	var taskEventChan chan task.TaskExecutionEvent
 
 	if llmAdapter != nil {
 		enhancedManager = task.NewEnhancedManager(taskExecutor, llmAdapter, chatSession, idx)
 		taskManager = enhancedManager.Manager // For compatibility
+		sequentialManager = task.NewSequentialTaskManager(taskExecutor, llmAdapter, chatSession)
 		taskEventChan = make(chan task.TaskExecutionEvent, 10)
 	}
 
@@ -1674,22 +1629,23 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 	}
 
 	m := model{
-		workspacePath:   workspacePath,
-		config:          cfg,
-		index:           idx,
-		input:           "",
-		messages:        chatSession.GetDisplayMessages(),
-		currentView:     viewChat,
-		llmAdapter:      llmAdapter,
-		chatSession:     chatSession,
-		llmError:        llmError,
-		taskManager:     taskManager,
-		enhancedManager: enhancedManager,
-		taskExecutor:    taskExecutor,
-		taskEventChan:   taskEventChan,
-		taskHistory:     make([]string, 0),
-		width:           80, // Default width until window size is received
-		height:          24, // Default height until window size is received
+		workspacePath:     workspacePath,
+		config:            cfg,
+		index:             idx,
+		input:             "",
+		messages:          chatSession.GetDisplayMessages(),
+		currentView:       viewChat,
+		llmAdapter:        llmAdapter,
+		chatSession:       chatSession,
+		llmError:          llmError,
+		taskManager:       taskManager,
+		enhancedManager:   enhancedManager,
+		sequentialManager: sequentialManager,
+		taskExecutor:      taskExecutor,
+		taskEventChan:     taskEventChan,
+		taskHistory:       make([]string, 0),
+		width:             80, // Default width until window size is received
+		height:            24, // Default height until window size is received
 
 		// Initialize recursive tracking with safety defaults
 		recentResponses:   make([]string, 0, 5),
@@ -2065,5 +2021,84 @@ Please analyze why the tests failed and suggest how to fix them.`, testResult.Ou
 		m.updateWrappedMessages()
 
 		return StreamMsg{Content: "", Done: true}
+	}
+}
+
+
+
+// isExplorationQuery checks if the user query should trigger sequential exploration
+func (m *model) isExplorationQuery(userInput string) bool {
+	lowerInput := strings.ToLower(userInput)
+	
+	explorationPatterns := []string{
+		"tell me about",
+		"check out",
+		"what is this",
+		"explain this",
+		"analyze this",
+		"how does this work",
+		"what does this do",
+		"show me this",
+		"explore this",
+		"understand this",
+		"architecture",
+		"codebase",
+		"repository",
+		"repo",
+		"project",
+	}
+	
+	for _, pattern := range explorationPatterns {
+		if strings.Contains(lowerInput, pattern) {
+			return true
+		}
+	}
+	
+	return false
+}
+
+// extractUserQuery extracts the most recent user query from chat history
+func (m *model) extractUserQuery() string {
+	messages := m.chatSession.GetMessages()
+	
+	// Look for the most recent user message (not system messages)
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "user" {
+			// Skip common commands
+			content := strings.TrimSpace(messages[i].Content)
+			if !strings.HasPrefix(content, "/") {
+				return content
+			}
+		}
+	}
+	
+	return ""
+}
+
+// formatTaskResultForLLM formats task results for LLM context (hidden from user display)
+func (m *model) formatTaskResultForLLM(task *task.Task, response *task.TaskResponse) llm.Message {
+	var content strings.Builder
+	
+	content.WriteString(fmt.Sprintf("TASK_RESULT: %s\n", task.Description()))
+	
+	if response.Success {
+		content.WriteString("STATUS: Success\n")
+		// Use ActualContent for LLM context (includes full file content, etc.)
+		if response.ActualContent != "" {
+			content.WriteString(fmt.Sprintf("CONTENT:\n%s\n", response.ActualContent))
+		} else if response.Output != "" {
+			content.WriteString(fmt.Sprintf("CONTENT:\n%s\n", response.Output))
+		}
+	} else {
+		content.WriteString("STATUS: Failed\n")
+		if response.Error != "" {
+			content.WriteString(fmt.Sprintf("ERROR: %s\n", response.Error))
+		}
+	}
+	
+	return llm.Message{
+		Role:      "system",
+		Content:   content.String(),
+		Timestamp: time.Now(),
 	}
 }
