@@ -138,7 +138,7 @@ func (pe *PromptEnhancer) CreateEnhancedSystemPrompt(enableShell bool) Message {
 When exploring a codebase, follow this autonomous approach:
 
 #### Phase 1: Project Overview (Execute Immediately in Parallel)
-```json
+THREE_BACKTICKS_JSON
 {
   "tasks": [
     {"type": "ReadFile", "path": "README.md", "max_lines": 300},
@@ -149,7 +149,7 @@ When exploring a codebase, follow this autonomous approach:
     {"type": "ListDir", "path": "internal", "recursive": false}
   ]
 }
-```
+THREE_BACKTICKS_JSON
 
 #### Phase 2: Architecture Understanding (Continue Autonomously)
 - Read key package files in parallel (cmd/, pkg/, internal/)
@@ -174,7 +174,7 @@ When exploring a codebase, follow this autonomous approach:
 **CRITICAL**: Use JSON code blocks immediately. Execute 5-10 parallel tasks when exploring.
 
 **COMPREHENSIVE EXPLORATION Example:**
-```json
+THREE_BACKTICKS_JSON
 {
   "tasks": [
     {"type": "ReadFile", "path": "README.md", "max_lines": 300},
@@ -186,7 +186,7 @@ When exploring a codebase, follow this autonomous approach:
     {"type": "ListDir", "path": "llm", "recursive": false}
   ]
 }
-```
+THREE_BACKTICKS_JSON
 
 ### Task Types:
 1. **ReadFile**: Read file contents with smart continuation support
@@ -425,7 +425,7 @@ func (pe *PromptEnhancer) generateTestingGuidance() string {
 
 	guidance.WriteString("### Testing Framework: " + pe.conventions.TestingFramework + "\n")
 	guidance.WriteString("### Test File Patterns: " + strings.Join(pe.conventions.TestFilePatterns, ", ") + "\n")
-	
+
 	guidance.WriteString("### Autonomous Testing Analysis:\n")
 	guidance.WriteString("- **Read all test files** when analyzing testing approaches\n")
 	guidance.WriteString("- **Understand test patterns** by examining multiple test examples\n")
