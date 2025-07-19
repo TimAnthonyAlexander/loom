@@ -171,6 +171,44 @@ func TestTaskDescription(t *testing.T) {
 		t.Errorf("Expected '%s', got '%s'", expected, desc)
 	}
 
+	// Test ReadFile with line range
+	task = &Task{
+		Type:      TaskTypeReadFile,
+		Path:      "main.go",
+		StartLine: 50,
+		EndLine:   150,
+	}
+
+	expected = "Read main.go (lines 50-150)"
+	if desc := task.Description(); desc != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, desc)
+	}
+
+	// Test ReadFile with start line and max lines
+	task = &Task{
+		Type:      TaskTypeReadFile,
+		Path:      "main.go",
+		StartLine: 100,
+		MaxLines:  50,
+	}
+
+	expected = "Read main.go (from line 100, max 50 lines)"
+	if desc := task.Description(); desc != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, desc)
+	}
+
+	// Test ReadFile with just start line
+	task = &Task{
+		Type:      TaskTypeReadFile,
+		Path:      "main.go",
+		StartLine: 200,
+	}
+
+	expected = "Read main.go (from line 200)"
+	if desc := task.Description(); desc != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, desc)
+	}
+
 	// Test EditFile description
 	task = &Task{
 		Type:    TaskTypeEditFile,
@@ -204,6 +242,97 @@ func TestTaskDescription(t *testing.T) {
 	expected = "Run command: go build"
 	if desc := task.Description(); desc != expected {
 		t.Errorf("Expected '%s', got '%s'", expected, desc)
+	}
+}
+
+func TestValidateTaskLineRanges(t *testing.T) {
+	// Test valid line range
+	task := &Task{
+		Type:      TaskTypeReadFile,
+		Path:      "test.go",
+		StartLine: 10,
+		EndLine:   20,
+		MaxLines:  50,
+	}
+
+	if err := validateTask(task); err != nil {
+		t.Errorf("Expected valid task, got error: %v", err)
+	}
+
+	// Test invalid line range (start > end)
+	task = &Task{
+		Type:      TaskTypeReadFile,
+		Path:      "test.go",
+		StartLine: 20,
+		EndLine:   10,
+	}
+
+	if err := validateTask(task); err == nil {
+		t.Error("Expected error for invalid line range (start > end)")
+	}
+
+	// Test negative start line
+	task = &Task{
+		Type:      TaskTypeReadFile,
+		Path:      "test.go",
+		StartLine: -5,
+	}
+
+	if err := validateTask(task); err == nil {
+		t.Error("Expected error for negative start line")
+	}
+
+	// Test negative end line
+	task = &Task{
+		Type:    TaskTypeReadFile,
+		Path:    "test.go",
+		EndLine: -10,
+	}
+
+	if err := validateTask(task); err == nil {
+		t.Error("Expected error for negative end line")
+	}
+}
+
+func TestParseTasksWithLineRanges(t *testing.T) {
+	// Test parsing tasks with line range parameters
+	llmResponse := "I'll read the specific section of the file.\n\n" +
+		"```json\n" +
+		"{\n" +
+		"  \"tasks\": [\n" +
+		"    {\"type\": \"ReadFile\", \"path\": \"main.go\", \"start_line\": 50, \"end_line\": 100, \"max_lines\": 200}\n" +
+		"  ]\n" +
+		"}\n" +
+		"```"
+
+	taskList, err := ParseTasks(llmResponse)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if taskList == nil {
+		t.Fatal("Expected task list, got nil")
+	}
+
+	if len(taskList.Tasks) != 1 {
+		t.Fatalf("Expected 1 task, got %d", len(taskList.Tasks))
+	}
+
+	task := taskList.Tasks[0]
+	if task.Type != TaskTypeReadFile {
+		t.Errorf("Expected ReadFile, got %s", task.Type)
+	}
+	if task.Path != "main.go" {
+		t.Errorf("Expected main.go, got %s", task.Path)
+	}
+	if task.StartLine != 50 {
+		t.Errorf("Expected start_line 50, got %d", task.StartLine)
+	}
+	if task.EndLine != 100 {
+		t.Errorf("Expected end_line 100, got %d", task.EndLine)
+	}
+	if task.MaxLines != 200 {
+		t.Errorf("Expected max_lines 200, got %d", task.MaxLines)
 	}
 }
 

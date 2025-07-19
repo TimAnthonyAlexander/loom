@@ -54,6 +54,15 @@ var (
 			Background(lipgloss.Color("#2A2A2A")).
 			Padding(1, 2).
 			Bold(true)
+
+	// New styles to clearly distinguish user and assistant prefixes
+	userPrefixStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#00D7FF"))
+
+	assistantPrefixStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#FFAF00"))
 )
 
 type viewMode int
@@ -154,6 +163,9 @@ type model struct {
 	// Safety limits (hardcoded defaults)
 	maxRecursiveDepth int
 	maxRecursiveTime  time.Duration
+
+	// UI preferences
+	showInfoPanel bool // Hide the top info panel after the first user message
 }
 
 func (m model) Init() tea.Cmd {
@@ -214,6 +226,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.currentView == viewChat && strings.TrimSpace(m.input) != "" && !m.isStreaming {
 				userInput := strings.TrimSpace(m.input)
 				m.input = ""
+
+				// Hide the static info panel after the first message is sent
+				if m.showInfoPanel {
+					m.showInfoPanel = false
+				}
 
 				// Handle special commands
 				if userInput == "/quit" {
@@ -576,23 +593,29 @@ func (m model) View() string {
 		changeStatus = "Changes: N/A"
 	}
 
-	info := infoStyle.Render(fmt.Sprintf(
-		"Workspace: %s\nModel: %s\nShell: %t\nFiles: %d %s\n%s\n%s",
-		m.workspacePath,
-		modelStatus,
-		m.config.EnableShell,
-		stats.TotalFiles,
-		langSummary,
-		taskStatus,
-		changeStatus,
-	))
+	// Build header components conditionally
+	headerParts := []string{title}
+	if m.showInfoPanel {
+		headerParts = append(headerParts, "", infoStyle.Render(fmt.Sprintf(
+			"Workspace: %s\nModel: %s\nShell: %t\nFiles: %d %s\n%s\n%s",
+			m.workspacePath,
+			modelStatus,
+			m.config.EnableShell,
+			stats.TotalFiles,
+			langSummary,
+			taskStatus,
+			changeStatus,
+		)))
+	}
+
+	header := lipgloss.JoinVertical(lipgloss.Left, headerParts...)
 
 	var mainContent string
 
 	// Show confirmation dialog if needed
 	if m.showingConfirmation && m.pendingConfirmation != nil {
 		confirmDialog := m.renderConfirmationDialog()
-		return lipgloss.JoinVertical(lipgloss.Left, title, "", info, "", confirmDialog)
+		return lipgloss.JoinVertical(lipgloss.Left, header, "", confirmDialog)
 	}
 
 	switch m.currentView {
@@ -677,7 +700,7 @@ func (m model) View() string {
 
 	help := lipgloss.NewStyle().Foreground(lipgloss.Color("#626262")).Render(helpText)
 
-	return lipgloss.JoinVertical(lipgloss.Left, title, "", info, "", mainContent, "", help)
+	return lipgloss.JoinVertical(lipgloss.Left, header, "", mainContent, "", help)
 }
 
 // renderConfirmationDialog renders the task confirmation dialog
@@ -1563,8 +1586,21 @@ func (m *model) updateWrappedMessagesWithOptions(forceAutoScroll bool) {
 		allMessages = append(allMessages, welcomeMsg)
 	}
 
-	for _, message := range allMessages {
-		wrapped := m.wrapText(message, messageWidth)
+	for _, original := range allMessages {
+		msg := original
+		if strings.HasPrefix(msg, "You: ") {
+			if parts := strings.SplitN(msg, ": ", 2); len(parts) == 2 {
+				prefix := userPrefixStyle.Render(parts[0] + ":")
+				msg = prefix + " " + parts[1]
+			}
+		} else if strings.HasPrefix(msg, "Loom: ") {
+			if parts := strings.SplitN(msg, ": ", 2); len(parts) == 2 {
+				prefix := assistantPrefixStyle.Render(parts[0] + ":")
+				msg = prefix + " " + parts[1]
+			}
+		}
+
+		wrapped := m.wrapText(msg, messageWidth)
 		allLines = append(allLines, wrapped...)
 	}
 
@@ -1749,6 +1785,7 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 		recentResponses:   make([]string, 0, 5),
 		maxRecursiveDepth: 15,
 		maxRecursiveTime:  30 * time.Minute,
+		showInfoPanel:    true,
 	}
 
 	// Initialize wrapped messages

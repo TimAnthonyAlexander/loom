@@ -91,6 +91,13 @@ func (e *Executor) executeReadFile(task *Task) *TaskResponse {
 		return response
 	}
 
+	// Read file to get total line count first
+	totalLines, err := e.countFileLines(fullPath)
+	if err != nil {
+		response.Error = fmt.Sprintf("failed to count file lines: %v", err)
+		return response
+	}
+
 	// Read file
 	file, err := os.Open(fullPath)
 	if err != nil {
@@ -103,27 +110,56 @@ func (e *Executor) executeReadFile(task *Task) *TaskResponse {
 	scanner := bufio.NewScanner(file)
 	lineNum := 0
 	linesRead := 0
+	skippedLines := 0
 
-	// Set default max lines if not specified
+	// Determine reading strategy
+	startLine := task.StartLine
+	endLine := task.EndLine
 	maxLines := task.MaxLines
+
+	// Set defaults and validate ranges
+	if startLine <= 0 {
+		startLine = 1
+	}
+	if endLine > 0 && endLine < startLine {
+		response.Error = fmt.Sprintf("invalid line range: start_line (%d) > end_line (%d)", startLine, endLine)
+		return response
+	}
 	if maxLines <= 0 {
 		maxLines = 200 // Default limit
 	}
 
+	// Calculate effective reading window
+	effectiveEndLine := endLine
+	if endLine <= 0 || endLine > totalLines {
+		effectiveEndLine = totalLines
+	}
+
+	// If we have a specific range, but it would exceed maxLines, adjust
+	if endLine > 0 {
+		rangeSize := endLine - startLine + 1
+		if rangeSize > maxLines {
+			effectiveEndLine = startLine + maxLines - 1
+		}
+	}
+
+	// Read the file
 	for scanner.Scan() {
 		lineNum++
 
-		// Check line range if specified
-		if task.StartLine > 0 && lineNum < task.StartLine {
+		// Skip lines before start
+		if lineNum < startLine {
+			skippedLines++
 			continue
 		}
-		if task.EndLine > 0 && lineNum > task.EndLine {
+
+		// Stop if we've reached the end of our range
+		if effectiveEndLine > 0 && lineNum > effectiveEndLine {
 			break
 		}
 
-		// Check max lines limit
+		// Stop if we've read enough lines
 		if linesRead >= maxLines {
-			content.WriteString(fmt.Sprintf("\n... (truncated after %d lines)\n", maxLines))
 			break
 		}
 
@@ -139,15 +175,59 @@ func (e *Executor) executeReadFile(task *Task) *TaskResponse {
 		return response
 	}
 
+	// Build the result content with context information
+	var result strings.Builder
+	
+	// Add file header with context
+	if skippedLines > 0 {
+		result.WriteString(fmt.Sprintf("... (skipped first %d lines)\n", skippedLines))
+	}
+	
+	result.WriteString(content.String())
+	
+	// Add truncation info and continuation hint
+	lastLineRead := startLine + linesRead - 1
+	remainingLines := totalLines - lastLineRead
+	
+	if remainingLines > 0 {
+		result.WriteString(fmt.Sprintf("\n... (truncated after %d lines)", linesRead))
+		
+		// Smart continuation suggestion
+		nextStart := lastLineRead + 1
+		suggestedEnd := nextStart + maxLines - 1
+		if suggestedEnd > totalLines {
+			suggestedEnd = totalLines
+		}
+		
+		result.WriteString(fmt.Sprintf("\n\n[FILE CONTINUES: %d more lines remaining (lines %d-%d)", 
+			remainingLines, nextStart, totalLines))
+		result.WriteString(fmt.Sprintf("\nTo continue reading, use: {\"type\": \"ReadFile\", \"path\": \"%s\", \"start_line\": %d, \"end_line\": %d}]", 
+			task.Path, nextStart, suggestedEnd))
+	}
+
 	// Redact secrets from the actual content for LLM
-	actualContent := e.redactSecrets(content.String())
+	actualContent := e.redactSecrets(result.String())
 
 	// Store actual content for LLM (will be used internally)
 	response.ActualContent = actualContent
 
 	response.Success = true
-	// Show only status message to user, not the actual content
-	response.Output = fmt.Sprintf("Reading file: %s (%d lines)", task.Path, linesRead)
+	
+	// Enhanced status message for user
+	var statusMsg string
+	if task.StartLine > 0 || task.EndLine > 0 {
+		statusMsg = fmt.Sprintf("Reading file: %s (lines %d-%d, %d lines read, %d total lines)", 
+			task.Path, startLine, lastLineRead, linesRead, totalLines)
+	} else {
+		statusMsg = fmt.Sprintf("Reading file: %s (%d lines read, %d total lines)", 
+			task.Path, linesRead, totalLines)
+	}
+	
+	if remainingLines > 0 {
+		statusMsg += fmt.Sprintf(", %d more lines available", remainingLines)
+	}
+	
+	response.Output = statusMsg
 	return response
 }
 
@@ -494,4 +574,25 @@ func (e *Executor) formatFileSize(size int64) string {
 	} else {
 		return fmt.Sprintf("%.1fMB", float64(size)/1024/1024)
 	}
+}
+
+// countFileLines counts the total number of lines in a file
+func (e *Executor) countFileLines(filePath string) (int, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return 0, err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	lineCount := 0
+	for scanner.Scan() {
+		lineCount++
+	}
+
+	if err := scanner.Err(); err != nil {
+		return 0, err
+	}
+
+	return lineCount, nil
 }

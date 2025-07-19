@@ -241,6 +241,11 @@ func (t *Task) Description() string {
 	case TaskTypeReadFile:
 		if t.StartLine > 0 && t.EndLine > 0 {
 			return fmt.Sprintf("Read %s (lines %d-%d)", t.Path, t.StartLine, t.EndLine)
+		} else if t.StartLine > 0 {
+			if t.MaxLines > 0 {
+				return fmt.Sprintf("Read %s (from line %d, max %d lines)", t.Path, t.StartLine, t.MaxLines)
+			}
+			return fmt.Sprintf("Read %s (from line %d)", t.Path, t.StartLine)
 		} else if t.MaxLines > 0 {
 			return fmt.Sprintf("Read %s (max %d lines)", t.Path, t.MaxLines)
 		}

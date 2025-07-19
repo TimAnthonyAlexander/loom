@@ -139,6 +139,7 @@ I'll read the README file to understand the project.
   ]
 }
 ` + "```" + `
+
 ` + "```" + `
 
 ` + "```" + `json
@@ -151,10 +152,17 @@ I'll read the README file to understand the project.
 ` + "```" + `
 
 ### Task Types:
-1. **ReadFile**: Read file contents
+1. **ReadFile**: Read file contents with smart continuation support
    - path: File path (required)
-   - max_lines: Max lines to read (default: 200)
-   - start_line, end_line: Read specific line range
+   - max_lines: Max lines to read per chunk (default: 200)
+   - start_line: Start reading from this line (1-indexed, optional)
+   - end_line: Stop reading at this line (1-indexed, optional)
+   
+   **Smart Reading Features:**
+   - When truncated, provides exact continuation instructions
+   - Shows total file size and remaining lines
+   - Suggests optimal next reading chunk
+   - Example continuation: {"type": "ReadFile", "path": "large_file.go", "start_line": 201, "end_line": 400}
 
 2. **EditFile**: Create or modify files (user will be asked to confirm)
    - path: File path (required) 
