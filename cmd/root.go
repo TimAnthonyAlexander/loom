@@ -20,7 +20,7 @@ var rootCmd = &cobra.Command{
 	Use:   "loom",
 	Short: "Loom is a terminal-based, AI-driven coding assistant",
 	Long: `Loom is a terminal-based, AI-driven coding assistant written in Go.
-It runs inside any project folder and gives developers a conversational 
+It runs inside any project folder and gives developers a conversational
 interface to modify and extend their codebase.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Detect workspace
@@ -92,7 +92,7 @@ func init() {
 	// Configure command line flags
 	rootCmd.Flags().BoolVarP(&continueSession, "continue", "c", false, "Continue from the latest chat session")
 	rootCmd.Flags().StringVarP(&sessionID, "session", "s", "", "Continue from a specific session ID")
-	
+
 	// Add subcommands
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(configCmd)

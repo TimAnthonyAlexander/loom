@@ -85,7 +85,7 @@ func (pe *PromptEnhancer) CreateEnhancedSystemPrompt(enableShell bool) Message {
 
 ## Current Workspace Analysis
 - **Total files**: %d
-- **Total size**: %.2f MB  
+- **Total size**: %.2f MB
 - **Last updated**: %s
 - **Primary languages**: %s
 - **Shell execution**: %s
@@ -98,7 +98,7 @@ func (pe *PromptEnhancer) CreateEnhancedSystemPrompt(enableShell bool) Message {
 ## Code Quality Guidelines
 %s
 
-## Testing Best Practices  
+## Testing Best Practices
 %s
 
 ## CRITICAL: Autonomous Exploration Behavior
@@ -139,14 +139,14 @@ When exploring a codebase, follow this autonomous approach:
 
 #### Sequential Exploration Flow:
 1. **Start with README** to understand project purpose and structure
-   ` + "`" + "`" + "`" + `json
+   `+"`"+"`"+"`"+`json
    {"type": "ReadFile", "path": "README.md", "max_lines": 300}
-   ` + "`" + "`" + "`" + `
+   `+"`"+"`"+"`"+`
 
 2. **Analyze main entry point** based on project type discovered
-   ` + "`" + "`" + "`" + `json
+   `+"`"+"`"+"`"+`json
    {"type": "ReadFile", "path": "main.go", "max_lines": 200}
-   ` + "`" + "`" + "`" + `
+   `+"`"+"`"+"`"+`
 
 3. **Continue systematically** - choose next most important file/directory
 4. **Signal completion** when you have comprehensive understanding
@@ -163,33 +163,33 @@ When exploring a codebase, follow this autonomous approach:
 
 **Task Format Options:**
 - **Single Task**: Use direct task object for one task
-  ` + "`" + "`" + "`" + `json
+  `+"`"+"`"+"`"+`json
   {"type": "ReadFile", "path": "README.md", "max_lines": 300}
-  ` + "`" + "`" + "`" + `
-- **Multiple Tasks**: Use ` + "`" + `{"tasks": [...]}` + "`" + ` array format  
-  ` + "`" + "`" + "`" + `json
+  `+"`"+"`"+"`"+`
+- **Multiple Tasks**: Use `+"`"+`{"tasks": [...]}`+"`"+` array format
+  `+"`"+"`"+"`"+`json
   {"tasks": [
     {"type": "ReadFile", "path": "README.md", "max_lines": 300},
     {"type": "ListDir", "path": ".", "recursive": false}
   ]}
-  ` + "`" + "`" + "`" + `
+  `+"`"+"`"+"`"+`
 
 **SEQUENTIAL EXPLORATION Examples:**
 
 **Starting exploration:**
-` + "`" + "`" + "`" + `json
+`+"`"+"`"+"`"+`json
 {"type": "ReadFile", "path": "README.md", "max_lines": 300}
-` + "`" + "`" + "`" + `
+`+"`"+"`"+"`"+`
 
 **Following up based on results:**
-` + "`" + "`" + "`" + `json
+`+"`"+"`"+"`"+`json
 {"type": "ListDir", "path": ".", "recursive": false}
-` + "`" + "`" + "`" + `
+`+"`"+"`"+"`"+`
 
 **Reading specific implementation:**
-` + "`" + "`" + "`" + `json
+`+"`"+"`"+"`"+`json
 {"type": "ReadFile", "path": "cmd/root.go", "max_lines": 200}
-` + "`" + "`" + "`" + `
+`+"`"+"`"+"`"+`
 
 ### Task Types:
 1. **ReadFile**: Read file contents with smart continuation support
@@ -197,21 +197,21 @@ When exploring a codebase, follow this autonomous approach:
    - max_lines: Max lines to read per chunk (default: 200, increase for key files)
    - start_line: Start reading from this line (1-indexed, optional)
    - end_line: Stop reading at this line (1-indexed, optional)
-   
+
    **Smart Reading Features:**
    - When truncated, automatically continue reading with follow-up tasks
    - Shows total file size and remaining lines
    - For large files, read in strategic chunks focusing on key sections
 
 2. **EditFile**: Create or modify files (user will be asked to confirm)
-   - path: File path (required) 
+   - path: File path (required)
    - **Either** diff: Unified diff format **OR** content: Complete file content
-   
+
    **For EditFile Tasks:**
    - NEW FILES: Use "content" with complete file content
    - EXISTING FILES: Read first to understand context, then use "diff" or "content"
    - Be confident - user will approve/reject as needed
-   
+
 3. **ListDir**: List directory contents (use extensively for exploration)
    - path: Directory path (default: ".")
    - recursive: Include subdirectories (use true for comprehensive analysis)

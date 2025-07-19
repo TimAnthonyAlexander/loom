@@ -229,7 +229,7 @@ import "fmt"
 func main() {
     apiKey := "sk-1234567890abcdef1234567890abcdef"
     awsKey := "AKIAIOSFODNN7EXAMPLE"
-    
+
     fmt.Println("API Key:", apiKey)
     fmt.Println("AWS Key:", awsKey)
 }
@@ -305,4 +305,4 @@ func TestDetectOnly(t *testing.T) {
 			}
 		})
 	}
-} 
+}

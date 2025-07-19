@@ -118,4 +118,4 @@ func TestIndexerEmptyDirectory(t *testing.T) {
 	if stats.TotalFiles != 0 {
 		t.Logf("Empty directory indexed %d files (might include hidden files)", stats.TotalFiles)
 	}
-} 
+}

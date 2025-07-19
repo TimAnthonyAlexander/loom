@@ -232,9 +232,9 @@ func TestOptimizeContext(t *testing.T) {
 
 	// Create test files
 	testFiles := map[string]string{
-		"main.go":    strings.Repeat("package main\nfunc main() {}\n", 50), // Large file
-		"helper.go":  "package helper\nfunc Help() {}",                     // Small file
-		"config.go":  "package config\ntype Config struct{}",               // Small file
+		"main.go":   strings.Repeat("package main\nfunc main() {}\n", 50), // Large file
+		"helper.go": "package helper\nfunc Help() {}",                     // Small file
+		"config.go": "package config\ntype Config struct{}",               // Small file
 	}
 
 	for filePath, content := range testFiles {
@@ -433,4 +433,4 @@ func TestContextOptimizationWithSnippets(t *testing.T) {
 
 	// Log for debugging
 	t.Logf("Formatted snippets: %s", formatted)
-} 
+}

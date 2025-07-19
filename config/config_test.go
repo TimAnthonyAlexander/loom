@@ -237,5 +237,3 @@ func TestSaveConfig(t *testing.T) {
 		t.Errorf("Expected BaseURL %s, got %s", cfg.BaseURL, loadedCfg.BaseURL)
 	}
 }
-
- 

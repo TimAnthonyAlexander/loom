@@ -48,11 +48,11 @@ func TestBuildIndex(t *testing.T) {
 
 	// Create test files
 	testFiles := map[string]string{
-		"main.go":           "package main\n\nfunc main() {\n\tprintln(\"Hello, World!\")\n}",
-		"config.json":       `{"key": "value"}`,
-		"README.md":         "# Test Project\n\nThis is a test.",
-		"subdir/utils.go":   "package utils\n\nfunc Helper() string {\n\treturn \"help\"\n}",
-		"subdir/test.txt":   "This is a test file.",
+		"main.go":         "package main\n\nfunc main() {\n\tprintln(\"Hello, World!\")\n}",
+		"config.json":     `{"key": "value"}`,
+		"README.md":       "# Test Project\n\nThis is a test.",
+		"subdir/utils.go": "package utils\n\nfunc Helper() string {\n\treturn \"help\"\n}",
+		"subdir/test.txt": "This is a test file.",
 	}
 
 	for filePath, content := range testFiles {
@@ -119,10 +119,10 @@ func TestLanguageDetectionInIndex(t *testing.T) {
 
 	// Create test files with various extensions
 	testFiles := map[string]string{
-		"main.go":    "package main",
-		"script.py":  "print('hello')",
-		"app.js":     "console.log('hello')",
-		"README.md":  "# Test",
+		"main.go":   "package main",
+		"script.py": "print('hello')",
+		"app.js":    "console.log('hello')",
+		"README.md": "# Test",
 	}
 
 	for filePath, content := range testFiles {
@@ -170,11 +170,11 @@ func TestGetStats(t *testing.T) {
 
 	// Create test files with different languages
 	testFiles := map[string]string{
-		"main.go":      "package main\nfunc main() {}",
-		"helper.go":    "package helper\nfunc Help() {}",
-		"script.py":    "print('hello')",
-		"config.json":  `{"key": "value"}`,
-		"README.md":    "# Project",
+		"main.go":     "package main\nfunc main() {}",
+		"helper.go":   "package helper\nfunc Help() {}",
+		"script.py":   "print('hello')",
+		"config.json": `{"key": "value"}`,
+		"README.md":   "# Project",
 	}
 
 	for filePath, content := range testFiles {
@@ -240,8 +240,8 @@ func TestSaveAndLoadCache(t *testing.T) {
 
 	// Create test files
 	testFiles := map[string]string{
-		"main.go":    "package main\nfunc main() {}",
-		"helper.py":  "def help(): pass",
+		"main.go":   "package main\nfunc main() {}",
+		"helper.py": "def help(): pass",
 	}
 
 	for filePath, content := range testFiles {
@@ -320,12 +320,12 @@ node_modules/
 
 	// Create test files (some should be ignored)
 	testFiles := map[string]string{
-		"main.go":           "package main",
-		"debug.log":         "log content",         // should be ignored
-		"temp.tmp":          "temp content",        // should be ignored
-		"build/output.bin":  "binary content",     // should be ignored
-		"src/helper.go":     "package helper",
-		".DS_Store":         "mac metadata",       // should be ignored
+		"main.go":          "package main",
+		"debug.log":        "log content",    // should be ignored
+		"temp.tmp":         "temp content",   // should be ignored
+		"build/output.bin": "binary content", // should be ignored
+		"src/helper.go":    "package helper",
+		".DS_Store":        "mac metadata", // should be ignored
 	}
 
 	for filePath, content := range testFiles {
@@ -551,4 +551,4 @@ func TestRelativePaths(t *testing.T) {
 			t.Errorf("Relative path %s should not contain temp directory path", relativePath)
 		}
 	}
-} 
+}

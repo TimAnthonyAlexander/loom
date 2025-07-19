@@ -22,7 +22,7 @@ type EnhancedManager struct {
 // NewEnhancedManager creates a new enhanced manager with M6 features
 func NewEnhancedManager(executor *Executor, llmAdapter llm.LLMAdapter, chatSession *chat.Session, index *indexer.Index) *EnhancedManager {
 	baseManager := NewManager(executor, llmAdapter, chatSession)
-	
+
 	return &EnhancedManager{
 		Manager:            baseManager,
 		testDiscovery:      NewTestDiscovery(index),
@@ -133,7 +133,7 @@ func (em *EnhancedManager) runTestsForLanguage(language string, execution *TaskE
 
 	// Format test results
 	testSummary := em.formatTestResults(testResult)
-	
+
 	eventChan <- TaskExecutionEvent{
 		Type:    "test_execution_completed",
 		Message: testSummary,
@@ -295,5 +295,3 @@ func (em *EnhancedManager) SetTestConfiguration(enableTestFirst, autoRunTests bo
 func (em *EnhancedManager) GetChangeSummaries() string {
 	return em.changeSummaryMgr.FormatSummariesForDisplay()
 }
-
- 

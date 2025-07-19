@@ -177,31 +177,31 @@ func (e *Executor) executeReadFile(task *Task) *TaskResponse {
 
 	// Build the result content with context information
 	var result strings.Builder
-	
+
 	// Add file header with context
 	if skippedLines > 0 {
 		result.WriteString(fmt.Sprintf("... (skipped first %d lines)\n", skippedLines))
 	}
-	
+
 	result.WriteString(content.String())
-	
+
 	// Add truncation info and continuation hint
 	lastLineRead := startLine + linesRead - 1
 	remainingLines := totalLines - lastLineRead
-	
+
 	if remainingLines > 0 {
 		result.WriteString(fmt.Sprintf("\n... (truncated after %d lines)", linesRead))
-		
+
 		// Smart continuation suggestion
 		nextStart := lastLineRead + 1
 		suggestedEnd := nextStart + maxLines - 1
 		if suggestedEnd > totalLines {
 			suggestedEnd = totalLines
 		}
-		
-		result.WriteString(fmt.Sprintf("\n\n[FILE CONTINUES: %d more lines remaining (lines %d-%d)", 
+
+		result.WriteString(fmt.Sprintf("\n\n[FILE CONTINUES: %d more lines remaining (lines %d-%d)",
 			remainingLines, nextStart, totalLines))
-		result.WriteString(fmt.Sprintf("\nTo continue reading, use: {\"type\": \"ReadFile\", \"path\": \"%s\", \"start_line\": %d, \"end_line\": %d}]", 
+		result.WriteString(fmt.Sprintf("\nTo continue reading, use: {\"type\": \"ReadFile\", \"path\": \"%s\", \"start_line\": %d, \"end_line\": %d}]",
 			task.Path, nextStart, suggestedEnd))
 	}
 
@@ -212,21 +212,21 @@ func (e *Executor) executeReadFile(task *Task) *TaskResponse {
 	response.ActualContent = actualContent
 
 	response.Success = true
-	
+
 	// Enhanced status message for user
 	var statusMsg string
 	if task.StartLine > 0 || task.EndLine > 0 {
-		statusMsg = fmt.Sprintf("Reading file: %s (lines %d-%d, %d lines read, %d total lines)", 
+		statusMsg = fmt.Sprintf("Reading file: %s (lines %d-%d, %d lines read, %d total lines)",
 			task.Path, startLine, lastLineRead, linesRead, totalLines)
 	} else {
-		statusMsg = fmt.Sprintf("Reading file: %s (%d lines read, %d total lines)", 
+		statusMsg = fmt.Sprintf("Reading file: %s (%d lines read, %d total lines)",
 			task.Path, linesRead, totalLines)
 	}
-	
+
 	if remainingLines > 0 {
 		statusMsg += fmt.Sprintf(", %d more lines available", remainingLines)
 	}
-	
+
 	response.Output = statusMsg
 	return response
 }

@@ -90,14 +90,14 @@ func ParseTasks(llmResponse string) (*TaskList, error) {
 				"create", "edit", "file", "license", "i'll", "i will", "let me",
 				"executing", "running", "applying", "writing to", "updating",
 			}
-			
+
 			foundActions := []string{}
 			for _, word := range actionWords {
 				if strings.Contains(lowerResponse, word) {
 					foundActions = append(foundActions, word)
 				}
 			}
-			
+
 			if len(foundActions) > 0 {
 				fmt.Printf("🚨 DEBUG: LLM response suggests action but no JSON tasks found!\n")
 				fmt.Printf("   Found action indicators: %v\n", foundActions)
@@ -144,7 +144,7 @@ func ParseTasks(llmResponse string) (*TaskList, error) {
 			if debugTaskParsing {
 				fmt.Printf("DEBUG: Parsed as TaskList with %d tasks\n", len(taskList.Tasks))
 			}
-			
+
 			// Only proceed with TaskList if it actually has tasks
 			if len(taskList.Tasks) > 0 {
 				// Successfully parsed as TaskList
@@ -157,7 +157,7 @@ func ParseTasks(llmResponse string) (*TaskList, error) {
 				}
 				return &taskList, nil
 			}
-			
+
 			if debugTaskParsing {
 				fmt.Printf("DEBUG: TaskList was empty, trying single task parsing\n")
 			}

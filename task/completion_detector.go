@@ -19,7 +19,7 @@ func (cd *CompletionDetector) IsComplete(response string) bool {
 	}
 
 	lowerResponse := strings.ToLower(strings.TrimSpace(response))
-	
+
 	// Simple completion check
 	completionWords := []string{"done", "complete", "finished"}
 	for _, word := range completionWords {
@@ -27,7 +27,7 @@ func (cd *CompletionDetector) IsComplete(response string) bool {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -41,10 +41,10 @@ func (cd *CompletionDetector) HasInfiniteLoopPattern(responses []string) bool {
 	if len(responses) < 3 {
 		return false
 	}
-	
+
 	// Simple check: if last two responses are very similar, it's likely a loop
 	last := responses[len(responses)-1]
 	secondLast := responses[len(responses)-2]
-	
+
 	return strings.Contains(last, secondLast) || strings.Contains(secondLast, last)
-} 
+}

@@ -77,9 +77,9 @@ func (rm *RecoveryManager) CheckForRecovery() (*RecoveryOptions, error) {
 	// Create recovery options if needed
 	if len(incompleteOps) > 0 || len(corruptedSessions) > 0 {
 		return &RecoveryOptions{
-			IncompleteOperations: incompleteOps,
-			CorruptedSessions:    corruptedSessions,
-			LastSession:          lastSession,
+			IncompleteOperations:  incompleteOps,
+			CorruptedSessions:     corruptedSessions,
+			LastSession:           lastSession,
 			AutoRecoveryAvailable: lastSession != nil,
 		}, nil
 	}
@@ -175,7 +175,7 @@ func (rm *RecoveryManager) GenerateRecoveryReport(options *RecoveryOptions) stri
 	if len(options.IncompleteOperations) > 0 {
 		report.WriteString("⚠️  Incomplete Operations Found:\n")
 		for _, op := range options.IncompleteOperations {
-			report.WriteString(fmt.Sprintf("  • Session %s (last saved: %s)\n", 
+			report.WriteString(fmt.Sprintf("  • Session %s (last saved: %s)\n",
 				op.SessionID, op.LastSaved.Format("15:04:05")))
 			for _, operation := range op.Operations {
 				report.WriteString(fmt.Sprintf("    - %s\n", operation))
@@ -187,7 +187,7 @@ func (rm *RecoveryManager) GenerateRecoveryReport(options *RecoveryOptions) stri
 	if len(options.CorruptedSessions) > 0 {
 		report.WriteString("❌ Corrupted Sessions Found:\n")
 		for _, corrupted := range options.CorruptedSessions {
-			report.WriteString(fmt.Sprintf("  • Session %s (last saved: %s)\n", 
+			report.WriteString(fmt.Sprintf("  • Session %s (last saved: %s)\n",
 				corrupted.SessionID, corrupted.LastSaved.Format("15:04:05")))
 			if corrupted.RecoveryInfo.BackupFileUsed != "" {
 				report.WriteString(fmt.Sprintf("    Backup available: %s\n", corrupted.RecoveryInfo.BackupFileUsed))
@@ -263,7 +263,7 @@ func (rm *RecoveryManager) AddRecoveryMessage(session *SessionState, recoveryTyp
 // CleanupOldBackups removes old backup files
 func (rm *RecoveryManager) CleanupOldBackups(olderThan time.Duration) error {
 	backupDir := filepath.Join(rm.workspacePath, ".loom", "backups")
-	
+
 	files, err := os.ReadDir(backupDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -296,4 +296,4 @@ func (rm *RecoveryManager) CleanupOldBackups(olderThan time.Duration) error {
 // GetSessionManager returns the underlying session manager
 func (rm *RecoveryManager) GetSessionManager() *SessionManager {
 	return rm.sessionMgr
-} 
+}

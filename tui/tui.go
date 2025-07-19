@@ -61,8 +61,8 @@ var (
 			Foreground(lipgloss.Color("#00D7FF"))
 
 	assistantPrefixStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("#FFAF00"))
+				Bold(true).
+				Foreground(lipgloss.Color("#FFAF00"))
 )
 
 type viewMode int
@@ -150,8 +150,6 @@ type model struct {
 	currentExecution  *taskPkg.TaskExecution
 	taskHistory       []string
 	taskEventChan     chan taskPkg.TaskExecutionEvent
-	
-
 
 	// Task confirmation
 	pendingConfirmation *TaskConfirmationMsg
@@ -885,7 +883,7 @@ func (m *model) sendToLLMWithTasks(userInput string) tea.Cmd {
 		if m.sequentialManager != nil && m.isExplorationQuery(userInput) {
 			// Start objective exploration
 			m.sequentialManager.StartObjectiveExploration(userInput)
-			
+
 			// Replace the system message with objective-setting prompt
 			messages := m.chatSession.GetMessages()
 			if len(messages) > 0 && messages[0].Role == "system" {
@@ -956,7 +954,7 @@ func (m *model) handleLLMResponseForTasks(llmResponse string) tea.Cmd {
 			if err != nil {
 				return StreamMsg{Error: fmt.Errorf("failed to handle LLM response: %w", err)}
 			}
-			
+
 			if execution != nil {
 				m.currentExecution = execution
 			}
@@ -978,7 +976,7 @@ func (m *model) handleObjectiveExploration(llmResponse string) tea.Msg {
 		m.messages = append(m.messages, objectiveMsg)
 		m.updateWrappedMessages()
 	}
-	
+
 	// Check if objective is complete
 	if m.sequentialManager.IsObjectiveComplete(llmResponse) {
 		m.sequentialManager.CompleteObjective()
@@ -986,26 +984,26 @@ func (m *model) handleObjectiveExploration(llmResponse string) tea.Msg {
 		m.recursiveDepth = 0
 		return nil
 	}
-	
+
 	// Parse and execute task
 	task, _, err := m.sequentialManager.ParseSingleTask(llmResponse)
 	if err != nil {
 		return StreamMsg{Error: fmt.Errorf("failed to parse task: %w", err)}
 	}
-	
+
 	if task != nil {
 		// Execute the task
 		response := m.taskExecutor.Execute(task)
-		
+
 		// Add task result to accumulated data
 		m.sequentialManager.AddTaskResult(*response)
-		
+
 		// Add task result to chat session for LLM to see
 		taskResultMsg := m.formatTaskResultForLLM(task, response)
 		if err := m.chatSession.AddMessage(taskResultMsg); err != nil {
 			fmt.Printf("Warning: failed to add task result to chat: %v\n", err)
 		}
-		
+
 		// Show minimal status during suppressed phase
 		if m.sequentialManager.GetCurrentPhase() == taskPkg.PhaseSuppressedExploration {
 			statusMsg := m.createMinimalTaskStatus(task)
@@ -1016,11 +1014,11 @@ func (m *model) handleObjectiveExploration(llmResponse string) tea.Msg {
 			m.messages = m.chatSession.GetDisplayMessages()
 			m.updateWrappedMessages()
 		}
-		
+
 		// Continue the conversation for next step
 		return m.continueLLMAfterTasks()()
 	}
-	
+
 	// No task found - regular response
 	m.recursiveDepth = 0
 	return nil
@@ -1036,7 +1034,7 @@ func (m *model) createMinimalTaskStatus(task *taskPkg.Task) string {
 			filename = filename[idx+1:]
 		}
 		return fmt.Sprintf("📖 %s", filename)
-		
+
 	case taskPkg.TaskTypeListDir:
 		dirName := task.Path
 		if dirName == "." {
@@ -1046,14 +1044,14 @@ func (m *model) createMinimalTaskStatus(task *taskPkg.Task) string {
 			dirName = dirName[idx+1:]
 		}
 		return fmt.Sprintf("📂 %s/", dirName)
-		
+
 	case taskPkg.TaskTypeEditFile:
 		filename := task.Path
 		if idx := strings.LastIndex(filename, "/"); idx != -1 {
 			filename = filename[idx+1:]
 		}
 		return fmt.Sprintf("✏️  %s", filename)
-		
+
 	case taskPkg.TaskTypeRunShell:
 		// Show just the command verb
 		cmd := strings.Fields(task.Command)
@@ -1061,7 +1059,7 @@ func (m *model) createMinimalTaskStatus(task *taskPkg.Task) string {
 			return fmt.Sprintf("🔧 %s", cmd[0])
 		}
 		return "🔧 shell"
-		
+
 	default:
 		return "⚡ task"
 	}
@@ -1070,17 +1068,17 @@ func (m *model) createMinimalTaskStatus(task *taskPkg.Task) string {
 // detectsActionWithoutTasks checks if the LLM indicated an action but didn't provide tasks (simplified)
 func (m *model) detectsActionWithoutTasks(response string) bool {
 	lowerResponse := strings.ToLower(response)
-	
+
 	// Simple check for common action phrases
 	actionPhrases := []string{"let me read", "i'll read", "reading file"}
-	
+
 	for _, phrase := range actionPhrases {
 		if strings.Contains(lowerResponse, phrase) {
 			// Check if there are actual JSON tasks
 			return !strings.Contains(response, "```json")
 		}
 	}
-	
+
 	return false
 }
 
@@ -1176,20 +1174,20 @@ func (m model) handleTaskEvent(event taskPkg.TaskExecutionEvent) (tea.Model, tea
 		}
 	}
 
-    // Automatically continue the LLM conversation once all tasks have
-    // finished and there is no user confirmation required. This prevents
-    // the UI from stalling on a status-only message like "Reading file …"
-    // and allows the assistant to immediately respond with the follow-up
-    // answer that uses the newly-read content.
-    if event.Type == "execution_completed" && m.pendingConfirmation == nil {
-        // Trigger continuation only if the LLM adapter is available so we
-        // don't schedule redundant work in offline mode.
-        if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
-            return m, func() tea.Msg {
-                return ContinueLLMMsg{}
-            }
-        }
-    }
+	// Automatically continue the LLM conversation once all tasks have
+	// finished and there is no user confirmation required. This prevents
+	// the UI from stalling on a status-only message like "Reading file …"
+	// and allows the assistant to immediately respond with the follow-up
+	// answer that uses the newly-read content.
+	if event.Type == "execution_completed" && m.pendingConfirmation == nil {
+		// Trigger continuation only if the LLM adapter is available so we
+		// don't schedule redundant work in offline mode.
+		if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
+			return m, func() tea.Msg {
+				return ContinueLLMMsg{}
+			}
+		}
+	}
 
 	return m, nil
 }
@@ -1207,7 +1205,7 @@ Found %d tests in the workspace. Would you like to run them to verify your recen
 
 You can:
 • Type "yes" to run all %s tests now
-• Type "no" to skip testing for now  
+• Type "no" to skip testing for now
 • Use "/test" command anytime to see test details
 • Tests will run automatically after future code changes
 
@@ -1341,9 +1339,9 @@ func (m model) handleAutoContinuation(msg AutoContinueMsg) (tea.Model, tea.Cmd) 
 
 	// Check if this looks like a completion signal
 	lowerResponse := strings.ToLower(msg.LastResponse)
-	if strings.Contains(lowerResponse, "complete") || 
-	   strings.Contains(lowerResponse, "done") ||
-	   strings.Contains(lowerResponse, "finished") {
+	if strings.Contains(lowerResponse, "complete") ||
+		strings.Contains(lowerResponse, "done") ||
+		strings.Contains(lowerResponse, "finished") {
 		m.recursiveDepth = 0
 		return m, nil
 	}
@@ -1740,7 +1738,7 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 		recentResponses:   make([]string, 0, 5),
 		maxRecursiveDepth: 15,
 		maxRecursiveTime:  30 * time.Minute,
-		showInfoPanel:    true,
+		showInfoPanel:     true,
 	}
 
 	// Initialize wrapped messages
@@ -1748,15 +1746,15 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
 
-    // Forward task execution events from the manager to the TUI update loop.
-    if taskEventChan != nil {
-        go func() {
-            for ev := range taskEventChan {
-                // Forward TaskEventMsg; Send has no return value.
-                p.Send(TaskEventMsg{Event: ev})
-            }
-        }()
-    }
+	// Forward task execution events from the manager to the TUI update loop.
+	if taskEventChan != nil {
+		go func() {
+			for ev := range taskEventChan {
+				// Forward TaskEventMsg; Send has no return value.
+				p.Send(TaskEventMsg{Event: ev})
+			}
+		}()
+	}
 
 	_, err = p.Run()
 	return err
@@ -1982,7 +1980,7 @@ You can emit tasks to interact with the workspace. Use JSON code blocks like thi
    - start_line, end_line: Read specific line range
 
 2. **EditFile**: Apply file changes (requires user confirmation)
-   - path: File path (required) 
+   - path: File path (required)
    - diff: Unified diff format, OR
    - content: Complete file replacement
 
@@ -2010,7 +2008,7 @@ You can emit tasks to interact with the workspace. Use JSON code blocks like thi
 
 You can help with:
 - Reading and analyzing code files
-- Making targeted edits and improvements  
+- Making targeted edits and improvements
 - Listing and exploring directory structures
 - Running build/test commands (if shell enabled)
 - Explaining code structure and architecture
@@ -2113,12 +2111,10 @@ Please analyze why the tests failed and suggest how to fix them.`, testResult.Ou
 	}
 }
 
-
-
 // isExplorationQuery checks if the user query should trigger sequential exploration
 func (m *model) isExplorationQuery(userInput string) bool {
 	lowerInput := strings.ToLower(userInput)
-	
+
 	explorationPatterns := []string{
 		"tell me about",
 		"check out",
@@ -2136,20 +2132,20 @@ func (m *model) isExplorationQuery(userInput string) bool {
 		"repo",
 		"project",
 	}
-	
+
 	for _, pattern := range explorationPatterns {
 		if strings.Contains(lowerInput, pattern) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
 // extractUserQuery extracts the most recent user query from chat history
 func (m *model) extractUserQuery() string {
 	messages := m.chatSession.GetMessages()
-	
+
 	// Look for the most recent user message (not system messages)
 	for i := len(messages) - 1; i >= 0; i-- {
 		if messages[i].Role == "user" {
@@ -2160,16 +2156,16 @@ func (m *model) extractUserQuery() string {
 			}
 		}
 	}
-	
+
 	return ""
 }
 
 // formatTaskResultForLLM formats task results for LLM context (hidden from user display)
 func (m *model) formatTaskResultForLLM(task *taskPkg.Task, response *taskPkg.TaskResponse) llm.Message {
 	var content strings.Builder
-	
+
 	content.WriteString(fmt.Sprintf("TASK_RESULT: %s\n", task.Description()))
-	
+
 	if response.Success {
 		content.WriteString("STATUS: Success\n")
 		// Use ActualContent for LLM context (includes full file content, etc.)
@@ -2184,7 +2180,7 @@ func (m *model) formatTaskResultForLLM(task *taskPkg.Task, response *taskPkg.Tas
 			content.WriteString(fmt.Sprintf("ERROR: %s\n", response.Error))
 		}
 	}
-	
+
 	return llm.Message{
 		Role:      "system",
 		Content:   content.String(),

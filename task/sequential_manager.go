@@ -12,35 +12,35 @@ import (
 type ExplorationPhase string
 
 const (
-	PhaseObjectiveSetting ExplorationPhase = "objective_setting"
-	PhaseSuppressedExploration ExplorationPhase = "suppressed_exploration" 
-	PhaseSynthesis ExplorationPhase = "synthesis"
+	PhaseObjectiveSetting      ExplorationPhase = "objective_setting"
+	PhaseSuppressedExploration ExplorationPhase = "suppressed_exploration"
+	PhaseSynthesis             ExplorationPhase = "synthesis"
 )
 
 // ObjectiveExploration tracks an ongoing objective-driven exploration
 type ObjectiveExploration struct {
-	Objective         string
-	Phase            ExplorationPhase
-	TasksExecuted    int
-	AccumulatedData  []TaskResponse
-	StartTime        time.Time
+	Objective       string
+	Phase           ExplorationPhase
+	TasksExecuted   int
+	AccumulatedData []TaskResponse
+	StartTime       time.Time
 }
 
 // SequentialTaskManager processes tasks one at a time with hidden exploration context
 // This prevents fragmented output and enables comprehensive synthesis like Cursor
 type SequentialTaskManager struct {
-	executor            *Executor
-	llmAdapter          llm.LLMAdapter
-	chatSession         ChatSession
-	explorationContext  []llm.Message // Hidden context for iterative exploration
-	maxIterations       int           // Safety limit to prevent infinite loops
-	currentIteration    int
-	isExploring         bool
-	initialUserQuery    string
-	completionSignals   []string
-	
+	executor           *Executor
+	llmAdapter         llm.LLMAdapter
+	chatSession        ChatSession
+	explorationContext []llm.Message // Hidden context for iterative exploration
+	maxIterations      int           // Safety limit to prevent infinite loops
+	currentIteration   int
+	isExploring        bool
+	initialUserQuery   string
+	completionSignals  []string
+
 	// Objective-driven exploration
-	currentObjective    *ObjectiveExploration
+	currentObjective *ObjectiveExploration
 }
 
 // ExplorationResult represents the final result of a sequential exploration
@@ -55,11 +55,11 @@ type ExplorationResult struct {
 // NewSequentialTaskManager creates a new sequential task manager
 func NewSequentialTaskManager(executor *Executor, llmAdapter llm.LLMAdapter, chatSession ChatSession) *SequentialTaskManager {
 	return &SequentialTaskManager{
-		executor:          executor,
-		llmAdapter:        llmAdapter,
-		chatSession:       chatSession,
+		executor:           executor,
+		llmAdapter:         llmAdapter,
+		chatSession:        chatSession,
 		explorationContext: make([]llm.Message, 0),
-		maxIterations:     15, // Reasonable limit for exploration
+		maxIterations:      15, // Reasonable limit for exploration
 		completionSignals: []string{
 			"EXPLORATION_COMPLETE:",
 			"ANALYSIS_COMPLETE:",
@@ -74,20 +74,20 @@ func NewSequentialTaskManager(executor *Executor, llmAdapter llm.LLMAdapter, cha
 // HandleExplorationRequest starts a sequential exploration based on user query
 func (stm *SequentialTaskManager) HandleExplorationRequest(userQuery string) (*ExplorationResult, error) {
 	startTime := time.Now()
-	
+
 	// Reset state for new exploration
 	stm.explorationContext = make([]llm.Message, 0)
 	stm.currentIteration = 0
 	stm.isExploring = true
 	stm.initialUserQuery = userQuery
-	
+
 	// Add initial user query to exploration context
 	stm.addToExplorationContext(llm.Message{
 		Role:      "user",
 		Content:   userQuery,
 		Timestamp: time.Now(),
 	})
-	
+
 	// Execute exploration loop
 	result, err := stm.executeExplorationLoop()
 	if err != nil {
@@ -98,7 +98,7 @@ func (stm *SequentialTaskManager) HandleExplorationRequest(userQuery string) (*E
 			CompletionReason: fmt.Sprintf("Error: %v", err),
 		}, err
 	}
-	
+
 	result.Duration = time.Since(startTime)
 	return result, nil
 }
@@ -108,28 +108,28 @@ func (stm *SequentialTaskManager) executeExplorationLoop() (*ExplorationResult, 
 	for stm.currentIteration < stm.maxIterations {
 		// Get current context for LLM (system + exploration context)
 		messages := stm.buildLLMContext()
-		
+
 		// Send to LLM
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		response, err := stm.llmAdapter.Send(ctx, messages)
 		cancel()
-		
+
 		if err != nil {
 			return nil, fmt.Errorf("LLM request failed at iteration %d: %w", stm.currentIteration, err)
 		}
-		
+
 		// Check for completion signal
 		if isComplete, synthesis := stm.checkCompletionSignal(response.Content); isComplete {
 			// Add final synthesis to chat session for user
 			return stm.finalizeSynthesis(synthesis)
 		}
-		
+
 		// Parse single task from response
 		task, explorationContent, err := stm.ParseSingleTask(response.Content)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse task at iteration %d: %w", stm.currentIteration, err)
 		}
-		
+
 		if task == nil {
 			// No task found - LLM might be providing analysis without action
 			// Add the response to exploration context and continue
@@ -137,14 +137,14 @@ func (stm *SequentialTaskManager) executeExplorationLoop() (*ExplorationResult, 
 			stm.currentIteration++
 			continue
 		}
-		
+
 		// Execute the task
 		taskResponse := stm.executor.Execute(task)
-		
+
 		// Add task result to exploration context (hidden from user)
 		taskResultMsg := stm.formatTaskResultForExploration(task, taskResponse)
 		stm.addToExplorationContext(taskResultMsg)
-		
+
 		// If there was additional exploration content, add it too
 		if strings.TrimSpace(explorationContent) != "" {
 			stm.addToExplorationContext(llm.Message{
@@ -153,10 +153,10 @@ func (stm *SequentialTaskManager) executeExplorationLoop() (*ExplorationResult, 
 				Timestamp: time.Now(),
 			})
 		}
-		
+
 		stm.currentIteration++
 	}
-	
+
 	// Max iterations reached - force completion
 	return &ExplorationResult{
 		Success:          false,
@@ -169,18 +169,18 @@ func (stm *SequentialTaskManager) executeExplorationLoop() (*ExplorationResult, 
 func (stm *SequentialTaskManager) buildLLMContext() []llm.Message {
 	// Get system message with sequential exploration instructions
 	systemMsg := stm.CreateSequentialSystemMessage()
-	
+
 	// Combine system message with exploration context
 	messages := []llm.Message{systemMsg}
 	messages = append(messages, stm.explorationContext...)
-	
+
 	return messages
 }
 
 // CreateSequentialSystemMessage creates a system message optimized for sequential exploration
 func (stm *SequentialTaskManager) CreateSequentialSystemMessage() llm.Message {
 	var content string
-	
+
 	switch stm.GetCurrentPhase() {
 	case PhaseObjectiveSetting:
 		content = stm.createObjectiveSettingPrompt()
@@ -262,7 +262,7 @@ func (stm *SequentialTaskManager) createSynthesisPrompt() string {
 		}
 		taskCount = stm.currentObjective.TasksExecuted
 	}
-	
+
 	return fmt.Sprintf(`You are Loom completing an OBJECTIVE-DRIVEN EXPLORATION.
 
 ## PHASE 3: COMPREHENSIVE SYNTHESIS
@@ -276,7 +276,7 @@ Use ALL the information you've systematically gathered to provide:
 
 ### Required Analysis Components:
 1. **Project Overview** - What this project does, its purpose and goals
-2. **Architecture Deep Dive** - Key components, packages, and their relationships  
+2. **Architecture Deep Dive** - Key components, packages, and their relationships
 3. **Technology Stack** - Languages, frameworks, dependencies, and patterns used
 4. **Code Organization** - Package structure, design patterns, and architectural decisions
 5. **Key Features & Functionality** - Main capabilities and how they're implemented
@@ -286,7 +286,7 @@ Use ALL the information you've systematically gathered to provide:
 ### Response Requirements:
 - **BE COMPREHENSIVE** - This is the user's main response, make it thorough
 - **USE SPECIFIC DETAILS** - Reference actual files, functions, and code you've seen
-- **EXPLAIN RELATIONSHIPS** - How components work together 
+- **EXPLAIN RELATIONSHIPS** - How components work together
 - **PROVIDE CONTEXT** - Why certain decisions were made
 - **BE INSIGHTFUL** - Go beyond just listing features
 
@@ -302,24 +302,24 @@ func (stm *SequentialTaskManager) ParseSingleTask(llmResponse string) (*Task, st
 	if task != nil {
 		return task, content, err
 	}
-	
+
 	// Fall back to existing parser for code-block wrapped tasks
 	taskList, err := ParseTasks(llmResponse)
 	if err != nil {
 		return nil, "", err
 	}
-	
+
 	// If no tasks found, return the response content for analysis
 	if taskList == nil || len(taskList.Tasks) == 0 {
 		return nil, llmResponse, nil
 	}
-	
+
 	// Take only the first task
 	firstTask := &taskList.Tasks[0]
-	
+
 	// Extract non-task content (everything outside JSON blocks)
 	content = stm.extractNonTaskContent(llmResponse)
-	
+
 	return firstTask, content, nil
 }
 
@@ -327,7 +327,7 @@ func (stm *SequentialTaskManager) ParseSingleTask(llmResponse string) (*Task, st
 func (stm *SequentialTaskManager) parseRawTaskJSON(response string) (*Task, string, error) {
 	// DISABLED: This function was too aggressive and would parse any JSON content as tasks
 	// including file content like {"message": "hello"} which is meant to be file data, not task instructions.
-	// 
+	//
 	// Sequential manager should only parse tasks from proper JSON code blocks,
 	// so we return nil to fall back to the standard ParseTasks function.
 	return nil, "", nil
@@ -339,32 +339,32 @@ func (stm *SequentialTaskManager) extractNonTaskContent(response string) string 
 	lines := strings.Split(response, "\n")
 	var content []string
 	inJsonBlock := false
-	
+
 	for _, line := range lines {
 		if strings.HasPrefix(strings.TrimSpace(line), "```") {
 			inJsonBlock = !inJsonBlock
 			continue
 		}
-		
+
 		if !inJsonBlock && strings.TrimSpace(line) != "" {
 			content = append(content, line)
 		}
 	}
-	
+
 	return strings.Join(content, "\n")
 }
 
 // checkCompletionSignal checks if the LLM has signaled exploration completion
 func (stm *SequentialTaskManager) checkCompletionSignal(response string) (bool, string) {
 	lowerResponse := strings.ToLower(response)
-	
+
 	for _, signal := range stm.completionSignals {
 		if strings.Contains(lowerResponse, strings.ToLower(signal)) {
 			// Found completion signal - extract the synthesis
 			return true, response
 		}
 	}
-	
+
 	return false, ""
 }
 
@@ -372,18 +372,18 @@ func (stm *SequentialTaskManager) checkCompletionSignal(response string) (bool, 
 func (stm *SequentialTaskManager) finalizeSynthesis(synthesis string) (*ExplorationResult, error) {
 	// Clean up the synthesis content
 	cleanSynthesis := stm.cleanSynthesisContent(synthesis)
-	
+
 	// Add final synthesis to chat session for user display
 	finalMessage := llm.Message{
 		Role:      "assistant",
 		Content:   cleanSynthesis,
 		Timestamp: time.Now(),
 	}
-	
+
 	if err := stm.chatSession.AddMessage(finalMessage); err != nil {
 		return nil, fmt.Errorf("failed to add synthesis to chat: %w", err)
 	}
-	
+
 	return &ExplorationResult{
 		Success:          true,
 		FinalSynthesis:   cleanSynthesis,
@@ -395,7 +395,7 @@ func (stm *SequentialTaskManager) finalizeSynthesis(synthesis string) (*Explorat
 // cleanSynthesisContent removes completion signals and formats the synthesis
 func (stm *SequentialTaskManager) cleanSynthesisContent(synthesis string) string {
 	content := synthesis
-	
+
 	// Remove completion signal prefixes
 	for _, signal := range stm.completionSignals {
 		if strings.HasPrefix(strings.ToUpper(content), strings.ToUpper(signal)) {
@@ -405,16 +405,16 @@ func (stm *SequentialTaskManager) cleanSynthesisContent(synthesis string) string
 			break
 		}
 	}
-	
+
 	return content
 }
 
 // formatTaskResultForExploration formats task results for the hidden exploration context
 func (stm *SequentialTaskManager) formatTaskResultForExploration(task *Task, response *TaskResponse) llm.Message {
 	var content strings.Builder
-	
+
 	content.WriteString(fmt.Sprintf("TASK_RESULT: %s\n", task.Description()))
-	
+
 	if response.Success {
 		content.WriteString("STATUS: Success\n")
 		// Use ActualContent for LLM context (includes full file content, etc.)
@@ -429,7 +429,7 @@ func (stm *SequentialTaskManager) formatTaskResultForExploration(task *Task, res
 			content.WriteString(fmt.Sprintf("ERROR: %s\n", response.Error))
 		}
 	}
-	
+
 	return llm.Message{
 		Role:      "assistant",
 		Content:   content.String(),
@@ -440,7 +440,7 @@ func (stm *SequentialTaskManager) formatTaskResultForExploration(task *Task, res
 // addToExplorationContext adds a message to the hidden exploration context
 func (stm *SequentialTaskManager) addToExplorationContext(message llm.Message) {
 	stm.explorationContext = append(stm.explorationContext, message)
-	
+
 	// Limit context size to prevent token overflow
 	maxContextMessages := 50
 	if len(stm.explorationContext) > maxContextMessages {
@@ -503,7 +503,7 @@ func (stm *SequentialTaskManager) SetObjective(objective string) {
 func (stm *SequentialTaskManager) IsObjectiveComplete(response string) bool {
 	upperResponse := strings.ToUpper(response)
 	return strings.Contains(upperResponse, "OBJECTIVE_COMPLETE:") ||
-		   strings.Contains(upperResponse, "EXPLORATION_COMPLETE:")
+		strings.Contains(upperResponse, "EXPLORATION_COMPLETE:")
 }
 
 // AddTaskResult adds a task result to the accumulated data

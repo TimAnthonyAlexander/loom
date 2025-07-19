@@ -267,4 +267,4 @@ func TestWorkspaceDetectionEdgeCases(t *testing.T) {
 	if resolvedWorkspace != expectedPath {
 		t.Errorf("Expected workspace %s, got %s", expectedPath, resolvedWorkspace)
 	}
-} 
+}

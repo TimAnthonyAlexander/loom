@@ -243,7 +243,7 @@ func (s *Session) GetDisplayMessages() []string {
 
 			// Filter task result messages to show only status, not actual content
 			content := s.filterTaskResultForDisplay(msg.Content)
-			
+
 			// Skip empty content (like completion detector interactions)
 			if strings.TrimSpace(content) == "" {
 				continue
@@ -265,14 +265,14 @@ func (s *Session) filterTaskResultForDisplay(content string) string {
 		// of lines (default 200), so it’s safe to display as-is.
 		return content
 	}
-    // First check if this contains JSON task blocks - filter those out
+	// First check if this contains JSON task blocks - filter those out
 	content = s.filterJSONTaskBlocks(content)
-	
+
 	// Check if this is a completion detector interaction - hide those entirely
 	if s.isCompletionDetectorInteraction(content) {
 		return "" // Return empty to hide these interactions
 	}
-	
+
 	// Check if this is a task result message
 	if !strings.HasPrefix(content, "🔧 Task Result:") {
 		return content // Not a task result, return as is
@@ -343,56 +343,56 @@ func (s *Session) filterJSONTaskBlocks(content string) string {
 	// Find JSON code blocks using regex
 	re := regexp.MustCompile("(?s)```(?:json)?\n?(.*?)\n?```")
 	matches := re.FindAllStringSubmatch(content, -1)
-	
+
 	if len(matches) == 0 {
 		return content // No JSON blocks found
 	}
-	
+
 	// Try to extract task information from JSON blocks
 	var taskDescriptions []string
-	
+
 	for _, match := range matches {
 		if len(match) < 2 {
 			continue
 		}
-		
+
 		jsonStr := strings.TrimSpace(match[1])
 		if jsonStr == "" {
 			continue
 		}
-		
+
 		// Parse the JSON to extract task information
 		var data map[string]interface{}
 		if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
 			continue // Skip invalid JSON
 		}
-		
+
 		// Look for tasks array
 		tasksData, ok := data["tasks"]
 		if !ok {
 			continue
 		}
-		
+
 		tasks, ok := tasksData.([]interface{})
 		if !ok {
 			continue
 		}
-		
+
 		// Extract task descriptions
 		for _, taskInterface := range tasks {
 			taskMap, ok := taskInterface.(map[string]interface{})
 			if !ok {
 				continue
 			}
-			
+
 			taskType, hasType := taskMap["type"].(string)
 			path, hasPath := taskMap["path"].(string)
 			command, hasCommand := taskMap["command"].(string)
-			
+
 			if !hasType {
 				continue
 			}
-			
+
 			// Generate clean description based on task type
 			switch taskType {
 			case "ReadFile":
@@ -424,7 +424,7 @@ func (s *Session) filterJSONTaskBlocks(content string) string {
 			}
 		}
 	}
-	
+
 	// If we found tasks, create a clean summary
 	if len(taskDescriptions) > 0 {
 		taskSummary := ""
@@ -433,12 +433,12 @@ func (s *Session) filterJSONTaskBlocks(content string) string {
 		} else {
 			taskSummary = fmt.Sprintf("🔧 Executing %d tasks:\n%s", len(taskDescriptions), strings.Join(taskDescriptions, "\n"))
 		}
-		
+
 		// Replace all JSON blocks with the clean task summary
 		filteredContent := re.ReplaceAllString(content, "\n"+taskSummary)
 		return filteredContent
 	}
-	
+
 	// If no valid tasks found, just remove the JSON blocks
 	return re.ReplaceAllString(content, "\n🔧 Executing tasks...")
 }
@@ -449,9 +449,9 @@ func (s *Session) isCompletionDetectorInteraction(content string) bool {
 	if strings.HasPrefix(content, "COMPLETION_CHECK:") {
 		return true
 	}
-	
+
 	lowerContent := strings.ToLower(content)
-	
+
 	// Completion detector question patterns
 	completionQuestions := []string{
 		"is this task complete?",
@@ -463,13 +463,13 @@ func (s *Session) isCompletionDetectorInteraction(content string) bool {
 		"is the task fully complete?",
 		"do you need to do anything else?",
 	}
-	
+
 	for _, question := range completionQuestions {
 		if strings.Contains(lowerContent, question) {
 			return true
 		}
 	}
-	
+
 	// Completion detector response patterns
 	completionResponses := []string{
 		"yes, the task is complete",
@@ -479,13 +479,13 @@ func (s *Session) isCompletionDetectorInteraction(content string) bool {
 		"not yet, i should",
 		"there's more work",
 	}
-	
+
 	for _, response := range completionResponses {
 		if strings.Contains(lowerContent, response) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
