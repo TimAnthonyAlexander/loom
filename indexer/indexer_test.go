@@ -541,6 +541,8 @@ func TestRelativePaths(t *testing.T) {
 
 	// Verify relative path is used
 	expectedRelativePath := filepath.Join("level1", "level2", "level3", "nested.txt")
+	// Normalize to forward slashes to match our cross-platform indexing
+	expectedRelativePath = filepath.ToSlash(expectedRelativePath)
 	if _, exists := index.Files[expectedRelativePath]; !exists {
 		t.Errorf("Expected file with relative path %s to be in index", expectedRelativePath)
 	}
