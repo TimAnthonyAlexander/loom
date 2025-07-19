@@ -378,7 +378,7 @@ node_modules/
 	expectedFiles := []string{"main.go", "src/helper.go"}
 	if len(index.Files) != len(expectedFiles) {
 		t.Errorf("Expected %d files to be indexed, got %d", len(expectedFiles), len(index.Files))
-		
+
 		// Additional debug for mismatches
 		t.Logf("=== DEBUG: Expected vs Actual ===")
 		t.Logf("Expected files: %v", expectedFiles)
