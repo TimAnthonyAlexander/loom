@@ -945,9 +945,21 @@ func (m *model) handleLLMResponseForTasks(llmResponse string) tea.Cmd {
 		// Store the response for recursive tracking
 		m.lastLLMResponse = llmResponse
 
-		// Handle objective-driven exploration
-		if m.sequentialManager != nil {
+		// Handle objective-driven exploration only for exploration queries
+		if m.sequentialManager != nil && m.sequentialManager.IsExploring() {
 			return m.handleObjectiveExploration(llmResponse)
+		}
+
+		// For non-exploration requests, use standard task management
+		if m.taskManager != nil {
+			execution, err := m.taskManager.HandleLLMResponse(llmResponse, m.taskEventChan)
+			if err != nil {
+				return StreamMsg{Error: fmt.Errorf("failed to handle LLM response: %w", err)}
+			}
+			
+			if execution != nil {
+				m.currentExecution = execution
+			}
 		}
 
 		// No tasks found - this is a regular Q&A response
@@ -996,7 +1008,7 @@ func (m *model) handleObjectiveExploration(llmResponse string) tea.Msg {
 		
 		// Show minimal status during suppressed phase
 		if m.sequentialManager.GetCurrentPhase() == taskPkg.PhaseSuppressedExploration {
-			statusMsg := fmt.Sprintf("📖 %s", task.Description())
+			statusMsg := m.createMinimalTaskStatus(task)
 			m.messages = append(m.messages, statusMsg)
 			m.updateWrappedMessages()
 		} else {
@@ -1012,6 +1024,47 @@ func (m *model) handleObjectiveExploration(llmResponse string) tea.Msg {
 	// No task found - regular response
 	m.recursiveDepth = 0
 	return nil
+}
+
+// createMinimalTaskStatus creates very minimal status messages for suppressed exploration
+func (m *model) createMinimalTaskStatus(task *taskPkg.Task) string {
+	switch task.Type {
+	case taskPkg.TaskTypeReadFile:
+		// Extract just the filename from path
+		filename := task.Path
+		if idx := strings.LastIndex(filename, "/"); idx != -1 {
+			filename = filename[idx+1:]
+		}
+		return fmt.Sprintf("📖 %s", filename)
+		
+	case taskPkg.TaskTypeListDir:
+		dirName := task.Path
+		if dirName == "." {
+			dirName = "root"
+		}
+		if idx := strings.LastIndex(dirName, "/"); idx != -1 {
+			dirName = dirName[idx+1:]
+		}
+		return fmt.Sprintf("📂 %s/", dirName)
+		
+	case taskPkg.TaskTypeEditFile:
+		filename := task.Path
+		if idx := strings.LastIndex(filename, "/"); idx != -1 {
+			filename = filename[idx+1:]
+		}
+		return fmt.Sprintf("✏️  %s", filename)
+		
+	case taskPkg.TaskTypeRunShell:
+		// Show just the command verb
+		cmd := strings.Fields(task.Command)
+		if len(cmd) > 0 {
+			return fmt.Sprintf("🔧 %s", cmd[0])
+		}
+		return "🔧 shell"
+		
+	default:
+		return "⚡ task"
+	}
 }
 
 // detectsActionWithoutTasks checks if the LLM indicated an action but didn't provide tasks (simplified)

@@ -104,6 +104,10 @@ func ParseTasks(llmResponse string) (*TaskList, error) {
 				fmt.Printf("   Response (first 200 chars): %s...\n", llmResponse[:min(len(llmResponse), 200)])
 				fmt.Printf("   ✅ Expected: JSON code block like:\n")
 				fmt.Printf("   " + "```" + "json\n")
+				fmt.Printf("   {\"type\": \"ReadFile\", \"path\": \"README.md\", \"max_lines\": 100}\n")
+				fmt.Printf("   " + "```" + "\n")
+				fmt.Printf("   📝 OR for multiple tasks:\n")
+				fmt.Printf("   " + "```" + "json\n")
 				fmt.Printf("   {\n")
 				fmt.Printf("     \"tasks\": [\n")
 				fmt.Printf("       {\"type\": \"ReadFile\", \"path\": \"README.md\", \"max_lines\": 100}\n")
@@ -134,22 +138,61 @@ func ParseTasks(llmResponse string) (*TaskList, error) {
 			fmt.Printf("DEBUG: Attempting to parse JSON task block: %s\n", jsonStr[:min(len(jsonStr), 100)])
 		}
 
-		// Try to parse as TaskList
+		// Try to parse as TaskList first
 		var taskList TaskList
-		if err := json.Unmarshal([]byte(jsonStr), &taskList); err != nil {
+		if err := json.Unmarshal([]byte(jsonStr), &taskList); err == nil {
 			if debugTaskParsing {
-				fmt.Printf("DEBUG: Failed to parse JSON task block: %v\n", err)
+				fmt.Printf("DEBUG: Parsed as TaskList with %d tasks\n", len(taskList.Tasks))
+			}
+			
+			// Only proceed with TaskList if it actually has tasks
+			if len(taskList.Tasks) > 0 {
+				// Successfully parsed as TaskList
+				if err := validateTasks(&taskList); err != nil {
+					return nil, fmt.Errorf("invalid tasks: %w", err)
+				}
+
+				if debugTaskParsing {
+					fmt.Printf("DEBUG: Successfully parsed %d tasks (as TaskList)\n", len(taskList.Tasks))
+				}
+				return &taskList, nil
+			}
+			
+			if debugTaskParsing {
+				fmt.Printf("DEBUG: TaskList was empty, trying single task parsing\n")
+			}
+		}
+
+		// Try to parse as single Task object
+		var singleTask Task
+		if err := json.Unmarshal([]byte(jsonStr), &singleTask); err != nil {
+			if debugTaskParsing {
+				fmt.Printf("DEBUG: Failed to parse JSON as either TaskList or single Task: %v\n", err)
 			}
 			continue // Skip invalid JSON blocks
 		}
 
+		if debugTaskParsing {
+			fmt.Printf("DEBUG: Parsed single task - Type: %s, Path: %s\n", singleTask.Type, singleTask.Path)
+		}
+
+		// Create TaskList with single task
+		taskList = TaskList{Tasks: []Task{singleTask}}
+
+		if debugTaskParsing {
+			fmt.Printf("DEBUG: Created TaskList with %d tasks\n", len(taskList.Tasks))
+		}
+
 		// Validate tasks
 		if err := validateTasks(&taskList); err != nil {
+			if debugTaskParsing {
+				fmt.Printf("DEBUG: Task validation failed: %v\n", err)
+			}
 			return nil, fmt.Errorf("invalid tasks: %w", err)
 		}
 
 		if debugTaskParsing {
-			fmt.Printf("DEBUG: Successfully parsed %d tasks\n", len(taskList.Tasks))
+			fmt.Printf("DEBUG: Successfully parsed 1 task (as single Task object)\n")
 		}
 		return &taskList, nil
 	}

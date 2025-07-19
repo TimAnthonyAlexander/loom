@@ -2,7 +2,6 @@ package task
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"loom/llm"
 	"strings"
@@ -235,42 +234,65 @@ func (stm *SequentialTaskManager) createSuppressedExplorationPrompt() string {
 
 ## PHASE 2: SUPPRESSED EXPLORATION
 
-Continue pursuing your objective with minimal output:
+Continue pursuing your objective with ABSOLUTELY MINIMAL output:
 
-**SUPPRESSED OUTPUT**: Provide ONLY the next logical task
-- NO explanations or analysis
-- NO verbose responses  
+**CRITICAL: OUTPUT ONLY TASKS**
+- Provide ONLY the next JSON task
+- NO text, explanations, or analysis
+- NO status messages or commentary
 - Think internally about what you learned
-- Focus on systematic exploration
-- Continue until objective is complete
+- Continue systematically until objective complete
 
-### When Complete:
-Signal completion with: **OBJECTIVE_COMPLETE:** followed by comprehensive analysis
-
-### Next Task Only:
+### Task-Only Response Format:
 {"type": "ReadFile", "path": "main.go", "max_lines": 200}
 
-Provide only the next task needed to complete your objective.`
+### When Objective Complete:
+Signal with: **OBJECTIVE_COMPLETE:** followed by comprehensive analysis
+
+**Remember: TASK ONLY - No other text during suppressed phase.**`
 }
 
 // createSynthesisPrompt creates the final synthesis prompt
 func (stm *SequentialTaskManager) createSynthesisPrompt() string {
 	objectiveText := "the exploration objective"
-	if stm.currentObjective != nil && stm.currentObjective.Objective != "" {
-		objectiveText = stm.currentObjective.Objective
+	taskCount := 0
+	if stm.currentObjective != nil {
+		if stm.currentObjective.Objective != "" {
+			objectiveText = stm.currentObjective.Objective
+		}
+		taskCount = stm.currentObjective.TasksExecuted
 	}
 	
 	return fmt.Sprintf(`You are Loom completing an OBJECTIVE-DRIVEN EXPLORATION.
 
-## PHASE 3: SYNTHESIS
+## PHASE 3: COMPREHENSIVE SYNTHESIS
 
-You have completed your objective: %s
+You have successfully completed your objective: %s
+Tasks executed: %d
 
-Provide a comprehensive analysis using ALL the information you've gathered during exploration.
+**CRITICAL: PROVIDE DETAILED COMPREHENSIVE ANALYSIS**
 
-**NO MORE TASKS** - Focus entirely on synthesis and analysis.
+Use ALL the information you've systematically gathered to provide:
 
-Provide a complete, detailed response that fully addresses the original user question.`, objectiveText)
+### Required Analysis Components:
+1. **Project Overview** - What this project does, its purpose and goals
+2. **Architecture Deep Dive** - Key components, packages, and their relationships  
+3. **Technology Stack** - Languages, frameworks, dependencies, and patterns used
+4. **Code Organization** - Package structure, design patterns, and architectural decisions
+5. **Key Features & Functionality** - Main capabilities and how they're implemented
+6. **Development Approach** - Testing, configuration, build process, conventions
+7. **Interesting Insights** - Notable patterns, clever implementations, or unique aspects
+
+### Response Requirements:
+- **BE COMPREHENSIVE** - This is the user's main response, make it thorough
+- **USE SPECIFIC DETAILS** - Reference actual files, functions, and code you've seen
+- **EXPLAIN RELATIONSHIPS** - How components work together 
+- **PROVIDE CONTEXT** - Why certain decisions were made
+- **BE INSIGHTFUL** - Go beyond just listing features
+
+**NO MORE TASKS** - Focus entirely on detailed synthesis and analysis.
+
+Start with "OBJECTIVE_COMPLETE:" followed by your comprehensive architectural analysis.`, objectiveText, taskCount)
 }
 
 // ParseSingleTask extracts the first task from LLM response and any additional content
@@ -303,41 +325,12 @@ func (stm *SequentialTaskManager) ParseSingleTask(llmResponse string) (*Task, st
 
 // parseRawTaskJSON attempts to parse a raw JSON task object from the response
 func (stm *SequentialTaskManager) parseRawTaskJSON(response string) (*Task, string, error) {
-	// Look for JSON-like patterns in the response
-	lines := strings.Split(response, "\n")
-	var taskJSON string
-	var nonTaskLines []string
-	
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		
-		// Check if this line looks like a JSON task
-		if strings.HasPrefix(line, `{"type":`) && strings.HasSuffix(line, `}`) {
-			taskJSON = line
-		} else if line != "" {
-			nonTaskLines = append(nonTaskLines, line)
-		}
-	}
-	
-	if taskJSON == "" {
-		return nil, "", nil
-	}
-	
-	// Try to parse the task JSON
-	var task Task
-	if err := json.Unmarshal([]byte(taskJSON), &task); err != nil {
-		return nil, "", fmt.Errorf("failed to parse task JSON: %w", err)
-	}
-	
-	// Validate the task
-	if err := validateTask(&task); err != nil {
-		return nil, "", fmt.Errorf("invalid task: %w", err)
-	}
-	
-	// Return non-task content
-	nonTaskContent := strings.Join(nonTaskLines, "\n")
-	
-	return &task, nonTaskContent, nil
+	// DISABLED: This function was too aggressive and would parse any JSON content as tasks
+	// including file content like {"message": "hello"} which is meant to be file data, not task instructions.
+	// 
+	// Sequential manager should only parse tasks from proper JSON code blocks,
+	// so we return nil to fall back to the standard ParseTasks function.
+	return nil, "", nil
 }
 
 // extractNonTaskContent extracts text content outside of JSON task blocks

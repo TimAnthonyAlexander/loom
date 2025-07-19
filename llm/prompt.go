@@ -139,10 +139,14 @@ When exploring a codebase, follow this autonomous approach:
 
 #### Sequential Exploration Flow:
 1. **Start with README** to understand project purpose and structure
-   JSON: {"type": "ReadFile", "path": "README.md", "max_lines": 300}
+   ` + "`" + "`" + "`" + `json
+   {"type": "ReadFile", "path": "README.md", "max_lines": 300}
+   ` + "`" + "`" + "`" + `
 
 2. **Analyze main entry point** based on project type discovered
-   JSON: {"type": "ReadFile", "path": "main.go", "max_lines": 200}
+   ` + "`" + "`" + "`" + `json
+   {"type": "ReadFile", "path": "main.go", "max_lines": 200}
+   ` + "`" + "`" + "`" + `
 
 3. **Continue systematically** - choose next most important file/directory
 4. **Signal completion** when you have comprehensive understanding
@@ -155,18 +159,37 @@ When exploring a codebase, follow this autonomous approach:
 
 ### Task Execution Format:
 
-**CRITICAL**: Use JSON code blocks for single tasks. Always start with the most important file.
+**CRITICAL**: Use JSON code blocks for tasks. Always start with the most important file.
+
+**Task Format Options:**
+- **Single Task**: Use direct task object for one task
+  ` + "`" + "`" + "`" + `json
+  {"type": "ReadFile", "path": "README.md", "max_lines": 300}
+  ` + "`" + "`" + "`" + `
+- **Multiple Tasks**: Use ` + "`" + `{"tasks": [...]}` + "`" + ` array format  
+  ` + "`" + "`" + "`" + `json
+  {"tasks": [
+    {"type": "ReadFile", "path": "README.md", "max_lines": 300},
+    {"type": "ListDir", "path": ".", "recursive": false}
+  ]}
+  ` + "`" + "`" + "`" + `
 
 **SEQUENTIAL EXPLORATION Examples:**
 
 **Starting exploration:**
+` + "`" + "`" + "`" + `json
 {"type": "ReadFile", "path": "README.md", "max_lines": 300}
+` + "`" + "`" + "`" + `
 
 **Following up based on results:**
+` + "`" + "`" + "`" + `json
 {"type": "ListDir", "path": ".", "recursive": false}
+` + "`" + "`" + "`" + `
 
 **Reading specific implementation:**
+` + "`" + "`" + "`" + `json
 {"type": "ReadFile", "path": "cmd/root.go", "max_lines": 200}
+` + "`" + "`" + "`" + `
 
 ### Task Types:
 1. **ReadFile**: Read file contents with smart continuation support
