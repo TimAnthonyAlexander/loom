@@ -199,7 +199,7 @@ func (idx *Index) calculateFileHash(path string) (string, error) {
 // shouldSkipDirectory checks if a directory should be skipped
 func (idx *Index) shouldSkipDirectory(relPath string) bool {
 	// Skip common ignored directories
-	skipDirs := []string{".git", "node_modules", "vendor", ".loom", ".vscode", ".idea", "target", "build", "dist", "__pycache__"}
+	skipDirs := []string{".git", "node_modules", "vendor", ".loom", ".vscode", ".idea", "target", "dist", "__pycache__"}
 
 	dirName := filepath.Base(relPath)
 	for _, skip := range skipDirs {
