@@ -76,6 +76,7 @@ func (idx *Index) BuildIndex() error {
 	fileChan := make(chan string, 100)
 	resultChan := make(chan *FileMeta, 100)
 	var wg sync.WaitGroup
+	var resultWg sync.WaitGroup
 
 	// Start workers
 	for i := 0; i < numWorkers; i++ {
@@ -83,8 +84,10 @@ func (idx *Index) BuildIndex() error {
 		go idx.indexWorker(fileChan, resultChan, &wg)
 	}
 
-	// Start result collector
+	// Start result collector with proper synchronization
+	resultWg.Add(1)
 	go func() {
+		defer resultWg.Done()
 		for meta := range resultChan {
 			if meta != nil {
 				idx.Files[meta.RelativePath] = meta
@@ -124,10 +127,13 @@ func (idx *Index) BuildIndex() error {
 		return nil
 	})
 
-	// Close channels and wait
+	// Close file channel and wait for workers
 	close(fileChan)
 	wg.Wait()
+	
+	// Close result channel and wait for result collector
 	close(resultChan)
+	resultWg.Wait()
 
 	idx.LastUpdated = time.Now()
 	return err
@@ -214,6 +220,11 @@ func (idx *Index) shouldSkipDirectory(relPath string) bool {
 func (idx *Index) shouldSkipFile(relPath string, info os.FileInfo) bool {
 	// Skip large files
 	if info.Size() > idx.maxFileSize {
+		return true
+	}
+
+	// Skip .gitignore files
+	if filepath.Base(relPath) == ".gitignore" {
 		return true
 	}
 
