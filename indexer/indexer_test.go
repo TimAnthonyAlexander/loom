@@ -348,10 +348,45 @@ node_modules/
 		t.Fatalf("Failed to build index: %v", err)
 	}
 
+	// Debug: print all test files created and their status
+	t.Logf("=== DEBUG: Test files created ===")
+	for filePath, content := range testFiles {
+		fullPath := filepath.Join(tempDir, filePath)
+		if info, err := os.Stat(fullPath); err == nil {
+			t.Logf("✓ Created: %s (size: %d)", filePath, info.Size())
+		} else {
+			t.Logf("✗ Missing: %s (error: %v)", filePath, err)
+		}
+		t.Logf("   Content: %q", content)
+	}
+
+	// Debug: print gitignore patterns
+	if index.gitIgnore != nil {
+		t.Logf("=== DEBUG: Gitignore patterns ===")
+		for _, pattern := range index.gitIgnore.patterns {
+			t.Logf("Pattern: %q", pattern)
+		}
+	}
+
+	// Debug: print all indexed files
+	t.Logf("=== DEBUG: Indexed files (%d total) ===", len(index.Files))
+	for filePath := range index.Files {
+		t.Logf("✓ Indexed: %s", filePath)
+	}
+
 	// Verify only non-ignored files are indexed
 	expectedFiles := []string{"main.go", "src/helper.go"}
 	if len(index.Files) != len(expectedFiles) {
 		t.Errorf("Expected %d files to be indexed, got %d", len(expectedFiles), len(index.Files))
+		
+		// Additional debug for mismatches
+		t.Logf("=== DEBUG: Expected vs Actual ===")
+		t.Logf("Expected files: %v", expectedFiles)
+		actualFiles := make([]string, 0, len(index.Files))
+		for filePath := range index.Files {
+			actualFiles = append(actualFiles, filePath)
+		}
+		t.Logf("Actual files: %v", actualFiles)
 	}
 
 	for _, expectedFile := range expectedFiles {
