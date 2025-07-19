@@ -1,78 +1,82 @@
-# Loom - Advanced AI-Driven Coding Assistant
+# Loom
+**Advanced AI-Driven Coding Assistant**
 
-Loom is a sophisticated terminal-based AI coding assistant written in Go that provides a conversational interface for understanding, modifying, and extending codebases.
-It features autonomous task execution, intelligent context management, comprehensive security, and seamless project integration.
+A sophisticated terminal-based AI coding assistant written in Go that provides a conversational interface for understanding, modifying, and extending codebases. Features autonomous task execution, intelligent context management, comprehensive security, and seamless project integration.
 
-Written by Tim Anthony Alexander. I am not a professional Go developer, so bear with me.
+*Written by Tim Anthony Alexander. I am not a professional Go developer, so bear with me.*
 
-## 🚀 Key Features
+---
 
-### 🤖 **Advanced AI Integration**
-- **Multi-LLM Support**: OpenAI (GPT-4o, GPT-4.1) and Ollama (local models)
-- **Project-Aware Intelligence**: Automatically analyzes project conventions and coding standards
-- **Autonomous Exploration**: Comprehensive project analysis without requiring explicit prompts
-- **Streaming Responses**: Real-time response streaming for immediate feedback
+## Core Capabilities
 
-### ⚡ **Sophisticated Task Execution**
-- **JSON Task System**: AI can autonomously read, edit, list directories, and run shell commands
-- **Sequential Task Manager**: Objective-driven exploration with suppressed intermediate output
-- **Staged Execution**: Multi-file coordination with preview and batch approval
-- **Task Debug Mode**: Troubleshooting for AI task generation issues
-- **User Confirmation**: Safe execution with preview and approval for destructive operations
+### Advanced AI Integration
+- **Multi-LLM Support** — OpenAI (GPT-4o, GPT-4.1) and Ollama (local models)
+- **Project-Aware Intelligence** — Automatically analyzes project conventions and coding standards  
+- **Autonomous Exploration** — Comprehensive project analysis without requiring explicit prompts
+- **Streaming Responses** — Real-time response streaming for immediate feedback
 
-### 🧠 **Intelligent Context Management**
-- **Token-Aware Optimization**: Smart context window management with file references and snippets
-- **Language-Aware Extraction**: Understands code structures (functions, classes, methods)
-- **Auto-Summarization**: AI-powered session, progress, and action plan summaries
-- **File Reference System**: Efficient file summaries without full content inclusion
+### Sophisticated Task Execution
+- **JSON Task System** — AI can autonomously read, edit, list directories, and run shell commands
+- **Sequential Task Manager** — Objective-driven exploration with suppressed intermediate output
+- **Staged Execution** — Multi-file coordination with preview and batch approval
+- **Task Debug Mode** — Troubleshooting for AI task generation issues
+- **User Confirmation** — Safe execution with preview and approval for destructive operations
 
-### 🔒 **Comprehensive Security**
-- **Secret Detection**: 25+ patterns for API keys, passwords, tokens, certificates, and PII
-- **Workspace Isolation**: All operations restricted to project workspace
-- **Binary File Protection**: Automatic detection and exclusion of binary files
-- **Gitignore Integration**: Respects .gitignore patterns for file operations
+### Intelligent Context Management
+- **Token-Aware Optimization** — Smart context window management with file references and snippets
+- **Language-Aware Extraction** — Understands code structures (functions, classes, methods)
+- **Auto-Summarization** — AI-powered session, progress, and action plan summaries
+- **File Reference System** — Efficient file summaries without full content inclusion
 
-### 🎨 **Enhanced Terminal Interface**
-- **Multiple Views**: Chat, File Tree, Tasks, Action Plans, Git Status, Undo History
-- **Interactive Navigation**: Tab switching, scrolling, keyboard shortcuts
-- **Batch Approval**: Review and approve multiple file changes simultaneously
-- **Task Confirmation**: Clear previews with diff display for all modifications
-- **Progress Tracking**: Real-time task execution status and history
+### Comprehensive Security
+- **Secret Detection** — 25+ patterns for API keys, passwords, tokens, certificates, and PII
+- **Workspace Isolation** — All operations restricted to project workspace
+- **Binary File Protection** — Automatic detection and exclusion of binary files
+- **Gitignore Integration** — Respects .gitignore patterns for file operations
 
-### 🧪 **Testing Integration**
-- **Test Discovery**: Automatically finds tests in multiple languages (Go, JavaScript, Python)
-- **Test Execution**: Runs tests and provides AI analysis of failures
-- **Test-First Development**: Optional requirement for tests before implementation
-- **Framework Support**: Go testing, Jest, pytest, and more
+### Enhanced Terminal Interface
+- **Multiple Views** — Chat, File Tree, Tasks, Action Plans, Git Status, Undo History
+- **Interactive Navigation** — Tab switching, scrolling, keyboard shortcuts
+- **Batch Approval** — Review and approve multiple file changes simultaneously
+- **Task Confirmation** — Clear previews with diff display for all modifications
+- **Progress Tracking** — Real-time task execution status and history
 
-### 📁 **Advanced Workspace Management**
-- **Fast Indexing**: Multi-threaded file indexing with real-time watching
-- **Language Detection**: Automatic programming language identification
-- **Cache System**: Compressed index cache for instant startup
-- **File Watching**: Real-time updates with batched processing
-- **Performance Optimized**: Handles large projects efficiently
+### Testing Integration
+- **Test Discovery** — Automatically finds tests in multiple languages (Go, JavaScript, Python)
+- **Test Execution** — Runs tests and provides AI analysis of failures
+- **Test-First Development** — Optional requirement for tests before implementation
+- **Framework Support** — Go testing, Jest, pytest, and more
 
-### 🔄 **Git Integration**
-- **Repository Status**: Detailed Git status, branches, ahead/behind tracking
-- **File Operations**: Stage, unstage, commit with intelligent diff generation
-- **Pre-condition Validation**: Check Git state before destructive operations
-- **Branch Management**: List and navigate between branches
-- **Commit History**: Access commit information and file changes
+### Advanced Workspace Management
+- **Fast Indexing** — Multi-threaded file indexing with real-time watching
+- **Language Detection** — Automatic programming language identification
+- **Cache System** — Compressed index cache for instant startup
+- **File Watching** — Real-time updates with batched processing
+- **Performance Optimized** — Handles large projects efficiently
 
-### ↩️ **Comprehensive Undo System**
-- **Multi-Type Undo**: Revert file edits, creations, and deletions
-- **Backup Management**: Automatic backups before all destructive operations
-- **Persistent History**: 50-action undo stack with cleanup
-- **File Restoration**: Complete file recovery from timestamped backups
+### Git Integration
+- **Repository Status** — Detailed Git status, branches, ahead/behind tracking
+- **File Operations** — Stage, unstage, commit with intelligent diff generation
+- **Pre-condition Validation** — Check Git state before destructive operations
+- **Branch Management** — List and navigate between branches
+- **Commit History** — Access commit information and file changes
 
-### 💾 **Session Management**
-- **Persistent Sessions**: Chat history preserved across sessions
-- **Crash Recovery**: Automatic detection and recovery from incomplete sessions
-- **Task Audit Trail**: Complete record of all task executions
-- **Auto-save**: Configurable periodic session saving
-- **Session Loading**: Continue from latest or load specific sessions by ID
+### Comprehensive Undo System
+- **Multi-Type Undo** — Revert file edits, creations, and deletions
+- **Backup Management** — Automatic backups before all destructive operations
+- **Persistent History** — 50-action undo stack with cleanup
+- **File Restoration** — Complete file recovery from timestamped backups
 
-## 📦 Installation
+### Session Management
+- **Persistent Sessions** — Chat history preserved across sessions
+- **Crash Recovery** — Automatic detection and recovery from incomplete sessions
+- **Task Audit Trail** — Complete record of all task executions
+- **Auto-save** — Configurable periodic session saving
+- **Session Loading** — Continue from latest or load specific sessions by ID
+
+---
+
+## Installation
 
 ```bash
 # Clone and build
@@ -81,9 +85,9 @@ cd loom
 go build -o loom .
 ```
 
-## ⚙️ LLM Setup
+## LLM Setup
 
-### OpenAI Setup
+### OpenAI Configuration
 ```bash
 # Set API key
 export OPENAI_API_KEY="your-api-key-here"
@@ -111,7 +115,7 @@ ollama pull codellama
 ./loom config set model "ollama:codellama"
 ```
 
-## 🏃 Quick Start
+## Quick Start
 
 ```bash
 # Initialize loom in your project
@@ -130,41 +134,41 @@ ollama pull codellama
 ./loom index
 ```
 
-## 🎮 Interactive Interface
+## Interactive Interface
 
 ### Navigation
-- **`Tab`** - Switch between chat, file tree, tasks, and other views
-- **`Ctrl+P`** - Action Plan view (see planned multi-file changes)
-- **`Ctrl+G`** - Git Status view (repository information)
-- **`Ctrl+U`** - Undo History view (review and revert changes)
-- **`Ctrl+Z`** - Quick undo last action
-- **`↑↓`** - Scroll in views and navigate batch approvals
-- **`Enter`** - Send message, approve changes, execute tasks
-- **`A`** - Approve all changes in batch mode
-- **`R`** - Reject all changes in batch mode
-- **`y/n`** - Approve/cancel individual tasks
-- **`Ctrl+C`** - Exit safely
+- **`Tab`** — Switch between chat, file tree, tasks, and other views
+- **`Ctrl+P`** — Action Plan view (see planned multi-file changes)
+- **`Ctrl+G`** — Git Status view (repository information)
+- **`Ctrl+U`** — Undo History view (review and revert changes)
+- **`Ctrl+Z`** — Quick undo last action
+- **`↑↓`** — Scroll in views and navigate batch approvals
+- **`Enter`** — Send message, approve changes, execute tasks
+- **`A`** — Approve all changes in batch mode
+- **`R`** — Reject all changes in batch mode
+- **`y/n`** — Approve/cancel individual tasks
+- **`Ctrl+C`** — Exit safely
 
 ### Special Commands
-- **`/files`** - Show file count and language breakdown
-- **`/stats`** - Detailed project statistics and index information
-- **`/tasks`** - Task execution history and current status
-- **`/test`** - Test discovery results and execution
-- **`/summary`** - AI-generated session summary (also `Ctrl+S`)
-- **`/rationale`** - Change summaries and explanations
-- **`/git`** - Git repository status and file changes
-- **`/commit "message"`** - Commit staged changes
-- **`/undo`** - Undo the last applied action
-- **`/debug`** - Toggle task debugging mode
-- **`/quit`** - Exit application
+- **`/files`** — Show file count and language breakdown
+- **`/stats`** — Detailed project statistics and index information
+- **`/tasks`** — Task execution history and current status
+- **`/test`** — Test discovery results and execution
+- **`/summary`** — AI-generated session summary (also `Ctrl+S`)
+- **`/rationale`** — Change summaries and explanations
+- **`/git`** — Git repository status and file changes
+- **`/commit "message"`** — Commit staged changes
+- **`/undo`** — Undo the last applied action
+- **`/debug`** — Toggle task debugging mode
+- **`/quit`** — Exit application
 
-## 🔧 Task System
+## Task System
 
 Loom's AI can autonomously perform coding tasks through structured JSON commands:
 
 ### Task Types
 
-#### 1. **ReadFile** - Intelligent File Reading
+#### ReadFile — Intelligent File Reading
 ```json
 {"type": "ReadFile", "path": "main.go", "max_lines": 200}
 {"type": "ReadFile", "path": "config.go", "start_line": 10, "end_line": 50}
@@ -173,7 +177,7 @@ Loom's AI can autonomously perform coding tasks through structured JSON commands
 - Contextual snippet extraction
 - Language-aware structure detection
 
-#### 2. **EditFile** - Safe File Modification
+#### EditFile — Safe File Modification
 ```json
 {"type": "EditFile", "path": "main.go", "diff": "unified diff format"}
 {"type": "EditFile", "path": "new.go", "content": "complete file content"}
@@ -182,7 +186,7 @@ Loom's AI can autonomously perform coding tasks through structured JSON commands
 - Diff preview before application
 - Backup creation for recovery
 
-#### 3. **ListDir** - Directory Exploration
+#### ListDir — Directory Exploration
 ```json
 {"type": "ListDir", "path": ".", "recursive": true}
 {"type": "ListDir", "path": "src/components"}
@@ -191,7 +195,7 @@ Loom's AI can autonomously perform coding tasks through structured JSON commands
 - Language and file type detection
 - Intelligent directory traversal
 
-#### 4. **RunShell** - Command Execution
+#### RunShell — Command Execution
 ```json
 {"type": "RunShell", "command": "go test", "timeout": 30}
 {"type": "RunShell", "command": "npm run build"}
@@ -202,23 +206,23 @@ Loom's AI can autonomously perform coding tasks through structured JSON commands
 
 ### Task Execution Modes
 
-#### **Autonomous Mode** (Default)
+#### Autonomous Mode (Default)
 AI executes tasks automatically with user confirmation for destructive operations.
 
-#### **Sequential Exploration**
+#### Sequential Exploration
 For comprehensive project analysis:
-1. **Objective Setting** - AI establishes exploration goals
-2. **Suppressed Exploration** - Quiet systematic analysis
-3. **Comprehensive Synthesis** - Detailed architectural summary
+1. **Objective Setting** — AI establishes exploration goals
+2. **Suppressed Exploration** — Quiet systematic analysis
+3. **Comprehensive Synthesis** — Detailed architectural summary
 
-#### **Staged Execution**
+#### Staged Execution
 For complex multi-file changes:
-1. **Planning** - Create action plan with task coordination
-2. **Staging** - Prepare all changes with preview
-3. **Batch Approval** - Review and approve all changes together
-4. **Execution** - Apply all changes atomically
+1. **Planning** — Create action plan with task coordination
+2. **Staging** — Prepare all changes with preview
+3. **Batch Approval** — Review and approve all changes together
+4. **Execution** — Apply all changes atomically
 
-## ⚙️ Configuration
+## Configuration
 
 ### Enhanced Configuration Options
 ```json
@@ -251,22 +255,22 @@ rm .loom/config.json
 ```
 
 #### Key Settings
-- **`max_context_tokens`** - Context window size (default: 6000)
-- **`enable_test_first`** - Require tests before implementation (default: false)
-- **`auto_save_interval`** - Session persistence frequency (default: "30s")
-- **`enable_shell`** - Allow shell command execution (default: false)
-- **`max_file_size`** - Maximum file size for indexing (default: 512KB)
+- **`max_context_tokens`** — Context window size (default: 6000)
+- **`enable_test_first`** — Require tests before implementation (default: false)
+- **`auto_save_interval`** — Session persistence frequency (default: "30s")
+- **`enable_shell`** — Allow shell command execution (default: false)
+- **`max_file_size`** — Maximum file size for indexing (default: 512KB)
 
-## 🔒 Security Features
+## Security Features
 
 ### Secret Detection
 Automatically detects and redacts 25+ types of secrets:
-- **API Keys**: AWS, Google, Azure, GitHub, GitLab
-- **Authentication**: Passwords, tokens, certificates
-- **Database**: Connection strings, credentials
-- **Payment**: Stripe, PayPal keys
-- **Communication**: Slack, Discord tokens
-- **Personal Info**: Email addresses, phone numbers
+- **API Keys** — AWS, Google, Azure, GitHub, GitLab
+- **Authentication** — Passwords, tokens, certificates
+- **Database** — Connection strings, credentials
+- **Payment** — Stripe, PayPal keys
+- **Communication** — Slack, Discord tokens
+- **Personal Info** — Email addresses, phone numbers
 
 ### Security Constraints
 - All operations restricted to workspace directory
@@ -275,19 +279,19 @@ Automatically detects and redacts 25+ types of secrets:
 - User confirmation for destructive operations
 - File size limits prevent resource exhaustion
 
-## 🧪 Testing Features
+## Testing Features
 
 ### Test Discovery
 Automatically discovers tests in multiple languages:
-- **Go**: `*_test.go` files with standard testing
-- **JavaScript/TypeScript**: `*.test.js`, `*.spec.js` with Jest/Mocha
-- **Python**: `test_*.py`, `*_test.py` with pytest
+- **Go** — `*_test.go` files with standard testing
+- **JavaScript/TypeScript** — `*.test.js`, `*.spec.js` with Jest/Mocha
+- **Python** — `test_*.py`, `*_test.py` with pytest
 
 ### Test Integration
-- **Automatic Execution**: Run tests after code changes
-- **Failure Analysis**: AI analyzes test failures and suggests fixes
-- **Test-First Development**: Optional enforcement of tests before implementation
-- **Framework Support**: Works with popular testing frameworks
+- **Automatic Execution** — Run tests after code changes
+- **Failure Analysis** — AI analyzes test failures and suggests fixes
+- **Test-First Development** — Optional enforcement of tests before implementation
+- **Framework Support** — Works with popular testing frameworks
 
 ### Test Commands
 ```bash
@@ -299,15 +303,15 @@ Automatically discovers tests in multiple languages:
 "no" - Skip testing for now
 ```
 
-## 📊 Project Statistics & Analysis
+## Project Statistics & Analysis
 
 ### Workspace Analysis
 Loom provides detailed insights into your project:
-- **File Count**: Total files indexed with language breakdown
-- **Size Analysis**: Total project size and file size distribution
-- **Language Detection**: Automatic identification of 30+ programming languages
-- **Git Status**: Repository state, branch info, ahead/behind tracking
-- **Change Tracking**: Real-time file modification detection
+- **File Count** — Total files indexed with language breakdown
+- **Size Analysis** — Total project size and file size distribution
+- **Language Detection** — Automatic identification of 30+ programming languages
+- **Git Status** — Repository state, branch info, ahead/behind tracking
+- **Change Tracking** — Real-time file modification detection
 
 ### Performance Benchmarks
 - **Small Projects** (< 100 files): < 200ms indexing
@@ -316,14 +320,14 @@ Loom provides detailed insights into your project:
 - **Cache Reload**: < 50ms for any project size
 - **LLM Streaming**: < 100ms response latency
 
-## 🔄 Session & Persistence
+## Session & Persistence
 
 ### Session Features
-- **Persistent History**: Chat preserved across sessions
-- **Crash Recovery**: Automatic detection and recovery
-- **Session Loading**: Continue from latest or specific sessions
-- **Task Auditing**: Complete record of all operations
-- **Auto-save**: Configurable session persistence
+- **Persistent History** — Chat preserved across sessions
+- **Crash Recovery** — Automatic detection and recovery
+- **Session Loading** — Continue from latest or specific sessions
+- **Task Auditing** — Complete record of all operations
+- **Auto-save** — Configurable session persistence
 
 ### Session Commands
 ```bash
@@ -340,18 +344,18 @@ Loom provides detailed insights into your project:
 ./loom sessions clean
 ```
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### LLM Issues
-- **"LLM not available"**: Verify API key and model configuration
-- **OpenAI errors**: Check API key with `echo $OPENAI_API_KEY`
-- **Ollama connection**: Ensure Ollama is running with `ollama serve`
-- **Model not found**: For Ollama, run `ollama pull <model-name>` first
+- **"LLM not available"** — Verify API key and model configuration
+- **OpenAI errors** — Check API key with `echo $OPENAI_API_KEY`
+- **Ollama connection** — Ensure Ollama is running with `ollama serve`
+- **Model not found** — For Ollama, run `ollama pull <model-name>` first
 
 ### Task Execution Issues
-- **AI explains but doesn't act**: Enable debug mode with `/debug` command
-- **Tasks not parsed**: Check if AI is outputting proper JSON task format
-- **Task confirmation**: Destructive operations require user approval by design
+- **AI explains but doesn't act** — Enable debug mode with `/debug` command
+- **Tasks not parsed** — Check if AI is outputting proper JSON task format
+- **Task confirmation** — Destructive operations require user approval by design
 
 ### Debug Mode
 ```bash
@@ -366,9 +370,9 @@ export LOOM_DEBUG_TASKS=1
 Debug mode shows detailed task parsing information when AI suggests actions but doesn't provide executable JSON tasks.
 
 ### Performance Issues
-- **Slow indexing**: Check `.gitignore` patterns and exclude large directories
-- **High memory usage**: Reduce `max_file_size` in configuration
-- **Cache corruption**: Delete `.loom/index.cache` and rebuild
+- **Slow indexing** — Check `.gitignore` patterns and exclude large directories
+- **High memory usage** — Reduce `max_file_size` in configuration
+- **Cache corruption** — Delete `.loom/index.cache` and rebuild
 
 ### Session Recovery
 ```bash
@@ -380,111 +384,113 @@ rm -rf .loom/sessions/
 ./loom init
 ```
 
-## 🎯 Example Usage Scenarios
+## Example Usage Scenarios
 
-### 1. **Project Exploration**
+### Project Exploration
 ```
 > Tell me about this project
 
 Loom: I'll comprehensively analyze this project. Let me start by reading the README and exploring the structure.
 
-🎯 OBJECTIVE: Understand this Go project's architecture and key components
+OBJECTIVE: Understand this Go project's architecture and key components
 
-📖 README.md
-📂 root/
-📖 main.go
+README.md
+root/
+main.go
 ...
 
 OBJECTIVE_COMPLETE: This is a sophisticated AI coding assistant built in Go...
 [Detailed architectural analysis follows]
 ```
 
-### 2. **Code Implementation**
+### Code Implementation
 ```
 > Add error handling to the main function
 
 Loom: I'll enhance the main function with comprehensive error handling.
 
-🔧 Task: Read main.go (13 lines)
-✅ Applied successfully
+Task: Read main.go (13 lines)
+Applied successfully
 
-🔧 Task: Edit main.go (apply diff)
-⚠️  TASK CONFIRMATION REQUIRED
+Task: Edit main.go (apply diff)
+TASK CONFIRMATION REQUIRED
 
 [Diff preview shown]
 
 > y
 
-✅ Applied Edit main.go
+Applied Edit main.go
 Enhanced main function with logging and structured error handling.
 ```
 
-### 3. **Testing Integration**
+### Testing Integration
 ```
 > Run the tests
 
-🧪 Test Discovery Complete
+Test Discovery Complete
 Found 15 tests in the workspace. Would you like to run them?
 
 > yes
 
-✅ All tests passed! Your changes look good.
+All tests passed! Your changes look good.
 Test Results: 15 passed, 0 failed, 0 skipped
 ```
 
-### 4. **Git Integration**
+### Git Integration
 ```
 > What's the current git status?
 
-📊 Git Status:
+Git Status:
 Branch: main (clean)
 3 modified files, 1 staged file
 2 commits ahead of origin/main
 
 > /commit "Add enhanced error handling"
 
-✅ Created commit abc123: Add enhanced error handling
+Created commit abc123: Add enhanced error handling
 Files changed: main.go, error_handler.go
 ```
 
-## 🚀 Advanced Features
+## Advanced Features
 
 ### Autonomous Exploration
 Loom can autonomously explore and understand codebases:
-- **Project Convention Analysis**: Automatically detects coding standards
-- **Architectural Insights**: Understands component relationships
-- **Technology Stack Analysis**: Identifies frameworks and patterns
-- **Best Practice Detection**: Recognizes project-specific conventions
+- **Project Convention Analysis** — Automatically detects coding standards
+- **Architectural Insights** — Understands component relationships
+- **Technology Stack Analysis** — Identifies frameworks and patterns
+- **Best Practice Detection** — Recognizes project-specific conventions
 
 ### Context Optimization
-- **Smart Token Management**: Efficient use of LLM context windows
-- **File Reference System**: Summaries instead of full file inclusion
-- **Language-Aware Snippets**: Extracts meaningful code structures
-- **Auto-Summarization**: Compresses chat history intelligently
+- **Smart Token Management** — Efficient use of LLM context windows
+- **File Reference System** — Summaries instead of full file inclusion
+- **Language-Aware Snippets** — Extracts meaningful code structures
+- **Auto-Summarization** — Compresses chat history intelligently
 
 ### Multi-File Operations
-- **Action Planning**: Coordinates changes across multiple files
-- **Staged Execution**: Preview all changes before application
-- **Batch Approval**: Interactive review of multiple modifications
-- **Atomic Operations**: All-or-nothing change application
+- **Action Planning** — Coordinates changes across multiple files
+- **Staged Execution** — Preview all changes before application
+- **Batch Approval** — Interactive review of multiple modifications
+- **Atomic Operations** — All-or-nothing change application
 
-## 🔮 Future Roadmap
+## Future Roadmap
 
-- **Advanced Code Analysis**: Syntax tree parsing and AST manipulation
-- **Plugin System**: Custom task types and integrations
-- **IDE Integration**: Language server protocol support
-- **Multi-file Search/Replace**: Pattern-based modifications
-- **Project Templates**: Scaffolding with customizable generators
-- **CI/CD Integration**: Pipeline integration and automation
-- **Real-time Collaboration**: Shared sessions and pair programming
-- **Advanced Debugging**: Integrated debugger and profiler support
-- **Code Quality Metrics**: Automated code review and suggestions
+- **Advanced Code Analysis** — Syntax tree parsing and AST manipulation
+- **Plugin System** — Custom task types and integrations
+- **IDE Integration** — Language server protocol support
+- **Multi-file Search/Replace** — Pattern-based modifications
+- **Project Templates** — Scaffolding with customizable generators
+- **CI/CD Integration** — Pipeline integration and automation
+- **Real-time Collaboration** — Shared sessions and pair programming
+- **Advanced Debugging** — Integrated debugger and profiler support
+- **Code Quality Metrics** — Automated code review and suggestions
 
-## 📄 License
+---
+
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
@@ -494,11 +500,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 I am not expecting anyone to contribute as I started this as a little project just for myself.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
-- Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea) for the terminal interface
-- [fsnotify](https://github.com/fsnotify/fsnotify) for efficient file watching
-- [Cobra](https://github.com/spf13/cobra) for CLI command structure
-- OpenAI and Ollama for LLM integration
+Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea) for the terminal interface, [fsnotify](https://github.com/fsnotify/fsnotify) for efficient file watching, [Cobra](https://github.com/spf13/cobra) for CLI command structure, and OpenAI and Ollama for LLM integration.
 
-Tim Anthony Alexander, 2025.
+*Tim Anthony Alexander, 2025.*
