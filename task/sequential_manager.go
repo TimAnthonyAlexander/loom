@@ -9,6 +9,24 @@ import (
 	"time"
 )
 
+// ExplorationPhase represents the current phase of objective exploration
+type ExplorationPhase string
+
+const (
+	PhaseObjectiveSetting ExplorationPhase = "objective_setting"
+	PhaseSuppressedExploration ExplorationPhase = "suppressed_exploration" 
+	PhaseSynthesis ExplorationPhase = "synthesis"
+)
+
+// ObjectiveExploration tracks an ongoing objective-driven exploration
+type ObjectiveExploration struct {
+	Objective         string
+	Phase            ExplorationPhase
+	TasksExecuted    int
+	AccumulatedData  []TaskResponse
+	StartTime        time.Time
+}
+
 // SequentialTaskManager processes tasks one at a time with hidden exploration context
 // This prevents fragmented output and enables comprehensive synthesis like Cursor
 type SequentialTaskManager struct {
@@ -21,6 +39,9 @@ type SequentialTaskManager struct {
 	isExploring         bool
 	initialUserQuery    string
 	completionSignals   []string
+	
+	// Objective-driven exploration
+	currentObjective    *ObjectiveExploration
 }
 
 // ExplorationResult represents the final result of a sequential exploration
@@ -44,6 +65,7 @@ func NewSequentialTaskManager(executor *Executor, llmAdapter llm.LLMAdapter, cha
 			"EXPLORATION_COMPLETE:",
 			"ANALYSIS_COMPLETE:",
 			"TASK_COMPLETE:",
+			"OBJECTIVE_COMPLETE:",
 			"exploration complete",
 			"analysis complete",
 		},
@@ -158,14 +180,40 @@ func (stm *SequentialTaskManager) buildLLMContext() []llm.Message {
 
 // CreateSequentialSystemMessage creates a system message optimized for sequential exploration
 func (stm *SequentialTaskManager) CreateSequentialSystemMessage() llm.Message {
-	content := `You are Loom operating in SEQUENTIAL EXPLORATION MODE for comprehensive codebase analysis.
+	var content string
+	
+	switch stm.GetCurrentPhase() {
+	case PhaseObjectiveSetting:
+		content = stm.createObjectiveSettingPrompt()
+	case PhaseSuppressedExploration:
+		content = stm.createSuppressedExplorationPrompt()
+	case PhaseSynthesis:
+		content = stm.createSynthesisPrompt()
+	default:
+		content = stm.createObjectiveSettingPrompt()
+	}
 
-## CRITICAL: Sequential Task Rules
+	return llm.Message{
+		Role:      "system",
+		Content:   content,
+		Timestamp: time.Now(),
+	}
+}
 
-**ONE TASK AT A TIME**: You must provide exactly ONE task, analyze its results, then decide the next step.
+// createObjectiveSettingPrompt creates the initial objective-setting prompt
+func (stm *SequentialTaskManager) createObjectiveSettingPrompt() string {
+	return `You are Loom starting an OBJECTIVE-DRIVEN EXPLORATION.
+
+## PHASE 1: OBJECTIVE SETTING
+
+Analyze the user's request and establish a clear exploration objective:
+
+1. **Set Clear Objective**: Start with "OBJECTIVE: [specific exploration goal]"
+2. **Begin First Task**: Immediately provide the first logical task
+3. **Stay Focused**: Keep the objective specific and achievable
 
 ### Task Format (JSON only):
-{"type": "ReadFile", "path": "README.md", "max_lines": 200}
+{"type": "ReadFile", "path": "README.md", "max_lines": 300}
 
 ### Available Task Types:
 - **ReadFile**: Read file contents (prefer max_lines: 200-300 for key files)
@@ -173,38 +221,56 @@ func (stm *SequentialTaskManager) CreateSequentialSystemMessage() llm.Message {
 - **EditFile**: Create/modify files (requires user confirmation)
 - **RunShell**: Execute commands (requires user confirmation)
 
-### Exploration Strategy:
-1. **Start with README.md** to understand project purpose
-2. **Check main entry points** (main.go, package.json, etc.)
-3. **Explore key directories** based on what you discover
-4. **Read core implementation files** to understand architecture
-5. **Continue until complete understanding** is achieved
+### Example Response:
+OBJECTIVE: Understand this Go project's architecture and key components
 
-### Completion Signal:
-When you have sufficient information for comprehensive analysis, start your response with:
-**EXPLORATION_COMPLETE:** followed by your detailed architectural analysis.
+{"type": "ReadFile", "path": "README.md", "max_lines": 300}
 
-### Example Flow:
-1. Read README.md → Learn project purpose and structure
-2. Read main.go → Understand entry point and CLI structure  
-3. List key directories → Map out code organization
-4. Read core package files → Understand implementation patterns
-5. EXPLORATION_COMPLETE: [comprehensive analysis]
+Set your objective and begin exploration immediately.`
+}
 
-**IMPORTANT**: 
-- Provide ONE task per response
-- Analyze each result before deciding next step
-- Build understanding progressively
-- Signal completion when ready for synthesis
-- Be thorough but efficient
+// createSuppressedExplorationPrompt creates the suppressed exploration prompt
+func (stm *SequentialTaskManager) createSuppressedExplorationPrompt() string {
+	return `You are Loom in SUPPRESSED EXPLORATION MODE.
 
-Continue exploring until you can provide a complete architectural understanding.`
+## PHASE 2: SUPPRESSED EXPLORATION
 
-	return llm.Message{
-		Role:      "system",
-		Content:   content,
-		Timestamp: time.Now(),
+Continue pursuing your objective with minimal output:
+
+**SUPPRESSED OUTPUT**: Provide ONLY the next logical task
+- NO explanations or analysis
+- NO verbose responses  
+- Think internally about what you learned
+- Focus on systematic exploration
+- Continue until objective is complete
+
+### When Complete:
+Signal completion with: **OBJECTIVE_COMPLETE:** followed by comprehensive analysis
+
+### Next Task Only:
+{"type": "ReadFile", "path": "main.go", "max_lines": 200}
+
+Provide only the next task needed to complete your objective.`
+}
+
+// createSynthesisPrompt creates the final synthesis prompt
+func (stm *SequentialTaskManager) createSynthesisPrompt() string {
+	objectiveText := "the exploration objective"
+	if stm.currentObjective != nil && stm.currentObjective.Objective != "" {
+		objectiveText = stm.currentObjective.Objective
 	}
+	
+	return fmt.Sprintf(`You are Loom completing an OBJECTIVE-DRIVEN EXPLORATION.
+
+## PHASE 3: SYNTHESIS
+
+You have completed your objective: %s
+
+Provide a comprehensive analysis using ALL the information you've gathered during exploration.
+
+**NO MORE TASKS** - Focus entirely on synthesis and analysis.
+
+Provide a complete, detailed response that fully addresses the original user question.`, objectiveText)
 }
 
 // ParseSingleTask extracts the first task from LLM response and any additional content
@@ -405,4 +471,67 @@ func (stm *SequentialTaskManager) IsExploring() bool {
 // GetCurrentIteration returns the current exploration iteration
 func (stm *SequentialTaskManager) GetCurrentIteration() int {
 	return stm.currentIteration
-} 
+}
+
+// StartObjectiveExploration initiates objective-driven exploration
+func (stm *SequentialTaskManager) StartObjectiveExploration(userQuery string) {
+	stm.currentObjective = &ObjectiveExploration{
+		Phase:           PhaseObjectiveSetting,
+		TasksExecuted:   0,
+		AccumulatedData: make([]TaskResponse, 0),
+		StartTime:       time.Now(),
+	}
+	stm.isExploring = true
+	stm.initialUserQuery = userQuery
+}
+
+// ExtractObjective extracts objective from LLM response
+func (stm *SequentialTaskManager) ExtractObjective(response string) string {
+	lines := strings.Split(response, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(strings.ToUpper(line), "OBJECTIVE:") {
+			objective := strings.TrimSpace(line[10:]) // Remove "OBJECTIVE:"
+			return objective
+		}
+	}
+	return ""
+}
+
+// SetObjective sets the current exploration objective and moves to suppressed phase
+func (stm *SequentialTaskManager) SetObjective(objective string) {
+	if stm.currentObjective != nil {
+		stm.currentObjective.Objective = objective
+		stm.currentObjective.Phase = PhaseSuppressedExploration
+	}
+}
+
+// IsObjectiveComplete checks if the exploration objective is complete
+func (stm *SequentialTaskManager) IsObjectiveComplete(response string) bool {
+	upperResponse := strings.ToUpper(response)
+	return strings.Contains(upperResponse, "OBJECTIVE_COMPLETE:") ||
+		   strings.Contains(upperResponse, "EXPLORATION_COMPLETE:")
+}
+
+// AddTaskResult adds a task result to the accumulated data
+func (stm *SequentialTaskManager) AddTaskResult(taskResponse TaskResponse) {
+	if stm.currentObjective != nil {
+		stm.currentObjective.AccumulatedData = append(stm.currentObjective.AccumulatedData, taskResponse)
+		stm.currentObjective.TasksExecuted++
+	}
+}
+
+// GetCurrentPhase returns the current exploration phase
+func (stm *SequentialTaskManager) GetCurrentPhase() ExplorationPhase {
+	if stm.currentObjective != nil {
+		return stm.currentObjective.Phase
+	}
+	return PhaseObjectiveSetting
+}
+
+// CompleteObjective completes the current objective and resets state
+func (stm *SequentialTaskManager) CompleteObjective() {
+	stm.currentObjective = nil
+	stm.isExploring = false
+	stm.currentIteration = 0
+}

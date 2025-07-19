@@ -9,7 +9,7 @@ import (
 	"loom/indexer"
 	"loom/llm"
 	"loom/session"
-	"loom/task"
+	taskPkg "loom/task"
 	"sort"
 	"strings"
 	"time"
@@ -87,13 +87,13 @@ type StreamStartMsg struct {
 
 // TaskEventMsg represents task execution events
 type TaskEventMsg struct {
-	Event task.TaskExecutionEvent
+	Event taskPkg.TaskExecutionEvent
 }
 
 // TaskConfirmationMsg represents a pending task confirmation
 type TaskConfirmationMsg struct {
-	Task     *task.Task
-	Response *task.TaskResponse
+	Task     *taskPkg.Task
+	Response *taskPkg.TaskResponse
 	Preview  string
 }
 
@@ -143,13 +143,13 @@ type model struct {
 	streamChan       chan llm.StreamChunk
 
 	// Task execution
-	taskManager       *task.Manager
-	enhancedManager   *task.EnhancedManager
-	sequentialManager *task.SequentialTaskManager
-	taskExecutor      *task.Executor
-	currentExecution  *task.TaskExecution
+	taskManager       *taskPkg.Manager
+	enhancedManager   *taskPkg.EnhancedManager
+	sequentialManager *taskPkg.SequentialTaskManager
+	taskExecutor      *taskPkg.Executor
+	currentExecution  *taskPkg.TaskExecution
 	taskHistory       []string
-	taskEventChan     chan task.TaskExecutionEvent
+	taskEventChan     chan taskPkg.TaskExecutionEvent
 	
 
 
@@ -354,8 +354,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, m.showTestSummary()
 				} else if userInput == "/debug" {
 					// Toggle debug mode for task parsing
-					if task.IsTaskDebugEnabled() {
-						task.DisableTaskDebug()
+					if taskPkg.IsTaskDebugEnabled() {
+						taskPkg.DisableTaskDebug()
 						response := llm.Message{
 							Role:      "assistant",
 							Content:   "🔧 Task debug mode disabled.\n\nDebug output for task parsing is now off.",
@@ -363,7 +363,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 						m.chatSession.AddMessage(response)
 					} else {
-						task.EnableTaskDebug()
+						taskPkg.EnableTaskDebug()
 						response := llm.Message{
 							Role:      "assistant",
 							Content:   "🔧 Task debug mode enabled.\n\nYou'll now see detailed output when the LLM fails to output proper task JSON format. This helps identify when the AI suggests actions but doesn't provide executable tasks.\n\nTry asking the AI to read or edit files to see the debug output.",
@@ -881,18 +881,17 @@ func (m *model) sendToLLMWithTasks(userInput string) tea.Cmd {
 		m.messages = m.chatSession.GetDisplayMessages()
 		m.updateWrappedMessages()
 
-		// For exploration queries, use the sequential system prompt
+		// For exploration queries, use the objective-driven exploration
 		if m.sequentialManager != nil && m.isExplorationQuery(userInput) {
-			// Replace the system message temporarily with sequential prompt
+			// Start objective exploration
+			m.sequentialManager.StartObjectiveExploration(userInput)
+			
+			// Replace the system message with objective-setting prompt
 			messages := m.chatSession.GetMessages()
-			
-			// Replace or update the first system message
 			if len(messages) > 0 && messages[0].Role == "system" {
-				sequentialPrompt := m.sequentialManager.CreateSequentialSystemMessage()
-				messages[0] = sequentialPrompt
+				objectivePrompt := m.sequentialManager.CreateSequentialSystemMessage()
+				messages[0] = objectivePrompt
 			}
-			
-			// Continue with normal streaming but with sequential system prompt
 		}
 
 		// Create context with timeout
@@ -946,36 +945,73 @@ func (m *model) handleLLMResponseForTasks(llmResponse string) tea.Cmd {
 		// Store the response for recursive tracking
 		m.lastLLMResponse = llmResponse
 
-		// Use sequential task parsing to handle single tasks
+		// Handle objective-driven exploration
 		if m.sequentialManager != nil {
-			task, _, err := m.sequentialManager.ParseSingleTask(llmResponse)
-			if err != nil {
-				return StreamMsg{Error: fmt.Errorf("failed to parse task: %w", err)}
-			}
-			
-			if task != nil {
-				// Execute the single task
-				response := m.taskExecutor.Execute(task)
-				
-				// Add task result to chat session for LLM to see
-				taskResultMsg := m.formatTaskResultForLLM(task, response)
-				if err := m.chatSession.AddMessage(taskResultMsg); err != nil {
-					fmt.Printf("Warning: failed to add task result to chat: %v\n", err)
-				}
-				
-				// Refresh display and continue with LLM
-				m.messages = m.chatSession.GetDisplayMessages()
-				m.updateWrappedMessages()
-				
-				// Continue the conversation for next step
-				return m.continueLLMAfterTasks()()
-			}
+			return m.handleObjectiveExploration(llmResponse)
 		}
 
 		// No tasks found - this is a regular Q&A response
 		m.recursiveDepth = 0
 		return nil
 	}
+}
+
+// handleObjectiveExploration manages the objective-driven exploration flow
+func (m *model) handleObjectiveExploration(llmResponse string) tea.Msg {
+	// Check if this is setting a new objective
+	if objective := m.sequentialManager.ExtractObjective(llmResponse); objective != "" {
+		m.sequentialManager.SetObjective(objective)
+		// Show objective to user
+		objectiveMsg := fmt.Sprintf("🎯 OBJECTIVE: %s", objective)
+		m.messages = append(m.messages, objectiveMsg)
+		m.updateWrappedMessages()
+	}
+	
+	// Check if objective is complete
+	if m.sequentialManager.IsObjectiveComplete(llmResponse) {
+		m.sequentialManager.CompleteObjective()
+		// This is the final synthesis - show it normally
+		m.recursiveDepth = 0
+		return nil
+	}
+	
+	// Parse and execute task
+	task, _, err := m.sequentialManager.ParseSingleTask(llmResponse)
+	if err != nil {
+		return StreamMsg{Error: fmt.Errorf("failed to parse task: %w", err)}
+	}
+	
+	if task != nil {
+		// Execute the task
+		response := m.taskExecutor.Execute(task)
+		
+		// Add task result to accumulated data
+		m.sequentialManager.AddTaskResult(*response)
+		
+		// Add task result to chat session for LLM to see
+		taskResultMsg := m.formatTaskResultForLLM(task, response)
+		if err := m.chatSession.AddMessage(taskResultMsg); err != nil {
+			fmt.Printf("Warning: failed to add task result to chat: %v\n", err)
+		}
+		
+		// Show minimal status during suppressed phase
+		if m.sequentialManager.GetCurrentPhase() == taskPkg.PhaseSuppressedExploration {
+			statusMsg := fmt.Sprintf("📖 %s", task.Description())
+			m.messages = append(m.messages, statusMsg)
+			m.updateWrappedMessages()
+		} else {
+			// Refresh display normally for objective setting phase
+			m.messages = m.chatSession.GetDisplayMessages()
+			m.updateWrappedMessages()
+		}
+		
+		// Continue the conversation for next step
+		return m.continueLLMAfterTasks()()
+	}
+	
+	// No task found - regular response
+	m.recursiveDepth = 0
+	return nil
 }
 
 // detectsActionWithoutTasks checks if the LLM indicated an action but didn't provide tasks (simplified)
@@ -1053,7 +1089,7 @@ func (m *model) mentionsFutureWork(response string) bool {
 }
 
 // handleTaskEvent processes task execution events
-func (m model) handleTaskEvent(event task.TaskExecutionEvent) (tea.Model, tea.Cmd) {
+func (m model) handleTaskEvent(event taskPkg.TaskExecutionEvent) (tea.Model, tea.Cmd) {
 	// Add to task history
 	if event.Message != "" {
 		m.taskHistory = append(m.taskHistory, event.Message)
@@ -1439,7 +1475,7 @@ func (m *model) updateWrappedMessagesWithOptions(forceAutoScroll bool) {
 	// Add welcome message if no messages
 	if len(allMessages) == 0 && !m.isStreaming {
 		debugStatus := ""
-		if task.IsTaskDebugEnabled() {
+		if taskPkg.IsTaskDebugEnabled() {
 			debugStatus = "\n🔧 Task debug mode is ON"
 		} else {
 			debugStatus = "\n🔧 Task debug mode is OFF (use /debug to enable)"
@@ -1606,17 +1642,17 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 	}
 
 	// Initialize task system with enhanced M6 features
-	taskExecutor := task.NewExecutor(workspacePath, cfg.EnableShell, cfg.MaxFileSize)
-	var taskManager *task.Manager
-	var enhancedManager *task.EnhancedManager
-	var sequentialManager *task.SequentialTaskManager
-	var taskEventChan chan task.TaskExecutionEvent
+	taskExecutor := taskPkg.NewExecutor(workspacePath, cfg.EnableShell, cfg.MaxFileSize)
+	var taskManager *taskPkg.Manager
+	var enhancedManager *taskPkg.EnhancedManager
+	var sequentialManager *taskPkg.SequentialTaskManager
+	var taskEventChan chan taskPkg.TaskExecutionEvent
 
 	if llmAdapter != nil {
-		enhancedManager = task.NewEnhancedManager(taskExecutor, llmAdapter, chatSession, idx)
+		enhancedManager = taskPkg.NewEnhancedManager(taskExecutor, llmAdapter, chatSession, idx)
 		taskManager = enhancedManager.Manager // For compatibility
-		sequentialManager = task.NewSequentialTaskManager(taskExecutor, llmAdapter, chatSession)
-		taskEventChan = make(chan task.TaskExecutionEvent, 10)
+		sequentialManager = taskPkg.NewSequentialTaskManager(taskExecutor, llmAdapter, chatSession)
+		taskEventChan = make(chan taskPkg.TaskExecutionEvent, 10)
 	}
 
 	// Add enhanced system prompt if this is a new session (no previous messages)
@@ -2076,7 +2112,7 @@ func (m *model) extractUserQuery() string {
 }
 
 // formatTaskResultForLLM formats task results for LLM context (hidden from user display)
-func (m *model) formatTaskResultForLLM(task *task.Task, response *task.TaskResponse) llm.Message {
+func (m *model) formatTaskResultForLLM(task *taskPkg.Task, response *taskPkg.TaskResponse) llm.Message {
 	var content strings.Builder
 	
 	content.WriteString(fmt.Sprintf("TASK_RESULT: %s\n", task.Description()))
