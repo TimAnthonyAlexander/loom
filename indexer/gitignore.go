@@ -2,7 +2,6 @@ package indexer
 
 import (
 	"bufio"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -47,23 +46,10 @@ func (gi *GitIgnore) MatchesPath(path string) bool {
 	}
 
 	// Normalize path separators
-	originalPath := path
 	path = filepath.ToSlash(path)
 
-	// Debug output for Windows testing (only when LOOM_DEBUG_GITIGNORE is set)
-	debugMode := os.Getenv("LOOM_DEBUG_GITIGNORE") != ""
-	if debugMode {
-		fmt.Printf("GITIGNORE DEBUG: Testing path '%s' (original: '%s')\n", path, originalPath)
-	}
-
 	for _, pattern := range gi.patterns {
-		if debugMode {
-			fmt.Printf("GITIGNORE DEBUG: Testing pattern '%s' against path '%s'\n", pattern, path)
-		}
 		if gi.matchPattern(pattern, path) {
-			if debugMode {
-				fmt.Printf("GITIGNORE DEBUG: ✓ Pattern '%s' MATCHED path '%s'\n", pattern, path)
-			}
 			return true
 		}
 	}

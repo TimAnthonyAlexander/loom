@@ -161,6 +161,9 @@ func (idx *Index) indexFile(path string) *FileMeta {
 		return nil
 	}
 
+	// Normalize path separators to forward slashes for cross-platform consistency
+	relPath = filepath.ToSlash(relPath)
+
 	// Calculate hash
 	hash, err := idx.calculateFileHash(path)
 	if err != nil {
@@ -198,80 +201,46 @@ func (idx *Index) calculateFileHash(path string) (string, error) {
 
 // shouldSkipDirectory checks if a directory should be skipped
 func (idx *Index) shouldSkipDirectory(relPath string) bool {
-	debugMode := os.Getenv("LOOM_DEBUG_GITIGNORE") != ""
-	if debugMode {
-		fmt.Printf("INDEXER DEBUG: Checking directory '%s'\n", relPath)
-	}
-
 	// Skip common ignored directories
 	skipDirs := []string{".git", "node_modules", "vendor", ".loom", ".vscode", ".idea", "target", "dist", "__pycache__"}
 
 	dirName := filepath.Base(relPath)
 	for _, skip := range skipDirs {
 		if dirName == skip {
-			if debugMode {
-				fmt.Printf("INDEXER DEBUG: ✓ Directory '%s' skipped (hardcoded: %s)\n", relPath, skip)
-			}
 			return true
 		}
 	}
 
 	// Check .gitignore
 	if idx.gitIgnore != nil && idx.gitIgnore.MatchesPath(relPath) {
-		if debugMode {
-			fmt.Printf("INDEXER DEBUG: ✓ Directory '%s' skipped (gitignore)\n", relPath)
-		}
 		return true
 	}
 
-	if debugMode {
-		fmt.Printf("INDEXER DEBUG: Directory '%s' allowed\n", relPath)
-	}
 	return false
 }
 
 // shouldSkipFile checks if a file should be skipped
 func (idx *Index) shouldSkipFile(relPath string, info os.FileInfo) bool {
-	debugMode := os.Getenv("LOOM_DEBUG_GITIGNORE") != ""
-	if debugMode {
-		fmt.Printf("INDEXER DEBUG: Checking file '%s' (size: %d)\n", relPath, info.Size())
-	}
-
 	// Skip large files
 	if info.Size() > idx.maxFileSize {
-		if debugMode {
-			fmt.Printf("INDEXER DEBUG: ✓ File '%s' skipped (too large: %d > %d)\n", relPath, info.Size(), idx.maxFileSize)
-		}
 		return true
 	}
 
 	// Skip .gitignore files
 	if filepath.Base(relPath) == ".gitignore" {
-		if debugMode {
-			fmt.Printf("INDEXER DEBUG: ✓ File '%s' skipped (gitignore file)\n", relPath)
-		}
 		return true
 	}
 
 	// Skip binary files (basic check)
 	if isBinaryFile(relPath) {
-		if debugMode {
-			fmt.Printf("INDEXER DEBUG: ✓ File '%s' skipped (binary)\n", relPath)
-		}
 		return true
 	}
 
 	// Check .gitignore
 	if idx.gitIgnore != nil && idx.gitIgnore.MatchesPath(relPath) {
-		if debugMode {
-			fmt.Printf("INDEXER DEBUG: ✓ File '%s' skipped (gitignore)\n", relPath)
-		}
 		return true
 	}
 
-	if debugMode {
-		fmt.Printf("INDEXER DEBUG: File '%s' allowed\n", relPath)
-	}
 	return false
 }
 
