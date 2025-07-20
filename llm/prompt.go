@@ -262,14 +262,15 @@ When exploring a codebase, follow this autonomous approach:
    
    **Simple targeted edit (PREFERRED):**
    🔧 EDIT README.md → add installation section after "## Features"
-   ```markdown
+   
+   [CODE BLOCK]
    ## Installation
    
    Install via npm:
-   ```bash
+   [BASH]
    npm install loom
-   ```
-   ```
+   [/BASH]
+   [/CODE BLOCK]
 
    **Complex edit requiring full context:**
    1. 🔧 READ filename.go (to understand current content)
