@@ -81,23 +81,23 @@ func tryFallbackJSONParsing(llmResponse string) *TaskList {
 	// This regex looks for JSON objects that contain "type" field with known task types
 	taskTypePattern := `\{"type":\s*"(?:ReadFile|EditFile|ListDir|RunShell)"`
 	re := regexp.MustCompile(taskTypePattern)
-	
+
 	if debugTaskParsing {
 		fmt.Printf("DEBUG: Searching for raw JSON patterns in response...\n")
 	}
-	
+
 	// Find potential JSON task objects
 	lines := strings.Split(llmResponse, "\n")
 	var jsonCandidates []string
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		
+
 		// Skip empty lines and obvious non-JSON lines
 		if line == "" || !strings.HasPrefix(line, "{") {
 			continue
 		}
-		
+
 		// Check if this line matches a task pattern
 		if re.MatchString(line) {
 			if debugTaskParsing {
@@ -106,13 +106,13 @@ func tryFallbackJSONParsing(llmResponse string) *TaskList {
 			jsonCandidates = append(jsonCandidates, line)
 		}
 	}
-	
+
 	// Try to parse each candidate
 	for _, jsonStr := range jsonCandidates {
 		if debugTaskParsing {
 			fmt.Printf("DEBUG: Attempting to parse raw JSON: %s\n", jsonStr[:min(len(jsonStr), 100)])
 		}
-		
+
 		// Try to parse as single Task object
 		var singleTask Task
 		if err := json.Unmarshal([]byte(jsonStr), &singleTask); err == nil {
@@ -121,7 +121,7 @@ func tryFallbackJSONParsing(llmResponse string) *TaskList {
 				if debugTaskParsing {
 					fmt.Printf("DEBUG: Successfully parsed raw JSON task - Type: %s, Path: %s\n", singleTask.Type, singleTask.Path)
 				}
-				
+
 				// Create TaskList with single task
 				taskList := TaskList{Tasks: []Task{singleTask}}
 				return &taskList
@@ -135,7 +135,7 @@ func tryFallbackJSONParsing(llmResponse string) *TaskList {
 				fmt.Printf("DEBUG: Failed to parse raw JSON: %v\n", err)
 			}
 		}
-		
+
 		// Try to parse as TaskList
 		var taskList TaskList
 		if err := json.Unmarshal([]byte(jsonStr), &taskList); err == nil {
@@ -153,7 +153,7 @@ func tryFallbackJSONParsing(llmResponse string) *TaskList {
 			}
 		}
 	}
-	
+
 	if debugTaskParsing {
 		fmt.Printf("DEBUG: No valid raw JSON tasks found\n")
 	}
@@ -171,7 +171,7 @@ func ParseTasks(llmResponse string) (*TaskList, error) {
 		if debugTaskParsing {
 			fmt.Printf("DEBUG: No backtick-wrapped JSON found, trying fallback raw JSON parsing...\n")
 		}
-		
+
 		// Try fallback parsing for raw JSON
 		if result := tryFallbackJSONParsing(llmResponse); result != nil {
 			if debugTaskParsing {

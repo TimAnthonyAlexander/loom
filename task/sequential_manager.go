@@ -349,7 +349,7 @@ func (stm *SequentialTaskManager) parseRawTaskJSON(response string) (*Task, stri
 		content := stm.extractNonTaskContent(response)
 		return &result.Tasks[0], content, nil
 	}
-	
+
 	// Return nil to fall back to the standard ParseTasks function
 	return nil, "", nil
 }
