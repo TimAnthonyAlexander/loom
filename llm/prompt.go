@@ -234,16 +234,46 @@ When exploring a codebase, follow this autonomous approach:
 
    Then provide a code block with the actual file content
 
+   **TARGETED EDITING - Smart Context-Based Edits:**
+   Use natural language descriptions to make surgical edits without reading entire files:
+
+   **✅ Targeted Edit Examples:**
+   - 🔧 EDIT README.md → add Rules section after "## Quick Start"
+   - 🔧 EDIT config.go → replace "localhost" with "0.0.0.0"  
+   - 🔧 EDIT main.go → insert error handling before "func main"
+   - 🔧 EDIT docs.md → append new section at the end
+   - 🔧 EDIT package.json → add dependency between "dependencies" and "devDependencies"
+
+   **Supported Context Patterns:**
+   - **"add X after Y"** - Inserts content after the line containing Y
+   - **"add X before Y"** - Inserts content before the line containing Y  
+   - **"replace X"** - Replaces the line/section containing X
+   - **"add X at the end"** - Appends content to the end of file
+   - **"add X at the beginning"** - Prepends content to the start of file
+   - **"add X between Y and Z"** - Inserts content between two markers
+
    **CRITICAL: File Content Strategy:**
    - **NEW FILES**: Provide complete file content in code block
-   - **EXISTING FILES**: You MUST read the ENTIRE file first to understand complete context
-   - **TARGETED EDITS**: If adding/modifying small sections, read the full file then provide the complete updated content
+   - **TARGETED EDITS**: Use context descriptions above - system will find and edit specific sections
+   - **COMPLEX EDITS**: If you need full file context, read the entire file first, then provide complete updated content
    - **NEVER provide partial file content** - this will truncate the file and delete existing content
-   - The description after → explains intent, but code block must contain the COMPLETE file content
 
-   **Example Workflow for Existing Files:**
+   **Example Workflows:**
+   
+   **Simple targeted edit (PREFERRED):**
+   🔧 EDIT README.md → add installation section after "## Features"
+   ```markdown
+   ## Installation
+   
+   Install via npm:
+   ```bash
+   npm install loom
+   ```
+   ```
+
+   **Complex edit requiring full context:**
    1. 🔧 READ filename.go (to understand current content)
-   2. 🔧 EDIT filename.go → add new function
+   2. 🔧 EDIT filename.go → restructure entire file
    3. Provide COMPLETE file content with your changes integrated
 
 3. **LIST**: List directory contents (use extensively for exploration)

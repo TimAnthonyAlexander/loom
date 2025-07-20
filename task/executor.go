@@ -268,6 +268,11 @@ func (e *Executor) executeEditFile(task *Task) *TaskResponse {
 	if task.Diff != "" {
 		return e.applyDiff(task, fullPath)
 	} else if task.Content != "" {
+		// Check if this is a targeted edit with context
+		if task.StartContext != "" || task.InsertMode != "" {
+			return e.applyTargetedEdit(task, fullPath)
+		}
+		// Otherwise use full content replacement
 		return e.replaceContent(task, fullPath)
 	} else if task.Intent != "" {
 		// Handle natural language edit with description but no content
@@ -826,6 +831,190 @@ func (e *Executor) looksIncomplete(filePath, newContent, originalContent string)
 				!strings.HasSuffix(newTrimmed, ";") {
 				return true
 			}
+		}
+	}
+
+	return false
+}
+
+// applyTargetedEdit applies an edit to a specific section of a file based on context
+func (e *Executor) applyTargetedEdit(task *Task, fullPath string) *TaskResponse {
+	response := &TaskResponse{Task: *task}
+
+	// Read existing content
+	var originalContent string
+	if _, err := os.Stat(fullPath); err == nil {
+		data, err := os.ReadFile(fullPath)
+		if err != nil {
+			response.Error = fmt.Sprintf("failed to read existing file: %v", err)
+			return response
+		}
+		originalContent = string(data)
+	}
+
+	// Apply targeted edit
+	newContent, err := e.performTargetedEdit(originalContent, task)
+	if err != nil {
+		response.Error = err.Error()
+		return response
+	}
+
+	// Create diff preview
+	dmp := diffmatchpatch.New()
+	diff := dmp.DiffMain(originalContent, newContent, false)
+	preview := dmp.DiffPrettyText(diff)
+
+	// Store actual preview for LLM
+	response.ActualContent = fmt.Sprintf("Targeted edit preview for %s:\n\n%s\n\nReady to apply changes.", task.Path, preview)
+
+	response.Success = true
+	// Show status message to user
+	response.Output = fmt.Sprintf("Editing file: %s (targeted edit prepared - %s)", task.Path, task.InsertMode)
+
+	// Store the new content for later application
+	response.Task.Content = newContent
+	return response
+}
+
+// performTargetedEdit performs the actual targeted editing logic
+func (e *Executor) performTargetedEdit(originalContent string, task *Task) (string, error) {
+	lines := strings.Split(originalContent, "\n")
+
+	switch task.InsertMode {
+	case "append":
+		// Add content at the end of the file
+		if originalContent == "" {
+			return task.Content, nil
+		}
+		return originalContent + "\n" + task.Content, nil
+
+	case "insert_before":
+		if task.StartContext == "BEGINNING_OF_FILE" {
+			return task.Content + "\n" + originalContent, nil
+		}
+
+		// Find the line matching StartContext
+		for i, line := range lines {
+			if e.matchesContext(line, task.StartContext) {
+				// Insert before this line
+				newLines := make([]string, 0, len(lines)+strings.Count(task.Content, "\n")+1)
+				newLines = append(newLines, lines[:i]...)
+				newLines = append(newLines, strings.Split(task.Content, "\n")...)
+				newLines = append(newLines, lines[i:]...)
+				return strings.Join(newLines, "\n"), nil
+			}
+		}
+		return "", fmt.Errorf("could not find start context: %s", task.StartContext)
+
+	case "insert_after":
+		// Find the line matching StartContext
+		for i, line := range lines {
+			if e.matchesContext(line, task.StartContext) {
+				// Insert after this line
+				newLines := make([]string, 0, len(lines)+strings.Count(task.Content, "\n")+1)
+				newLines = append(newLines, lines[:i+1]...)
+				newLines = append(newLines, strings.Split(task.Content, "\n")...)
+				newLines = append(newLines, lines[i+1:]...)
+				return strings.Join(newLines, "\n"), nil
+			}
+		}
+		return "", fmt.Errorf("could not find start context: %s", task.StartContext)
+
+	case "replace":
+		// Find and replace the section matching StartContext
+		startIdx := -1
+		endIdx := -1
+
+		// Find start context
+		for i, line := range lines {
+			if e.matchesContext(line, task.StartContext) {
+				startIdx = i
+				break
+			}
+		}
+
+		if startIdx == -1 {
+			return "", fmt.Errorf("could not find start context: %s", task.StartContext)
+		}
+
+		// If EndContext is specified, find it; otherwise replace just the start line
+		if task.EndContext != "" {
+			for i := startIdx + 1; i < len(lines); i++ {
+				if e.matchesContext(lines[i], task.EndContext) {
+					endIdx = i
+					break
+				}
+			}
+			if endIdx == -1 {
+				return "", fmt.Errorf("could not find end context: %s", task.EndContext)
+			}
+		} else {
+			endIdx = startIdx
+		}
+
+		// Replace the section
+		newLines := make([]string, 0, len(lines))
+		newLines = append(newLines, lines[:startIdx]...)
+		newLines = append(newLines, strings.Split(task.Content, "\n")...)
+		newLines = append(newLines, lines[endIdx+1:]...)
+		return strings.Join(newLines, "\n"), nil
+
+	case "insert_between":
+		if task.StartContext == "" || task.EndContext == "" {
+			return "", fmt.Errorf("insert_between requires both start and end context")
+		}
+
+		startIdx := -1
+		endIdx := -1
+
+		// Find start and end contexts
+		for i, line := range lines {
+			if startIdx == -1 && e.matchesContext(line, task.StartContext) {
+				startIdx = i
+			} else if startIdx != -1 && e.matchesContext(line, task.EndContext) {
+				endIdx = i
+				break
+			}
+		}
+
+		if startIdx == -1 {
+			return "", fmt.Errorf("could not find start context: %s", task.StartContext)
+		}
+		if endIdx == -1 {
+			return "", fmt.Errorf("could not find end context: %s", task.EndContext)
+		}
+
+		// Insert between the contexts
+		newLines := make([]string, 0, len(lines)+strings.Count(task.Content, "\n")+1)
+		newLines = append(newLines, lines[:startIdx+1]...)
+		newLines = append(newLines, strings.Split(task.Content, "\n")...)
+		newLines = append(newLines, lines[endIdx:]...)
+		return strings.Join(newLines, "\n"), nil
+
+	default:
+		return "", fmt.Errorf("unknown insert mode: %s", task.InsertMode)
+	}
+}
+
+// matchesContext checks if a line matches the given context string or pattern
+func (e *Executor) matchesContext(line, context string) bool {
+	line = strings.TrimSpace(line)
+	context = strings.TrimSpace(context)
+
+	// Exact match
+	if line == context {
+		return true
+	}
+
+	// Contains match (case-insensitive)
+	if strings.Contains(strings.ToLower(line), strings.ToLower(context)) {
+		return true
+	}
+
+	// Try regex match if context looks like a pattern
+	if strings.Contains(context, "*") || strings.Contains(context, "^") || strings.Contains(context, "$") {
+		if matched, _ := regexp.MatchString(context, line); matched {
+			return true
 		}
 	}
 
