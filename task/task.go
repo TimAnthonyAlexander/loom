@@ -758,6 +758,23 @@ func (t *Task) Description() string {
 		if t.Diff != "" {
 			return fmt.Sprintf("Edit %s (apply diff)", t.Path)
 		}
+		// Check if this is a targeted edit
+		if t.InsertMode != "" {
+			switch t.InsertMode {
+			case "append":
+				return fmt.Sprintf("Edit %s (append content)", t.Path)
+			case "insert_after":
+				return fmt.Sprintf("Edit %s (insert after)", t.Path)
+			case "insert_before":
+				return fmt.Sprintf("Edit %s (insert before)", t.Path)
+			case "replace":
+				return fmt.Sprintf("Edit %s (replace section)", t.Path)
+			case "insert_between":
+				return fmt.Sprintf("Edit %s (insert between)", t.Path)
+			default:
+				return fmt.Sprintf("Edit %s (targeted edit)", t.Path)
+			}
+		}
 		return fmt.Sprintf("Edit %s (replace content)", t.Path)
 
 	case TaskTypeListDir:

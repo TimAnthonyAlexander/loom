@@ -72,23 +72,26 @@ func (m *Manager) HandleLLMResponse(llmResponse string, eventChan chan<- TaskExe
 
 	// Execute tasks sequentially
 	for i, task := range execution.Tasks {
+		// Create a copy of the task to avoid loop variable capture issues
+		currentTask := task
+		
 		// Send task started event
 		eventChan <- TaskExecutionEvent{
 			Type:      "task_started",
-			Task:      &task,
+			Task:      &currentTask,
 			Execution: execution,
-			Message:   fmt.Sprintf("Executing task %d/%d: %s", i+1, len(execution.Tasks), task.Description()),
+			Message:   fmt.Sprintf("Executing task %d/%d: %s", i+1, len(execution.Tasks), currentTask.Description()),
 		}
 
 		// Execute the task
-		response := m.executor.Execute(&task)
+		response := m.executor.Execute(&currentTask)
 		execution.Responses = append(execution.Responses, *response)
 
 		if !response.Success {
 			// Task failed
 			eventChan <- TaskExecutionEvent{
 				Type:      "task_failed",
-				Task:      &task,
+				Task:      &currentTask,
 				Response:  response,
 				Execution: execution,
 				Message:   fmt.Sprintf("Task failed: %s", response.Error),
@@ -99,13 +102,13 @@ func (m *Manager) HandleLLMResponse(llmResponse string, eventChan chan<- TaskExe
 		}
 
 		// Check if task requires confirmation
-		if task.RequiresConfirmation() {
+		if currentTask.RequiresConfirmation() {
 			eventChan <- TaskExecutionEvent{
 				Type:          "task_completed",
-				Task:          &task,
+				Task:          &currentTask,
 				Response:      response,
 				Execution:     execution,
-				Message:       fmt.Sprintf("Task completed, awaiting confirmation: %s", task.Description()),
+				Message:       fmt.Sprintf("Task completed, awaiting confirmation: %s", currentTask.Description()),
 				RequiresInput: true,
 			}
 
@@ -116,10 +119,10 @@ func (m *Manager) HandleLLMResponse(llmResponse string, eventChan chan<- TaskExe
 			// Task completed successfully
 			eventChan <- TaskExecutionEvent{
 				Type:      "task_completed",
-				Task:      &task,
+				Task:      &currentTask,
 				Response:  response,
 				Execution: execution,
-				Message:   fmt.Sprintf("Task completed: %s", task.Description()),
+				Message:   fmt.Sprintf("Task completed: %s", currentTask.Description()),
 			}
 		}
 
