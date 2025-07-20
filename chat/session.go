@@ -520,6 +520,10 @@ func formatNaturalLanguageTaskDescription(taskType, args string) string {
 					filename = filename[idx+1:]
 				}
 				action := strings.TrimSpace(parts[1])
+				// Truncate long descriptions for display
+				if len(action) > 40 {
+					action = action[:37] + "..."
+				}
 				return fmt.Sprintf("✏️ Editing %s → %s", filename, action)
 			}
 		}

@@ -701,8 +701,11 @@ This will improve the robustness of the application.`
 	if task.Path != "main.go" {
 		t.Errorf("Expected main.go, got %s", task.Path)
 	}
-	if task.Content != "add error handling and logging" {
-		t.Errorf("Expected 'add error handling and logging', got %s", task.Content)
+	if task.Intent != "add error handling and logging" {
+		t.Errorf("Expected 'add error handling and logging', got %s", task.Intent)
+	}
+	if task.Content != "" {
+		t.Errorf("Expected empty content, got %s", task.Content)
 	}
 }
 
@@ -767,5 +770,87 @@ func TestParseNaturalLanguagePreferredOverJSON(t *testing.T) {
 	}
 	if task.MaxLines != 150 {
 		t.Errorf("Expected 150 (from natural language), got %d", task.MaxLines)
+	}
+}
+
+func TestParseNaturalLanguageEditWithCodeBlock(t *testing.T) {
+	// Test edit task with code block content
+	llmResponse := `I'll create a sample JSON file with proper content.
+
+🔧 EDIT sample.json → create a sample JSON file
+
+` + "```json\n" + `{
+  "name": "test",
+  "version": "1.0.0",
+  "description": "A test file"
+}` + "\n```"
+
+	taskList, err := ParseTasks(llmResponse)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if taskList == nil {
+		t.Fatal("Expected task list, got nil")
+	}
+
+	if len(taskList.Tasks) != 1 {
+		t.Fatalf("Expected 1 task, got %d", len(taskList.Tasks))
+	}
+
+	task := taskList.Tasks[0]
+	if task.Type != TaskTypeEditFile {
+		t.Errorf("Expected EditFile, got %s", task.Type)
+	}
+	if task.Path != "sample.json" {
+		t.Errorf("Expected sample.json, got %s", task.Path)
+	}
+	if task.Intent != "create a sample JSON file" {
+		t.Errorf("Expected intent 'create a sample JSON file', got %s", task.Intent)
+	}
+	
+	expectedContent := `{
+  "name": "test",
+  "version": "1.0.0",
+  "description": "A test file"
+}`
+	if task.Content != expectedContent {
+		t.Errorf("Expected JSON content, got %s", task.Content)
+	}
+}
+
+func TestParseNaturalLanguageEditWithoutCodeBlock(t *testing.T) {
+	// Test edit task without code block content (should only have description)
+	llmResponse := `I'll update the configuration file.
+
+🔧 EDIT config.yaml → add database settings
+
+This will add the necessary database configuration.`
+
+	taskList, err := ParseTasks(llmResponse)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if taskList == nil {
+		t.Fatal("Expected task list, got nil")
+	}
+
+	if len(taskList.Tasks) != 1 {
+		t.Fatalf("Expected 1 task, got %d", len(taskList.Tasks))
+	}
+
+	task := taskList.Tasks[0]
+	if task.Type != TaskTypeEditFile {
+		t.Errorf("Expected EditFile, got %s", task.Type)
+	}
+	if task.Path != "config.yaml" {
+		t.Errorf("Expected config.yaml, got %s", task.Path)
+	}
+	if task.Intent != "add database settings" {
+		t.Errorf("Expected intent 'add database settings', got %s", task.Intent)
+	}
+	if task.Content != "" {
+		t.Errorf("Expected empty content, got %s", task.Content)
 	}
 }

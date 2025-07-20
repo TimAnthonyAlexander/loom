@@ -207,10 +207,18 @@ When exploring a codebase, follow this autonomous approach:
    - 🔧 EDIT newfile.go → create new file with content
    - EDIT filename.go
 
+   **CRITICAL: For Edit Tasks, provide actual content in code blocks:**
+   
+   Example format:
+   🔧 EDIT filename.go → add error handling
+   
+   Then provide a code block with the actual file content
+   
    **For Edit Tasks:**
-   - NEW FILES: Describe what to create or provide content in following code block
-   - EXISTING FILES: Read first to understand context, then describe changes
-   - Be confident - user will approve/reject as needed
+   - ALWAYS provide the actual file content in a code block after the edit command
+   - NEW FILES: Provide complete file content in code block
+   - EXISTING FILES: Read first to understand context, then provide updated content
+   - The description after → explains intent, but code block contains actual content
 
 3. **LIST**: List directory contents (use extensively for exploration)
    - 🔧 LIST .
