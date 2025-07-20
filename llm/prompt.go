@@ -125,21 +125,23 @@ func (pe *PromptEnhancer) CreateEnhancedSystemPrompt(enableShell bool) Message {
 
 ## CRITICAL: Task Execution Instructions
 
-**ALWAYS USE TASKS FOR FILE OPERATIONS** - When you need to understand code or make changes, use JSON task blocks immediately. Prioritize doing over explaining.
+**ALWAYS USE TASKS FOR FILE OPERATIONS** - When you need to understand code or make changes, use simple task commands immediately. Prioritize doing over explaining.
 
-## 🚨 MANDATORY JSON FORMAT REQUIREMENT 🚨
+## 🔧 NATURAL LANGUAGE TASK FORMAT 🔧
 
-**CRITICAL: ALL TASKS MUST BE WRAPPED IN JSON CODE BLOCKS**
+**Use simple, natural language commands with the 🔧 prefix:**
 
-❌ **WRONG** - This will NOT be detected:
-{"type": "ReadFile", "path": "README.md"}
+✅ **PREFERRED** - Natural language format:
+🔧 READ README.md (max: 300 lines)
+🔧 LIST . recursive
+🔧 EDIT main.go → add error handling
 
-✅ **CORRECT** - This WILL be detected:
-`+"```"+`json
-{"type": "ReadFile", "path": "README.md"}
-`+"```"+`
+✅ **Also supported** - Simple format without emoji:
+READ main.go
+LIST src/
+EDIT config.go
 
-**NEVER output raw JSON without the triple backticks and json language tag!**
+**This is much more reliable than JSON and easier for both AI and humans to understand!**
 
 ### MANDATORY Task Rules:
 1. **START with ONE TASK** - begin with the most important file or directory
@@ -150,17 +152,11 @@ func (pe *PromptEnhancer) CreateEnhancedSystemPrompt(enableShell bool) Message {
 ### Task Execution Format Examples:
 
 **Single Task (use this format 90%% of the time):**
-`+"```"+`json
-{"type": "ReadFile", "path": "README.md", "max_lines": 300}
-`+"```"+`
+🔧 READ README.md (max: 300 lines)
 
-**Multiple Tasks (use sparingly):**
-`+"```"+`json
-{"tasks": [
-  {"type": "ReadFile", "path": "README.md", "max_lines": 300},
-  {"type": "ListDir", "path": ".", "recursive": false}
-]}
-`+"```"+`
+**Multiple Tasks (use sparingly, only when truly needed):**
+🔧 READ README.md (max: 300 lines)
+🔧 LIST . recursive
 
 ### Systematic Codebase Analysis Protocol
 
@@ -168,14 +164,10 @@ When exploring a codebase, follow this autonomous approach:
 
 #### Sequential Exploration Flow:
 1. **Start with README** to understand project purpose and structure
-`+"```"+`json
-{"type": "ReadFile", "path": "README.md", "max_lines": 300}
-`+"```"+`
+🔧 READ README.md (max: 300 lines)
 
 2. **Analyze main entry point** based on project type discovered
-`+"```"+`json
-{"type": "ReadFile", "path": "main.go", "max_lines": 200}
-`+"```"+`
+🔧 READ main.go (max: 200 lines)
 
 3. **Continue systematically** - choose next most important file/directory
 4. **Signal completion** when you have comprehensive understanding
@@ -189,59 +181,59 @@ When exploring a codebase, follow this autonomous approach:
 **SEQUENTIAL EXPLORATION Examples:**
 
 **Starting exploration:**
-`+"```"+`json
-{"type": "ReadFile", "path": "README.md", "max_lines": 300}
-`+"```"+`
+🔧 READ README.md (max: 300 lines)
 
 **Following up based on results:**
-`+"```"+`json
-{"type": "ListDir", "path": ".", "recursive": false}
-`+"```"+`
+🔧 LIST . recursive
 
 **Reading specific implementation:**
-`+"```"+`json
-{"type": "ReadFile", "path": "cmd/root.go", "max_lines": 200}
-`+"```"+`
+🔧 READ cmd/root.go (max: 200 lines)
 
 ### Task Types:
-1. **ReadFile**: Read file contents with smart continuation support
-   - path: File path (required)
-   - max_lines: Max lines to read per chunk (default: 200, increase for key files)
-   - start_line: Start reading from this line (1-indexed, optional)
-   - end_line: Stop reading at this line (1-indexed, optional)
+
+1. **READ**: Read file contents with smart continuation support
+   - 🔧 READ filename.go
+   - 🔧 READ filename.go (max: 200 lines)
+   - 🔧 READ filename.go (lines 50-100)
+   - 🔧 READ filename.go (first 300 lines)
 
    **Smart Reading Features:**
    - When truncated, automatically continue reading with follow-up tasks
    - Shows total file size and remaining lines
    - For large files, read in strategic chunks focusing on key sections
 
-2. **EditFile**: Create or modify files (user will be asked to confirm)
-   - path: File path (required)
-   - **Either** diff: Unified diff format **OR** content: Complete file content
+2. **EDIT**: Create or modify files (user will be asked to confirm)
+   - 🔧 EDIT filename.go → add error handling
+   - 🔧 EDIT newfile.go → create new file with content
+   - EDIT filename.go
 
-   **For EditFile Tasks:**
-   - NEW FILES: Use "content" with complete file content
-   - EXISTING FILES: Read first to understand context, then use "diff" or "content"
+   **For Edit Tasks:**
+   - NEW FILES: Describe what to create or provide content in following code block
+   - EXISTING FILES: Read first to understand context, then describe changes
    - Be confident - user will approve/reject as needed
 
-3. **ListDir**: List directory contents (use extensively for exploration)
-   - path: Directory path (default: ".")
-   - recursive: Include subdirectories (use true for comprehensive analysis)
+3. **LIST**: List directory contents (use extensively for exploration)
+   - 🔧 LIST .
+   - 🔧 LIST src/
+   - 🔧 LIST . recursive
+   - 🔧 LIST src/ recursive
 
-4. **RunShell**: Execute shell commands (user confirmation required, %s)
-   - command: Shell command (required)
-   - timeout: Timeout in seconds (default: 30)
+4. **RUN**: Execute shell commands (user confirmation required, %s)
+   - 🔧 RUN go test
+   - 🔧 RUN go build
+   - 🔧 RUN npm install (timeout: 60)
 
-### ⚠️ FORMATTING WARNING ⚠️
-**If you output JSON without proper code blocks, your tasks will be IGNORED!**
-- Raw JSON like `+"`"+`{"type": "ReadFile"}`+"`"+` will NOT execute
-- Only JSON in code blocks like `+"`"+` `+"```"+`json\\n{"type": "ReadFile"}\\n`+"```"+` `+"`"+` will execute
-- Missing the `+"`"+`json`+"`"+` language tag will also cause failures
+### ✅ SIMPLE TASK FORMAT ✅
+**Natural language tasks are much more reliable than JSON!**
+- Simply use: 🔧 READ filename.go
+- Or without emoji: READ filename.go  
+- Both formats work perfectly
+- No complicated syntax, quotes, or brackets needed
 
 ## Response Workflow:
 
-### 🚨 REMINDER: ALL TASKS MUST USE JSON CODE BLOCKS 🚨
-**Format: `+"```"+`json followed by task JSON followed by `+"```"+`**
+### 🔧 REMINDER: USE SIMPLE TASK COMMANDS 🔧
+**Just write natural language task commands - they're easier and more reliable!**
 
 ### For Project Exploration Requests:
 1. **START with single most important task** (usually README.md)
@@ -250,8 +242,8 @@ When exploring a codebase, follow this autonomous approach:
 4. **Signal completion** with EXPLORATION_COMPLETE: [analysis]
 
 ### For File Creation/Editing Requests:
-1. **If creating new file**: Use EditFile with "content" immediately
-2. **If editing existing file**: Read comprehensively first, then EditFile
+1. **If creating new file**: Use EDIT command with description
+2. **If editing existing file**: Read comprehensively first, then EDIT
 3. **Gather complete context** before making changes
 4. **Execute confidently** - user will provide feedback if needed
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -73,6 +74,229 @@ type TaskResponse struct {
 	ActualContent string `json:"actual_content,omitempty"` // Actual content for LLM (hidden from user)
 	Error         string `json:"error,omitempty"`
 	Approved      bool   `json:"approved,omitempty"` // For tasks requiring confirmation
+}
+
+// tryNaturalLanguageParsing attempts to parse natural language task commands
+func tryNaturalLanguageParsing(llmResponse string) *TaskList {
+	if debugTaskParsing {
+		fmt.Printf("DEBUG: Attempting natural language task parsing...\n")
+	}
+
+	lines := strings.Split(llmResponse, "\n")
+	var tasks []Task
+
+	// Look for task indicators with emoji prefixes
+	taskPattern := regexp.MustCompile(`^🔧\s+(READ|EDIT|LIST|RUN)\s+(.+)`)
+	
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		matches := taskPattern.FindStringSubmatch(line)
+		
+		if len(matches) == 3 {
+			taskType := strings.ToUpper(matches[1])
+			taskArgs := strings.TrimSpace(matches[2])
+			
+			task := parseNaturalLanguageTask(taskType, taskArgs)
+			if task != nil {
+				tasks = append(tasks, *task)
+				if debugTaskParsing {
+					fmt.Printf("DEBUG: Parsed natural language task - Type: %s, Path: %s\n", task.Type, task.Path)
+				}
+			}
+		}
+	}
+
+	// Also look for simpler patterns without emoji
+	simplePattern := regexp.MustCompile(`(?i)^(read|edit|list|run)\s+(.+)`)
+	
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		matches := simplePattern.FindStringSubmatch(line)
+		
+		if len(matches) == 3 {
+			taskType := strings.ToUpper(matches[1])
+			taskArgs := strings.TrimSpace(matches[2])
+			
+			task := parseNaturalLanguageTask(taskType, taskArgs)
+			if task != nil {
+				// Avoid duplicates
+				duplicate := false
+				for _, existingTask := range tasks {
+					if existingTask.Type == task.Type && existingTask.Path == task.Path {
+						duplicate = true
+						break
+					}
+				}
+				if !duplicate {
+					tasks = append(tasks, *task)
+					if debugTaskParsing {
+						fmt.Printf("DEBUG: Parsed simple natural language task - Type: %s, Path: %s\n", task.Type, task.Path)
+					}
+				}
+			}
+		}
+	}
+
+	if len(tasks) == 0 {
+		if debugTaskParsing {
+			fmt.Printf("DEBUG: No natural language tasks found\n")
+		}
+		return nil
+	}
+
+	if debugTaskParsing {
+		fmt.Printf("DEBUG: Successfully parsed %d natural language tasks\n", len(tasks))
+	}
+
+	return &TaskList{Tasks: tasks}
+}
+
+// parseNaturalLanguageTask parses a single natural language task
+func parseNaturalLanguageTask(taskType, args string) *Task {
+	switch taskType {
+	case "READ":
+		return parseReadTask(args)
+	case "EDIT":
+		return parseEditTask(args)
+	case "LIST":
+		return parseListTask(args)
+	case "RUN":
+		return parseRunTask(args)
+	default:
+		return nil
+	}
+}
+
+// parseReadTask parses natural language READ commands
+func parseReadTask(args string) *Task {
+	task := &Task{Type: TaskTypeReadFile}
+	
+	// Extract file path and options
+	// Examples:
+	// - "main.go"
+	// - "main.go (max: 100 lines)"
+	// - "main.go (lines 50-100)"
+	// - "config.go (first 200 lines)"
+	
+	// Look for parenthetical options
+	optionsPattern := regexp.MustCompile(`^(.+?)\s*\((.+)\)$`)
+	matches := optionsPattern.FindStringSubmatch(args)
+	
+	if len(matches) == 3 {
+		task.Path = strings.TrimSpace(matches[1])
+		options := strings.TrimSpace(matches[2])
+		
+		// Parse options
+		if strings.Contains(options, "max:") {
+			maxPattern := regexp.MustCompile(`max:\s*(\d+)`)
+			maxMatches := maxPattern.FindStringSubmatch(options)
+			if len(maxMatches) == 2 {
+				if maxLines, err := strconv.Atoi(maxMatches[1]); err == nil {
+					task.MaxLines = maxLines
+				}
+			}
+		}
+		
+		if strings.Contains(options, "first") && strings.Contains(options, "lines") {
+			firstPattern := regexp.MustCompile(`first\s+(\d+)\s+lines`)
+			firstMatches := firstPattern.FindStringSubmatch(options)
+			if len(firstMatches) == 2 {
+				if maxLines, err := strconv.Atoi(firstMatches[1]); err == nil {
+					task.MaxLines = maxLines
+				}
+			}
+		}
+		
+		// Parse line ranges like "lines 50-100"
+		rangePattern := regexp.MustCompile(`lines?\s+(\d+)-(\d+)`)
+		rangeMatches := rangePattern.FindStringSubmatch(options)
+		if len(rangeMatches) == 3 {
+			if startLine, err := strconv.Atoi(rangeMatches[1]); err == nil {
+				if endLine, err := strconv.Atoi(rangeMatches[2]); err == nil {
+					task.StartLine = startLine
+					task.EndLine = endLine
+				}
+			}
+		}
+	} else {
+		// Simple path without options
+		task.Path = strings.TrimSpace(args)
+	}
+	
+	// Set default max lines if not specified
+	if task.MaxLines == 0 && task.StartLine == 0 && task.EndLine == 0 {
+		task.MaxLines = 200
+	}
+	
+	return task
+}
+
+// parseEditTask parses natural language EDIT commands
+func parseEditTask(args string) *Task {
+	task := &Task{Type: TaskTypeEditFile}
+	
+	// Look for arrow notation: "file.go → content"
+	arrowPattern := regexp.MustCompile(`^(.+?)\s*→\s*(.+)$`)
+	matches := arrowPattern.FindStringSubmatch(args)
+	
+	if len(matches) == 3 {
+		task.Path = strings.TrimSpace(matches[1])
+		contentDesc := strings.TrimSpace(matches[2])
+		
+		// This is just a description, the actual content will be provided
+		// in a following code block or the LLM will need to be more specific
+		task.Content = contentDesc
+	} else {
+		// Simple path, content will be provided separately
+		task.Path = strings.TrimSpace(args)
+	}
+	
+	return task
+}
+
+// parseListTask parses natural language LIST commands
+func parseListTask(args string) *Task {
+	task := &Task{Type: TaskTypeListDir}
+	
+	// Check for recursive indication
+	if strings.Contains(strings.ToLower(args), "recursive") {
+		task.Recursive = true
+		// Remove "recursively" or "recursive" from path
+		args = regexp.MustCompile(`\s+recursively?\s*$`).ReplaceAllString(args, "")
+		args = regexp.MustCompile(`\s+recursive\s*$`).ReplaceAllString(args, "")
+	}
+	
+	task.Path = strings.TrimSpace(args)
+	if task.Path == "" {
+		task.Path = "."
+	}
+	
+	return task
+}
+
+// parseRunTask parses natural language RUN commands
+func parseRunTask(args string) *Task {
+	task := &Task{Type: TaskTypeRunShell}
+	
+	// Look for timeout specification
+	timeoutPattern := regexp.MustCompile(`^(.+?)\s*\(timeout:\s*(\d+)s?\)$`)
+	matches := timeoutPattern.FindStringSubmatch(args)
+	
+	if len(matches) == 3 {
+		task.Command = strings.TrimSpace(matches[1])
+		if timeout, err := strconv.Atoi(matches[2]); err == nil {
+			task.Timeout = timeout
+		}
+	} else {
+		task.Command = strings.TrimSpace(args)
+	}
+	
+	// Set default timeout
+	if task.Timeout == 0 {
+		task.Timeout = 30
+	}
+	
+	return task
 }
 
 // tryFallbackJSONParsing attempts to parse raw JSON tasks when no backtick-wrapped JSON is found
@@ -160,8 +384,21 @@ func tryFallbackJSONParsing(llmResponse string) *TaskList {
 	return nil
 }
 
-// ParseTasks extracts and parses task JSON blocks from LLM response
+// ParseTasks extracts and parses tasks from LLM response (tries natural language first, then JSON)
 func ParseTasks(llmResponse string) (*TaskList, error) {
+	// First, try natural language parsing
+	if result := tryNaturalLanguageParsing(llmResponse); result != nil {
+		if debugTaskParsing {
+			fmt.Printf("DEBUG: Successfully parsed %d tasks using natural language parsing\n", len(result.Tasks))
+		}
+		return result, nil
+	}
+
+	// Fall back to JSON parsing
+	if debugTaskParsing {
+		fmt.Printf("DEBUG: Natural language parsing found no tasks, trying JSON parsing...\n")
+	}
+
 	// Look for JSON code blocks
 	re := regexp.MustCompile("(?s)```(?:json)?\n?(.*?)\n?```")
 	matches := re.FindAllStringSubmatch(llmResponse, -1)

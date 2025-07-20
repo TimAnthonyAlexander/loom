@@ -340,6 +340,57 @@ func (s *Session) filterTaskResultForDisplay(content string) string {
 
 // filterJSONTaskBlocks removes JSON task blocks from LLM responses and replaces with clean descriptions
 func (s *Session) filterJSONTaskBlocks(content string) string {
+	// First check for natural language tasks (much simpler)
+	lines := strings.Split(content, "\n")
+	var filteredLines []string
+	var taskDescriptions []string
+	
+	taskPattern := regexp.MustCompile(`^🔧\s+(READ|EDIT|LIST|RUN)\s+(.+)`)
+	simplePattern := regexp.MustCompile(`(?i)^(read|edit|list|run)\s+(.+)`)
+	
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		
+		// Check for natural language tasks
+		if matches := taskPattern.FindStringSubmatch(trimmed); len(matches) == 3 {
+			taskType := strings.ToUpper(matches[1])
+			taskArgs := strings.TrimSpace(matches[2])
+			desc := formatNaturalLanguageTaskDescription(taskType, taskArgs)
+			taskDescriptions = append(taskDescriptions, desc)
+			continue // Skip this line in output
+		}
+		
+		if matches := simplePattern.FindStringSubmatch(trimmed); len(matches) == 3 {
+			taskType := strings.ToUpper(matches[1])
+			taskArgs := strings.TrimSpace(matches[2])
+			desc := formatNaturalLanguageTaskDescription(taskType, taskArgs)
+			taskDescriptions = append(taskDescriptions, desc)
+			continue // Skip this line in output
+		}
+		
+		filteredLines = append(filteredLines, line)
+	}
+	
+	// If we found natural language tasks, create summary
+	if len(taskDescriptions) > 0 {
+		taskSummary := ""
+		if len(taskDescriptions) == 1 {
+			taskSummary = taskDescriptions[0]
+		} else {
+			taskSummary = fmt.Sprintf("🔧 Executing %d tasks:\n%s", len(taskDescriptions), strings.Join(taskDescriptions, "\n"))
+		}
+		
+		// Add task summary to filtered content
+		filteredContent := strings.Join(filteredLines, "\n")
+		if strings.TrimSpace(filteredContent) == "" {
+			return taskSummary
+		}
+		return filteredContent + "\n\n" + taskSummary
+	}
+	
+	// Fall back to JSON block filtering for backward compatibility
+	content = strings.Join(filteredLines, "\n")
+	
 	// Find JSON code blocks using regex
 	re := regexp.MustCompile("(?s)```(?:json)?\n?(.*?)\n?```")
 	matches := re.FindAllStringSubmatch(content, -1)
@@ -349,7 +400,7 @@ func (s *Session) filterJSONTaskBlocks(content string) string {
 	}
 
 	// Try to extract task information from JSON blocks
-	var taskDescriptions []string
+	var jsonTaskDescriptions []string
 
 	for _, match := range matches {
 		if len(match) < 2 {
@@ -397,41 +448,41 @@ func (s *Session) filterJSONTaskBlocks(content string) string {
 			switch taskType {
 			case "ReadFile":
 				if hasPath && path != "" {
-					taskDescriptions = append(taskDescriptions, "📖 Reading file: "+path)
+					jsonTaskDescriptions = append(jsonTaskDescriptions, "📖 Reading file: "+path)
 				} else {
-					taskDescriptions = append(taskDescriptions, "📖 Reading file")
+					jsonTaskDescriptions = append(jsonTaskDescriptions, "📖 Reading file")
 				}
 			case "EditFile":
 				if hasPath && path != "" {
-					taskDescriptions = append(taskDescriptions, "✏️ Editing file: "+path)
+					jsonTaskDescriptions = append(jsonTaskDescriptions, "✏️ Editing file: "+path)
 				} else {
-					taskDescriptions = append(taskDescriptions, "✏️ Editing file")
+					jsonTaskDescriptions = append(jsonTaskDescriptions, "✏️ Editing file")
 				}
 			case "ListDir":
 				if hasPath && path != "" && path != "." {
-					taskDescriptions = append(taskDescriptions, "📁 Listing directory: "+path)
+					jsonTaskDescriptions = append(jsonTaskDescriptions, "📁 Listing directory: "+path)
 				} else {
-					taskDescriptions = append(taskDescriptions, "📁 Listing current directory")
+					jsonTaskDescriptions = append(jsonTaskDescriptions, "📁 Listing current directory")
 				}
 			case "RunShell":
 				if hasCommand && command != "" {
-					taskDescriptions = append(taskDescriptions, "⚡ Running command: "+command)
+					jsonTaskDescriptions = append(jsonTaskDescriptions, "⚡ Running command: "+command)
 				} else {
-					taskDescriptions = append(taskDescriptions, "⚡ Running shell command")
+					jsonTaskDescriptions = append(jsonTaskDescriptions, "⚡ Running shell command")
 				}
 			default:
-				taskDescriptions = append(taskDescriptions, "🔧 Executing task: "+taskType)
+				jsonTaskDescriptions = append(jsonTaskDescriptions, "🔧 Executing task: "+taskType)
 			}
 		}
 	}
 
 	// If we found tasks, create a clean summary
-	if len(taskDescriptions) > 0 {
+	if len(jsonTaskDescriptions) > 0 {
 		taskSummary := ""
-		if len(taskDescriptions) == 1 {
-			taskSummary = taskDescriptions[0]
+		if len(jsonTaskDescriptions) == 1 {
+			taskSummary = jsonTaskDescriptions[0]
 		} else {
-			taskSummary = fmt.Sprintf("🔧 Executing %d tasks:\n%s", len(taskDescriptions), strings.Join(taskDescriptions, "\n"))
+			taskSummary = fmt.Sprintf("🔧 Executing %d tasks:\n%s", len(jsonTaskDescriptions), strings.Join(jsonTaskDescriptions, "\n"))
 		}
 
 		// Replace all JSON blocks with the clean task summary
@@ -441,6 +492,76 @@ func (s *Session) filterJSONTaskBlocks(content string) string {
 
 	// If no valid tasks found, just remove the JSON blocks
 	return re.ReplaceAllString(content, "\n🔧 Executing tasks...")
+}
+
+// formatNaturalLanguageTaskDescription creates clean descriptions for natural language tasks
+func formatNaturalLanguageTaskDescription(taskType, args string) string {
+	switch taskType {
+	case "READ":
+		// Extract just the filename for cleaner display
+		parts := strings.Fields(args)
+		if len(parts) > 0 {
+			filename := parts[0]
+			// Remove path prefixes for cleaner display
+			if idx := strings.LastIndex(filename, "/"); idx != -1 {
+				filename = filename[idx+1:]
+			}
+			return "📖 Reading file: " + filename
+		}
+		return "📖 Reading file"
+		
+	case "EDIT":
+		// Check for arrow notation
+		if strings.Contains(args, "→") {
+			parts := strings.Split(args, "→")
+			if len(parts) >= 2 {
+				filename := strings.TrimSpace(parts[0])
+				if idx := strings.LastIndex(filename, "/"); idx != -1 {
+					filename = filename[idx+1:]
+				}
+				action := strings.TrimSpace(parts[1])
+				return fmt.Sprintf("✏️ Editing %s → %s", filename, action)
+			}
+		}
+		
+		// Simple filename
+		parts := strings.Fields(args)
+		if len(parts) > 0 {
+			filename := parts[0]
+			if idx := strings.LastIndex(filename, "/"); idx != -1 {
+				filename = filename[idx+1:]
+			}
+			return "✏️ Editing file: " + filename
+		}
+		return "✏️ Editing file"
+		
+	case "LIST":
+		dirName := strings.Fields(args)[0]
+		if dirName == "." {
+			dirName = "current directory"
+		} else if idx := strings.LastIndex(dirName, "/"); idx != -1 {
+			dirName = dirName[idx+1:] + "/"
+		}
+		if strings.Contains(strings.ToLower(args), "recursive") {
+			return "📁 Listing directory: " + dirName + " (recursive)"
+		}
+		return "📁 Listing directory: " + dirName
+		
+	case "RUN":
+		// Extract command, limit length for display
+		command := args
+		if strings.Contains(command, "(timeout:") {
+			command = strings.Split(command, "(timeout:")[0]
+		}
+		command = strings.TrimSpace(command)
+		if len(command) > 50 {
+			command = command[:47] + "..."
+		}
+		return "⚡ Running command: " + command
+		
+	default:
+		return "🔧 Executing task: " + taskType
+	}
 }
 
 // isCompletionDetectorInteraction checks if content is from completion detector

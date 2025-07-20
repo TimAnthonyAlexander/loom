@@ -211,30 +211,26 @@ Analyze the user's request and establish a clear exploration objective:
 2. **Begin First Task**: Immediately provide the first logical task
 3. **Stay Focused**: Keep the objective specific and achievable
 
-### 🚨 CRITICAL: Task Format (JSON code blocks REQUIRED):
+### 🔧 CRITICAL: Use Simple Task Commands:
 
-❌ **WRONG** - This will NOT be detected:
-{"type": "ReadFile", "path": "README.md"}
+✅ **CORRECT** - Natural language format:
+🔧 READ README.md (max: 300 lines)
 
-✅ **CORRECT** - This WILL be detected:
-` + "```json" + `
-{"type": "ReadFile", "path": "README.md", "max_lines": 300}
-` + "```" + `
+✅ **Also supported** - Simple format:
+READ README.md
 
-**NEVER output raw JSON without triple backticks and json language tag!**
+**Much easier than JSON and more reliable!**
 
 ### Available Task Types:
-- **ReadFile**: Read file contents (prefer max_lines: 200-300 for key files)
-- **ListDir**: List directory contents (recursive: true for deep analysis)
-- **EditFile**: Create/modify files (requires user confirmation)
-- **RunShell**: Execute commands (requires user confirmation)
+- **READ**: Read file contents (🔧 READ filename.go)
+- **LIST**: List directory contents (🔧 LIST . recursive)
+- **EDIT**: Create/modify files (🔧 EDIT filename.go → changes)
+- **RUN**: Execute commands (🔧 RUN command)
 
 ### Example Response:
 OBJECTIVE: Understand this Go project's architecture and key components
 
-` + "```json" + `
-{"type": "ReadFile", "path": "README.md", "max_lines": 300}
-` + "```" + `
+🔧 READ README.md (max: 300 lines)
 
 Set your objective and begin exploration immediately.`
 }
@@ -254,20 +250,18 @@ Continue pursuing your objective with ABSOLUTELY MINIMAL output:
 - Think internally about what you learned
 - Continue systematically until objective complete
 
-### 🚨 CRITICAL: Task-Only Response Format (JSON code blocks REQUIRED):
+### 🔧 CRITICAL: Task-Only Response Format:
 
-❌ **WRONG** - This will NOT be detected:
-{"type": "ReadFile", "path": "main.go"}
+✅ **CORRECT** - Natural language format:
+🔧 READ main.go (max: 200 lines)
 
-✅ **CORRECT** - This WILL be detected:
-` + "```json" + `
-{"type": "ReadFile", "path": "main.go", "max_lines": 200}
-` + "```" + `
+✅ **Also supported** - Simple format:
+READ main.go
 
 ### When Objective Complete:
 Signal with: **OBJECTIVE_COMPLETE:** followed by comprehensive analysis
 
-**Remember: TASK IN CODE BLOCKS ONLY - No other text during suppressed phase.**`
+**Remember: TASK COMMANDS ONLY - No other text during suppressed phase.**`
 }
 
 // createSynthesisPrompt creates the final synthesis prompt
