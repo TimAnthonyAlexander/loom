@@ -34,11 +34,21 @@ func CreateAdapter(modelStr, apiKey, baseURL string) (LLMAdapter, error) {
 		}
 		return NewOpenAIAdapter(config), nil
 
+	case "claude":
+		if config.APIKey == "" {
+			// Try to get from environment
+			config.APIKey = os.Getenv("ANTHROPIC_API_KEY")
+		}
+		if config.APIKey == "" {
+			return nil, fmt.Errorf("Claude API key not provided (set ANTHROPIC_API_KEY environment variable or configure via loom config)")
+		}
+		return NewClaudeAdapter(config), nil
+
 	case "ollama":
 		return NewOllamaAdapter(config), nil
 
 	default:
-		return nil, fmt.Errorf("unsupported LLM provider: %s (supported: openai, ollama)", provider)
+		return nil, fmt.Errorf("unsupported LLM provider: %s (supported: openai, claude, ollama)", provider)
 	}
 }
 

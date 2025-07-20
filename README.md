@@ -12,7 +12,7 @@ A sophisticated terminal-based AI coding assistant written in Go that provides a
 ## Core Capabilities
 
 ### Advanced AI Integration
-- **Multi-LLM Support** — OpenAI (GPT-4o, GPT-4.1) and Ollama (local models)
+- **Multi-LLM Support** — OpenAI (GPT-4o, GPT-4.1), Claude (Sonnet 3.5, Opus 4), and Ollama (local models)
 - **Project-Aware Intelligence** — Automatically analyzes project conventions and coding standards  
 - **Autonomous Exploration** — Comprehensive project analysis without requiring explicit prompts
 - **Streaming Responses** — Real-time response streaming for immediate feedback
@@ -101,6 +101,22 @@ export OPENAI_API_KEY="your-api-key-here"
 **Available OpenAI Models:**
 - `openai:o3` (recommended)
 - `openai:gpt-4.1` (cheaper)
+
+### Claude Configuration
+```bash
+# Set API key
+export ANTHROPIC_API_KEY="your-api-key-here"
+# OR configure via loom
+./loom config set api_key "your-api-key-here"
+
+# Configure model
+./loom config set model "claude:claude-3-5-sonnet-20241022"
+```
+
+**Available Claude Models:**
+- `claude:claude-3-5-sonnet-20241022` (balanced)
+- `claude:claude-3-5-haiku-20241022` (fast)
+- `claude:claude-opus-4-20250514` (most capable)
 
 ### Ollama Setup (Local Models)
 ```bash
@@ -292,6 +308,8 @@ For file modifications:
 
 # Set configuration values
 ./loom config set model "openai:gpt-4o"
+# OR: ./loom config set model "claude:claude-3-5-sonnet-20241022"
+# OR: ./loom config set model "ollama:codellama"
 ./loom config set enable_shell true
 ./loom config set max_context_tokens 8000
 
@@ -555,6 +573,6 @@ I am not expecting anyone to contribute as I started this as a little project ju
 
 ## Acknowledgments
 
-Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea) for the terminal interface, [fsnotify](https://github.com/fsnotify/fsnotify) for efficient file watching, [Cobra](https://github.com/spf13/cobra) for CLI command structure, and OpenAI and Ollama for LLM integration.
+Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea) for the terminal interface, [fsnotify](https://github.com/fsnotify/fsnotify) for efficient file watching, [Cobra](https://github.com/spf13/cobra) for CLI command structure, and OpenAI, Claude, and Ollama for LLM integration.
 
 *Tim Anthony Alexander, 2025.*
