@@ -298,8 +298,8 @@ func parseEditContext(task *Task, description string) {
 	// Pattern: "replace all occurrences of X with Y" or "replace all X with Y"
 	replaceAllPattern := regexp.MustCompile(`(?i)replace\s+all\s+(?:occurrences\s+of\s+)?["']?([^"']+?)["']?\s+with\s+["']?([^"']+?)["']?$`)
 	if matches := replaceAllPattern.FindStringSubmatch(description); len(matches) > 2 {
-		task.StartContext = strings.TrimSpace(matches[1])  // What to find
-		task.EndContext = strings.TrimSpace(matches[2])    // What to replace with
+		task.StartContext = strings.TrimSpace(matches[1]) // What to find
+		task.EndContext = strings.TrimSpace(matches[2])   // What to replace with
 		task.InsertMode = "replace_all"
 		return
 	}
@@ -307,8 +307,8 @@ func parseEditContext(task *Task, description string) {
 	// Pattern: "find and replace X with Y" or "find X and replace with Y"
 	findReplacePattern := regexp.MustCompile(`(?i)(?:find\s+(?:and\s+)?replace|find)\s+["']?([^"']+?)["']?\s+(?:and\s+replace\s+)?with\s+["']?([^"']+?)["']?$`)
 	if matches := findReplacePattern.FindStringSubmatch(description); len(matches) > 2 {
-		task.StartContext = strings.TrimSpace(matches[1])  // What to find
-		task.EndContext = strings.TrimSpace(matches[2])    // What to replace with  
+		task.StartContext = strings.TrimSpace(matches[1]) // What to find
+		task.EndContext = strings.TrimSpace(matches[2])   // What to replace with
 		task.InsertMode = "replace_all"
 		return
 	}

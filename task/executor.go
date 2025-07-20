@@ -273,7 +273,7 @@ func (e *Executor) executeEditFile(task *Task) *TaskResponse {
 			// Convert diff-formatted content to proper diff and apply it
 			return e.applyDiffFormattedContent(task, fullPath)
 		}
-		
+
 		// Check if this is a targeted edit with context
 		if task.StartContext != "" || task.InsertMode != "" {
 			return e.applyTargetedEdit(task, fullPath)
@@ -285,7 +285,7 @@ func (e *Executor) executeEditFile(task *Task) *TaskResponse {
 		if task.InsertMode == "replace_all" && task.StartContext != "" && task.EndContext != "" {
 			return e.applyTargetedEdit(task, fullPath)
 		}
-		
+
 		// Handle natural language edit with description but no content
 		response.Error = fmt.Sprintf("Edit task has intent '%s' but no actual content provided. Please provide the file content in a code block or specify the exact changes.", task.Intent)
 		return response
@@ -1052,7 +1052,7 @@ func (e *Executor) isDiffFormattedContent(content string) bool {
 	lines := strings.Split(content, "\n")
 	diffLineCount := 0
 	totalLines := len(lines)
-	
+
 	// Count lines that start with - or +
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
@@ -1060,7 +1060,7 @@ func (e *Executor) isDiffFormattedContent(content string) bool {
 			diffLineCount++
 		}
 	}
-	
+
 	// If more than 20% of lines look like diff format, treat it as diff
 	return totalLines > 0 && float64(diffLineCount)/float64(totalLines) > 0.2
 }
@@ -1107,12 +1107,12 @@ func (e *Executor) applyDiffFormattedContent(task *Task, fullPath string) *TaskR
 // parseDiffFormattedContent converts diff-formatted content to final content
 func (e *Executor) parseDiffFormattedContent(diffContent string, originalContent string) (string, error) {
 	lines := strings.Split(diffContent, "\n")
-	
+
 	var result []string
-	
+
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		
+
 		if strings.HasPrefix(trimmed, "+") {
 			// This is a line to add - remove the + prefix and preserve spacing
 			newLine := strings.TrimPrefix(trimmed, "+")
@@ -1128,6 +1128,6 @@ func (e *Executor) parseDiffFormattedContent(diffContent string, originalContent
 			result = append(result, line)
 		}
 	}
-	
+
 	return strings.Join(result, "\n"), nil
 }

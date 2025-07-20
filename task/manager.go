@@ -74,7 +74,7 @@ func (m *Manager) HandleLLMResponse(llmResponse string, eventChan chan<- TaskExe
 	for i, task := range execution.Tasks {
 		// Create a copy of the task to avoid loop variable capture issues
 		currentTask := task
-		
+
 		// Send task started event
 		eventChan <- TaskExecutionEvent{
 			Type:      "task_started",

@@ -128,7 +128,7 @@ func TestReplaceContentBug(t *testing.T) {
 func TestDiffContentInContentField(t *testing.T) {
 	// This test reproduces the exact issue: LLM provides diff-formatted content
 	// in the content field instead of either final content or using the diff field
-	
+
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "loom_executor_test")
 	if err != nil {
@@ -181,7 +181,7 @@ func TestDiffContentInContentField(t *testing.T) {
 	}
 
 	actualContentStr := string(actualContent)
-	
+
 	// Verify the file does NOT contain diff syntax
 	if strings.Contains(actualContentStr, "- #") || strings.Contains(actualContentStr, "+ #") {
 		t.Errorf("BUG STILL EXISTS: File contains diff syntax:\n%s", actualContentStr)
@@ -197,7 +197,7 @@ func TestDiffContentInContentField(t *testing.T) {
 
 func TestReplaceAllOccurrences(t *testing.T) {
 	// Test the new replace_all functionality for global find-and-replace
-	
+
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "loom_executor_test")
 	if err != nil {
@@ -279,9 +279,9 @@ Welcome to loom!`
 
 			// Create a replace_all task
 			task := &Task{
-				Type:    TaskTypeEditFile,
-				Path:    "README.md",
-				Intent:  tc.description,
+				Type:   TaskTypeEditFile,
+				Path:   "README.md",
+				Intent: tc.description,
 			}
 
 			// Parse the edit context
@@ -349,4 +349,4 @@ Welcome to loom!`
 			t.Logf("SUCCESS: Replaced %d occurrences of '%s' with '%s'", replacementsMade, tc.findText, tc.replaceText)
 		})
 	}
-} 
+}
