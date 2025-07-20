@@ -14,6 +14,12 @@ import (
 	"time"
 )
 
+// Constants for text truncation limits
+const (
+	MaxActionDescriptionLength = 40 // Maximum length for action descriptions in display
+	MaxCommandLength           = 50 // Maximum length for commands in display
+)
+
 // TaskAuditEntry represents a task execution in the audit trail
 type TaskAuditEntry struct {
 	TaskID      string    `json:"task_id"`
@@ -521,8 +527,8 @@ func formatNaturalLanguageTaskDescription(taskType, args string) string {
 				}
 				action := strings.TrimSpace(parts[1])
 				// Truncate long descriptions for display
-				if len(action) > 40 {
-					action = action[:37] + "..."
+				if len(action) > MaxActionDescriptionLength {
+					action = action[:MaxActionDescriptionLength-3] + "..."
 				}
 				return fmt.Sprintf("✏️ Editing %s → %s", filename, action)
 			}
@@ -558,8 +564,8 @@ func formatNaturalLanguageTaskDescription(taskType, args string) string {
 			command = strings.Split(command, "(timeout:")[0]
 		}
 		command = strings.TrimSpace(command)
-		if len(command) > 50 {
-			command = command[:47] + "..."
+		if len(command) > MaxCommandLength {
+			command = command[:MaxCommandLength-3] + "..."
 		}
 		return "⚡ Running command: " + command
 

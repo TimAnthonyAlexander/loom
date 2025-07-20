@@ -5,8 +5,14 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-	"strconv"
+	"strconv" // Used for parsing integers in natural language task commands
 	"strings"
+)
+
+// Default values for task parameters
+const (
+	DefaultMaxLines = 200 // Default maximum lines to read from a file
+	DefaultTimeout  = 30  // Default timeout in seconds for shell commands
 )
 
 // Global debug flag for task parsing - can be enabled with environment variable
@@ -85,6 +91,8 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 
 	lines := strings.Split(llmResponse, "\n")
 	var tasks []Task
+	// Use map for O(1) duplicate detection instead of O(n) linear search
+	seenTasks := make(map[string]bool)
 
 	// Look for task indicators with emoji prefixes
 	taskPattern := regexp.MustCompile(`^🔧\s+(READ|EDIT|LIST|RUN)\s+(.+)`)
@@ -109,9 +117,14 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 					}
 				}
 
-				tasks = append(tasks, *task)
-				if debugTaskParsing {
-					fmt.Printf("DEBUG: Parsed natural language task - Type: %s, Path: %s\n", task.Type, task.Path)
+				// Create unique key for duplicate detection
+				taskKey := fmt.Sprintf("%s:%s", task.Type, task.Path)
+				if !seenTasks[taskKey] {
+					seenTasks[taskKey] = true
+					tasks = append(tasks, *task)
+					if debugTaskParsing {
+						fmt.Printf("DEBUG: Parsed natural language task - Type: %s, Path: %s\n", task.Type, task.Path)
+					}
 				}
 			}
 		}
@@ -130,15 +143,9 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 
 			task := parseNaturalLanguageTask(taskType, taskArgs)
 			if task != nil {
-				// Avoid duplicates
-				duplicate := false
-				for _, existingTask := range tasks {
-					if existingTask.Type == task.Type && existingTask.Path == task.Path {
-						duplicate = true
-						break
-					}
-				}
-				if !duplicate {
+				// Create unique key for duplicate detection
+				taskKey := fmt.Sprintf("%s:%s", task.Type, task.Path)
+				if !seenTasks[taskKey] {
 					// For EDIT tasks, look for content in subsequent code blocks
 					if task.Type == TaskTypeEditFile && task.Content == "" {
 						if content := extractContentFromCodeBlock(lines, i+1); content != "" {
@@ -149,6 +156,7 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 						}
 					}
 
+					seenTasks[taskKey] = true
 					tasks = append(tasks, *task)
 					if debugTaskParsing {
 						fmt.Printf("DEBUG: Parsed simple natural language task - Type: %s, Path: %s\n", task.Type, task.Path)
@@ -246,7 +254,7 @@ func parseReadTask(args string) *Task {
 
 	// Set default max lines if not specified
 	if task.MaxLines == 0 && task.StartLine == 0 && task.EndLine == 0 {
-		task.MaxLines = 200
+		task.MaxLines = DefaultMaxLines
 	}
 
 	return task
@@ -314,7 +322,7 @@ func parseRunTask(args string) *Task {
 
 	// Set default timeout
 	if task.Timeout == 0 {
-		task.Timeout = 30
+		task.Timeout = DefaultTimeout
 	}
 
 	return task

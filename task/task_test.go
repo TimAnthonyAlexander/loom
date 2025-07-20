@@ -632,8 +632,8 @@ This will give us a complete overview.`
 	if task3.Path != "main.go" {
 		t.Errorf("Expected main.go, got %s", task3.Path)
 	}
-	if task3.MaxLines != 200 { // Default value
-		t.Errorf("Expected 200 (default), got %d", task3.MaxLines)
+	if task3.MaxLines != DefaultMaxLines { // Default value
+		t.Errorf("Expected %d (default), got %d", DefaultMaxLines, task3.MaxLines)
 	}
 }
 

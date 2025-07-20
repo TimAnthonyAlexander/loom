@@ -126,7 +126,7 @@ func (e *Executor) executeReadFile(task *Task) *TaskResponse {
 		return response
 	}
 	if maxLines <= 0 {
-		maxLines = 200 // Default limit
+		maxLines = DefaultMaxLines // Default limit
 	}
 
 	// Calculate effective reading window
