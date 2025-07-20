@@ -344,13 +344,13 @@ func (s *Session) filterJSONTaskBlocks(content string) string {
 	lines := strings.Split(content, "\n")
 	var filteredLines []string
 	var taskDescriptions []string
-	
+
 	taskPattern := regexp.MustCompile(`^🔧\s+(READ|EDIT|LIST|RUN)\s+(.+)`)
 	simplePattern := regexp.MustCompile(`(?i)^(read|edit|list|run)\s+(.+)`)
-	
+
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		
+
 		// Check for natural language tasks
 		if matches := taskPattern.FindStringSubmatch(trimmed); len(matches) == 3 {
 			taskType := strings.ToUpper(matches[1])
@@ -359,7 +359,7 @@ func (s *Session) filterJSONTaskBlocks(content string) string {
 			taskDescriptions = append(taskDescriptions, desc)
 			continue // Skip this line in output
 		}
-		
+
 		if matches := simplePattern.FindStringSubmatch(trimmed); len(matches) == 3 {
 			taskType := strings.ToUpper(matches[1])
 			taskArgs := strings.TrimSpace(matches[2])
@@ -367,10 +367,10 @@ func (s *Session) filterJSONTaskBlocks(content string) string {
 			taskDescriptions = append(taskDescriptions, desc)
 			continue // Skip this line in output
 		}
-		
+
 		filteredLines = append(filteredLines, line)
 	}
-	
+
 	// If we found natural language tasks, create summary
 	if len(taskDescriptions) > 0 {
 		taskSummary := ""
@@ -379,7 +379,7 @@ func (s *Session) filterJSONTaskBlocks(content string) string {
 		} else {
 			taskSummary = fmt.Sprintf("🔧 Executing %d tasks:\n%s", len(taskDescriptions), strings.Join(taskDescriptions, "\n"))
 		}
-		
+
 		// Add task summary to filtered content
 		filteredContent := strings.Join(filteredLines, "\n")
 		if strings.TrimSpace(filteredContent) == "" {
@@ -387,10 +387,10 @@ func (s *Session) filterJSONTaskBlocks(content string) string {
 		}
 		return filteredContent + "\n\n" + taskSummary
 	}
-	
+
 	// Fall back to JSON block filtering for backward compatibility
 	content = strings.Join(filteredLines, "\n")
-	
+
 	// Find JSON code blocks using regex
 	re := regexp.MustCompile("(?s)```(?:json)?\n?(.*?)\n?```")
 	matches := re.FindAllStringSubmatch(content, -1)
@@ -509,7 +509,7 @@ func formatNaturalLanguageTaskDescription(taskType, args string) string {
 			return "📖 Reading file: " + filename
 		}
 		return "📖 Reading file"
-		
+
 	case "EDIT":
 		// Check for arrow notation
 		if strings.Contains(args, "→") {
@@ -527,7 +527,7 @@ func formatNaturalLanguageTaskDescription(taskType, args string) string {
 				return fmt.Sprintf("✏️ Editing %s → %s", filename, action)
 			}
 		}
-		
+
 		// Simple filename
 		parts := strings.Fields(args)
 		if len(parts) > 0 {
@@ -538,7 +538,7 @@ func formatNaturalLanguageTaskDescription(taskType, args string) string {
 			return "✏️ Editing file: " + filename
 		}
 		return "✏️ Editing file"
-		
+
 	case "LIST":
 		dirName := strings.Fields(args)[0]
 		if dirName == "." {
@@ -550,7 +550,7 @@ func formatNaturalLanguageTaskDescription(taskType, args string) string {
 			return "📁 Listing directory: " + dirName + " (recursive)"
 		}
 		return "📁 Listing directory: " + dirName
-		
+
 	case "RUN":
 		// Extract command, limit length for display
 		command := args
@@ -562,7 +562,7 @@ func formatNaturalLanguageTaskDescription(taskType, args string) string {
 			command = command[:47] + "..."
 		}
 		return "⚡ Running command: " + command
-		
+
 	default:
 		return "🔧 Executing task: " + taskType
 	}

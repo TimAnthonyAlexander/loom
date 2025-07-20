@@ -808,7 +808,7 @@ func TestParseNaturalLanguageEditWithCodeBlock(t *testing.T) {
 	if task.Intent != "create a sample JSON file" {
 		t.Errorf("Expected intent 'create a sample JSON file', got %s", task.Intent)
 	}
-	
+
 	expectedContent := `{
   "name": "test",
   "version": "1.0.0",
