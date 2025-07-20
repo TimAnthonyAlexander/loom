@@ -67,6 +67,99 @@ func TestParseTasksNoJSON(t *testing.T) {
 	}
 }
 
+func TestParseTasksFallbackRawJSON(t *testing.T) {
+	// Test raw JSON without backticks (fallback parsing)
+	llmResponse := "OBJECTIVE: Read the main file to understand the project structure\n\n" +
+		"{\"type\": \"ReadFile\", \"path\": \"main.go\", \"max_lines\": 200}\n\n" +
+		"Starting exploration now."
+
+	taskList, err := ParseTasks(llmResponse)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if taskList == nil {
+		t.Fatal("Expected task list, got nil")
+	}
+
+	if len(taskList.Tasks) != 1 {
+		t.Fatalf("Expected 1 task, got %d", len(taskList.Tasks))
+	}
+
+	// Test the parsed task
+	task := taskList.Tasks[0]
+	if task.Type != TaskTypeReadFile {
+		t.Errorf("Expected ReadFile, got %s", task.Type)
+	}
+	if task.Path != "main.go" {
+		t.Errorf("Expected main.go, got %s", task.Path)
+	}
+	if task.MaxLines != 200 {
+		t.Errorf("Expected 200, got %d", task.MaxLines)
+	}
+}
+
+func TestParseTasksFallbackRawJSONMultiple(t *testing.T) {
+	// Test multiple raw JSON lines (should pick the first valid one)
+	llmResponse := "OBJECTIVE: Understand the project structure\n\n" +
+		"This is some explanatory text.\n" +
+		"{\"type\": \"ListDir\", \"path\": \".\", \"recursive\": false}\n" +
+		"Some more text.\n" +
+		"{\"type\": \"ReadFile\", \"path\": \"README.md\", \"max_lines\": 100}\n" +
+		"End of response."
+
+	taskList, err := ParseTasks(llmResponse)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if taskList == nil {
+		t.Fatal("Expected task list, got nil")
+	}
+
+	if len(taskList.Tasks) != 1 {
+		t.Fatalf("Expected 1 task (first valid one), got %d", len(taskList.Tasks))
+	}
+
+	// Should pick the first valid task
+	task := taskList.Tasks[0]
+	if task.Type != TaskTypeListDir {
+		t.Errorf("Expected ListDir, got %s", task.Type)
+	}
+	if task.Path != "." {
+		t.Errorf("Expected '.', got %s", task.Path)
+	}
+}
+
+func TestParseTasksPreferBackticksOverRaw(t *testing.T) {
+	// Test that backtick-wrapped JSON is preferred over raw JSON
+	llmResponse := "I'll start by reading the file.\n\n" +
+		"{\"type\": \"ReadFile\", \"path\": \"wrong.go\", \"max_lines\": 50}\n\n" +
+		"```json\n" +
+		"{\"type\": \"ReadFile\", \"path\": \"correct.go\", \"max_lines\": 100}\n" +
+		"```\n\n" +
+		"This should use the backtick version."
+
+	taskList, err := ParseTasks(llmResponse)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if taskList == nil {
+		t.Fatal("Expected task list, got nil")
+	}
+
+	if len(taskList.Tasks) != 1 {
+		t.Fatalf("Expected 1 task, got %d", len(taskList.Tasks))
+	}
+
+	// Should prefer the backtick-wrapped version
+	task := taskList.Tasks[0]
+	if task.Path != "correct.go" {
+		t.Errorf("Expected correct.go (from backticks), got %s", task.Path)
+	}
+}
+
 func TestParseTasksInvalidJSON(t *testing.T) {
 	// Test response with malformed JSON
 	llmResponse := "I'll help you with that.\n\n" +

@@ -127,11 +127,40 @@ func (pe *PromptEnhancer) CreateEnhancedSystemPrompt(enableShell bool) Message {
 
 **ALWAYS USE TASKS FOR FILE OPERATIONS** - When you need to understand code or make changes, use JSON task blocks immediately. Prioritize doing over explaining.
 
+## 🚨 MANDATORY JSON FORMAT REQUIREMENT 🚨
+
+**CRITICAL: ALL TASKS MUST BE WRAPPED IN JSON CODE BLOCKS**
+
+❌ **WRONG** - This will NOT be detected:
+{"type": "ReadFile", "path": "README.md"}
+
+✅ **CORRECT** - This WILL be detected:
+` + "```" + `json
+{"type": "ReadFile", "path": "README.md"}
+` + "```" + `
+
+**NEVER output raw JSON without the triple backticks and json language tag!**
+
 ### MANDATORY Task Rules:
 1. **START with ONE TASK** - begin with the most important file or directory
 2. **ANALYZE RESULTS** - understand what you learned before proceeding
 3. **CONTINUE SEQUENTIALLY** - decide the next logical step based on findings
 4. **SIGNAL COMPLETION** - when ready, provide comprehensive synthesis
+
+### Task Execution Format Examples:
+
+**Single Task (use this format 90%% of the time):**
+` + "```" + `json
+{"type": "ReadFile", "path": "README.md", "max_lines": 300}
+` + "```" + `
+
+**Multiple Tasks (use sparingly):**
+` + "```" + `json
+{"tasks": [
+  {"type": "ReadFile", "path": "README.md", "max_lines": 300},
+  {"type": "ListDir", "path": ".", "recursive": false}
+]}
+` + "```" + `
 
 ### Systematic Codebase Analysis Protocol
 
@@ -139,14 +168,14 @@ When exploring a codebase, follow this autonomous approach:
 
 #### Sequential Exploration Flow:
 1. **Start with README** to understand project purpose and structure
-   `+"`"+"`"+"`"+`json
-   {"type": "ReadFile", "path": "README.md", "max_lines": 300}
-   `+"`"+"`"+"`"+`
+` + "```" + `json
+{"type": "ReadFile", "path": "README.md", "max_lines": 300}
+` + "```" + `
 
 2. **Analyze main entry point** based on project type discovered
-   `+"`"+"`"+"`"+`json
-   {"type": "ReadFile", "path": "main.go", "max_lines": 200}
-   `+"`"+"`"+"`"+`
+` + "```" + `json
+{"type": "ReadFile", "path": "main.go", "max_lines": 200}
+` + "```" + `
 
 3. **Continue systematically** - choose next most important file/directory
 4. **Signal completion** when you have comprehensive understanding
@@ -157,39 +186,22 @@ When exploring a codebase, follow this autonomous approach:
 - Build understanding progressively
 - Signal completion with: **EXPLORATION_COMPLETE:**
 
-### Task Execution Format:
-
-**CRITICAL**: Use JSON code blocks for tasks. Always start with the most important file.
-
-**Task Format Options:**
-- **Single Task**: Use direct task object for one task
-  `+"`"+"`"+"`"+`json
-  {"type": "ReadFile", "path": "README.md", "max_lines": 300}
-  `+"`"+"`"+"`"+`
-- **Multiple Tasks**: Use `+"`"+`{"tasks": [...]}`+"`"+` array format
-  `+"`"+"`"+"`"+`json
-  {"tasks": [
-    {"type": "ReadFile", "path": "README.md", "max_lines": 300},
-    {"type": "ListDir", "path": ".", "recursive": false}
-  ]}
-  `+"`"+"`"+"`"+`
-
 **SEQUENTIAL EXPLORATION Examples:**
 
 **Starting exploration:**
-`+"`"+"`"+"`"+`json
+` + "```" + `json
 {"type": "ReadFile", "path": "README.md", "max_lines": 300}
-`+"`"+"`"+"`"+`
+` + "```" + `
 
 **Following up based on results:**
-`+"`"+"`"+"`"+`json
+` + "```" + `json
 {"type": "ListDir", "path": ".", "recursive": false}
-`+"`"+"`"+"`"+`
+` + "```" + `
 
 **Reading specific implementation:**
-`+"`"+"`"+"`"+`json
+` + "```" + `json
 {"type": "ReadFile", "path": "cmd/root.go", "max_lines": 200}
-`+"`"+"`"+"`"+`
+` + "```" + `
 
 ### Task Types:
 1. **ReadFile**: Read file contents with smart continuation support
@@ -220,7 +232,16 @@ When exploring a codebase, follow this autonomous approach:
    - command: Shell command (required)
    - timeout: Timeout in seconds (default: 30)
 
+### ⚠️ FORMATTING WARNING ⚠️
+**If you output JSON without proper code blocks, your tasks will be IGNORED!**
+- Raw JSON like ` + "`" + `{"type": "ReadFile"}` + "`" + ` will NOT execute
+- Only JSON in code blocks like ` + "`" + ` ` + "```" + `json\\n{"type": "ReadFile"}\\n` + "```" + ` ` + "`" + ` will execute
+- Missing the ` + "`" + `json` + "`" + ` language tag will also cause failures
+
 ## Response Workflow:
+
+### 🚨 REMINDER: ALL TASKS MUST USE JSON CODE BLOCKS 🚨
+**Format: ` + "```" + `json followed by task JSON followed by ` + "```" + `**
 
 ### For Project Exploration Requests:
 1. **START with single most important task** (usually README.md)

@@ -211,8 +211,17 @@ Analyze the user's request and establish a clear exploration objective:
 2. **Begin First Task**: Immediately provide the first logical task
 3. **Stay Focused**: Keep the objective specific and achievable
 
-### Task Format (JSON only):
+### 🚨 CRITICAL: Task Format (JSON code blocks REQUIRED):
+
+❌ **WRONG** - This will NOT be detected:
+{"type": "ReadFile", "path": "README.md"}
+
+✅ **CORRECT** - This WILL be detected:
+` + "```json" + `
 {"type": "ReadFile", "path": "README.md", "max_lines": 300}
+` + "```" + `
+
+**NEVER output raw JSON without triple backticks and json language tag!**
 
 ### Available Task Types:
 - **ReadFile**: Read file contents (prefer max_lines: 200-300 for key files)
@@ -223,7 +232,9 @@ Analyze the user's request and establish a clear exploration objective:
 ### Example Response:
 OBJECTIVE: Understand this Go project's architecture and key components
 
+` + "```json" + `
 {"type": "ReadFile", "path": "README.md", "max_lines": 300}
+` + "```" + `
 
 Set your objective and begin exploration immediately.`
 }
@@ -237,19 +248,26 @@ func (stm *SequentialTaskManager) createSuppressedExplorationPrompt() string {
 Continue pursuing your objective with ABSOLUTELY MINIMAL output:
 
 **CRITICAL: OUTPUT ONLY TASKS**
-- Provide ONLY the next JSON task
+- Provide ONLY the next JSON task in code blocks
 - NO text, explanations, or analysis
 - NO status messages or commentary
 - Think internally about what you learned
 - Continue systematically until objective complete
 
-### Task-Only Response Format:
+### 🚨 CRITICAL: Task-Only Response Format (JSON code blocks REQUIRED):
+
+❌ **WRONG** - This will NOT be detected:
+{"type": "ReadFile", "path": "main.go"}
+
+✅ **CORRECT** - This WILL be detected:
+` + "```json" + `
 {"type": "ReadFile", "path": "main.go", "max_lines": 200}
+` + "```" + `
 
 ### When Objective Complete:
 Signal with: **OBJECTIVE_COMPLETE:** followed by comprehensive analysis
 
-**Remember: TASK ONLY - No other text during suppressed phase.**`
+**Remember: TASK IN CODE BLOCKS ONLY - No other text during suppressed phase.**`
 }
 
 // createSynthesisPrompt creates the final synthesis prompt
@@ -325,11 +343,14 @@ func (stm *SequentialTaskManager) ParseSingleTask(llmResponse string) (*Task, st
 
 // parseRawTaskJSON attempts to parse a raw JSON task object from the response
 func (stm *SequentialTaskManager) parseRawTaskJSON(response string) (*Task, string, error) {
-	// DISABLED: This function was too aggressive and would parse any JSON content as tasks
-	// including file content like {"message": "hello"} which is meant to be file data, not task instructions.
-	//
-	// Sequential manager should only parse tasks from proper JSON code blocks,
-	// so we return nil to fall back to the standard ParseTasks function.
+	// Use the enhanced fallback parsing from ParseTasks which properly validates task types
+	if result := tryFallbackJSONParsing(response); result != nil && len(result.Tasks) > 0 {
+		// Extract non-task content
+		content := stm.extractNonTaskContent(response)
+		return &result.Tasks[0], content, nil
+	}
+	
+	// Return nil to fall back to the standard ParseTasks function
 	return nil, "", nil
 }
 
