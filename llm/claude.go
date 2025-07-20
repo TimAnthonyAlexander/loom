@@ -292,4 +292,5 @@ func parseClaudeModel(modelStr string) string {
 	}
 	// Fallback - assume it's just the model name
 	return modelStr
-} 
+}
+
