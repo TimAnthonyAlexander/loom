@@ -958,9 +958,8 @@ func (m *model) sendToLLMWithTasks(userInput string) tea.Cmd {
 		// Start streaming in a goroutine
 		go func() {
 			defer cancel()
-			if err := m.llmAdapter.Stream(ctx, messages, chunks); err != nil {
-				chunks <- llm.StreamChunk{Error: err}
-			}
+			// Stream method handles its own error reporting via chunks
+			m.llmAdapter.Stream(ctx, messages, chunks)
 		}()
 
 		return StreamStartMsg{chunks: chunks}
@@ -982,9 +981,8 @@ func (m *model) continueLLMAfterTasks() tea.Cmd {
 		// Start streaming in a goroutine
 		go func() {
 			defer cancel()
-			if err := m.llmAdapter.Stream(ctx, messages, chunks); err != nil {
-				chunks <- llm.StreamChunk{Error: err}
-			}
+			// Stream method handles its own error reporting via chunks
+			m.llmAdapter.Stream(ctx, messages, chunks)
 		}()
 
 		return StreamStartMsg{chunks: chunks}
