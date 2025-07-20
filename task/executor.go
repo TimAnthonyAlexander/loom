@@ -19,8 +19,8 @@ import (
 
 // Constants for directory listing limits
 const (
-	MaxDirectoryListingFiles = 1000 // Maximum number of files to list
-	MaxDirectoryListingDepth = 10   // Maximum depth for recursive listing
+	MaxDirectoryListingFiles = 1000   // Maximum number of files to list
+	MaxDirectoryListingDepth = 10     // Maximum depth for recursive listing
 	MaxListingOutputSize     = 100000 // Maximum characters in listing output (~25k tokens)
 )
 
@@ -407,7 +407,7 @@ func (e *Executor) executeListDir(task *Task) *TaskResponse {
 
 	fileCount := 0
 	truncated := false
-	
+
 	if task.Recursive {
 		err = filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
@@ -431,7 +431,7 @@ func (e *Executor) executeListDir(task *Task) *TaskResponse {
 
 			// Get relative path from workspace root for gitignore checking
 			workspaceRelPath, _ := filepath.Rel(e.workspacePath, path)
-			
+
 			// Skip if matches gitignore patterns
 			if e.shouldSkipPath(workspaceRelPath, info.IsDir()) {
 				if info.IsDir() {
@@ -461,7 +461,7 @@ func (e *Executor) executeListDir(task *Task) *TaskResponse {
 			fileCount++
 			return nil
 		})
-		
+
 		// If error is our limit check, clear it
 		if err != nil && (strings.Contains(err.Error(), "limit reached") || strings.Contains(err.Error(), "output size limit")) {
 			err = nil
@@ -491,7 +491,7 @@ func (e *Executor) executeListDir(task *Task) *TaskResponse {
 			if task.Path == "." {
 				entryPath = entry.Name()
 			}
-			
+
 			// Skip if matches gitignore patterns
 			if e.shouldSkipPath(entryPath, entry.IsDir()) {
 				continue
@@ -510,7 +510,7 @@ func (e *Executor) executeListDir(task *Task) *TaskResponse {
 
 	// Add truncation notice if needed
 	if truncated {
-		output.WriteString(fmt.Sprintf("\n⚠️  Listing truncated at %d items (limits: %d files, %d chars, %d depth)\n", 
+		output.WriteString(fmt.Sprintf("\n⚠️  Listing truncated at %d items (limits: %d files, %d chars, %d depth)\n",
 			fileCount, MaxDirectoryListingFiles, MaxListingOutputSize, MaxDirectoryListingDepth))
 	}
 
@@ -525,12 +525,12 @@ func (e *Executor) executeListDir(task *Task) *TaskResponse {
 	} else {
 		statusMsg = fmt.Sprintf("Reading folder structure: %s (%d items", task.Path, fileCount)
 	}
-	
+
 	if truncated {
 		statusMsg += ", truncated"
 	}
 	statusMsg += ")"
-	
+
 	response.Output = statusMsg
 	return response
 }
@@ -539,7 +539,7 @@ func (e *Executor) executeListDir(task *Task) *TaskResponse {
 func (e *Executor) shouldSkipPath(relPath string, isDir bool) bool {
 	// Skip common directories that should never be listed
 	skipDirs := []string{".git", "node_modules", "vendor", ".loom", ".vscode", ".idea", "target", "dist", "__pycache__", ".next", ".nuxt", "build", "out"}
-	
+
 	if isDir {
 		dirName := filepath.Base(relPath)
 		for _, skip := range skipDirs {
@@ -547,12 +547,12 @@ func (e *Executor) shouldSkipPath(relPath string, isDir bool) bool {
 				return true
 			}
 		}
-		
+
 		// Check if directory path matches gitignore
 		if e.gitIgnore != nil && e.gitIgnore.MatchesPath(relPath) {
 			return true
 		}
-		
+
 		// Check directory path with trailing slash for gitignore
 		if e.gitIgnore != nil && e.gitIgnore.MatchesPath(relPath+"/") {
 			return true
@@ -562,7 +562,7 @@ func (e *Executor) shouldSkipPath(relPath string, isDir bool) bool {
 		if e.gitIgnore != nil && e.gitIgnore.MatchesPath(relPath) {
 			return true
 		}
-		
+
 		// Skip common temporary and build files
 		fileName := filepath.Base(relPath)
 		skipFiles := []string{".DS_Store", "Thumbs.db", "*.tmp", "*.log", "*.swp", "*.swo"}
@@ -572,7 +572,7 @@ func (e *Executor) shouldSkipPath(relPath string, isDir bool) bool {
 			}
 		}
 	}
-	
+
 	return false
 }
 
