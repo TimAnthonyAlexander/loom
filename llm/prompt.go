@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"encoding/json"
 	"fmt"
 	"loom/indexer"
 	"os"
@@ -22,6 +23,19 @@ type ProjectConventions struct {
 	BuildSystem          string   `json:"build_system"`
 	CodingStandards      []string `json:"coding_standards"`
 	BestPractices        []string `json:"best_practices"`
+}
+
+// ProjectRules represents user-defined project-specific rules
+type ProjectRules struct {
+	Rules []ProjectRule `json:"rules"`
+}
+
+// ProjectRule represents a single user-defined rule
+type ProjectRule struct {
+	ID          string    `json:"id"`
+	Text        string    `json:"text"`
+	CreatedAt   time.Time `json:"created_at"`
+	Description string    `json:"description,omitempty"`
 }
 
 // PromptEnhancer generates enhanced system prompts with project-specific context
@@ -208,12 +222,12 @@ When exploring a codebase, follow this autonomous approach:
    - EDIT filename.go
 
    **CRITICAL: For Edit Tasks, provide actual content in code blocks:**
-   
+
    Example format:
    🔧 EDIT filename.go → add error handling
-   
+
    Then provide a code block with the actual file content
-   
+
    **For Edit Tasks:**
    - ALWAYS provide the actual file content in a code block after the edit command
    - NEW FILES: Provide complete file content in code block
@@ -234,7 +248,7 @@ When exploring a codebase, follow this autonomous approach:
 ### ✅ SIMPLE TASK FORMAT ✅
 **Natural language tasks are much more reliable than JSON!**
 - Simply use: 🔧 READ filename.go
-- Or without emoji: READ filename.go  
+- Or without emoji: READ filename.go
 - Both formats work perfectly
 - No complicated syntax, quotes, or brackets needed
 
@@ -436,6 +450,14 @@ func (pe *PromptEnhancer) extractProjectGuidelines() string {
 	guidelines.WriteString("- **Analyze main entry points** to understand application flow\n")
 	guidelines.WriteString("- **Follow import dependencies** to build complete understanding\n")
 
+	// Add user-defined project rules
+	if rules, err := pe.LoadProjectRules(); err == nil && len(rules.Rules) > 0 {
+		guidelines.WriteString("\n### Project-Specific Rules:\n")
+		for _, rule := range rules.Rules {
+			guidelines.WriteString(fmt.Sprintf("- %s\n", rule.Text))
+		}
+	}
+
 	if guidelines.Len() == 0 {
 		guidelines.WriteString("- Follow established project patterns and maintain consistency through comprehensive analysis\n")
 	}
@@ -538,6 +560,87 @@ func (pe *PromptEnhancer) formatConventions() string {
 	formatted.WriteString("- **Understand the reasoning** behind established patterns\n")
 
 	return formatted.String()
+}
+
+// LoadProjectRules loads user-defined project rules from .loom/rules.json
+func (pe *PromptEnhancer) LoadProjectRules() (*ProjectRules, error) {
+	rulesPath := filepath.Join(pe.workspacePath, ".loom", "rules.json")
+
+	// Return empty rules if file doesn't exist
+	if _, err := os.Stat(rulesPath); os.IsNotExist(err) {
+		return &ProjectRules{Rules: []ProjectRule{}}, nil
+	}
+
+	data, err := os.ReadFile(rulesPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read rules file: %w", err)
+	}
+
+	var rules ProjectRules
+	if err := json.Unmarshal(data, &rules); err != nil {
+		return nil, fmt.Errorf("failed to parse rules file: %w", err)
+	}
+
+	return &rules, nil
+}
+
+// SaveProjectRules saves user-defined project rules to .loom/rules.json
+func (pe *PromptEnhancer) SaveProjectRules(rules *ProjectRules) error {
+	rulesPath := filepath.Join(pe.workspacePath, ".loom", "rules.json")
+
+	data, err := json.MarshalIndent(rules, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal rules: %w", err)
+	}
+
+	if err := os.WriteFile(rulesPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write rules file: %w", err)
+	}
+
+	return nil
+}
+
+// AddProjectRule adds a new user-defined rule to the project
+func (pe *PromptEnhancer) AddProjectRule(text, description string) error {
+	rules, err := pe.LoadProjectRules()
+	if err != nil {
+		return err
+	}
+
+	// Generate a simple ID based on current time
+	id := fmt.Sprintf("rule_%d", time.Now().Unix())
+
+	newRule := ProjectRule{
+		ID:          id,
+		Text:        text,
+		CreatedAt:   time.Now(),
+		Description: description,
+	}
+
+	rules.Rules = append(rules.Rules, newRule)
+	return pe.SaveProjectRules(rules)
+}
+
+// RemoveProjectRule removes a user-defined rule by ID
+func (pe *PromptEnhancer) RemoveProjectRule(id string) error {
+	rules, err := pe.LoadProjectRules()
+	if err != nil {
+		return err
+	}
+
+	for i, rule := range rules.Rules {
+		if rule.ID == id {
+			rules.Rules = append(rules.Rules[:i], rules.Rules[i+1:]...)
+			return pe.SaveProjectRules(rules)
+		}
+	}
+
+	return fmt.Errorf("rule with ID %s not found", id)
+}
+
+// ListProjectRules returns all user-defined project rules
+func (pe *PromptEnhancer) ListProjectRules() (*ProjectRules, error) {
+	return pe.LoadProjectRules()
 }
 
 // Helper methods
