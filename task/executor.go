@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"loom/indexer"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,19 +17,35 @@ import (
 	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
+// Constants for directory listing limits
+const (
+	MaxDirectoryListingFiles = 1000 // Maximum number of files to list
+	MaxDirectoryListingDepth = 10   // Maximum depth for recursive listing
+	MaxListingOutputSize     = 100000 // Maximum characters in listing output (~25k tokens)
+)
+
 // Executor handles task execution with security constraints
 type Executor struct {
 	workspacePath string
 	enableShell   bool
 	maxFileSize   int64
+	gitIgnore     *indexer.GitIgnore
 }
 
 // NewExecutor creates a new task executor
 func NewExecutor(workspacePath string, enableShell bool, maxFileSize int64) *Executor {
+	// Load gitignore patterns
+	gitIgnore, err := indexer.LoadGitIgnore(workspacePath)
+	if err != nil {
+		// Continue without .gitignore if it fails to load
+		gitIgnore = &indexer.GitIgnore{}
+	}
+
 	return &Executor{
 		workspacePath: workspacePath,
 		enableShell:   enableShell,
 		maxFileSize:   maxFileSize,
+		gitIgnore:     gitIgnore,
 	}
 }
 
@@ -362,7 +379,7 @@ func (e *Executor) ApplyEdit(task *Task) error {
 	return nil
 }
 
-// executeListDir lists files in a directory
+// executeListDir lists files in a directory with limits and gitignore support
 func (e *Executor) executeListDir(task *Task) *TaskResponse {
 	response := &TaskResponse{Task: *task}
 
@@ -389,22 +406,66 @@ func (e *Executor) executeListDir(task *Task) *TaskResponse {
 	output.WriteString(fmt.Sprintf("Directory listing for %s:\n\n", task.Path))
 
 	fileCount := 0
+	truncated := false
+	
 	if task.Recursive {
 		err = filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return nil // Skip errors
 			}
 
-			relPath, _ := filepath.Rel(e.workspacePath, path)
+			// Calculate depth relative to starting directory
+			relPath, _ := filepath.Rel(fullPath, path)
+			depth := strings.Count(relPath, string(filepath.Separator))
+			if relPath == "." {
+				depth = 0
+			}
+
+			// Check depth limit
+			if depth > MaxDirectoryListingDepth {
+				if info.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+
+			// Get relative path from workspace root for gitignore checking
+			workspaceRelPath, _ := filepath.Rel(e.workspacePath, path)
+			
+			// Skip if matches gitignore patterns
+			if e.shouldSkipPath(workspaceRelPath, info.IsDir()) {
+				if info.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+
+			// Check file count limit
+			if fileCount >= MaxDirectoryListingFiles {
+				truncated = true
+				return fmt.Errorf("limit reached") // Stop walking
+			}
+
+			// Check output size limit
+			if output.Len() >= MaxListingOutputSize {
+				truncated = true
+				return fmt.Errorf("output size limit reached")
+			}
+
 			if info.IsDir() {
-				output.WriteString(fmt.Sprintf("📁 %s/\n", relPath))
+				output.WriteString(fmt.Sprintf("📁 %s/\n", workspaceRelPath))
 			} else {
 				size := e.formatFileSize(info.Size())
-				output.WriteString(fmt.Sprintf("📄 %s (%s)\n", relPath, size))
+				output.WriteString(fmt.Sprintf("📄 %s (%s)\n", workspaceRelPath, size))
 			}
 			fileCount++
 			return nil
 		})
+		
+		// If error is our limit check, clear it
+		if err != nil && (strings.Contains(err.Error(), "limit reached") || strings.Contains(err.Error(), "output size limit")) {
+			err = nil
+		}
 	} else {
 		entries, err := os.ReadDir(fullPath)
 		if err != nil {
@@ -413,6 +474,29 @@ func (e *Executor) executeListDir(task *Task) *TaskResponse {
 		}
 
 		for _, entry := range entries {
+			// Check file count limit
+			if fileCount >= MaxDirectoryListingFiles {
+				truncated = true
+				break
+			}
+
+			// Check output size limit
+			if output.Len() >= MaxListingOutputSize {
+				truncated = true
+				break
+			}
+
+			// Get relative path for gitignore checking
+			entryPath := filepath.Join(task.Path, entry.Name())
+			if task.Path == "." {
+				entryPath = entry.Name()
+			}
+			
+			// Skip if matches gitignore patterns
+			if e.shouldSkipPath(entryPath, entry.IsDir()) {
+				continue
+			}
+
 			if entry.IsDir() {
 				output.WriteString(fmt.Sprintf("📁 %s/\n", entry.Name()))
 			} else {
@@ -424,17 +508,72 @@ func (e *Executor) executeListDir(task *Task) *TaskResponse {
 		}
 	}
 
+	// Add truncation notice if needed
+	if truncated {
+		output.WriteString(fmt.Sprintf("\n⚠️  Listing truncated at %d items (limits: %d files, %d chars, %d depth)\n", 
+			fileCount, MaxDirectoryListingFiles, MaxListingOutputSize, MaxDirectoryListingDepth))
+	}
+
 	// Store actual directory listing for LLM
 	response.ActualContent = output.String()
 
 	response.Success = true
-	// Show only status message to user, not the actual directory listing
+	// Show status message to user
+	statusMsg := ""
 	if task.Recursive {
-		response.Output = fmt.Sprintf("Reading folder structure: %s (recursive, %d items)", task.Path, fileCount)
+		statusMsg = fmt.Sprintf("Reading folder structure: %s (recursive, %d items", task.Path, fileCount)
 	} else {
-		response.Output = fmt.Sprintf("Reading folder structure: %s (%d items)", task.Path, fileCount)
+		statusMsg = fmt.Sprintf("Reading folder structure: %s (%d items", task.Path, fileCount)
 	}
+	
+	if truncated {
+		statusMsg += ", truncated"
+	}
+	statusMsg += ")"
+	
+	response.Output = statusMsg
 	return response
+}
+
+// shouldSkipPath checks if a path should be skipped based on gitignore patterns and common ignore rules
+func (e *Executor) shouldSkipPath(relPath string, isDir bool) bool {
+	// Skip common directories that should never be listed
+	skipDirs := []string{".git", "node_modules", "vendor", ".loom", ".vscode", ".idea", "target", "dist", "__pycache__", ".next", ".nuxt", "build", "out"}
+	
+	if isDir {
+		dirName := filepath.Base(relPath)
+		for _, skip := range skipDirs {
+			if dirName == skip {
+				return true
+			}
+		}
+		
+		// Check if directory path matches gitignore
+		if e.gitIgnore != nil && e.gitIgnore.MatchesPath(relPath) {
+			return true
+		}
+		
+		// Check directory path with trailing slash for gitignore
+		if e.gitIgnore != nil && e.gitIgnore.MatchesPath(relPath+"/") {
+			return true
+		}
+	} else {
+		// For files, check gitignore patterns
+		if e.gitIgnore != nil && e.gitIgnore.MatchesPath(relPath) {
+			return true
+		}
+		
+		// Skip common temporary and build files
+		fileName := filepath.Base(relPath)
+		skipFiles := []string{".DS_Store", "Thumbs.db", "*.tmp", "*.log", "*.swp", "*.swo"}
+		for _, pattern := range skipFiles {
+			if pattern == fileName || strings.HasSuffix(fileName, strings.TrimPrefix(pattern, "*")) {
+				return true
+			}
+		}
+	}
+	
+	return false
 }
 
 // executeRunShell runs a shell command (if enabled)
