@@ -283,14 +283,3 @@ func (c *ClaudeAdapter) IsAvailable() bool {
 	// Accept both 200 and rate limit errors as "available" since they indicate valid auth
 	return resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusTooManyRequests
 }
-
-// parseClaudeModel extracts the model name from a model string like "claude:claude-3-5-sonnet-20241022"
-func parseClaudeModel(modelStr string) string {
-	parts := strings.SplitN(modelStr, ":", 2)
-	if len(parts) == 2 && parts[0] == "claude" {
-		return parts[1]
-	}
-	// Fallback - assume it's just the model name
-	return modelStr
-}
-
