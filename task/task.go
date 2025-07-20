@@ -295,6 +295,24 @@ func parseEditTask(args string) *Task {
 func parseEditContext(task *Task, description string) {
 	desc := strings.ToLower(description)
 
+	// Pattern: "replace all occurrences of X with Y" or "replace all X with Y"
+	replaceAllPattern := regexp.MustCompile(`(?i)replace\s+all\s+(?:occurrences\s+of\s+)?["']?([^"']+?)["']?\s+with\s+["']?([^"']+?)["']?$`)
+	if matches := replaceAllPattern.FindStringSubmatch(description); len(matches) > 2 {
+		task.StartContext = strings.TrimSpace(matches[1])  // What to find
+		task.EndContext = strings.TrimSpace(matches[2])    // What to replace with
+		task.InsertMode = "replace_all"
+		return
+	}
+
+	// Pattern: "find and replace X with Y" or "find X and replace with Y"
+	findReplacePattern := regexp.MustCompile(`(?i)(?:find\s+(?:and\s+)?replace|find)\s+["']?([^"']+?)["']?\s+(?:and\s+replace\s+)?with\s+["']?([^"']+?)["']?$`)
+	if matches := findReplacePattern.FindStringSubmatch(description); len(matches) > 2 {
+		task.StartContext = strings.TrimSpace(matches[1])  // What to find
+		task.EndContext = strings.TrimSpace(matches[2])    // What to replace with  
+		task.InsertMode = "replace_all"
+		return
+	}
+
 	// Pattern: "add X after Y" or "insert X after Y"
 	afterPattern := regexp.MustCompile(`(?i)(?:add|insert)\s+.+?\s+after\s+["']?([^"']+)["']?`)
 	if matches := afterPattern.FindStringSubmatch(description); len(matches) > 1 {
@@ -769,6 +787,8 @@ func (t *Task) Description() string {
 				return fmt.Sprintf("Edit %s (insert before)", t.Path)
 			case "replace":
 				return fmt.Sprintf("Edit %s (replace section)", t.Path)
+			case "replace_all":
+				return fmt.Sprintf("Edit %s (replace all occurrences)", t.Path)
 			case "insert_between":
 				return fmt.Sprintf("Edit %s (insert between)", t.Path)
 			default:

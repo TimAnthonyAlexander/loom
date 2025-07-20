@@ -328,7 +328,9 @@ func (execution *TaskExecution) GetPendingTask() (*Task, *TaskResponse) {
 	for i, response := range execution.Responses {
 		task := execution.Tasks[i]
 		if response.Success && task.RequiresConfirmation() && !response.Approved {
-			return &task, &response
+			// Return the updated task from the response, not the original task
+			// This ensures we use the correct content that was prepared during execution
+			return &response.Task, &response
 		}
 	}
 	return nil, nil

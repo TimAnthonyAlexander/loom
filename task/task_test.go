@@ -1,6 +1,8 @@
 package task
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -774,16 +776,18 @@ func TestParseNaturalLanguagePreferredOverJSON(t *testing.T) {
 }
 
 func TestParseNaturalLanguageEditWithCodeBlock(t *testing.T) {
-	// Test edit task with code block content
-	llmResponse := `I'll create a sample JSON file with proper content.
+	// Test edit task with code block
+	llmResponse := `I'll update the configuration file.
 
-🔧 EDIT sample.json → create a sample JSON file
+🔧 EDIT config.json → add new database settings
 
 ` + "```json\n" + `{
-  "name": "test",
-  "version": "1.0.0",
-  "description": "A test file"
-}` + "\n```"
+  "database": {
+    "host": "localhost",
+    "port": 5432
+  }
+}
+` + "```"
 
 	taskList, err := ParseTasks(llmResponse)
 	if err != nil {
@@ -802,20 +806,94 @@ func TestParseNaturalLanguageEditWithCodeBlock(t *testing.T) {
 	if task.Type != TaskTypeEditFile {
 		t.Errorf("Expected EditFile, got %s", task.Type)
 	}
-	if task.Path != "sample.json" {
-		t.Errorf("Expected sample.json, got %s", task.Path)
+	if task.Path != "config.json" {
+		t.Errorf("Expected config.json, got %s", task.Path)
 	}
-	if task.Intent != "create a sample JSON file" {
-		t.Errorf("Expected intent 'create a sample JSON file', got %s", task.Intent)
+	if task.Intent != "add new database settings" {
+		t.Errorf("Expected 'add new database settings', got %s", task.Intent)
+	}
+	if !strings.Contains(task.Content, "database") {
+		t.Errorf("Expected content to contain 'database', got %s", task.Content)
+	}
+}
+
+func TestParseNaturalLanguageReplaceAll(t *testing.T) {
+	// Test replace all occurrences patterns
+	testCases := []struct {
+		name         string
+		description  string
+		expectedFind string
+		expectedRepl string
+	}{
+		{
+			name:         "replace all occurrences pattern",
+			description:  "replace all occurrences of \"loom\" with \"spoon\"",
+			expectedFind: "loom",
+			expectedRepl: "spoon",
+		},
+		{
+			name:         "replace all simple pattern",
+			description:  "replace all \"database\" with \"db\"",
+			expectedFind: "database",
+			expectedRepl: "db",
+		},
+		{
+			name:         "find and replace pattern",
+			description:  "find and replace \"localhost\" with \"192.168.1.1\"",
+			expectedFind: "localhost",
+			expectedRepl: "192.168.1.1",
+		},
+		{
+			name:         "find replace shorthand",
+			description:  "find \"old_function\" and replace with \"new_function\"",
+			expectedFind: "old_function",
+			expectedRepl: "new_function",
+		},
 	}
 
-	expectedContent := `{
-  "name": "test",
-  "version": "1.0.0",
-  "description": "A test file"
-}`
-	if task.Content != expectedContent {
-		t.Errorf("Expected JSON content, got %s", task.Content)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			llmResponse := fmt.Sprintf("I'll update the file.\n\n🔧 EDIT main.go → %s", tc.description)
+
+			taskList, err := ParseTasks(llmResponse)
+			if err != nil {
+				t.Fatalf("Expected no error, got: %v", err)
+			}
+
+			if taskList == nil {
+				t.Fatal("Expected task list, got nil")
+			}
+
+			if len(taskList.Tasks) != 1 {
+				t.Fatalf("Expected 1 task, got %d", len(taskList.Tasks))
+			}
+
+			task := taskList.Tasks[0]
+			if task.Type != TaskTypeEditFile {
+				t.Errorf("Expected EditFile, got %s", task.Type)
+			}
+			if task.Path != "main.go" {
+				t.Errorf("Expected main.go, got %s", task.Path)
+			}
+			if task.Intent != tc.description {
+				t.Errorf("Expected '%s', got %s", tc.description, task.Intent)
+			}
+			if task.InsertMode != "replace_all" {
+				t.Errorf("Expected InsertMode 'replace_all', got '%s'", task.InsertMode)
+			}
+			if task.StartContext != tc.expectedFind {
+				t.Errorf("Expected StartContext '%s', got '%s'", tc.expectedFind, task.StartContext)
+			}
+			if task.EndContext != tc.expectedRepl {
+				t.Errorf("Expected EndContext '%s', got '%s'", tc.expectedRepl, task.EndContext)
+			}
+
+			// Test description
+			desc := task.Description()
+			if !strings.Contains(desc, "replace all occurrences") {
+				t.Errorf("Expected description to contain 'replace all occurrences', got: %s", desc)
+			}
+		})
 	}
 }
 

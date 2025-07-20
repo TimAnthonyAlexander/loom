@@ -1,4 +1,4 @@
-# Loom
+# Spoon
 **Advanced AI-Driven Coding Assistant**
 
 A sophisticated terminal-based AI coding assistant written in Go that provides a conversational interface for understanding, modifying, and extending codebases. Features autonomous task execution, intelligent context management, comprehensive security, and seamless project integration.
@@ -127,7 +127,7 @@ ollama serve
 ollama pull codellama
 # OR: ollama pull llama2, phi, deepseek-coder, etc.
 
-# Configure Loom
+# Configure Spoon
 ./loom config set model "ollama:codellama"
 ```
 
@@ -173,7 +173,7 @@ ollama pull codellama
 
 ## Task System
 
-Loom's AI can autonomously perform coding tasks through intuitive natural language commands:
+Spoon's AI can autonomously perform coding tasks through intuitive natural language commands:
 
 ### Task Types
 
@@ -236,7 +236,7 @@ func main() {
 
 ### Natural Language vs JSON Format
 
-Loom now uses an intuitive natural language task format that's much more reliable and user-friendly than the previous JSON approach:
+Spoon now uses an intuitive natural language task format that's much more reliable and user-friendly than the previous JSON approach:
 
 #### ✅ **New Natural Language Format (Recommended)**
 ```
@@ -370,7 +370,7 @@ Automatically discovers tests in multiple languages:
 ## Project Statistics & Analysis
 
 ### Workspace Analysis
-Loom provides detailed insights into your project:
+Spoon provides detailed insights into your project:
 - **File Count** — Total files indexed with language breakdown
 - **Size Analysis** — Total project size and file size distribution
 - **Language Detection** — Automatic identification of 30+ programming languages
@@ -454,7 +454,7 @@ rm -rf .loom/sessions/
 ```
 > Tell me about this project
 
-Loom: I'll comprehensively analyze this project. Let me start by reading the README and exploring the structure.
+Spoon: I'll comprehensively analyze this project. Let me start by reading the README and exploring the structure.
 
 OBJECTIVE: Understand this Go project's architecture and key components
 
@@ -471,7 +471,7 @@ OBJECTIVE_COMPLETE: This is a sophisticated AI coding assistant built in Go...
 ```
 > Add error handling to the main function
 
-Loom: I'll enhance the main function with comprehensive error handling.
+Spoon: I'll enhance the main function with comprehensive error handling.
 
 📖 Reading file: main.go
 
@@ -525,7 +525,7 @@ Recent Changes:
 ## Advanced Features
 
 ### Autonomous Exploration
-Loom can autonomously explore and understand codebases:
+Spoon can autonomously explore and understand codebases:
 - **Project Convention Analysis** — Automatically detects coding standards
 - **Architectural Insights** — Understands component relationships
 - **Technology Stack Analysis** — Identifies frameworks and patterns

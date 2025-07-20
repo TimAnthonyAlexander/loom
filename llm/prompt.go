@@ -243,11 +243,16 @@ When exploring a codebase, follow this autonomous approach:
    - 🔧 EDIT main.go → insert error handling before "func main"
    - 🔧 EDIT docs.md → append new section at the end
    - 🔧 EDIT package.json → add dependency between "dependencies" and "devDependencies"
+   - 🔧 EDIT README.md → replace all occurrences of "loom" with "spoon"
+   - 🔧 EDIT config.go → find and replace "debug: false" with "debug: true"
 
    **Supported Context Patterns:**
    - **"add X after Y"** - Inserts content after the line containing Y
    - **"add X before Y"** - Inserts content before the line containing Y  
    - **"replace X"** - Replaces the line/section containing X
+   - **"replace all occurrences of X with Y"** - Global find-and-replace throughout the entire file
+   - **"replace all X with Y"** - Shorthand for global find-and-replace
+   - **"find and replace X with Y"** - Alternative syntax for global find-and-replace
    - **"add X at the end"** - Appends content to the end of file
    - **"add X at the beginning"** - Prepends content to the start of file
    - **"add X between Y and Z"** - Inserts content between two markers

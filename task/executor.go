@@ -268,6 +268,12 @@ func (e *Executor) executeEditFile(task *Task) *TaskResponse {
 	if task.Diff != "" {
 		return e.applyDiff(task, fullPath)
 	} else if task.Content != "" {
+		// CRITICAL FIX: Check if content looks like diff format instead of final content
+		if e.isDiffFormattedContent(task.Content) {
+			// Convert diff-formatted content to proper diff and apply it
+			return e.applyDiffFormattedContent(task, fullPath)
+		}
+		
 		// Check if this is a targeted edit with context
 		if task.StartContext != "" || task.InsertMode != "" {
 			return e.applyTargetedEdit(task, fullPath)
@@ -275,6 +281,11 @@ func (e *Executor) executeEditFile(task *Task) *TaskResponse {
 		// Otherwise use full content replacement
 		return e.replaceContent(task, fullPath)
 	} else if task.Intent != "" {
+		// Check if this is a replace_all operation that doesn't need additional content
+		if task.InsertMode == "replace_all" && task.StartContext != "" && task.EndContext != "" {
+			return e.applyTargetedEdit(task, fullPath)
+		}
+		
 		// Handle natural language edit with description but no content
 		response.Error = fmt.Sprintf("Edit task has intent '%s' but no actual content provided. Please provide the file content in a code block or specify the exact changes.", task.Intent)
 		return response
@@ -388,6 +399,8 @@ func (e *Executor) replaceContent(task *Task, fullPath string) *TaskResponse {
 	// Show only status message to user, not the actual diff
 	response.Output = fmt.Sprintf("Editing file: %s (content replacement prepared)", task.Path)
 
+	// Store the new content for later application
+	response.Task.Content = task.Content
 	return response
 }
 
@@ -959,6 +972,19 @@ func (e *Executor) performTargetedEdit(originalContent string, task *Task) (stri
 		newLines = append(newLines, lines[endIdx+1:]...)
 		return strings.Join(newLines, "\n"), nil
 
+	case "replace_all":
+		// Global find and replace operation
+		if task.StartContext == "" || task.EndContext == "" {
+			return "", fmt.Errorf("replace_all requires both StartContext (find) and EndContext (replace with)")
+		}
+
+		findText := task.StartContext
+		replaceText := task.EndContext
+
+		// Perform global replacement in the entire content
+		result := strings.ReplaceAll(originalContent, findText, replaceText)
+		return result, nil
+
 	case "insert_between":
 		if task.StartContext == "" || task.EndContext == "" {
 			return "", fmt.Errorf("insert_between requires both start and end context")
@@ -1019,4 +1045,89 @@ func (e *Executor) matchesContext(line, context string) bool {
 	}
 
 	return false
+}
+
+// isDiffFormattedContent detects if content looks like diff format instead of final content
+func (e *Executor) isDiffFormattedContent(content string) bool {
+	lines := strings.Split(content, "\n")
+	diffLineCount := 0
+	totalLines := len(lines)
+	
+	// Count lines that start with - or +
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "-") || strings.HasPrefix(trimmed, "+") {
+			diffLineCount++
+		}
+	}
+	
+	// If more than 20% of lines look like diff format, treat it as diff
+	return totalLines > 0 && float64(diffLineCount)/float64(totalLines) > 0.2
+}
+
+// applyDiffFormattedContent processes content that looks like diff format
+func (e *Executor) applyDiffFormattedContent(task *Task, fullPath string) *TaskResponse {
+	response := &TaskResponse{Task: *task}
+
+	// Read existing content if file exists
+	var originalContent string
+	if _, err := os.Stat(fullPath); err == nil {
+		data, err := os.ReadFile(fullPath)
+		if err != nil {
+			response.Error = fmt.Sprintf("failed to read existing file: %v", err)
+			return response
+		}
+		originalContent = string(data)
+	}
+
+	// Parse the diff-formatted content to extract the final result
+	newContent, err := e.parseDiffFormattedContent(task.Content, originalContent)
+	if err != nil {
+		response.Error = fmt.Sprintf("failed to parse diff-formatted content: %v", err)
+		return response
+	}
+
+	// Create diff preview for display
+	dmp := diffmatchpatch.New()
+	diff := dmp.DiffMain(originalContent, newContent, false)
+	preview := dmp.DiffPrettyText(diff)
+
+	// Store actual preview for LLM
+	response.ActualContent = fmt.Sprintf("Processed diff-formatted content for %s:\n\n%s\n\nReady to apply changes.", task.Path, preview)
+
+	response.Success = true
+	// Show status message to user
+	response.Output = fmt.Sprintf("Editing file: %s (processed diff-formatted content)", task.Path)
+
+	// Store the new content for later application
+	response.Task.Content = newContent
+	return response
+}
+
+// parseDiffFormattedContent converts diff-formatted content to final content
+func (e *Executor) parseDiffFormattedContent(diffContent string, originalContent string) (string, error) {
+	lines := strings.Split(diffContent, "\n")
+	
+	var result []string
+	
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		
+		if strings.HasPrefix(trimmed, "+") {
+			// This is a line to add - remove the + prefix and preserve spacing
+			newLine := strings.TrimPrefix(trimmed, "+")
+			if len(newLine) > 0 && newLine[0] == ' ' {
+				newLine = newLine[1:] // Remove the single space after +
+			}
+			result = append(result, newLine)
+		} else if strings.HasPrefix(trimmed, "-") {
+			// This is a line to remove - skip it
+			continue
+		} else {
+			// This is an unchanged line (context) or blank line - preserve as-is
+			result = append(result, line)
+		}
+	}
+	
+	return strings.Join(result, "\n"), nil
 }
