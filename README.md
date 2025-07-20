@@ -21,7 +21,7 @@ A sophisticated terminal-based AI coding assistant written in Go that provides a
 - **Natural Language Tasks** — AI uses intuitive commands like "🔧 READ main.go" and "🔧 EDIT config.json → add settings"
 - **JSON Legacy Support** — Backward compatibility with JSON task format for existing workflows
 - **Sequential Task Manager** — Objective-driven exploration with suppressed intermediate output
-- **Staged Execution** — Multi-file coordination with preview and batch approval
+- **Task Confirmation** — Preview and approval for destructive operations
 - **Task Debug Mode** — Troubleshooting for AI task generation issues
 - **User Confirmation** — Safe execution with preview and approval for destructive operations
 
@@ -38,9 +38,9 @@ A sophisticated terminal-based AI coding assistant written in Go that provides a
 - **Gitignore Integration** — Respects .gitignore patterns for file operations
 
 ### Enhanced Terminal Interface
-- **Multiple Views** — Chat, File Tree, Tasks, Action Plans, Git Status, Undo History
+- **Multiple Views** — Chat, File Tree, Tasks with interactive navigation
 - **Interactive Navigation** — Tab switching, scrolling, keyboard shortcuts
-- **Batch Approval** — Review and approve multiple file changes simultaneously
+- **Task Confirmation** — Review and approve individual file changes with previews
 - **Task Confirmation** — Clear previews with diff display for all modifications
 - **Progress Tracking** — Real-time task execution status and history
 
@@ -57,18 +57,15 @@ A sophisticated terminal-based AI coding assistant written in Go that provides a
 - **File Watching** — Real-time updates with batched processing
 - **Performance Optimized** — Handles large projects efficiently
 
-### Git Integration
-- **Repository Status** — Detailed Git status, branches, ahead/behind tracking
-- **File Operations** — Stage, unstage, commit with intelligent diff generation
-- **Pre-condition Validation** — Check Git state before destructive operations
-- **Branch Management** — List and navigate between branches
-- **Commit History** — Access commit information and file changes
+### Workspace Management
+- **File Operations** — Read, edit, create, and delete files with validation
+- **Pre-condition Validation** — Check file state before destructive operations
+- **Change Tracking** — Monitor file modifications and provide rationales
 
-### Comprehensive Undo System
-- **Multi-Type Undo** — Revert file edits, creations, and deletions
-- **Backup Management** — Automatic backups before all destructive operations
-- **Persistent History** — 50-action undo stack with cleanup
-- **File Restoration** — Complete file recovery from timestamped backups
+### Safety Features
+- **Backup Creation** — Automatic backups before file modifications
+- **User Confirmation** — Required approval for all destructive operations
+- **File Validation** — Pre-checks before applying changes
 
 ### Session Management
 - **Persistent Sessions** — Chat history preserved across sessions
@@ -140,28 +137,21 @@ ollama pull codellama
 ## Interactive Interface
 
 ### Navigation
-- **`Tab`** — Switch between chat, file tree, tasks, and other views
-- **`Ctrl+P`** — Action Plan view (see planned multi-file changes)
-- **`Ctrl+G`** — Git Status view (repository information)
-- **`Ctrl+U`** — Undo History view (review and revert changes)
-- **`Ctrl+Z`** — Quick undo last action
-- **`↑↓`** — Scroll in views and navigate batch approvals
+- **`Tab`** — Switch between chat, file tree, and tasks views
+- **`↑↓`** — Scroll in chat view
 - **`Enter`** — Send message, approve changes, execute tasks
-- **`A`** — Approve all changes in batch mode
-- **`R`** — Reject all changes in batch mode
 - **`y/n`** — Approve/cancel individual tasks
+- **`Ctrl+S`** — Quick summary generation
 - **`Ctrl+C`** — Exit safely
 
 ### Special Commands
+- **`/help`** — Show comprehensive command help
 - **`/files`** — Show file count and language breakdown
 - **`/stats`** — Detailed project statistics and index information
 - **`/tasks`** — Task execution history and current status
 - **`/test`** — Test discovery results and execution
 - **`/summary`** — AI-generated session summary (also `Ctrl+S`)
 - **`/rationale`** — Change summaries and explanations
-- **`/git`** — Git repository status and file changes
-- **`/commit "message"`** — Commit staged changes
-- **`/undo`** — Undo the last applied action
 - **`/debug`** — Toggle task debugging mode
 - **`/quit`** — Exit application
 
@@ -271,12 +261,12 @@ For comprehensive project analysis:
 2. **Suppressed Exploration** — Quiet systematic analysis
 3. **Comprehensive Synthesis** — Detailed architectural summary
 
-#### Staged Execution
-For complex multi-file changes:
-1. **Planning** — Create action plan with task coordination
-2. **Staging** — Prepare all changes with preview
-3. **Batch Approval** — Review and approve all changes together
-4. **Execution** — Apply all changes atomically
+#### Task Confirmation
+For file modifications:
+1. **Planning** — AI suggests necessary changes
+2. **Preview** — Show diff of proposed changes
+3. **User Approval** — Review and approve each change individually
+4. **Execution** — Apply approved changes safely
 
 ## Configuration
 
@@ -366,7 +356,7 @@ Loom provides detailed insights into your project:
 - **File Count** — Total files indexed with language breakdown
 - **Size Analysis** — Total project size and file size distribution
 - **Language Detection** — Automatic identification of 30+ programming languages
-- **Git Status** — Repository state, branch info, ahead/behind tracking
+- **File Status** — Modified files, language breakdown, change tracking
 - **Change Tracking** — Real-time file modification detection
 
 ### Performance Benchmarks
@@ -496,19 +486,22 @@ All tests passed! Your changes look good.
 Test Results: 15 passed, 0 failed, 0 skipped
 ```
 
-### Git Integration
+### File Management
 ```
-> What's the current git status?
+> Show me the current workspace state
 
-Git Status:
-Branch: main (clean)
-3 modified files, 1 staged file
-2 commits ahead of origin/main
+Workspace Status:
+Files: 42 indexed
+Languages: Go 78.2%, Markdown 12.1%, YAML 9.7%
+Recent changes: 3 files modified
+Tasks: Ready
 
-> /commit "Add enhanced error handling"
+> Tell me about the recent changes
 
-Created commit abc123: Add enhanced error handling
-Files changed: main.go, error_handler.go
+Recent Changes:
+• Enhanced main.go with error handling
+• Updated configuration structure
+• Added comprehensive documentation
 ```
 
 ## Advanced Features
@@ -526,11 +519,11 @@ Loom can autonomously explore and understand codebases:
 - **Language-Aware Snippets** — Extracts meaningful code structures
 - **Auto-Summarization** — Compresses chat history intelligently
 
-### Multi-File Operations
-- **Action Planning** — Coordinates changes across multiple files
-- **Staged Execution** — Preview all changes before application
-- **Batch Approval** — Interactive review of multiple modifications
-- **Atomic Operations** — All-or-nothing change application
+### File Operations
+- **Individual Changes** — Edit, create, and delete files one at a time
+- **Change Preview** — Review all file modifications before application
+- **Task Confirmation** — Interactive approval for each operation
+- **Safe Execution** — Backup and validation for all changes
 
 ## Future Roadmap
 

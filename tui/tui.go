@@ -382,6 +382,60 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.messages = m.chatSession.GetDisplayMessages()
 					m.updateWrappedMessages()
 
+				} else if userInput == "/help" {
+					// Show comprehensive help
+					userMessage := llm.Message{
+						Role:      "user",
+						Content:   userInput,
+						Timestamp: time.Now(),
+					}
+					m.chatSession.AddMessage(userMessage)
+
+					helpContent := `🤖 **Loom Help**
+
+**Navigation:**
+• Tab - Switch between Chat, File Tree, and Tasks views
+• ↑↓ - Scroll in chat view
+• Enter - Send message or confirm actions
+• Ctrl+S - Quick summary generation
+• Ctrl+C - Exit application
+
+**Special Commands:**
+• /files - Show file count and language breakdown
+• /stats - Detailed project statistics and index information
+• /tasks - Task execution history and current status
+• /test - Test discovery results and execution options
+• /summary - AI-generated session summary
+• /rationale - Change summaries and explanations
+• /debug - Toggle task debugging mode (shows AI task parsing)
+• /help - Show this help message
+• /quit - Exit application
+
+**Views:**
+• Chat - Main conversation with AI assistant
+• File Tree - Project file overview and language statistics
+• Tasks - Task execution history and status
+
+**Tips:**
+• The AI can read, edit, and list files using natural language
+• All file edits require your confirmation before being applied
+• Use specific questions for better AI responses
+• Press Tab to explore different views
+• Task debug mode helps troubleshoot AI task generation
+
+Ask me anything about your code, architecture, or programming questions!`
+
+					response := llm.Message{
+						Role:      "assistant",
+						Content:   helpContent,
+						Timestamp: time.Now(),
+					}
+					m.chatSession.AddMessage(response)
+
+					// Refresh display
+					m.messages = m.chatSession.GetDisplayMessages()
+					m.updateWrappedMessages()
+
 				} else if (userInput == "yes" || userInput == "y") && m.enhancedManager != nil {
 					// Check if this is a response to a test prompt
 					testDiscovery := m.enhancedManager.GetTestDiscovery()
@@ -693,11 +747,11 @@ func (m model) View() string {
 	var helpText string
 	switch m.currentView {
 	case viewChat:
-		helpText = "Tab: File Tree/Tasks | ↑↓: Scroll | Enter: Send | Ctrl+S: Summary | /test: Tests | /debug: Task Debug | /rationale: Changes | Ctrl+C: Quit"
+		helpText = "Tab: Views | ↑↓: Scroll | Ctrl+S: Summary | /help: Commands | /test: Tests | /debug: Debug | Ctrl+C: Quit"
 	case viewFileTree:
-		helpText = "Tab: Chat/Tasks | Ctrl+C: Quit"
+		helpText = "Tab: Chat/Tasks | /help: All Commands | Ctrl+C: Quit"
 	case viewTasks:
-		helpText = "Tab: Chat/File Tree | Ctrl+C: Quit"
+		helpText = "Tab: Chat/File Tree | /help: All Commands | Ctrl+C: Quit"
 	}
 
 	help := lipgloss.NewStyle().Foreground(lipgloss.Color("#626262")).Render(helpText)
@@ -1532,7 +1586,7 @@ func (m *model) updateWrappedMessagesWithOptions(forceAutoScroll bool) {
 			debugStatus = "\n🔧 Task debug mode is OFF (use /debug to enable)"
 		}
 
-		welcomeMsg := "Welcome to Loom!\nYou can now chat with an AI assistant about your project.\nTry asking about your code, architecture, or programming questions.\n\nSpecial commands:\n/files - Show file count\n/stats - Show detailed index statistics\n/tasks - Show task execution history\n/summary - Generate session summary\n/rationale - Show change explanations\n/debug - Toggle task debugging\n/quit - Exit the application" + debugStatus + "\n\nPress Tab to view file tree or tasks.\nPress Ctrl+S for quick summary.\nPress Ctrl+C to exit."
+		welcomeMsg := "Welcome to Loom!\nYou can now chat with an AI assistant about your project.\nTry asking about your code, architecture, or programming questions.\n\nQuick start:\n• Type /help for all available commands\n• Press Tab to explore views (Chat, File Tree, Tasks)\n• Press Ctrl+S for quick summary\n• Use /test to discover and run tests" + debugStatus + "\n\nThe AI can read, edit, and list files using natural language.\nAll changes require your confirmation before being applied.\n\nPress Ctrl+C to exit."
 		allMessages = append(allMessages, welcomeMsg)
 	}
 
