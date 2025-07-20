@@ -334,6 +334,7 @@ func (e *Executor) replaceContent(task *Task, fullPath string) *TaskResponse {
 
 	// Read existing content for preview if file exists
 	var originalContent string
+	fileExists := false
 	if _, err := os.Stat(fullPath); err == nil {
 		data, err := os.ReadFile(fullPath)
 		if err != nil {
@@ -341,6 +342,33 @@ func (e *Executor) replaceContent(task *Task, fullPath string) *TaskResponse {
 			return response
 		}
 		originalContent = string(data)
+		fileExists = true
+	}
+
+	// SAFETY CHECK: Prevent accidental file truncation
+	if fileExists && len(originalContent) > 0 {
+		originalLines := strings.Split(originalContent, "\n")
+		newLines := strings.Split(task.Content, "\n")
+
+		// Check for significant content reduction (more than 50% reduction in lines)
+		if len(newLines) < len(originalLines)/2 && len(originalLines) > 10 {
+			response.Error = fmt.Sprintf("SAFETY CHECK FAILED: Provided content (%d lines) is significantly shorter than original file (%d lines). This might truncate the file. Please read the ENTIRE file first with 🔧 READ %s (with sufficient line limits), then provide the COMPLETE updated content.",
+				len(newLines), len(originalLines), task.Path)
+			return response
+		}
+
+		// Check if new content appears to be incomplete for certain file types
+		if e.looksIncomplete(task.Path, task.Content, originalContent) {
+			response.Error = fmt.Sprintf("SAFETY CHECK FAILED: The provided content appears incomplete for %s. Please read the ENTIRE file first to understand its complete structure, then provide the COMPLETE updated content.", task.Path)
+			return response
+		}
+
+		// Check if the new content is suspiciously small compared to original
+		if len(task.Content) < len(originalContent)/3 && len(originalContent) > 500 {
+			response.Error = fmt.Sprintf("SAFETY CHECK FAILED: New content (%d chars) is much smaller than original (%d chars). This suggests partial content that would truncate the file. Read the full file first, then provide complete updated content.",
+				len(task.Content), len(originalContent))
+			return response
+		}
 	}
 
 	// Create diff preview
@@ -738,4 +766,68 @@ func (e *Executor) countFileLines(filePath string) (int, error) {
 	}
 
 	return lineCount, nil
+}
+
+// looksIncomplete checks if content appears to be incomplete for certain file types
+func (e *Executor) looksIncomplete(filePath, newContent, originalContent string) bool {
+	ext := strings.ToLower(filepath.Ext(filePath))
+
+	switch ext {
+	case ".go":
+		// Go files should have package declaration and proper structure
+		if !strings.Contains(newContent, "package ") {
+			return true
+		}
+		// Check for incomplete function/struct definitions
+		openBraces := strings.Count(newContent, "{")
+		closeBraces := strings.Count(newContent, "}")
+		if openBraces != closeBraces && openBraces > 0 {
+			return true
+		}
+
+	case ".json":
+		// JSON should be properly closed
+		newContent = strings.TrimSpace(newContent)
+		if strings.HasPrefix(newContent, "{") && !strings.HasSuffix(newContent, "}") {
+			return true
+		}
+		if strings.HasPrefix(newContent, "[") && !strings.HasSuffix(newContent, "]") {
+			return true
+		}
+
+	case ".md", ".markdown":
+		// Markdown files with headers should maintain structure
+		originalHeaders := strings.Count(originalContent, "#")
+		newHeaders := strings.Count(newContent, "#")
+		// If original had many headers but new content has very few, likely incomplete
+		if originalHeaders > 5 && newHeaders < originalHeaders/3 {
+			return true
+		}
+
+	case ".yaml", ".yml":
+		// YAML should maintain proper indentation and structure
+		if strings.Contains(originalContent, ":\n") && !strings.Contains(newContent, ":\n") {
+			return true
+		}
+	}
+
+	// General checks
+	// If original content ends with specific patterns, new content should too
+	originalTrimmed := strings.TrimSpace(originalContent)
+	newTrimmed := strings.TrimSpace(newContent)
+
+	// Check for truncated content (ends abruptly without proper closing)
+	if len(originalTrimmed) > 100 && len(newTrimmed) > 50 {
+		// If original ends with proper structure but new doesn't
+		if (strings.HasSuffix(originalTrimmed, "}") || strings.HasSuffix(originalTrimmed, ">")) &&
+			!strings.HasSuffix(newTrimmed, "}") && !strings.HasSuffix(newTrimmed, ">") {
+			// But allow if it's clearly intentional (new content ends with a complete line)
+			if !strings.HasSuffix(newTrimmed, ".") && !strings.HasSuffix(newTrimmed, "\n") &&
+				!strings.HasSuffix(newTrimmed, ";") {
+				return true
+			}
+		}
+	}
+
+	return false
 }

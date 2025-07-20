@@ -221,18 +221,30 @@ When exploring a codebase, follow this autonomous approach:
    - 🔧 EDIT newfile.go → create new file with content
    - EDIT filename.go
 
-   **CRITICAL: For Edit Tasks, provide actual content in code blocks:**
+   **CRITICAL: For Edit Tasks - Correct Format Required:**
 
-   Example format:
+   ✅ **CORRECT FORMAT (arrow on same line):**
    🔧 EDIT filename.go → add error handling
+
+   ❌ **WRONG FORMAT (arrow on separate line):**
+   🔧 EDIT filename.go
+   → add error handling
+
+   **The arrow → MUST be on the same line as the filename!**
 
    Then provide a code block with the actual file content
 
-   **For Edit Tasks:**
-   - ALWAYS provide the actual file content in a code block after the edit command
-   - NEW FILES: Provide complete file content in code block
-   - EXISTING FILES: Read first to understand context, then provide updated content
-   - The description after → explains intent, but code block contains actual content
+   **CRITICAL: File Content Strategy:**
+   - **NEW FILES**: Provide complete file content in code block
+   - **EXISTING FILES**: You MUST read the ENTIRE file first to understand complete context
+   - **TARGETED EDITS**: If adding/modifying small sections, read the full file then provide the complete updated content
+   - **NEVER provide partial file content** - this will truncate the file and delete existing content
+   - The description after → explains intent, but code block must contain the COMPLETE file content
+
+   **Example Workflow for Existing Files:**
+   1. 🔧 READ filename.go (to understand current content)
+   2. 🔧 EDIT filename.go → add new function
+   3. Provide COMPLETE file content with your changes integrated
 
 3. **LIST**: List directory contents (use extensively for exploration)
    - 🔧 LIST .
