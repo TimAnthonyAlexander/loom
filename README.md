@@ -18,7 +18,8 @@ A sophisticated terminal-based AI coding assistant written in Go that provides a
 - **Streaming Responses** — Real-time response streaming for immediate feedback
 
 ### Sophisticated Task Execution
-- **JSON Task System** — AI can autonomously read, edit, list directories, and run shell commands
+- **Natural Language Tasks** — AI uses intuitive commands like "🔧 READ main.go" and "🔧 EDIT config.json → add settings"
+- **JSON Legacy Support** — Backward compatibility with JSON task format for existing workflows
 - **Sequential Task Manager** — Objective-driven exploration with suppressed intermediate output
 - **Staged Execution** — Multi-file coordination with preview and batch approval
 - **Task Debug Mode** — Troubleshooting for AI task generation issues
@@ -166,45 +167,98 @@ ollama pull codellama
 
 ## Task System
 
-Loom's AI can autonomously perform coding tasks through structured JSON commands:
+Loom's AI can autonomously perform coding tasks through intuitive natural language commands:
 
 ### Task Types
 
-#### ReadFile — Intelligent File Reading
-```json
-{"type": "ReadFile", "path": "main.go", "max_lines": 200}
-{"type": "ReadFile", "path": "config.go", "start_line": 10, "end_line": 50}
+#### READ — Intelligent File Reading
+```
+🔧 READ main.go (max: 200 lines)
+🔧 READ config.go (lines 10-50)
+🔧 READ large_file.go (first 300 lines)
 ```
 - Smart continuation for large files
 - Contextual snippet extraction
 - Language-aware structure detection
+- Flexible line range and limit options
 
-#### EditFile — Safe File Modification
-```json
-{"type": "EditFile", "path": "main.go", "diff": "unified diff format"}
-{"type": "EditFile", "path": "new.go", "content": "complete file content"}
+#### EDIT — Safe File Modification
+```
+🔧 EDIT main.go → add error handling
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+)
+
+func main() {
+    if err := run(); err != nil {
+        log.Fatal(err)
+    }
+}
+```
 ```
 - User confirmation required
 - Diff preview before application
 - Backup creation for recovery
+- Natural language descriptions with actual code content
 
-#### ListDir — Directory Exploration
-```json
-{"type": "ListDir", "path": ".", "recursive": true}
-{"type": "ListDir", "path": "src/components"}
+#### LIST — Directory Exploration
+```
+🔧 LIST .
+🔧 LIST src/ recursive
+🔧 LIST components/
 ```
 - Respects .gitignore patterns
 - Language and file type detection
 - Intelligent directory traversal
+- Optional recursive exploration
 
-#### RunShell — Command Execution
-```json
-{"type": "RunShell", "command": "go test", "timeout": 30}
-{"type": "RunShell", "command": "npm run build"}
+#### RUN — Command Execution
+```
+🔧 RUN go test
+🔧 RUN npm run build (timeout: 60)
+🔧 RUN go mod tidy
 ```
 - User confirmation required
 - Timeout protection
 - Output capture and formatting
+- Configurable timeout settings
+
+### Natural Language vs JSON Format
+
+Loom now uses an intuitive natural language task format that's much more reliable and user-friendly than the previous JSON approach:
+
+#### ✅ **New Natural Language Format (Recommended)**
+```
+🔧 READ main.go (max: 100 lines)
+🔧 EDIT config.json → add database settings
+
+```json
+{
+  "database": {
+    "host": "localhost",
+    "port": 5432
+  }
+}
+```
+```
+
+#### 📜 **Legacy JSON Format (Still Supported)**
+```json
+{"type": "ReadFile", "path": "main.go", "max_lines": 100}
+{"type": "EditFile", "path": "config.json", "content": "..."}
+```
+
+#### **Benefits of Natural Language Format:**
+- **More Reliable** — LLMs generate natural language more consistently than JSON
+- **Human Readable** — Task commands are easy to understand and debug
+- **Less Error-Prone** — No syntax requirements, quotes, or bracket matching
+- **Better UX** — Clear separation between task intent and actual content
+- **Future-Proof** — Works with any LLM model without JSON formatting constraints
 
 ### Task Execution Modes
 
@@ -356,7 +410,7 @@ Loom provides detailed insights into your project:
 
 ### Task Execution Issues
 - **AI explains but doesn't act** — Enable debug mode with `/debug` command
-- **Tasks not parsed** — Check if AI is outputting proper JSON task format
+- **Tasks not parsed** — Check if AI is outputting proper natural language task commands
 - **Task confirmation** — Destructive operations require user approval by design
 
 ### Debug Mode
@@ -369,7 +423,7 @@ export LOOM_DEBUG_TASKS=1
 /debug
 ```
 
-Debug mode shows detailed task parsing information when AI suggests actions but doesn't provide executable JSON tasks.
+Debug mode shows detailed task parsing information when AI suggests actions but doesn't provide executable task commands. It helps identify when the AI indicates it wants to perform actions but doesn't use the proper natural language task format.
 
 ### Performance Issues
 - **Slow indexing** — Check `.gitignore` patterns and exclude large directories
@@ -411,10 +465,14 @@ OBJECTIVE_COMPLETE: This is a sophisticated AI coding assistant built in Go...
 
 Loom: I'll enhance the main function with comprehensive error handling.
 
-Task: Read main.go (13 lines)
-Applied successfully
+📖 Reading file: main.go
 
-Task: Edit main.go (apply diff)
+🔧 READ main.go
+
+✏️ Editing main.go → add error handling and logging
+
+🔧 EDIT main.go → add error handling and logging
+
 TASK CONFIRMATION REQUIRED
 
 [Diff preview shown]

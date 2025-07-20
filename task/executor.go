@@ -126,7 +126,7 @@ func (e *Executor) executeReadFile(task *Task) *TaskResponse {
 		return response
 	}
 	if maxLines <= 0 {
-		maxLines = 200 // Default limit
+		maxLines = DefaultMaxLines // Default limit
 	}
 
 	// Calculate effective reading window
@@ -252,6 +252,10 @@ func (e *Executor) executeEditFile(task *Task) *TaskResponse {
 		return e.applyDiff(task, fullPath)
 	} else if task.Content != "" {
 		return e.replaceContent(task, fullPath)
+	} else if task.Intent != "" {
+		// Handle natural language edit with description but no content
+		response.Error = fmt.Sprintf("Edit task has intent '%s' but no actual content provided. Please provide the file content in a code block or specify the exact changes.", task.Intent)
+		return response
 	}
 
 	response.Error = "EditFile requires either diff or content"

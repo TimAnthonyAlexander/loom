@@ -1960,37 +1960,31 @@ Current workspace summary:
 
 ## Available Task Types
 
-You can emit tasks to interact with the workspace. Use JSON code blocks like this:
+You can emit tasks to interact with the workspace using simple natural language commands:
 
-`+"```"+`json
-{
-  "tasks": [
-    {"type": "ReadFile", "path": "main.go", "max_lines": 150},
-    {"type": "EditFile", "path": "main.go", "diff": "diff content here"},
-    {"type": "ListDir", "path": "src/", "recursive": false},
-    {"type": "RunShell", "command": "go build", "timeout": 10}
-  ]
-}
-`+"```"+`
+🔧 READ main.go (max: 150 lines)
+🔧 EDIT main.go → add error handling
+🔧 LIST src/
+🔧 RUN go build (timeout: 10)
 
 ### Task Types:
-1. **ReadFile**: Read file contents with optional line limits
-   - path: File path (required)
-   - max_lines: Max lines to read (default: 200)
-   - start_line, end_line: Read specific line range
+1. **READ**: Read file contents with optional line limits
+   - 🔧 READ filename.go
+   - 🔧 READ filename.go (max: 200 lines)
+   - 🔧 READ filename.go (lines 50-100)
 
-2. **EditFile**: Apply file changes (requires user confirmation)
-   - path: File path (required)
-   - diff: Unified diff format, OR
-   - content: Complete file replacement
+2. **EDIT**: Apply file changes (requires user confirmation)
+   - 🔧 EDIT filename.go → describe changes
+   - 🔧 EDIT newfile.go → create new file
 
-3. **ListDir**: List directory contents
-   - path: Directory path (default: ".")
-   - recursive: Include subdirectories (default: false)
+3. **LIST**: List directory contents
+   - 🔧 LIST .
+   - 🔧 LIST src/
+   - 🔧 LIST . recursive
 
-4. **RunShell**: Execute shell commands (requires user confirmation, %s)
-   - command: Shell command (required)
-   - timeout: Timeout in seconds (default: 3)
+4. **RUN**: Execute shell commands (requires user confirmation, %s)
+   - 🔧 RUN go build
+   - 🔧 RUN go test (timeout: 30)
 
 ## Security & Constraints:
 - All file paths must be within the workspace
