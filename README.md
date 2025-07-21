@@ -18,7 +18,7 @@ A sophisticated terminal-based AI coding assistant written in Go that provides a
 - **Streaming Responses** — Real-time response streaming for immediate feedback
 
 ### Sophisticated Task Execution
-- **Natural Language Tasks** — AI uses intuitive commands like "🔧 READ main.go" and "🔧 EDIT config.json → add settings"
+- **Natural Language Tasks** — AI uses intuitive commands like "🔧 READ main.go" and "🔧 EDIT config.json -> add settings"
 - **JSON Legacy Support** — Backward compatibility with JSON task format for existing workflows
 - **Sequential Task Manager** — Objective-driven exploration with suppressed intermediate output
 - **Task Confirmation** — Preview and approval for destructive operations
@@ -194,7 +194,7 @@ Loom's AI can autonomously perform coding tasks through intuitive natural langua
 
 #### EDIT — Safe File Modification
 ```
-🔧 EDIT main.go → add error handling
+🔧 EDIT main.go -> add error handling
 
 ```go
 package main
@@ -245,7 +245,7 @@ Loom now uses an intuitive natural language task format that's much more reliabl
 #### ✅ **New Natural Language Format (Recommended)**
 ```
 🔧 READ main.go (max: 100 lines)
-🔧 EDIT config.json → add database settings
+🔧 EDIT config.json -> add database settings
 
 ```json
 {
@@ -481,9 +481,9 @@ Loom: I'll enhance the main function with comprehensive error handling.
 
 🔧 READ main.go
 
-✏️ Editing main.go → add error handling and logging
+✏️ Editing main.go -> add error handling and logging
 
-🔧 EDIT main.go → add error handling and logging
+🔧 EDIT main.go -> add error handling and logging
 
 TASK CONFIRMATION REQUIRED
 

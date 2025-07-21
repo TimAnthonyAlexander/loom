@@ -2016,7 +2016,8 @@ Current workspace summary:
 You can emit tasks to interact with the workspace using simple natural language commands:
 
 🔧 READ main.go (max: 150 lines)
-🔧 EDIT main.go → add error handling
+🔧 EDIT main.go -> describe changes
+🔧 EDIT newfile.go -> create new file
 🔧 LIST src/
 🔧 RUN go build (timeout: 10)
 
@@ -2027,8 +2028,8 @@ You can emit tasks to interact with the workspace using simple natural language 
    - 🔧 READ filename.go (lines 50-100)
 
 2. **EDIT**: Apply file changes (requires user confirmation)
-   - 🔧 EDIT filename.go → describe changes
-   - 🔧 EDIT newfile.go → create new file
+   - 🔧 EDIT filename.go -> describe changes
+   - 🔧 EDIT newfile.go -> create new file
 
 3. **LIST**: List directory contents
    - 🔧 LIST .

@@ -304,8 +304,8 @@ func parseReadTask(args string) *Task {
 func parseEditTask(args string) *Task {
 	task := &Task{Type: TaskTypeEditFile}
 
-	// Look for arrow notation: "file.go:15 → description" or "file.go → description"
-	arrowPattern := regexp.MustCompile(`^(.+?)\s*→\s*(.+)$`)
+	// Look for arrow notation: "file.go:15 → description" or "file.go:15 -> description"
+	arrowPattern := regexp.MustCompile(`^(.+?)\s*(?:→|->)\s*(.+)$`)
 	matches := arrowPattern.FindStringSubmatch(args)
 
 	if len(matches) == 3 {
@@ -473,7 +473,7 @@ func parseRunTask(args string) *Task {
 	return task
 }
 
-// parseSafeEditFormat attempts to parse the new SafeEdit format with BEFORE_CONTEXT, EDIT_LINES, AFTER_CONTEXT
+// parseSafeEditFormat attempts to parse SafeEdit format (both old and new fenced formats)
 func parseSafeEditFormat(task *Task, lines []string, startIdx int) bool {
 	if startIdx >= len(lines) {
 		return false
@@ -488,8 +488,8 @@ func parseSafeEditFormat(task *Task, lines []string, startIdx int) bool {
 	for i := startIdx; i < len(lines) && i < startIdx+50; i++ { // Look within reasonable distance
 		line := strings.TrimSpace(lines[i])
 
-		// Detect section markers
-		if line == "BEFORE_CONTEXT:" {
+		// Detect section markers - support both old and new formats
+		if line == "BEFORE_CONTEXT:" || line == "--- BEFORE ---" {
 			currentSection = "before"
 			continue
 		} else if strings.HasPrefix(line, "EDIT_LINES:") {
@@ -502,8 +502,22 @@ func parseSafeEditFormat(task *Task, lines []string, startIdx int) bool {
 				parseEditLineRange(task, lineRange)
 			}
 			continue
-		} else if line == "AFTER_CONTEXT:" {
+		} else if line == "--- CHANGE ---" {
+			currentSection = "change"
+			continue
+		} else if line == "AFTER_CONTEXT:" || line == "--- AFTER ---" {
 			currentSection = "after"
+			continue
+		}
+
+		// Handle EDIT_LINES within CHANGE section (new fenced format)
+		if currentSection == "change" && strings.HasPrefix(line, "EDIT_LINES:") {
+			// Extract line range from EDIT_LINES marker
+			parts := strings.Split(line, ":")
+			if len(parts) > 1 {
+				lineRange := strings.TrimSpace(parts[1])
+				parseEditLineRange(task, lineRange)
+			}
 			continue
 		}
 
@@ -523,6 +537,11 @@ func parseSafeEditFormat(task *Task, lines []string, startIdx int) bool {
 			beforeContext = append(beforeContext, lines[i]) // Preserve original formatting including empty lines
 		case "edit":
 			editContent = append(editContent, lines[i]) // Preserve original formatting including empty lines
+		case "change":
+			// In the new fenced format, content comes after EDIT_LINES
+			if !strings.HasPrefix(line, "EDIT_LINES:") {
+				editContent = append(editContent, lines[i]) // Preserve original formatting including empty lines
+			}
 		case "after":
 			afterContext = append(afterContext, lines[i]) // Preserve original formatting including empty lines
 		}

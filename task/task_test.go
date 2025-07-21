@@ -679,7 +679,7 @@ func TestParseNaturalLanguageEditTask(t *testing.T) {
 	// Test edit task with arrow notation
 	llmResponse := `I'll update the main function with error handling.
 
-🔧 EDIT main.go → add error handling and logging
+🔧 EDIT main.go -> add error handling and logging
 
 This will improve the robustness of the application.`
 
@@ -779,7 +779,7 @@ func TestParseNaturalLanguageEditWithCodeBlock(t *testing.T) {
 	// Test edit task with code block
 	llmResponse := `I'll update the configuration file.
 
-🔧 EDIT config.json → add new database settings
+🔧 EDIT config.json -> add new database settings
 
 ` + "```json\n" + `{
   "database": {
@@ -853,7 +853,7 @@ func TestParseNaturalLanguageReplaceAll(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			llmResponse := fmt.Sprintf("I'll update the file.\n\n🔧 EDIT main.go → %s", tc.description)
+			llmResponse := fmt.Sprintf("I'll update the file.\n\n🔧 EDIT main.go -> %s", tc.description)
 
 			taskList, err := ParseTasks(llmResponse)
 			if err != nil {
@@ -901,7 +901,7 @@ func TestParseNaturalLanguageEditWithoutCodeBlock(t *testing.T) {
 	// Test edit task without code block content (should only have description)
 	llmResponse := `I'll update the configuration file.
 
-🔧 EDIT config.yaml → add database settings
+🔧 EDIT config.yaml -> add database settings
 
 This will add the necessary database configuration.`
 
@@ -946,14 +946,14 @@ func TestParseLineBasedEditTasks(t *testing.T) {
 	}{
 		{
 			name:           "Single line edit",
-			llmResponse:    "🔧 EDIT main.go:15 → add error handling",
+			llmResponse:    "🔧 EDIT main.go:15 -> add error handling",
 			expectedPath:   "main.go",
 			expectedTarget: 15,
 			expectedIntent: "add error handling",
 		},
 		{
 			name:           "Line range edit",
-			llmResponse:    "🔧 EDIT config.go:10-20 → replace database settings",
+			llmResponse:    "🔧 EDIT config.go:10-20 -> replace database settings",
 			expectedPath:   "config.go",
 			expectedStart:  10,
 			expectedEnd:    20,
@@ -961,14 +961,14 @@ func TestParseLineBasedEditTasks(t *testing.T) {
 		},
 		{
 			name:           "Simple format single line",
-			llmResponse:    "EDIT utils.js:42 → fix bug",
+			llmResponse:    "EDIT utils.js:42 -> fix bug",
 			expectedPath:   "utils.js",
 			expectedTarget: 42,
 			expectedIntent: "fix bug",
 		},
 		{
 			name:           "Simple format range",
-			llmResponse:    "EDIT styles.css:5-8 → update colors",
+			llmResponse:    "EDIT styles.css:5-8 -> update colors",
 			expectedPath:   "styles.css",
 			expectedStart:  5,
 			expectedEnd:    8,
@@ -1090,7 +1090,7 @@ func TestParseReadWithLineNumbers(t *testing.T) {
 
 // Test backward compatibility - ensure legacy context-based editing still works
 func TestBackwardCompatibilityContextEditing(t *testing.T) {
-	llmResponse := `🔧 EDIT README.md → add Rules section after "## Quick Start"
+	llmResponse := `🔧 EDIT README.md -> add Rules section after "## Quick Start"
 
 ` + "```" + `markdown
 ## Rules

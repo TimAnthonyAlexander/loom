@@ -518,8 +518,13 @@ func formatNaturalLanguageTaskDescription(taskType, args string) string {
 
 	case "EDIT":
 		// Check for arrow notation
-		if strings.Contains(args, "→") {
-			parts := strings.Split(args, "→")
+		if strings.Contains(args, "→") || strings.Contains(args, "->") {
+			var parts []string
+			if strings.Contains(args, "→") {
+				parts = strings.Split(args, "→")
+			} else {
+				parts = strings.Split(args, "->")
+			}
 			if len(parts) >= 2 {
 				filename := strings.TrimSpace(parts[0])
 				if idx := strings.LastIndex(filename, "/"); idx != -1 {
@@ -530,7 +535,7 @@ func formatNaturalLanguageTaskDescription(taskType, args string) string {
 				if len(action) > MaxActionDescriptionLength {
 					action = action[:MaxActionDescriptionLength-3] + "..."
 				}
-				return fmt.Sprintf("✏️ Editing %s → %s", filename, action)
+				return fmt.Sprintf("✏️ Editing %s -> %s", filename, action)
 			}
 		}
 

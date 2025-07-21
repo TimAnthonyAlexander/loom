@@ -224,7 +224,7 @@ READ README.md
 ### Available Task Types:
 - **READ**: Read file contents (🔧 READ filename.go)
 - **LIST**: List directory contents (🔧 LIST . recursive)
-- **EDIT**: Create/modify files (🔧 EDIT filename.go → changes)
+- **EDIT**: Create/modify files (🔧 EDIT filename.go -> changes)
 - **RUN**: Execute commands (🔧 RUN command)
 
 ### Example Response:

@@ -351,22 +351,23 @@ Welcome to loom!`
 	}
 }
 
-// TestSafeEditFormatParsing tests parsing of the SafeEdit format
+// TestSafeEditFormatParsing tests parsing of the new SafeEdit fenced format
 func TestSafeEditFormatParsing(t *testing.T) {
-	// Test valid SafeEdit format
-	llmResponse := `🔧 EDIT main.go:15-17 → replace error handling
+	// Test new fenced SafeEdit format
+	llmResponse := `🔧 EDIT main.go:15-17 -> replace error handling
 
-BEFORE_CONTEXT:
+--- BEFORE ---
     if err != nil {
         log.Fatal(err)
     }
 
+--- CHANGE ---
 EDIT_LINES: 15-17
     if err != nil {
         return fmt.Errorf("operation failed: %w", err)
     }
 
-AFTER_CONTEXT:
+--- AFTER ---
     
     return result`
 
@@ -401,6 +402,79 @@ AFTER_CONTEXT:
 	}
 
 	// Verify context content
+	expectedBefore := `    if err != nil {
+        log.Fatal(err)
+    }
+`
+	if task.BeforeContext != expectedBefore {
+		t.Errorf("Expected BeforeContext:\n%q\nGot:\n%q", expectedBefore, task.BeforeContext)
+	}
+
+	expectedAfter := `    
+    return result`
+	if task.AfterContext != expectedAfter {
+		t.Errorf("Expected AfterContext:\n%s\nGot:\n%s", expectedAfter, task.AfterContext)
+	}
+
+	expectedContent := `    if err != nil {
+        return fmt.Errorf("operation failed: %w", err)
+    }
+`
+	if task.Content != expectedContent {
+		t.Errorf("Expected Content:\n%q\nGot:\n%q", expectedContent, task.Content)
+	}
+}
+
+// TestSafeEditFormatParsingLegacy tests parsing of the old SafeEdit format for backward compatibility
+func TestSafeEditFormatParsingLegacy(t *testing.T) {
+	// Test old SafeEdit format (with Unicode arrow)
+	llmResponse := `🔧 EDIT main.go:15-17 → replace error handling
+
+BEFORE_CONTEXT:
+    if err != nil {
+        log.Fatal(err)
+    }
+
+EDIT_LINES: 15-17
+    if err != nil {
+        return fmt.Errorf("operation failed: %w", err)
+    }
+
+AFTER_CONTEXT:
+    
+    return result`
+
+	taskList, err := ParseTasks(llmResponse)
+	if err != nil {
+		t.Fatalf("Failed to parse legacy SafeEdit format: %v", err)
+	}
+
+	if taskList == nil || len(taskList.Tasks) != 1 {
+		t.Fatalf("Expected 1 task, got %d", len(taskList.Tasks))
+	}
+
+	task := taskList.Tasks[0]
+
+	// Verify task type and basic fields
+	if task.Type != TaskTypeEditFile {
+		t.Errorf("Expected TaskTypeEditFile, got %v", task.Type)
+	}
+
+	if task.Path != "main.go" {
+		t.Errorf("Expected path 'main.go', got '%s'", task.Path)
+	}
+
+	// Verify SafeEdit mode is enabled
+	if !task.SafeEditMode {
+		t.Error("Expected SafeEditMode to be true for legacy format")
+	}
+
+	// Verify line range
+	if task.TargetStartLine != 15 || task.TargetEndLine != 17 {
+		t.Errorf("Expected lines 15-17, got %d-%d", task.TargetStartLine, task.TargetEndLine)
+	}
+
+	// Verify context content (should be identical regardless of format)
 	expectedBefore := `    if err != nil {
         log.Fatal(err)
     }
