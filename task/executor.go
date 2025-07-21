@@ -640,11 +640,27 @@ func (e *Executor) performSafeEdit(originalContent string, task *Task, targetSta
 	return strings.Join(newLines, "\n"), nil
 }
 
-// ApplyEdit actually writes the file changes (called after user confirmation)
-// IMPORTANT: This method should only be called through Manager.ConfirmTask() to ensure
-// proper edit summary feedback is sent to the LLM. Direct calls bypass the enhanced
-// confirmation flow and prevent the LLM from receiving detailed change information.
+// ApplyEditWithConfirmation applies file changes after user confirmation
+// This method should be used by Manager.ConfirmTask() to ensure proper edit summary
+// feedback is sent to the LLM. For testing purposes, use ApplyEditForTesting().
+func (e *Executor) ApplyEditWithConfirmation(task *Task) error {
+	return e.applyEditInternal(task)
+}
+
+// ApplyEditForTesting applies file changes for testing purposes only
+// This bypasses the confirmation flow and should not be used in production code.
+func (e *Executor) ApplyEditForTesting(task *Task) error {
+	return e.applyEditInternal(task)
+}
+
+// Deprecated: Use ApplyEditWithConfirmation() instead
+// This method is kept for backward compatibility but will be removed.
 func (e *Executor) ApplyEdit(task *Task) error {
+	return e.applyEditInternal(task)
+}
+
+// applyEditInternal contains the actual implementation
+func (e *Executor) applyEditInternal(task *Task) error {
 	fullPath, err := e.securePath(task.Path)
 	if err != nil {
 		return err
@@ -1612,9 +1628,6 @@ func (e *Executor) analyzeContentChanges(originalContent, newContent, filePath s
 
 	// Calculate total lines after edit
 	summary.TotalLines = len(newLines)
-	if newContent == "" {
-		summary.TotalLines = 0
-	}
 
 	// Calculate character changes
 	summary.CharactersAdded = len(newContent) - len(originalContent)
@@ -1666,8 +1679,19 @@ func (e *Executor) analyzeDiffs(diffs []diffmatchpatch.Diff) (linesAdded, linesR
 		}
 	}
 
-	// For modifications, we consider adjacent delete+insert as modifications
-	// This is a simplified heuristic - more sophisticated analysis could be done
+	// HEURISTIC: Calculate line modifications using a simplified approach
+	// This heuristic assumes the minimum of linesAdded and linesRemoved represents
+	// modifications (changed lines), which is not always accurate for complex diffs.
+	//
+	// Limitations:
+	// - Does not consider actual order of changes in the diff
+	// - May misclassify moved lines as modifications
+	// - Cannot distinguish between adjacent vs. non-adjacent changes
+	//
+	// For more accurate results, consider implementing:
+	// - Myers algorithm with line-level tracking
+	// - Content similarity analysis for moved lines
+	// - Position-aware change detection
 	minChanges := linesAdded
 	if linesRemoved < minChanges {
 		minChanges = linesRemoved

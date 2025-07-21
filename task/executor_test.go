@@ -48,7 +48,7 @@ func TestTargetedEditReplaceBug(t *testing.T) {
 	}
 
 	// Apply the edit (this simulates the confirmation step)
-	err = executor.ApplyEdit(&response.Task)
+	err = executor.ApplyEditForTesting(&response.Task)
 	if err != nil {
 		t.Fatalf("Failed to apply edit: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestReplaceContentBug(t *testing.T) {
 	}
 
 	// Apply the edit
-	err = executor.ApplyEdit(&response.Task)
+	err = executor.ApplyEditForTesting(&response.Task)
 	if err != nil {
 		t.Fatalf("Failed to apply edit: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestDiffContentInContentField(t *testing.T) {
 	}
 
 	// Apply the edit
-	err = executor.ApplyEdit(&response.Task)
+	err = executor.ApplyEditForTesting(&response.Task)
 	if err != nil {
 		t.Fatalf("Failed to apply edit: %v", err)
 	}
@@ -313,7 +313,7 @@ Welcome to loom!`
 			}
 
 			// Apply the edit
-			err = executor.ApplyEdit(&response.Task)
+			err = executor.ApplyEditForTesting(&response.Task)
 			if err != nil {
 				t.Fatalf("Failed to apply edit: %v", err)
 			}

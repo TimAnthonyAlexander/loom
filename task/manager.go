@@ -152,6 +152,15 @@ func (m *Manager) HandleLLMResponse(llmResponse string, eventChan chan<- TaskExe
 }
 
 // ConfirmTask applies a confirmed destructive task and sends enhanced feedback to LLM
+//
+// BREAKING CHANGE: This method signature was changed to include taskResponse parameter
+// to support enhanced edit summary feedback. The taskResponse should be the response
+// from the original task execution that generated the confirmation request.
+//
+// Parameters:
+//   - task: The task to confirm and apply
+//   - taskResponse: The original response containing edit summary data (required for enhanced feedback)
+//   - approve: Whether the user approved the task
 func (m *Manager) ConfirmTask(task *Task, taskResponse *TaskResponse, approve bool) error {
 	if !approve {
 		// Send cancellation feedback to LLM
@@ -168,7 +177,7 @@ func (m *Manager) ConfirmTask(task *Task, taskResponse *TaskResponse, approve bo
 
 	var applyError error
 	if task.Type == TaskTypeEditFile {
-		applyError = m.executor.ApplyEdit(task)
+		applyError = m.executor.ApplyEditWithConfirmation(task)
 	} else if task.Type == TaskTypeRunShell {
 		// Check if this is an interactive shell command that needs real execution
 		if task.Interactive && task.AllowUserInput {
