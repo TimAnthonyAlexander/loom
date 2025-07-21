@@ -2018,6 +2018,7 @@ Current workspace summary:
 You can emit tasks to interact with the workspace using simple natural language commands:
 
 🔧 READ main.go (max: 150 lines)
+🔧 SEARCH "IndexStats" (find patterns - USE THIS INSTEAD OF GREP!)
 🔧 EDIT main.go -> describe changes
 🔧 EDIT newfile.go -> create new file
 🔧 LIST src/

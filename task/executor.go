@@ -70,6 +70,8 @@ func (e *Executor) Execute(task *Task) *TaskResponse {
 		return e.executeListDir(task)
 	case TaskTypeRunShell:
 		return e.executeRunShell(task)
+	case TaskTypeSearch:
+		return e.executeSearch(task)
 	default:
 		response.Error = fmt.Sprintf("unknown task type: %s", task.Type)
 		return response
@@ -1234,6 +1236,239 @@ func (e *Executor) executeRegularShellCommand(task *Task) *TaskResponse {
 
 	response.Output = output.String()
 	return response
+}
+
+// executeSearch runs a ripgrep search with specified parameters
+func (e *Executor) executeSearch(task *Task) *TaskResponse {
+	response := &TaskResponse{Task: *task}
+
+	// Security: ensure search path is within workspace
+	searchPath, err := e.securePath(task.Path)
+	if err != nil {
+		response.Error = err.Error()
+		return response
+	}
+
+	// Build ripgrep command arguments
+	args := []string{}
+
+	// Add pattern (query)
+	args = append(args, task.Query)
+
+	// Add search path
+	args = append(args, searchPath)
+
+	// Add flags based on task options
+	if task.IgnoreCase {
+		args = append([]string{"-i"}, args...)
+	}
+
+	if task.WholeWord {
+		args = append([]string{"-w"}, args...)
+	}
+
+	if task.FixedString {
+		args = append([]string{"-F"}, args...)
+	}
+
+	if task.FilenamesOnly {
+		args = append([]string{"-l"}, args...)
+	}
+
+	if task.CountMatches {
+		args = append([]string{"-c"}, args...)
+	}
+
+	if task.UsePCRE2 {
+		args = append([]string{"-P"}, args...)
+	}
+
+	// Add context options
+	if task.ContextBefore > 0 {
+		args = append([]string{fmt.Sprintf("-B%d", task.ContextBefore)}, args...)
+	}
+
+	if task.ContextAfter > 0 {
+		args = append([]string{fmt.Sprintf("-A%d", task.ContextAfter)}, args...)
+	}
+
+	// Add file type filters
+	for _, fileType := range task.FileTypes {
+		args = append([]string{"-t", fileType}, args...)
+	}
+
+	for _, excludeType := range task.ExcludeTypes {
+		args = append([]string{"-T", excludeType}, args...)
+	}
+
+	// Add glob patterns
+	for _, glob := range task.GlobPatterns {
+		args = append([]string{"-g", glob}, args...)
+	}
+
+	for _, excludeGlob := range task.ExcludeGlobs {
+		args = append([]string{"-g", "!" + excludeGlob}, args...)
+	}
+
+	// Add search hidden files option
+	if task.SearchHidden {
+		args = append([]string{"--hidden"}, args...)
+	}
+
+	// Limit output to prevent overwhelming results
+	if task.MaxResults > 0 {
+		args = append([]string{"-m", fmt.Sprintf("%d", task.MaxResults)}, args...)
+	}
+
+	// Always add line numbers for better context
+	if !task.FilenamesOnly && !task.CountMatches {
+		args = append([]string{"-n"}, args...)
+	}
+
+	// Add color output for better readability
+	args = append([]string{"--color=always"}, args...)
+
+	// Execute ripgrep
+	output, err := indexer.RunRipgrepWithArgs(args...)
+	if err != nil {
+		// Check if it's just "no matches found" (exit code 1)
+		if strings.Contains(err.Error(), "exit status 1") {
+			// No matches found is not an error, just empty results
+			response.Success = true
+			response.Output = fmt.Sprintf("Search completed: '%s' - No matches found", task.Query)
+			response.ActualContent = fmt.Sprintf("No matches found for search query: '%s'\n\nSearch parameters:\n- Path: %s\n- Options: %s",
+				task.Query, task.Path, e.formatSearchOptions(task))
+			return response
+		}
+
+		response.Error = fmt.Sprintf("ripgrep search failed: %v", err)
+		return response
+	}
+
+	// Process and format output
+	outputStr := string(output)
+	
+	// Count matches and files for summary
+	lines := strings.Split(strings.TrimSpace(outputStr), "\n")
+	if len(lines) == 1 && lines[0] == "" {
+		// Empty output
+		response.Success = true
+		response.Output = fmt.Sprintf("Search completed: '%s' - No matches found", task.Query)
+		response.ActualContent = fmt.Sprintf("No matches found for search query: '%s'\n\nSearch parameters:\n- Path: %s\n- Options: %s",
+			task.Query, task.Path, e.formatSearchOptions(task))
+		return response
+	}
+
+	// Count matches and files
+	matchCount := 0
+	fileSet := make(map[string]bool)
+	
+	for _, line := range lines {
+		if line != "" {
+			matchCount++
+			// Extract filename (everything before first colon)
+			if colonIdx := strings.Index(line, ":"); colonIdx > 0 {
+				filename := line[:colonIdx]
+				fileSet[filename] = true
+			}
+		}
+	}
+
+	fileCount := len(fileSet)
+
+	// Format search results with intelligent truncation
+	formattedOutput := e.formatSearchResults(outputStr, task, matchCount, fileCount)
+
+	// Store actual search results for LLM
+	response.ActualContent = formattedOutput
+
+	response.Success = true
+	
+	// Create concise user status message
+	if task.FilenamesOnly {
+		response.Output = fmt.Sprintf("Search completed: '%s' - Found %d files with matches", task.Query, fileCount)
+	} else if task.CountMatches {
+		response.Output = fmt.Sprintf("Search completed: '%s' - Found %d total matches", task.Query, matchCount)
+	} else {
+		response.Output = fmt.Sprintf("Search completed: '%s' - Found %d matches in %d files", task.Query, matchCount, fileCount)
+	}
+
+	return response
+}
+
+// formatSearchOptions formats search options for display
+func (e *Executor) formatSearchOptions(task *Task) string {
+	var options []string
+
+	if task.IgnoreCase {
+		options = append(options, "case-insensitive")
+	}
+	if task.WholeWord {
+		options = append(options, "whole words")
+	}
+	if task.FixedString {
+		options = append(options, "literal string")
+	}
+	if len(task.FileTypes) > 0 {
+		options = append(options, fmt.Sprintf("file types: %s", strings.Join(task.FileTypes, ",")))
+	}
+	if len(task.ExcludeTypes) > 0 {
+		options = append(options, fmt.Sprintf("exclude types: %s", strings.Join(task.ExcludeTypes, ",")))
+	}
+	if len(task.GlobPatterns) > 0 {
+		options = append(options, fmt.Sprintf("include: %s", strings.Join(task.GlobPatterns, ",")))
+	}
+	if task.ContextBefore > 0 || task.ContextAfter > 0 {
+		options = append(options, fmt.Sprintf("context: %d/%d", task.ContextBefore, task.ContextAfter))
+	}
+
+	if len(options) == 0 {
+		return "default"
+	}
+
+	return strings.Join(options, ", ")
+}
+
+// formatSearchResults formats ripgrep output for better readability
+func (e *Executor) formatSearchResults(output string, task *Task, matchCount, fileCount int) string {
+	var result strings.Builder
+
+	// Add search summary header
+	result.WriteString(fmt.Sprintf("🔍 Search Results for: '%s'\n", task.Query))
+	result.WriteString(fmt.Sprintf("📁 Path: %s\n", task.Path))
+	result.WriteString(fmt.Sprintf("📊 Summary: %d matches in %d files\n", matchCount, fileCount))
+	
+	if len(task.FileTypes) > 0 {
+		result.WriteString(fmt.Sprintf("📋 File types: %s\n", strings.Join(task.FileTypes, ", ")))
+	}
+	
+	if task.IgnoreCase || task.WholeWord || task.FixedString {
+		options := []string{}
+		if task.IgnoreCase {
+			options = append(options, "case-insensitive")
+		}
+		if task.WholeWord {
+			options = append(options, "whole words")
+		}
+		if task.FixedString {
+			options = append(options, "literal")
+		}
+		result.WriteString(fmt.Sprintf("⚙️  Options: %s\n", strings.Join(options, ", ")))
+	}
+	
+	result.WriteString("\n" + strings.Repeat("─", 50) + "\n\n")
+
+	// Add the actual ripgrep output
+	result.WriteString(output)
+
+	// Add usage hints for large result sets
+	if matchCount > 50 {
+		result.WriteString("\n\n💡 Tip: Use more specific search terms or file type filters to narrow results:")
+		result.WriteString("\n   🔧 SEARCH \"specific phrase\" type:go")
+		result.WriteString("\n   🔧 SEARCH pattern glob:*.ts -glob:*.test.ts")
+	}
+
+	return result.String()
 }
 
 // securePath ensures the path is within the workspace and returns the full path

@@ -223,6 +223,7 @@ READ README.md
 
 ### Available Task Types:
 - **READ**: Read file contents (🔧 READ filename.go)
+- **SEARCH**: Find code patterns (🔧 SEARCH "IndexStats" - USE THIS INSTEAD OF GREP!)
 - **LIST**: List directory contents (🔧 LIST . recursive)
 - **EDIT**: Create/modify files (🔧 EDIT filename.go -> changes)
 - **RUN**: Execute commands (🔧 RUN command)

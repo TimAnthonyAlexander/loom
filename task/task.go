@@ -41,6 +41,7 @@ const (
 	TaskTypeEditFile TaskType = "EditFile"
 	TaskTypeListDir  TaskType = "ListDir"
 	TaskTypeRunShell TaskType = "RunShell"
+	TaskTypeSearch   TaskType = "Search" // NEW: Search files using ripgrep
 )
 
 // Task represents a single task to be executed
@@ -91,6 +92,23 @@ type Task struct {
 
 	// ListDir specific
 	Recursive bool `json:"recursive,omitempty"`
+
+	// Search specific (NEW)
+	Query           string   `json:"query,omitempty"`             // The search pattern/regex
+	FileTypes       []string `json:"file_types,omitempty"`        // File type filters (e.g., ["go", "js"])
+	ExcludeTypes    []string `json:"exclude_types,omitempty"`     // Exclude file types
+	GlobPatterns    []string `json:"glob_patterns,omitempty"`     // Include glob patterns (e.g., ["*.tf"])
+	ExcludeGlobs    []string `json:"exclude_globs,omitempty"`     // Exclude glob patterns
+	IgnoreCase      bool     `json:"ignore_case,omitempty"`       // Case-insensitive search
+	WholeWord       bool     `json:"whole_word,omitempty"`        // Match whole words only
+	FixedString     bool     `json:"fixed_string,omitempty"`      // Treat query as literal string, not regex
+	ContextBefore   int      `json:"context_before,omitempty"`    // Lines of context before matches
+	ContextAfter    int      `json:"context_after,omitempty"`     // Lines of context after matches
+	MaxResults      int      `json:"max_results,omitempty"`       // Limit number of results
+	FilenamesOnly   bool     `json:"filenames_only,omitempty"`    // Show only filenames with matches
+	CountMatches    bool     `json:"count_matches,omitempty"`     // Count matches per file
+	SearchHidden    bool     `json:"search_hidden,omitempty"`     // Search hidden files and directories
+	UsePCRE2        bool     `json:"use_pcre2,omitempty"`         // Use PCRE2 regex engine for advanced features
 }
 
 // InteractivePrompt represents an expected prompt and its response in interactive commands
@@ -144,7 +162,7 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 	seenTasks := make(map[string]bool)
 
 	// Look for task indicators with emoji prefixes
-	taskPattern := regexp.MustCompile(`^🔧\s+(READ|EDIT|LIST|RUN)\s+(.+)`)
+	taskPattern := regexp.MustCompile(`^🔧\s+(READ|EDIT|LIST|RUN|SEARCH)\s+(.+)`)
 
 	for i, line := range lines {
 		line = strings.TrimSpace(line)
@@ -185,7 +203,7 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 	}
 
 	// Also look for simpler patterns without emoji
-	simplePattern := regexp.MustCompile(`(?i)^(read|edit|list|run)\s+(.+)`)
+	simplePattern := regexp.MustCompile(`(?i)^(read|edit|list|run|search)\s+(.+)`)
 
 	for i, line := range lines {
 		line = strings.TrimSpace(line)
@@ -245,6 +263,8 @@ func parseNaturalLanguageTask(taskType, args string) *Task {
 		return parseListTask(args)
 	case "RUN":
 		return parseRunTask(args)
+	case "SEARCH":
+		return parseSearchTask(args)
 	default:
 		return nil
 	}
@@ -518,6 +538,110 @@ func parseRunTask(args string) *Task {
 	if !task.Interactive && isLikelyInteractiveCommand(task.Command) {
 		task.Interactive = true
 		task.InputMode = "auto" // Use automatic response handling
+	}
+
+	return task
+}
+
+// parseSearchTask parses natural language SEARCH commands
+func parseSearchTask(args string) *Task {
+	task := &Task{Type: TaskTypeSearch}
+
+	// Parse search query and options
+	parts := strings.Fields(args)
+	if len(parts) == 0 {
+		return nil
+	}
+
+	// First part is always the search query
+	task.Query = parts[0]
+	
+	// Remove quotes if present
+	if len(task.Query) >= 2 {
+		if (strings.HasPrefix(task.Query, "\"") && strings.HasSuffix(task.Query, "\"")) ||
+			(strings.HasPrefix(task.Query, "'") && strings.HasSuffix(task.Query, "'")) {
+			task.Query = task.Query[1 : len(task.Query)-1]
+		}
+	}
+
+	// Parse additional options
+	for i := 1; i < len(parts); i++ {
+		part := strings.ToLower(parts[i])
+
+		switch {
+		case strings.HasPrefix(part, "type:"):
+			// File type filter: type:go,js
+			types := strings.TrimPrefix(part, "type:")
+			task.FileTypes = strings.Split(types, ",")
+
+		case strings.HasPrefix(part, "-type:"):
+			// Exclude file type: -type:md
+			types := strings.TrimPrefix(part, "-type:")
+			task.ExcludeTypes = strings.Split(types, ",")
+
+		case strings.HasPrefix(part, "glob:"):
+			// Glob pattern: glob:*.tf
+			glob := strings.TrimPrefix(part, "glob:")
+			task.GlobPatterns = append(task.GlobPatterns, glob)
+
+		case strings.HasPrefix(part, "-glob:"):
+			// Exclude glob: -glob:*.md
+			glob := strings.TrimPrefix(part, "-glob:")
+			task.ExcludeGlobs = append(task.ExcludeGlobs, glob)
+
+		case strings.HasPrefix(part, "context:"):
+			// Context lines: context:3
+			if contextStr := strings.TrimPrefix(part, "context:"); contextStr != "" {
+				if context, err := strconv.Atoi(contextStr); err == nil {
+					task.ContextBefore = context
+					task.ContextAfter = context
+				}
+			}
+
+		case strings.HasPrefix(part, "max:"):
+			// Max results: max:50
+			if maxStr := strings.TrimPrefix(part, "max:"); maxStr != "" {
+				if max, err := strconv.Atoi(maxStr); err == nil {
+					task.MaxResults = max
+				}
+			}
+
+		case part == "case-insensitive" || part == "ignore-case" || part == "-i":
+			task.IgnoreCase = true
+
+		case part == "whole-word" || part == "-w":
+			task.WholeWord = true
+
+		case part == "fixed-string" || part == "-f":
+			task.FixedString = true
+
+		case part == "filenames-only" || part == "-l":
+			task.FilenamesOnly = true
+
+		case part == "count" || part == "-c":
+			task.CountMatches = true
+
+		case part == "hidden" || part == "all":
+			task.SearchHidden = true
+
+		case part == "pcre2" || part == "-p":
+			task.UsePCRE2 = true
+
+		case strings.HasPrefix(part, "in:"):
+			// Search in specific directory: in:src/
+			if path := strings.TrimPrefix(part, "in:"); path != "" {
+				task.Path = path
+			}
+		}
+	}
+
+	// Set defaults
+	if task.MaxResults == 0 {
+		task.MaxResults = 100 // Default limit to prevent overwhelming output
+	}
+
+	if task.Path == "" {
+		task.Path = "." // Default to current directory
 	}
 
 	return task
@@ -1001,6 +1125,17 @@ func validateTask(task *Task) error {
 			task.Timeout = 3 // Default 3 second timeout
 		}
 
+	case TaskTypeSearch:
+		if task.Query == "" {
+			return fmt.Errorf("Search requires query")
+		}
+		if task.Path == "" {
+			task.Path = "." // Default to current directory
+		}
+		if task.MaxResults <= 0 {
+			task.MaxResults = 100 // Default limit
+		}
+
 	default:
 		return fmt.Errorf("unknown task type: %s", task.Type)
 	}
@@ -1067,6 +1202,22 @@ func (t *Task) Description() string {
 
 	case TaskTypeRunShell:
 		return fmt.Sprintf("Run command: %s", t.Command)
+
+	case TaskTypeSearch:
+		description := fmt.Sprintf("Search for '%s'", t.Query)
+		if t.Path != "." {
+			description += fmt.Sprintf(" in %s", t.Path)
+		}
+		if len(t.FileTypes) > 0 {
+			description += fmt.Sprintf(" (types: %s)", strings.Join(t.FileTypes, ","))
+		}
+		if t.IgnoreCase {
+			description += " (case-insensitive)"
+		}
+		if t.WholeWord {
+			description += " (whole words)"
+		}
+		return description
 
 	default:
 		return fmt.Sprintf("Unknown task: %s", t.Type)
