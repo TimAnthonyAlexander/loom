@@ -271,6 +271,11 @@ func (e *Executor) executeEditFile(task *Task) *TaskResponse {
 		return response
 	}
 
+	// ULTRA-SAFE: Check for SafeEdit format first (highest priority - mandatory context validation)
+	if task.SafeEditMode {
+		return e.applySafeEdit(task, fullPath)
+	}
+
 	// NEW: Check for line-based editing (most precise method)
 	if task.TargetLine > 0 || (task.TargetStartLine > 0 && task.TargetEndLine > 0) {
 		return e.applyLineBasedEdit(task, fullPath)
@@ -413,6 +418,171 @@ func (e *Executor) replaceContent(task *Task, fullPath string) *TaskResponse {
 	// Store the new content for later application
 	response.Task.Content = task.Content
 	return response
+}
+
+// applySafeEdit applies the ultra-safe SafeEdit format with mandatory context validation
+func (e *Executor) applySafeEdit(task *Task, fullPath string) *TaskResponse {
+	response := &TaskResponse{Task: *task}
+
+	// Read existing content if file exists
+	var originalContent string
+	fileExists := false
+	if _, err := os.Stat(fullPath); err == nil {
+		data, err := os.ReadFile(fullPath)
+		if err != nil {
+			response.Error = fmt.Sprintf("failed to read existing file: %v", err)
+			return response
+		}
+		originalContent = string(data)
+		fileExists = true
+	}
+
+	if !fileExists {
+		response.Error = fmt.Sprintf("SafeEdit requires existing file for context validation: %s", task.Path)
+		return response
+	}
+
+	lines := strings.Split(originalContent, "\n")
+	totalLines := len(lines)
+
+	// Determine target line range
+	var targetStart, targetEnd int
+	if task.TargetLine > 0 {
+		// Single line edit
+		targetStart = task.TargetLine
+		targetEnd = task.TargetLine
+	} else if task.TargetStartLine > 0 && task.TargetEndLine > 0 {
+		// Range edit
+		targetStart = task.TargetStartLine
+		targetEnd = task.TargetEndLine
+	} else {
+		response.Error = "SafeEdit requires exact line numbers (TargetLine or TargetStartLine/TargetEndLine)"
+		return response
+	}
+
+	// Validate line numbers
+	if targetStart < 1 || targetStart > totalLines {
+		response.Error = fmt.Sprintf("target start line %d is out of range (file has %d lines)", targetStart, totalLines)
+		return response
+	}
+
+	if targetEnd < targetStart || targetEnd > totalLines {
+		response.Error = fmt.Sprintf("target end line %d is invalid (start: %d, file has %d lines)", targetEnd, targetStart, totalLines)
+		return response
+	}
+
+	// MANDATORY CONTEXT VALIDATION - this is what makes SafeEdit ultra-safe
+	if err := e.validateSafeEditContext(lines, task, targetStart, targetEnd); err != nil {
+		response.Error = fmt.Sprintf("CONTEXT VALIDATION FAILED: %v", err)
+		return response
+	}
+
+	// Apply the edit
+	newContent, err := e.performSafeEdit(originalContent, task, targetStart, targetEnd)
+	if err != nil {
+		response.Error = err.Error()
+		return response
+	}
+
+	// Create diff preview
+	dmp := diffmatchpatch.New()
+	diff := dmp.DiffMain(originalContent, newContent, false)
+	preview := dmp.DiffPrettyText(diff)
+
+	// Store actual preview for LLM
+	response.ActualContent = fmt.Sprintf("SafeEdit preview for %s (lines %d-%d):\n\n%s\n\nContext validation: PASSED ✓\nReady to apply changes.",
+		task.Path, targetStart, targetEnd, preview)
+
+	response.Success = true
+	// Show status message to user
+	if targetStart == targetEnd {
+		response.Output = fmt.Sprintf("Editing file: %s (SafeEdit line %d, context validated)", task.Path, targetStart)
+	} else {
+		response.Output = fmt.Sprintf("Editing file: %s (SafeEdit lines %d-%d, context validated)", task.Path, targetStart, targetEnd)
+	}
+
+	// Store the new content for later application
+	response.Task.Content = newContent
+	return response
+}
+
+// validateSafeEditContext performs mandatory context validation for SafeEdit
+func (e *Executor) validateSafeEditContext(lines []string, task *Task, targetStart, targetEnd int) error {
+	totalLines := len(lines)
+
+	// Validate BEFORE_CONTEXT
+	if task.BeforeContext == "" {
+		return fmt.Errorf("BeforeContext is required for SafeEdit")
+	}
+
+	beforeLines := strings.Split(task.BeforeContext, "\n")
+	beforeStartIdx := targetStart - len(beforeLines) - 1 // Convert to 0-indexed
+
+	if beforeStartIdx < 0 {
+		return fmt.Errorf("not enough lines before target for context validation (need %d lines before line %d)", len(beforeLines), targetStart)
+	}
+
+	// Check each line of before context
+	for i, expectedLine := range beforeLines {
+		actualIdx := beforeStartIdx + i
+		if actualIdx >= len(lines) {
+			return fmt.Errorf("before context validation failed: line index out of range")
+		}
+
+		actualLine := lines[actualIdx]
+		if strings.TrimSpace(actualLine) != strings.TrimSpace(expectedLine) {
+			return fmt.Errorf("before context mismatch at line %d:\nExpected: %q\nActual: %q", actualIdx+1, expectedLine, actualLine)
+		}
+	}
+
+	// Validate AFTER_CONTEXT
+	if task.AfterContext == "" {
+		return fmt.Errorf("AfterContext is required for SafeEdit")
+	}
+
+	afterLines := strings.Split(task.AfterContext, "\n")
+	afterStartIdx := targetEnd // Start right after target range (0-indexed)
+
+	if afterStartIdx >= totalLines {
+		return fmt.Errorf("not enough lines after target for context validation (need %d lines after line %d)", len(afterLines), targetEnd)
+	}
+
+	// Check each line of after context
+	for i, expectedLine := range afterLines {
+		actualIdx := afterStartIdx + i
+		if actualIdx >= len(lines) {
+			return fmt.Errorf("after context validation failed: line index out of range")
+		}
+
+		actualLine := lines[actualIdx]
+		if strings.TrimSpace(actualLine) != strings.TrimSpace(expectedLine) {
+			return fmt.Errorf("after context mismatch at line %d:\nExpected: %q\nActual: %q", actualIdx+1, expectedLine, actualLine)
+		}
+	}
+
+	return nil // All context validation passed
+}
+
+// performSafeEdit performs the actual SafeEdit with validated context
+func (e *Executor) performSafeEdit(originalContent string, task *Task, targetStart, targetEnd int) (string, error) {
+	lines := strings.Split(originalContent, "\n")
+
+	// Replace the target lines with new content
+	newLines := make([]string, 0, len(lines))
+	newLines = append(newLines, lines[:targetStart-1]...) // Lines before target (convert to 0-indexed)
+
+	// Add new content (split by newlines if multi-line)
+	if task.Content != "" {
+		contentLines := strings.Split(task.Content, "\n")
+		newLines = append(newLines, contentLines...)
+	}
+
+	// Add lines after target range
+	if targetEnd < len(lines) {
+		newLines = append(newLines, lines[targetEnd:]...) // Lines after target (0-indexed)
+	}
+
+	return strings.Join(newLines, "\n"), nil
 }
 
 // ApplyEdit actually writes the file changes (called after user confirmation)

@@ -197,79 +197,149 @@ When exploring a codebase, follow this autonomous approach:
 **Reading specific implementation:**
 🔧 READ cmd/root.go (max: 200 lines)
 
-## ✂️ Precise Editing Rules ✂️
+## ✂️ ULTRA-SAFE Precise Editing Rules ✂️
 
-1. **Prefer line-range edits** – deterministic, least risk of truncation  
-   - EDIT file.go:42-45 → replace panic with error  
-2. **Need the whole file?**  
-   - First: READ file.go (with line numbers) for context  
-   - Then: EDIT file.go → replace entire content (paste full file)  
-3. **Arrow (→) must sit on the same line as the filename.**  
-4. **NEVER** provide partial content unless using a line-range or context-pattern edit.  
-5. **Binary / large (>5 kLOC) files** – refuse with a clear message.
+**CRITICAL SAFETY REQUIREMENT**: ALL file edits MUST use the new SafeEdit format with mandatory context validation.
 
-### Edit Workflow (READ-VERIFY safeguard)
-1. READ file.go (with line numbers) – confirm target text & line numbers.
-2. EDIT file.go:... → … – apply the change.
-3. **System auto-verifies** line hash before and after; if mismatch, abort and re-READ.
+### 🔒 SafeEdit Format (MANDATORY for all edits)
 
-### New files
-- Use EDIT new/path/file.go → create and paste the **entire contents**.
-- Loom will fail if the path already exists.
+For existing files, you MUST use this exact format:
 
-### Existing files  
-- Use line-range or pattern edits.
-- Whole-file replacement permitted only after an explicit READ and matching hash.
+EXAMPLE:
+🔧 EDIT file.go:15-17 → replace error handling
 
-**When providing file content:**
-Use proper Go syntax highlighting in code blocks.
+BEFORE_CONTEXT:
+    if err != nil {
+        log.Fatal(err)
+    }
+
+EDIT_LINES: 15-17
+    if err != nil {
+        return fmt.Errorf("operation failed: %w", err)
+    }
+
+AFTER_CONTEXT:
+    
+    return result
+
+### SafeEdit Format Rules:
+1. **BEFORE_CONTEXT**: 1-3 lines immediately before the edit range (for validation)
+2. **EDIT_LINES**: Exact line numbers being replaced (e.g., 15-17 or just 15)
+3. **AFTER_CONTEXT**: 1-3 lines immediately after the edit range (for validation)
+4. **Line numbers MUST be exact** - system will validate context matches
+5. **Context lines are NEVER modified** - only EDIT_LINES content is changed
+
+### Why This Format is Safer:
+- **Mandatory Context Validation**: System verifies before/after context matches exactly
+- **Precise Line Targeting**: No ambiguity about what gets changed
+- **Reference vs Change Separation**: Clear distinction between context and actual edits
+- **Validation Failure Protection**: Edit rejected if context doesn't match
+
+### Examples:
+
+**Single Line Edit:**
+🔧 EDIT main.go:42 → fix variable name
+
+BEFORE_CONTEXT:
+func main() {
+    userName := "john"
+
+EDIT_LINES: 42
+    username := "john"
+
+AFTER_CONTEXT:
+    fmt.Println(username)
+}
+
+**Multi-Line Edit:**
+🔧 EDIT handler.go:28-31 → improve error handling
+
+BEFORE_CONTEXT:
+func ProcessRequest(req *Request) error {
+    if req == nil {
+
+EDIT_LINES: 28-31
+        return &ValidationError{
+            Field:   "request",
+            Message: "request cannot be nil",
+        }
+
+AFTER_CONTEXT:
+    }
+    
+    return processData(req.Data)
+
+### Legacy Support (DISCOURAGED):
+- **Line-range only**: EDIT file.go:42-45 → description (less safe, no context validation)
+- **Full file replacement**: Only after explicit READ with line numbers
+
+### FORBIDDEN Operations:
+❌ **NEVER edit without context validation for existing files**
+❌ **NEVER provide partial file content without line ranges**  
+❌ **NEVER edit large ranges (>20 lines) without breaking into smaller edits**
+❌ **NEVER edit without reading the file first to get line numbers**
+
+### Mandatory Edit Workflow:
+1. **READ file.go (with line numbers)** – ALWAYS get current state first
+2. **Identify exact line numbers** for the change
+3. **Use SafeEdit format** with BEFORE_CONTEXT, EDIT_LINES, AFTER_CONTEXT
+4. **System validates** context matches before applying
+5. **Edit rejected** if context validation fails
+
+### New Files (Different Rules):
+For NEW files only, use simple format:
+🔧 EDIT newfile.go → create new configuration file
+
+[Then provide the complete file content in a code block]
 
 ### Task Types:
 
-1. **READ**: File contents with smart continuation
-   - READ filename.go (max: 200 lines, with line numbers)
-   - If truncated, Loom automatically queues: READ file.go (next 300 lines, with line numbers)
+1. **READ**: File contents with smart continuation (ALWAYS with line numbers for editing)
+   - 🔧 READ filename.go (with line numbers) ← REQUIRED before editing
+   - 🔧 READ filename.go (lines 40-60, with line numbers)
 
 2. **EDIT**: Create or modify files (user confirmation required)
-   - EDIT file.go:42-45 → replace panic with error
-   - EDIT newfile.go → create new file with content
+   - 🔧 EDIT file.go:15-17 → description (with SafeEdit format)
+   - 🔧 EDIT newfile.go → create new file (full content for new files only)
 
 3. **LIST**: Directory contents
-   - LIST . recursive
+   - 🔧 LIST . recursive
 
 4. **RUN**: Shell commands (**shell tasks run in disposable container unless user adds --prod**)
-   - RUN go test
-   - RUN npm install (timeout: 60)
+   - 🔧 RUN go test
+   - 🔧 RUN npm install (timeout: 60)
 
 ## Response Workflow:
 
+### For Code Changes (MANDATORY SEQUENCE):
+1. **READ with line numbers** to get current file state and identify target lines
+2. **Use SafeEdit format** with exact line ranges and context validation
+3. **System validates** context before applying changes
+4. **Edit confidently** - validation ensures safety
+
 ### For Project Exploration:
 1. **START with README** (usually the most important context)
-2. **Continue step-by-step** based on findings
+2. **Continue step-by-step** based on findings  
 3. **Signal completion** with EXPLORATION_COMPLETE: [analysis]
-
-### For Code Changes:
-1. **READ with line numbers** to confirm target
-2. **EDIT with line-range** for precision
-3. **Execute confidently** - user provides feedback if needed
 
 ### Autonomous Behaviors:
 - Read files sequentially building understanding
-- Continue exploring without asking permission  
+- Continue exploring without asking permission
 - Signal completion when comprehensive knowledge achieved
-- Provide detailed responses covering architecture, patterns, and quality
+- **Always use SafeEdit format for existing file modifications**
 
 ## Security & Constraints:
 - All file paths must be within the workspace
 - Binary files cannot be read
 - Secrets are automatically redacted from file content
 - EditFile and RunShell tasks require user confirmation (but execute confidently)
+- **Context validation is MANDATORY for all existing file edits**
 - Use smart chunking for large files
 
 ## Project-Specific Guidelines:
 %s
 
-**Remember**: Be autonomous, comprehensive, and proactive. Think like Cursor - dive deep immediately and build complete understanding before responding.`,
+**Remember**: Be autonomous, comprehensive, and proactive. Always use SafeEdit format for maximum safety. Think like Cursor - dive deep immediately and build complete understanding before responding.`,
 		stats.TotalFiles,
 		float64(stats.TotalSize)/1024/1024,
 		pe.index.LastUpdated.Format("15:04:05"),

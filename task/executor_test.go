@@ -350,3 +350,422 @@ Welcome to loom!`
 		})
 	}
 }
+
+// TestSafeEditFormatParsing tests parsing of the SafeEdit format
+func TestSafeEditFormatParsing(t *testing.T) {
+	// Test valid SafeEdit format
+	llmResponse := `🔧 EDIT main.go:15-17 → replace error handling
+
+BEFORE_CONTEXT:
+    if err != nil {
+        log.Fatal(err)
+    }
+
+EDIT_LINES: 15-17
+    if err != nil {
+        return fmt.Errorf("operation failed: %w", err)
+    }
+
+AFTER_CONTEXT:
+    
+    return result`
+
+	taskList, err := ParseTasks(llmResponse)
+	if err != nil {
+		t.Fatalf("Failed to parse SafeEdit format: %v", err)
+	}
+
+	if taskList == nil || len(taskList.Tasks) != 1 {
+		t.Fatalf("Expected 1 task, got %d", len(taskList.Tasks))
+	}
+
+	task := taskList.Tasks[0]
+
+	// Verify task type and basic fields
+	if task.Type != TaskTypeEditFile {
+		t.Errorf("Expected TaskTypeEditFile, got %v", task.Type)
+	}
+
+	if task.Path != "main.go" {
+		t.Errorf("Expected path 'main.go', got '%s'", task.Path)
+	}
+
+	// Verify SafeEdit mode is enabled
+	if !task.SafeEditMode {
+		t.Error("Expected SafeEditMode to be true")
+	}
+
+	// Verify line range
+	if task.TargetStartLine != 15 || task.TargetEndLine != 17 {
+		t.Errorf("Expected lines 15-17, got %d-%d", task.TargetStartLine, task.TargetEndLine)
+	}
+
+	// Verify context content
+	expectedBefore := `    if err != nil {
+        log.Fatal(err)
+    }
+`
+	if task.BeforeContext != expectedBefore {
+		t.Errorf("Expected BeforeContext:\n%q\nGot:\n%q", expectedBefore, task.BeforeContext)
+	}
+
+	expectedAfter := `    
+    return result`
+	if task.AfterContext != expectedAfter {
+		t.Errorf("Expected AfterContext:\n%s\nGot:\n%s", expectedAfter, task.AfterContext)
+	}
+
+	expectedContent := `    if err != nil {
+        return fmt.Errorf("operation failed: %w", err)
+    }
+`
+	if task.Content != expectedContent {
+		t.Errorf("Expected Content:\n%q\nGot:\n%q", expectedContent, task.Content)
+	}
+}
+
+// TestSafeEditContextValidationSuccess tests successful context validation
+func TestSafeEditContextValidationSuccess(t *testing.T) {
+	// Create a temporary directory for testing
+	tempDir, err := os.MkdirTemp("", "loom_safeedit_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create an executor
+	executor := NewExecutor(tempDir, false, 1024*1024)
+
+	// Create a test file with specific content
+	testFile := filepath.Join(tempDir, "main.go")
+	originalContent := `package main
+
+import "fmt"
+
+func main() {
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    return result
+}`
+	err = os.WriteFile(testFile, []byte(originalContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Create a SafeEdit task with correct context
+	task := &Task{
+		Type:            TaskTypeEditFile,
+		Path:            "main.go",
+		SafeEditMode:    true,
+		TargetStartLine: 6,
+		TargetEndLine:   8,
+		BeforeContext: `import "fmt"
+
+func main() {`,
+		Content: `    if err != nil {
+        return fmt.Errorf("operation failed: %w", err)
+    }`,
+		AfterContext: `    
+    return result`,
+	}
+
+	// Execute the SafeEdit
+	response := executor.executeEditFile(task)
+	if !response.Success {
+		t.Fatalf("SafeEdit execution failed: %s", response.Error)
+	}
+
+	// Verify the content was changed correctly
+	expectedNewContent := `package main
+
+import "fmt"
+
+func main() {
+    if err != nil {
+        return fmt.Errorf("operation failed: %w", err)
+    }
+    
+    return result
+}`
+
+	if response.Task.Content != expectedNewContent {
+		t.Errorf("Expected new content:\n%s\nGot:\n%s", expectedNewContent, response.Task.Content)
+	}
+
+	// Verify context validation message
+	if !strings.Contains(response.ActualContent, "Context validation: PASSED ✓") {
+		t.Error("Expected context validation success message")
+	}
+}
+
+// TestSafeEditContextValidationFailure tests context validation failures
+func TestSafeEditContextValidationFailure(t *testing.T) {
+	// Create a temporary directory for testing
+	tempDir, err := os.MkdirTemp("", "loom_safeedit_fail_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create an executor
+	executor := NewExecutor(tempDir, false, 1024*1024)
+
+	// Create a test file with specific content
+	testFile := filepath.Join(tempDir, "main.go")
+	originalContent := `package main
+
+import "fmt"
+
+func main() {
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    return result
+}`
+	err = os.WriteFile(testFile, []byte(originalContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Test case 1: Incorrect before context
+	task1 := &Task{
+		Type:            TaskTypeEditFile,
+		Path:            "main.go",
+		SafeEditMode:    true,
+		TargetStartLine: 6,
+		TargetEndLine:   8,
+		BeforeContext: `import "wrong"
+
+func main() {`, // Wrong context
+		Content: `    if err != nil {
+        return fmt.Errorf("operation failed: %w", err)
+    }`,
+		AfterContext: `    
+    return result`,
+	}
+
+	response1 := executor.executeEditFile(task1)
+	if response1.Success {
+		t.Error("Expected SafeEdit to fail with incorrect before context")
+	}
+	if !strings.Contains(response1.Error, "CONTEXT VALIDATION FAILED") {
+		t.Errorf("Expected context validation error, got: %s", response1.Error)
+	}
+
+	// Test case 2: Incorrect after context
+	task2 := &Task{
+		Type:            TaskTypeEditFile,
+		Path:            "main.go",
+		SafeEditMode:    true,
+		TargetStartLine: 6,
+		TargetEndLine:   8,
+		BeforeContext: `import "fmt"
+
+func main() {`,
+		Content: `    if err != nil {
+        return fmt.Errorf("operation failed: %w", err)
+    }`,
+		AfterContext: `    
+    return wrong`, // Wrong context
+	}
+
+	response2 := executor.executeEditFile(task2)
+	if response2.Success {
+		t.Error("Expected SafeEdit to fail with incorrect after context")
+	}
+	if !strings.Contains(response2.Error, "CONTEXT VALIDATION FAILED") {
+		t.Errorf("Expected context validation error, got: %s", response2.Error)
+	}
+}
+
+// TestSafeEditMissingContext tests validation when context is missing
+func TestSafeEditMissingContext(t *testing.T) {
+	// Create a temporary directory for testing
+	tempDir, err := os.MkdirTemp("", "loom_safeedit_missing_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create an executor
+	executor := NewExecutor(tempDir, false, 1024*1024)
+
+	// Create a test file
+	testFile := filepath.Join(tempDir, "main.go")
+	originalContent := `package main
+
+func main() {
+    fmt.Println("hello")
+}`
+	err = os.WriteFile(testFile, []byte(originalContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Test missing BeforeContext
+	task1 := &Task{
+		Type:            TaskTypeEditFile,
+		Path:            "main.go",
+		SafeEditMode:    true,
+		TargetStartLine: 4,
+		TargetEndLine:   4,
+		// BeforeContext missing
+		Content:      `    fmt.Println("world")`,
+		AfterContext: `}`,
+	}
+
+	response1 := executor.executeEditFile(task1)
+	if response1.Success {
+		t.Error("Expected SafeEdit to fail with missing BeforeContext")
+	}
+	if !strings.Contains(response1.Error, "BeforeContext is required") {
+		t.Errorf("Expected BeforeContext required error, got: %s", response1.Error)
+	}
+
+	// Test missing AfterContext
+	task2 := &Task{
+		Type:            TaskTypeEditFile,
+		Path:            "main.go",
+		SafeEditMode:    true,
+		TargetStartLine: 4,
+		TargetEndLine:   4,
+		BeforeContext:   `func main() {`,
+		Content:         `    fmt.Println("world")`,
+		// AfterContext missing
+	}
+
+	response2 := executor.executeEditFile(task2)
+	if response2.Success {
+		t.Error("Expected SafeEdit to fail with missing AfterContext")
+	}
+	if !strings.Contains(response2.Error, "AfterContext is required") {
+		t.Errorf("Expected AfterContext required error, got: %s", response2.Error)
+	}
+}
+
+// TestSafeEditSingleLine tests SafeEdit with single line edits
+func TestSafeEditSingleLine(t *testing.T) {
+	// Create a temporary directory for testing
+	tempDir, err := os.MkdirTemp("", "loom_safeedit_single_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create an executor
+	executor := NewExecutor(tempDir, false, 1024*1024)
+
+	// Create a test file
+	testFile := filepath.Join(tempDir, "main.go")
+	originalContent := `package main
+
+func main() {
+    userName := "john"
+    fmt.Println(userName)
+}`
+	err = os.WriteFile(testFile, []byte(originalContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Create a single-line SafeEdit task
+	task := &Task{
+		Type:          TaskTypeEditFile,
+		Path:          "main.go",
+		SafeEditMode:  true,
+		TargetLine:    4, // Single line edit
+		BeforeContext: `func main() {`,
+		Content:       `    username := "john"`,
+		AfterContext:  `    fmt.Println(userName)`,
+	}
+
+	// Execute the SafeEdit
+	response := executor.executeEditFile(task)
+	if !response.Success {
+		t.Fatalf("SafeEdit single line execution failed: %s", response.Error)
+	}
+
+	// Verify the content was changed correctly
+	expectedNewContent := `package main
+
+func main() {
+    username := "john"
+    fmt.Println(userName)
+}`
+
+	if response.Task.Content != expectedNewContent {
+		t.Errorf("Expected new content:\n%s\nGot:\n%s", expectedNewContent, response.Task.Content)
+	}
+}
+
+// TestSafeEditVsLegacyComparison tests that SafeEdit is safer than legacy methods
+func TestSafeEditVsLegacyComparison(t *testing.T) {
+	// Create a temporary directory for testing
+	tempDir, err := os.MkdirTemp("", "loom_safeedit_comparison_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create an executor
+	executor := NewExecutor(tempDir, false, 1024*1024)
+
+	// Create a test file that has been modified since AI last saw it
+	testFile := filepath.Join(tempDir, "main.go")
+	originalContent := `package main
+
+func main() {
+    // This line was changed after AI saw the file
+    fmt.Println("modified content")
+    return
+}`
+	err = os.WriteFile(testFile, []byte(originalContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Test legacy line-based edit (without context validation)
+	// AI thinks it's editing the old content but file has changed
+	legacyTask := &Task{
+		Type:            TaskTypeEditFile,
+		Path:            "main.go",
+		TargetStartLine: 4,
+		TargetEndLine:   4,
+		Content:         `    fmt.Println("hello world")`, // AI expects old content here
+	}
+
+	legacyResponse := executor.executeEditFile(legacyTask)
+	// Legacy edit succeeds even though the context is wrong
+	if !legacyResponse.Success {
+		t.Logf("Legacy edit failed (which is actually good): %s", legacyResponse.Error)
+	} else {
+		t.Logf("Legacy edit succeeded without context validation (potentially unsafe)")
+	}
+
+	// Test SafeEdit with outdated context (should fail safely)
+	safeTask := &Task{
+		Type:            TaskTypeEditFile,
+		Path:            "main.go",
+		SafeEditMode:    true,
+		TargetStartLine: 4,
+		TargetEndLine:   4,
+		BeforeContext:   `func main() {`,
+		Content:         `    fmt.Println("hello world")`,
+		AfterContext:    `    fmt.Println("old content")`, // AI expects old content
+	}
+
+	safeResponse := executor.executeEditFile(safeTask)
+	// SafeEdit should fail because context doesn't match
+	if safeResponse.Success {
+		t.Error("SafeEdit should have failed due to context mismatch, but it succeeded")
+	}
+
+	if !strings.Contains(safeResponse.Error, "CONTEXT VALIDATION FAILED") {
+		t.Errorf("Expected context validation failure, got: %s", safeResponse.Error)
+	}
+
+	t.Logf("SafeEdit correctly prevented unsafe edit due to context mismatch")
+}

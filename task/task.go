@@ -67,6 +67,12 @@ type Task struct {
 	TargetEndLine     int    `json:"target_end_line,omitempty"`    // End of line range to edit (1-indexed)
 	ContextValidation string `json:"context_validation,omitempty"` // Optional: expected content for safety validation
 
+	// SafeEdit format (ULTRA-SAFE - mandatory context validation)
+	SafeEditMode  bool   `json:"safe_edit_mode,omitempty"` // Flag indicating this uses SafeEdit format
+	BeforeContext string `json:"before_context,omitempty"` // Lines immediately before edit range (mandatory for validation)
+	AfterContext  string `json:"after_context,omitempty"`  // Lines immediately after edit range (mandatory for validation)
+	EditReason    string `json:"edit_reason,omitempty"`    // Clear explanation of what's being changed and why
+
 	// Targeted editing fields (LEGACY - kept for backward compatibility)
 	StartContext string `json:"start_context,omitempty"` // Line or pattern marking start of edit section
 	EndContext   string `json:"end_context,omitempty"`   // Line or pattern marking end of edit section
@@ -119,9 +125,14 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 
 			task := parseNaturalLanguageTask(taskType, taskArgs)
 			if task != nil {
-				// For EDIT tasks, look for content in subsequent code blocks
+				// For EDIT tasks, look for SafeEdit format or content in subsequent code blocks
 				if task.Type == TaskTypeEditFile && task.Content == "" {
-					if content := extractContentFromCodeBlock(lines, i+1); content != "" {
+					// First try to parse SafeEdit format
+					if parseSafeEditFormat(task, lines, i+1) {
+						if debugTaskParsing {
+							fmt.Printf("DEBUG: Parsed SafeEdit format for edit task\n")
+						}
+					} else if content := extractContentFromCodeBlock(lines, i+1); content != "" {
 						task.Content = content
 						if debugTaskParsing {
 							fmt.Printf("DEBUG: Found content in code block for edit task\n")
@@ -460,6 +471,102 @@ func parseRunTask(args string) *Task {
 	}
 
 	return task
+}
+
+// parseSafeEditFormat attempts to parse the new SafeEdit format with BEFORE_CONTEXT, EDIT_LINES, AFTER_CONTEXT
+func parseSafeEditFormat(task *Task, lines []string, startIdx int) bool {
+	if startIdx >= len(lines) {
+		return false
+	}
+
+	var beforeContext []string
+	var editContent []string
+	var afterContext []string
+	var currentSection string
+
+	// Look for SafeEdit format markers in the following lines
+	for i := startIdx; i < len(lines) && i < startIdx+50; i++ { // Look within reasonable distance
+		line := strings.TrimSpace(lines[i])
+
+		// Detect section markers
+		if line == "BEFORE_CONTEXT:" {
+			currentSection = "before"
+			continue
+		} else if strings.HasPrefix(line, "EDIT_LINES:") {
+			currentSection = "edit"
+
+			// Extract line range from EDIT_LINES marker
+			parts := strings.Split(line, ":")
+			if len(parts) > 1 {
+				lineRange := strings.TrimSpace(parts[1])
+				parseEditLineRange(task, lineRange)
+			}
+			continue
+		} else if line == "AFTER_CONTEXT:" {
+			currentSection = "after"
+			continue
+		}
+
+		// Skip empty lines only at section boundaries (before any section is set)
+		if line == "" && currentSection == "" {
+			continue
+		}
+
+		// If we hit another task or end of meaningful content, stop
+		if strings.HasPrefix(line, "🔧") || strings.HasPrefix(line, "```") {
+			break
+		}
+
+		// Collect content based on current section (preserve all lines including empty ones)
+		switch currentSection {
+		case "before":
+			beforeContext = append(beforeContext, lines[i]) // Preserve original formatting including empty lines
+		case "edit":
+			editContent = append(editContent, lines[i]) // Preserve original formatting including empty lines
+		case "after":
+			afterContext = append(afterContext, lines[i]) // Preserve original formatting including empty lines
+		}
+	}
+
+	// Validate we found all required sections
+	if len(beforeContext) == 0 || len(editContent) == 0 || len(afterContext) == 0 {
+		return false // Not a valid SafeEdit format
+	}
+
+	// Populate task fields
+	task.SafeEditMode = true
+	task.BeforeContext = strings.Join(beforeContext, "\n")
+	task.Content = strings.Join(editContent, "\n")
+	task.AfterContext = strings.Join(afterContext, "\n")
+
+	if debugTaskParsing {
+		fmt.Printf("DEBUG: SafeEdit parsed - BeforeContext: %d lines, EditContent: %d lines, AfterContext: %d lines\n",
+			len(beforeContext), len(editContent), len(afterContext))
+	}
+
+	return true
+}
+
+// parseEditLineRange extracts line range information from EDIT_LINES marker
+func parseEditLineRange(task *Task, lineRange string) {
+	// Handle single line: "15"
+	if !strings.Contains(lineRange, "-") {
+		if lineNum, err := strconv.Atoi(strings.TrimSpace(lineRange)); err == nil {
+			task.TargetLine = lineNum
+		}
+		return
+	}
+
+	// Handle range: "15-17"
+	parts := strings.Split(lineRange, "-")
+	if len(parts) == 2 {
+		if startLine, err := strconv.Atoi(strings.TrimSpace(parts[0])); err == nil {
+			if endLine, err := strconv.Atoi(strings.TrimSpace(parts[1])); err == nil {
+				task.TargetStartLine = startLine
+				task.TargetEndLine = endLine
+			}
+		}
+	}
 }
 
 // extractContentFromCodeBlock looks for content in code blocks following a task command
