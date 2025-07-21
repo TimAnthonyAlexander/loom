@@ -94,21 +94,21 @@ type Task struct {
 	Recursive bool `json:"recursive,omitempty"`
 
 	// Search specific (NEW)
-	Query           string   `json:"query,omitempty"`             // The search pattern/regex
-	FileTypes       []string `json:"file_types,omitempty"`        // File type filters (e.g., ["go", "js"])
-	ExcludeTypes    []string `json:"exclude_types,omitempty"`     // Exclude file types
-	GlobPatterns    []string `json:"glob_patterns,omitempty"`     // Include glob patterns (e.g., ["*.tf"])
-	ExcludeGlobs    []string `json:"exclude_globs,omitempty"`     // Exclude glob patterns
-	IgnoreCase      bool     `json:"ignore_case,omitempty"`       // Case-insensitive search
-	WholeWord       bool     `json:"whole_word,omitempty"`        // Match whole words only
-	FixedString     bool     `json:"fixed_string,omitempty"`      // Treat query as literal string, not regex
-	ContextBefore   int      `json:"context_before,omitempty"`    // Lines of context before matches
-	ContextAfter    int      `json:"context_after,omitempty"`     // Lines of context after matches
-	MaxResults      int      `json:"max_results,omitempty"`       // Limit number of results
-	FilenamesOnly   bool     `json:"filenames_only,omitempty"`    // Show only filenames with matches
-	CountMatches    bool     `json:"count_matches,omitempty"`     // Count matches per file
-	SearchHidden    bool     `json:"search_hidden,omitempty"`     // Search hidden files and directories
-	UsePCRE2        bool     `json:"use_pcre2,omitempty"`         // Use PCRE2 regex engine for advanced features
+	Query         string   `json:"query,omitempty"`          // The search pattern/regex
+	FileTypes     []string `json:"file_types,omitempty"`     // File type filters (e.g., ["go", "js"])
+	ExcludeTypes  []string `json:"exclude_types,omitempty"`  // Exclude file types
+	GlobPatterns  []string `json:"glob_patterns,omitempty"`  // Include glob patterns (e.g., ["*.tf"])
+	ExcludeGlobs  []string `json:"exclude_globs,omitempty"`  // Exclude glob patterns
+	IgnoreCase    bool     `json:"ignore_case,omitempty"`    // Case-insensitive search
+	WholeWord     bool     `json:"whole_word,omitempty"`     // Match whole words only
+	FixedString   bool     `json:"fixed_string,omitempty"`   // Treat query as literal string, not regex
+	ContextBefore int      `json:"context_before,omitempty"` // Lines of context before matches
+	ContextAfter  int      `json:"context_after,omitempty"`  // Lines of context after matches
+	MaxResults    int      `json:"max_results,omitempty"`    // Limit number of results
+	FilenamesOnly bool     `json:"filenames_only,omitempty"` // Show only filenames with matches
+	CountMatches  bool     `json:"count_matches,omitempty"`  // Count matches per file
+	SearchHidden  bool     `json:"search_hidden,omitempty"`  // Search hidden files and directories
+	UsePCRE2      bool     `json:"use_pcre2,omitempty"`      // Use PCRE2 regex engine for advanced features
 }
 
 // InteractivePrompt represents an expected prompt and its response in interactive commands
@@ -555,7 +555,7 @@ func parseSearchTask(args string) *Task {
 
 	// First part is always the search query
 	task.Query = parts[0]
-	
+
 	// Remove quotes if present
 	if len(task.Query) >= 2 {
 		if (strings.HasPrefix(task.Query, "\"") && strings.HasSuffix(task.Query, "\"")) ||

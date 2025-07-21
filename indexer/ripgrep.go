@@ -14,7 +14,7 @@ func rgPath() string {
 		// Fallback to relative path if we can't find module root
 		moduleRoot = "."
 	}
-	
+
 	base := filepath.Join(moduleRoot, "bin")
 	switch runtime.GOOS {
 	case "windows":

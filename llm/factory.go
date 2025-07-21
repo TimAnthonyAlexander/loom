@@ -62,7 +62,7 @@ func CreateAdapterFromConfig(cfg ConfigInterface) (LLMAdapter, error) {
 		}
 	}
 
-	return createAdapterWithTimeouts(modelStr, apiKey, baseURL, 
+	return createAdapterWithTimeouts(modelStr, apiKey, baseURL,
 		time.Duration(llmTimeout)*time.Second,
 		time.Duration(llmStreamTimeout)*time.Second,
 		llmMaxRetries)

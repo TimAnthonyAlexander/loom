@@ -1347,7 +1347,7 @@ func (e *Executor) executeSearch(task *Task) *TaskResponse {
 
 	// Process and format output
 	outputStr := string(output)
-	
+
 	// Count matches and files for summary
 	lines := strings.Split(strings.TrimSpace(outputStr), "\n")
 	if len(lines) == 1 && lines[0] == "" {
@@ -1362,7 +1362,7 @@ func (e *Executor) executeSearch(task *Task) *TaskResponse {
 	// Count matches and files
 	matchCount := 0
 	fileSet := make(map[string]bool)
-	
+
 	for _, line := range lines {
 		if line != "" {
 			matchCount++
@@ -1383,7 +1383,7 @@ func (e *Executor) executeSearch(task *Task) *TaskResponse {
 	response.ActualContent = formattedOutput
 
 	response.Success = true
-	
+
 	// Create concise user status message
 	if task.FilenamesOnly {
 		response.Output = fmt.Sprintf("Search completed: '%s' - Found %d files with matches", task.Query, fileCount)
@@ -1437,11 +1437,11 @@ func (e *Executor) formatSearchResults(output string, task *Task, matchCount, fi
 	result.WriteString(fmt.Sprintf("🔍 Search Results for: '%s'\n", task.Query))
 	result.WriteString(fmt.Sprintf("📁 Path: %s\n", task.Path))
 	result.WriteString(fmt.Sprintf("📊 Summary: %d matches in %d files\n", matchCount, fileCount))
-	
+
 	if len(task.FileTypes) > 0 {
 		result.WriteString(fmt.Sprintf("📋 File types: %s\n", strings.Join(task.FileTypes, ", ")))
 	}
-	
+
 	if task.IgnoreCase || task.WholeWord || task.FixedString {
 		options := []string{}
 		if task.IgnoreCase {
@@ -1455,7 +1455,7 @@ func (e *Executor) formatSearchResults(output string, task *Task, matchCount, fi
 		}
 		result.WriteString(fmt.Sprintf("⚙️  Options: %s\n", strings.Join(options, ", ")))
 	}
-	
+
 	result.WriteString("\n" + strings.Repeat("─", 50) + "\n\n")
 
 	// Add the actual ripgrep output

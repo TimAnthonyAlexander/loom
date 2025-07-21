@@ -10,25 +10,25 @@ import (
 
 // Config represents the loom configuration
 type Config struct {
-	Model           string `json:"model"`
-	EnableShell     bool   `json:"enable_shell"`
-	MaxFileSize     int64  `json:"max_file_size"`     // Maximum file size to index in bytes
-	APIKey          string `json:"api_key"`           // API key for LLM providers
-	BaseURL         string `json:"base_url"`          // Base URL for LLM providers (optional)
-	LLMTimeout      int    `json:"llm_timeout"`       // LLM request timeout in seconds (default: 120)
-	LLMStreamTimeout int   `json:"llm_stream_timeout"` // LLM streaming timeout in seconds (default: 300)
-	LLMMaxRetries   int    `json:"llm_max_retries"`   // Maximum number of retries for failed LLM requests (default: 3)
+	Model            string `json:"model"`
+	EnableShell      bool   `json:"enable_shell"`
+	MaxFileSize      int64  `json:"max_file_size"`      // Maximum file size to index in bytes
+	APIKey           string `json:"api_key"`            // API key for LLM providers
+	BaseURL          string `json:"base_url"`           // Base URL for LLM providers (optional)
+	LLMTimeout       int    `json:"llm_timeout"`        // LLM request timeout in seconds (default: 120)
+	LLMStreamTimeout int    `json:"llm_stream_timeout"` // LLM streaming timeout in seconds (default: 300)
+	LLMMaxRetries    int    `json:"llm_max_retries"`    // Maximum number of retries for failed LLM requests (default: 3)
 }
 
 // DefaultConfig returns a config with default values
 func DefaultConfig() *Config {
 	return &Config{
-		Model:           "openai:gpt-4o",
-		EnableShell:     false,
-		MaxFileSize:     500 * 1024, // 500 KB default
-		LLMTimeout:      120,         // 2 minutes default
+		Model:            "openai:gpt-4o",
+		EnableShell:      false,
+		MaxFileSize:      500 * 1024, // 500 KB default
+		LLMTimeout:       120,        // 2 minutes default
 		LLMStreamTimeout: 300,        // 5 minutes default for streaming
-		LLMMaxRetries:   3,           // 3 retries default
+		LLMMaxRetries:    3,          // 3 retries default
 	}
 }
 
@@ -205,7 +205,7 @@ func mergeCfg(dst, src *Config) {
 	// EnableShell is a bool, so we need to check if it was explicitly set
 	// For simplicity, we'll always take the source value if the source exists
 	dst.EnableShell = src.EnableShell
-	
+
 	// Merge timeout settings if they're non-zero (explicitly set)
 	if src.LLMTimeout > 0 {
 		dst.LLMTimeout = src.LLMTimeout

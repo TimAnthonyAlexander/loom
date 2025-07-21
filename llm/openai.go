@@ -164,7 +164,7 @@ func (o *OpenAIAdapter) Send(ctx context.Context, messages []Message) (*Message,
 
 		// Wait before retrying
 		delay := o.calculateBackoffDelay(attempt)
-		fmt.Printf("OpenAI request failed (attempt %d/%d), retrying in %v: %v\n", 
+		fmt.Printf("OpenAI request failed (attempt %d/%d), retrying in %v: %v\n",
 			attempt+1, o.config.MaxRetries+1, delay, err)
 
 		select {
@@ -220,7 +220,7 @@ func (o *OpenAIAdapter) Stream(ctx context.Context, messages []Message, chunks c
 
 			// Wait before retrying
 			delay := o.calculateBackoffDelay(attempt)
-			fmt.Printf("OpenAI stream creation failed (attempt %d/%d), retrying in %v: %v\n", 
+			fmt.Printf("OpenAI stream creation failed (attempt %d/%d), retrying in %v: %v\n",
 				attempt+1, o.config.MaxRetries+1, delay, err)
 
 			select {
@@ -257,7 +257,7 @@ func (o *OpenAIAdapter) Stream(ctx context.Context, messages []Message, chunks c
 
 		// Wait before retrying
 		delay := o.calculateBackoffDelay(attempt)
-		fmt.Printf("OpenAI stream read failed (attempt %d/%d), retrying in %v: %v\n", 
+		fmt.Printf("OpenAI stream read failed (attempt %d/%d), retrying in %v: %v\n",
 			attempt+1, o.config.MaxRetries+1, delay, streamErr)
 
 		select {
