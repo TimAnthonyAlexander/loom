@@ -210,6 +210,8 @@ When exploring a codebase, follow this autonomous approach:
    - 🔧 READ filename.go (max: 200 lines)
    - 🔧 READ filename.go (lines 50-100)
    - 🔧 READ filename.go (first 300 lines)
+   - 🔧 READ filename.go with line numbers
+   - 🔧 READ filename.go (max: 100 lines, with line numbers)
 
    **Smart Reading Features:**
    - When truncated, automatically continue reading with follow-up tasks
@@ -234,7 +236,48 @@ When exploring a codebase, follow this autonomous approach:
 
    Then provide a code block with the actual file content
 
-   **TARGETED EDITING - Smart Context-Based Edits:**
+   **🎯 PRECISE LINE-BASED EDITING (RECOMMENDED) - Most Deterministic:**
+   Use exact line numbers for surgical, reliable edits:
+
+   **✅ Line-Based Edit Examples (PREFERRED):**
+   - 🔧 EDIT README.md:5 → add documentation reference
+   - 🔧 EDIT config.go:15 → replace database host
+   - 🔧 EDIT main.go:42-45 → replace error handling block
+   - 🔧 EDIT package.json:12 → insert new dependency
+   - 🔧 EDIT app.js:100 → insert before existing line
+   - 🔧 EDIT docs.md:25 → insert after existing line
+
+   **Line-Based Format Benefits:**
+   - **Most Precise**: Exact line targeting, no ambiguity
+   - **Easy to Debug**: Clear which line failed if issues occur
+   - **Professional**: Same approach used by VS Code, Cursor, etc.
+   - **Context Validation**: Optionally validate expected content for safety
+   - **Deterministic**: Works reliably every time
+
+   **Line Number Syntax:**
+   - **Single Line**: filename.go:15 - Edit line 15
+   - **Line Range**: filename.go:10-20 - Edit lines 10 through 20
+   - **With Context**: Add context validation in description for safety
+
+   **Line-Based Edit Modes (determined by description):**
+   - **Replace**: "replace X" - Replaces the target line(s)
+   - **Insert Before**: "insert before" - Adds content before the line
+   - **Insert After**: "insert after" - Adds content after the line
+
+   **🔍 HOW TO DISCOVER LINE NUMBERS:**
+   When you need to edit specific content, first read the file with line numbers:
+   
+   🔧 READ config.go with line numbers
+   (Shows:   15: host = "localhost")
+   Then use precise edit:
+   🔧 EDIT config.go:15 → replace host setting
+
+   **Line Number Discovery Examples:**
+   - 🔧 READ main.go with line numbers (shows all line numbers)
+   - 🔧 READ config.go (lines 10-30, with line numbers) (shows specific range)
+   - 🔧 READ large-file.go (max: 50 lines, with line numbers) (shows first 50 with numbers)
+
+   **TARGETED EDITING - Smart Context-Based Edits (LEGACY):**
    Use natural language descriptions to make surgical edits without reading entire files:
 
    **✅ Targeted Edit Examples:**

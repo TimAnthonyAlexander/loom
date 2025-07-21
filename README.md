@@ -78,6 +78,10 @@ A sophisticated terminal-based AI coding assistant written in Go that provides a
 
 ## Installation
 
+## Documentation
+
+Full documentation and usage guide available at [https://github.com/TimAnthonyAlexander/loom/wiki](https://github.com/TimAnthonyAlexander/loom/wiki)
+
 ```bash
 # Clone and build
 git clone https://github.com/timanthonyalexander/loom

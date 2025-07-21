@@ -183,7 +183,13 @@ func (e *Executor) executeReadFile(task *Task) *TaskResponse {
 		if linesRead > 0 {
 			content.WriteString("\n")
 		}
-		content.WriteString(scanner.Text())
+		
+		// Add line numbers if requested
+		if task.ShowLineNumbers {
+			content.WriteString(fmt.Sprintf("%4d: %s", lineNum, scanner.Text()))
+		} else {
+			content.WriteString(scanner.Text())
+		}
 		linesRead++
 	}
 
@@ -263,6 +269,11 @@ func (e *Executor) executeEditFile(task *Task) *TaskResponse {
 	if info, err := os.Stat(fullPath); err == nil && info.IsDir() {
 		response.Error = fmt.Sprintf("path is a directory: %s", task.Path)
 		return response
+	}
+
+	// NEW: Check for line-based editing (most precise method)
+	if task.TargetLine > 0 || (task.TargetStartLine > 0 && task.TargetEndLine > 0) {
+		return e.applyLineBasedEdit(task, fullPath)
 	}
 
 	if task.Diff != "" {
@@ -423,6 +434,180 @@ func (e *Executor) ApplyEdit(task *Task) error {
 	}
 
 	return nil
+}
+
+// applyLineBasedEdit applies precise line-based edits to a file
+func (e *Executor) applyLineBasedEdit(task *Task, fullPath string) *TaskResponse {
+	response := &TaskResponse{Task: *task}
+
+	// Read existing content if file exists
+	var originalContent string
+	fileExists := false
+	if _, err := os.Stat(fullPath); err == nil {
+		data, err := os.ReadFile(fullPath)
+		if err != nil {
+			response.Error = fmt.Sprintf("failed to read existing file: %v", err)
+			return response
+		}
+		originalContent = string(data)
+		fileExists = true
+	}
+
+	lines := strings.Split(originalContent, "\n")
+	totalLines := len(lines)
+
+	// Determine target line range
+	var targetStart, targetEnd int
+	if task.TargetLine > 0 {
+		// Single line edit
+		targetStart = task.TargetLine
+		targetEnd = task.TargetLine
+	} else {
+		// Range edit
+		targetStart = task.TargetStartLine
+		targetEnd = task.TargetEndLine
+	}
+
+	// Validate line numbers
+	if !fileExists && targetStart > 1 {
+		response.Error = fmt.Sprintf("cannot edit line %d in non-existent file %s", targetStart, task.Path)
+		return response
+	}
+
+	if fileExists && (targetStart < 1 || targetStart > totalLines) {
+		response.Error = fmt.Sprintf("target line %d is out of range (file has %d lines)", targetStart, totalLines)
+		return response
+	}
+
+	if targetEnd > 0 && fileExists && targetEnd > totalLines {
+		response.Error = fmt.Sprintf("target end line %d is out of range (file has %d lines)", targetEnd, totalLines)
+		return response
+	}
+
+	if targetEnd > 0 && targetEnd < targetStart {
+		response.Error = fmt.Sprintf("invalid range: end line %d is before start line %d", targetEnd, targetStart)
+		return response
+	}
+
+	// Optional context validation for safety
+	if task.ContextValidation != "" && fileExists {
+		targetLineContent := ""
+		if targetStart <= len(lines) {
+			targetLineContent = strings.TrimSpace(lines[targetStart-1]) // Convert to 0-indexed
+		}
+		
+		if !strings.Contains(strings.ToLower(targetLineContent), strings.ToLower(task.ContextValidation)) {
+			response.Error = fmt.Sprintf("context validation failed: expected line %d to contain '%s', but found: '%s'", 
+				targetStart, task.ContextValidation, targetLineContent)
+			return response
+		}
+	}
+
+	// Apply the edit based on Intent or Content
+	newContent, err := e.performLineBasedEdit(originalContent, task, targetStart, targetEnd)
+	if err != nil {
+		response.Error = err.Error()
+		return response
+	}
+
+	// Create diff preview
+	dmp := diffmatchpatch.New()
+	diff := dmp.DiffMain(originalContent, newContent, false)
+	preview := dmp.DiffPrettyText(diff)
+
+	// Store actual preview for LLM
+	response.ActualContent = fmt.Sprintf("Line-based edit preview for %s (lines %d-%d):\n\n%s\n\nReady to apply changes.", 
+		task.Path, targetStart, targetEnd, preview)
+
+	response.Success = true
+	// Show status message to user
+	if targetStart == targetEnd {
+		response.Output = fmt.Sprintf("Editing file: %s (line %d)", task.Path, targetStart)
+	} else {
+		response.Output = fmt.Sprintf("Editing file: %s (lines %d-%d)", task.Path, targetStart, targetEnd)
+	}
+
+	// Store the new content for later application
+	response.Task.Content = newContent
+	return response
+}
+
+// performLineBasedEdit performs the actual line-based edit logic
+func (e *Executor) performLineBasedEdit(originalContent string, task *Task, targetStart, targetEnd int) (string, error) {
+	lines := strings.Split(originalContent, "\n")
+	
+	// Handle new file creation
+	if originalContent == "" && targetStart == 1 {
+		return task.Content, nil
+	}
+
+	// Determine edit operation based on Intent
+	intent := strings.ToLower(task.Intent)
+	
+	if strings.Contains(intent, "replace") {
+		// Replace the target line(s) with new content
+		newLines := make([]string, 0, len(lines))
+		newLines = append(newLines, lines[:targetStart-1]...) // Lines before target (0-indexed)
+		
+		// Add new content (split by newlines if multi-line)
+		if task.Content != "" {
+			contentLines := strings.Split(task.Content, "\n")
+			newLines = append(newLines, contentLines...)
+		}
+		
+		// Add lines after target range
+		if targetEnd < len(lines) {
+			newLines = append(newLines, lines[targetEnd:]...)
+		}
+		
+		return strings.Join(newLines, "\n"), nil
+		
+	} else if strings.Contains(intent, "insert") && strings.Contains(intent, "before") {
+		// Insert content before the target line
+		newLines := make([]string, 0, len(lines)+1)
+		newLines = append(newLines, lines[:targetStart-1]...) // Lines before target
+		
+		if task.Content != "" {
+			contentLines := strings.Split(task.Content, "\n")
+			newLines = append(newLines, contentLines...)
+		}
+		
+		newLines = append(newLines, lines[targetStart-1:]...) // Original target line and after
+		return strings.Join(newLines, "\n"), nil
+		
+	} else if strings.Contains(intent, "insert") && strings.Contains(intent, "after") {
+		// Insert content after the target line
+		newLines := make([]string, 0, len(lines)+1)
+		newLines = append(newLines, lines[:targetStart]...) // Lines up to and including target
+		
+		if task.Content != "" {
+			contentLines := strings.Split(task.Content, "\n")
+			newLines = append(newLines, contentLines...)
+		}
+		
+		if targetStart < len(lines) {
+			newLines = append(newLines, lines[targetStart:]...) // Lines after target
+		}
+		
+		return strings.Join(newLines, "\n"), nil
+		
+	} else {
+		// Default: replace the target line(s)
+		newLines := make([]string, 0, len(lines))
+		newLines = append(newLines, lines[:targetStart-1]...) // Lines before target
+		
+		if task.Content != "" {
+			contentLines := strings.Split(task.Content, "\n")
+			newLines = append(newLines, contentLines...)
+		}
+		
+		// Add lines after target range
+		if targetEnd < len(lines) {
+			newLines = append(newLines, lines[targetEnd:]...)
+		}
+		
+		return strings.Join(newLines, "\n"), nil
+	}
 }
 
 // executeListDir lists files in a directory with limits and gitignore support

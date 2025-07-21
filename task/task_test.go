@@ -932,3 +932,205 @@ This will add the necessary database configuration.`
 		t.Errorf("Expected empty content, got %s", task.Content)
 	}
 }
+
+// Test line-based editing parsing
+func TestParseLineBasedEditTasks(t *testing.T) {
+	tests := []struct {
+		name           string
+		llmResponse    string
+		expectedPath   string
+		expectedTarget int
+		expectedStart  int
+		expectedEnd    int
+		expectedIntent string
+	}{
+		{
+			name:           "Single line edit",
+			llmResponse:    "🔧 EDIT main.go:15 → add error handling",
+			expectedPath:   "main.go",
+			expectedTarget: 15,
+			expectedIntent: "add error handling",
+		},
+		{
+			name:         "Line range edit",
+			llmResponse:  "🔧 EDIT config.go:10-20 → replace database settings",
+			expectedPath: "config.go",
+			expectedStart: 10,
+			expectedEnd:   20,
+			expectedIntent: "replace database settings",
+		},
+		{
+			name:           "Simple format single line",
+			llmResponse:    "EDIT utils.js:42 → fix bug",
+			expectedPath:   "utils.js",
+			expectedTarget: 42,
+			expectedIntent: "fix bug",
+		},
+		{
+			name:         "Simple format range",
+			llmResponse:  "EDIT styles.css:5-8 → update colors",
+			expectedPath: "styles.css",
+			expectedStart: 5,
+			expectedEnd:   8,
+			expectedIntent: "update colors",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			taskList, err := ParseTasks(tt.llmResponse)
+			if err != nil {
+				t.Fatalf("Expected no error, got: %v", err)
+			}
+
+			if taskList == nil {
+				t.Fatal("Expected task list, got nil")
+			}
+
+			if len(taskList.Tasks) != 1 {
+				t.Fatalf("Expected 1 task, got %d", len(taskList.Tasks))
+			}
+
+			task := taskList.Tasks[0]
+			if task.Type != TaskTypeEditFile {
+				t.Errorf("Expected EditFile, got %s", task.Type)
+			}
+			if task.Path != tt.expectedPath {
+				t.Errorf("Expected path %s, got %s", tt.expectedPath, task.Path)
+			}
+			if task.TargetLine != tt.expectedTarget {
+				t.Errorf("Expected target line %d, got %d", tt.expectedTarget, task.TargetLine)
+			}
+			if task.TargetStartLine != tt.expectedStart {
+				t.Errorf("Expected start line %d, got %d", tt.expectedStart, task.TargetStartLine)
+			}
+			if task.TargetEndLine != tt.expectedEnd {
+				t.Errorf("Expected end line %d, got %d", tt.expectedEnd, task.TargetEndLine)
+			}
+			if task.Intent != tt.expectedIntent {
+				t.Errorf("Expected intent '%s', got '%s'", tt.expectedIntent, task.Intent)
+			}
+		})
+	}
+}
+
+// Test READ with line numbers parsing
+func TestParseReadWithLineNumbers(t *testing.T) {
+	tests := []struct {
+		name              string
+		llmResponse       string
+		expectedPath      string
+		expectedShowLines bool
+		expectedMaxLines  int
+	}{
+		{
+			name:              "Simple line numbers request",
+			llmResponse:       "🔧 READ main.go with line numbers",
+			expectedPath:      "main.go",
+			expectedShowLines: true,
+		},
+		{
+			name:              "Line numbers with max lines",
+			llmResponse:       "🔧 READ config.go (max: 50 lines, with line numbers)",
+			expectedPath:      "config.go",
+			expectedShowLines: true,
+			expectedMaxLines:  50,
+		},
+		{
+			name:              "Simple format with numbers",
+			llmResponse:       "READ utils.js with numbers",
+			expectedPath:      "utils.js",
+			expectedShowLines: true,
+		},
+		{
+			name:              "Numbered variant",
+			llmResponse:       "🔧 READ styles.css numbered",
+			expectedPath:      "styles.css",
+			expectedShowLines: true,
+		},
+		{
+			name:              "Without line numbers",
+			llmResponse:       "🔧 READ normal.go",
+			expectedPath:      "normal.go",
+			expectedShowLines: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			taskList, err := ParseTasks(tt.llmResponse)
+			if err != nil {
+				t.Fatalf("Expected no error, got: %v", err)
+			}
+
+			if taskList == nil {
+				t.Fatal("Expected task list, got nil")
+			}
+
+			if len(taskList.Tasks) != 1 {
+				t.Fatalf("Expected 1 task, got %d", len(taskList.Tasks))
+			}
+
+			task := taskList.Tasks[0]
+			if task.Type != TaskTypeReadFile {
+				t.Errorf("Expected ReadFile, got %s", task.Type)
+			}
+			if task.Path != tt.expectedPath {
+				t.Errorf("Expected path %s, got %s", tt.expectedPath, task.Path)
+			}
+			if task.ShowLineNumbers != tt.expectedShowLines {
+				t.Errorf("Expected ShowLineNumbers %v, got %v", tt.expectedShowLines, task.ShowLineNumbers)
+			}
+			if tt.expectedMaxLines > 0 && task.MaxLines != tt.expectedMaxLines {
+				t.Errorf("Expected MaxLines %d, got %d", tt.expectedMaxLines, task.MaxLines)
+			}
+		})
+	}
+}
+
+// Test backward compatibility - ensure legacy context-based editing still works
+func TestBackwardCompatibilityContextEditing(t *testing.T) {
+	llmResponse := `🔧 EDIT README.md → add Rules section after "## Quick Start"
+
+` + "```" + `markdown
+## Rules
+
+These are the project rules.
+` + "```"
+
+	taskList, err := ParseTasks(llmResponse)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if taskList == nil {
+		t.Fatal("Expected task list, got nil")
+	}
+
+	if len(taskList.Tasks) != 1 {
+		t.Fatalf("Expected 1 task, got %d", len(taskList.Tasks))
+	}
+
+	task := taskList.Tasks[0]
+	if task.Type != TaskTypeEditFile {
+		t.Errorf("Expected EditFile, got %s", task.Type)
+	}
+	if task.Path != "README.md" {
+		t.Errorf("Expected README.md, got %s", task.Path)
+	}
+	
+	// Should NOT have line numbers set (legacy mode)
+	if task.TargetLine > 0 {
+		t.Errorf("Expected no target line for legacy task, got %d", task.TargetLine)
+	}
+	
+	// Should have context information
+	if task.Intent != "add Rules section after \"## Quick Start\"" {
+		t.Errorf("Expected intent with context, got %s", task.Intent)
+	}
+	
+	// Should have content
+	if !strings.Contains(task.Content, "## Rules") {
+		t.Errorf("Expected content with Rules section, got %s", task.Content)
+	}
+}
