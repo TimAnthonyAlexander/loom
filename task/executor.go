@@ -359,6 +359,27 @@ func (e *Executor) applyDiff(task *Task, fullPath string) *TaskResponse {
 		}
 	}
 
+	// EARLY DETECTION: Check if diff resulted in identical content
+	if originalContent == newContent {
+		// Generate edit summary for identical content
+		editSummary := e.analyzeContentChanges(originalContent, newContent, task.Path, task)
+		response.EditSummary = editSummary
+
+		// Store clear message for LLM
+		llmSummary := response.GetLLMSummary()
+		response.ActualContent = fmt.Sprintf("Diff analysis for %s:\n\n%s\n\nNo file changes needed - diff results in identical content.",
+			task.Path, llmSummary)
+
+		response.Success = true
+		// Provide clear status message
+		response.Output = fmt.Sprintf("File unchanged: %s - %s",
+			task.Path, editSummary.GetCompactSummary())
+
+		// Store the content for reference (no changes made)
+		response.Task.Content = newContent
+		return response
+	}
+
 	// Create a preview of the changes
 	diff := dmp.DiffMain(originalContent, newContent, false)
 	preview := dmp.DiffPrettyText(diff)
@@ -372,12 +393,20 @@ func (e *Executor) applyDiff(task *Task, fullPath string) *TaskResponse {
 	response.ActualContent = fmt.Sprintf("Diff preview for %s:\n\n%s\n\n%s\nReady to apply changes.",
 		task.Path, preview, llmSummary)
 
+	// CRITICAL FIX: Actually write the file immediately
+	task.Content = newContent
+	err = e.applyEditInternal(task)
+	if err != nil {
+		response.Error = fmt.Sprintf("failed to write file: %v", err)
+		return response
+	}
+
 	response.Success = true
 	// Show status message to user with edit summary
-	response.Output = fmt.Sprintf("Editing file: %s (diff preview prepared) - %s",
+	response.Output = fmt.Sprintf("File edited: %s (diff applied) - %s",
 		task.Path, editSummary.GetCompactSummary())
 
-	// Store the new content for later application
+	// Store the new content for reference
 	response.Task.Content = newContent
 	return response
 }
@@ -388,9 +417,11 @@ func (e *Executor) replaceContent(task *Task, fullPath string) *TaskResponse {
 
 	// Read existing content for preview if file exists
 	var originalContent string
+	var err error
+	var data []byte
 	fileExists := false
-	if _, err := os.Stat(fullPath); err == nil {
-		data, err := os.ReadFile(fullPath)
+	if _, err = os.Stat(fullPath); err == nil {
+		data, err = os.ReadFile(fullPath)
 		if err != nil {
 			response.Error = fmt.Sprintf("failed to read existing file: %v", err)
 			return response
@@ -399,7 +430,28 @@ func (e *Executor) replaceContent(task *Task, fullPath string) *TaskResponse {
 		fileExists = true
 	}
 
-	// SAFETY CHECK: Prevent accidental file truncation
+	// EARLY DETECTION: Check if content is identical to avoid unnecessary processing
+	if fileExists && originalContent == task.Content {
+		// Generate edit summary for identical content
+		editSummary := e.analyzeContentChanges(originalContent, task.Content, task.Path, task)
+		response.EditSummary = editSummary
+
+		// Store clear message for LLM
+		llmSummary := response.GetLLMSummary()
+		response.ActualContent = fmt.Sprintf("Content analysis for %s:\n\n%s\n\nNo file changes needed - content already matches.",
+			task.Path, llmSummary)
+
+		response.Success = true
+		// Provide clear status message
+		response.Output = fmt.Sprintf("File unchanged: %s - %s",
+			task.Path, editSummary.GetCompactSummary())
+
+		// Store the content for reference (no changes made)
+		response.Task.Content = task.Content
+		return response
+	}
+
+	// SAFETY CHECK: Prevent accidental file truncation (only for non-identical content)
 	if fileExists && len(originalContent) > 0 {
 		originalLines := strings.Split(originalContent, "\n")
 		newLines := strings.Split(task.Content, "\n")
@@ -439,12 +491,19 @@ func (e *Executor) replaceContent(task *Task, fullPath string) *TaskResponse {
 	response.ActualContent = fmt.Sprintf("Content replacement preview for %s:\n\n%s\n\n%s\nReady to apply changes.",
 		task.Path, preview, llmSummary)
 
+	// CRITICAL FIX: Actually write the file immediately instead of just preparing
+	err = e.applyEditInternal(task)
+	if err != nil {
+		response.Error = fmt.Sprintf("failed to write file: %v", err)
+		return response
+	}
+
 	response.Success = true
 	// Show status message to user with edit summary
-	response.Output = fmt.Sprintf("Editing file: %s (content replacement prepared) - %s",
+	response.Output = fmt.Sprintf("File edited: %s - %s",
 		task.Path, editSummary.GetCompactSummary())
 
-	// Store the new content for later application
+	// Store the new content for reference
 	response.Task.Content = task.Content
 	return response
 }
@@ -527,17 +586,25 @@ func (e *Executor) applySafeEdit(task *Task, fullPath string) *TaskResponse {
 	response.ActualContent = fmt.Sprintf("SafeEdit preview for %s (lines %d-%d):\n\n%s\n\nContext validation: PASSED ✓\n%s\nReady to apply changes.",
 		task.Path, targetStart, targetEnd, preview, llmSummary)
 
+	// CRITICAL FIX: Actually write the file immediately
+	task.Content = newContent
+	err = e.applyEditInternal(task)
+	if err != nil {
+		response.Error = fmt.Sprintf("failed to write file: %v", err)
+		return response
+	}
+
 	response.Success = true
 	// Show status message to user with edit summary
 	if targetStart == targetEnd {
-		response.Output = fmt.Sprintf("Editing file: %s (SafeEdit line %d, context validated) - %s",
+		response.Output = fmt.Sprintf("File edited: %s (SafeEdit line %d) - %s",
 			task.Path, targetStart, editSummary.GetCompactSummary())
 	} else {
-		response.Output = fmt.Sprintf("Editing file: %s (SafeEdit lines %d-%d, context validated) - %s",
+		response.Output = fmt.Sprintf("File edited: %s (SafeEdit lines %d-%d) - %s",
 			task.Path, targetStart, targetEnd, editSummary.GetCompactSummary())
 	}
 
-	// Store the new content for later application
+	// Store the new content for reference
 	response.Task.Content = newContent
 	return response
 }
@@ -888,17 +955,25 @@ func (e *Executor) applyLineBasedEdit(task *Task, fullPath string) *TaskResponse
 	response.ActualContent = fmt.Sprintf("Line-based edit preview for %s (lines %d-%d):\n\n%s\n\n%s\nReady to apply changes.",
 		task.Path, targetStart, targetEnd, preview, llmSummary)
 
+	// CRITICAL FIX: Actually write the file immediately
+	task.Content = newContent
+	err = e.applyEditInternal(task)
+	if err != nil {
+		response.Error = fmt.Sprintf("failed to write file: %v", err)
+		return response
+	}
+
 	response.Success = true
 	// Show status message to user with edit summary
 	if targetStart == targetEnd {
-		response.Output = fmt.Sprintf("Editing file: %s (line %d) - %s",
+		response.Output = fmt.Sprintf("File edited: %s (line %d) - %s",
 			task.Path, targetStart, editSummary.GetCompactSummary())
 	} else {
-		response.Output = fmt.Sprintf("Editing file: %s (lines %d-%d) - %s",
+		response.Output = fmt.Sprintf("File edited: %s (lines %d-%d) - %s",
 			task.Path, targetStart, targetEnd, editSummary.GetCompactSummary())
 	}
 
-	// Store the new content for later application
+	// Store the new content for reference
 	response.Task.Content = newContent
 	return response
 }
@@ -1689,12 +1764,20 @@ func (e *Executor) applyTargetedEdit(task *Task, fullPath string) *TaskResponse 
 	response.ActualContent = fmt.Sprintf("Targeted edit preview for %s:\n\n%s\n\n%s\nReady to apply changes.",
 		task.Path, preview, llmSummary)
 
+	// CRITICAL FIX: Actually write the file immediately
+	task.Content = newContent
+	err = e.applyEditInternal(task)
+	if err != nil {
+		response.Error = fmt.Sprintf("failed to write file: %v", err)
+		return response
+	}
+
 	response.Success = true
 	// Show status message to user with edit summary
-	response.Output = fmt.Sprintf("Editing file: %s (targeted edit prepared - %s) - %s",
+	response.Output = fmt.Sprintf("File edited: %s (%s) - %s",
 		task.Path, task.InsertMode, editSummary.GetCompactSummary())
 
-	// Store the new content for later application
+	// Store the new content for reference
 	response.Task.Content = newContent
 	return response
 }
@@ -1922,12 +2005,20 @@ func (e *Executor) applyDiffFormattedContent(task *Task, fullPath string) *TaskR
 	response.ActualContent = fmt.Sprintf("Processed diff-formatted content for %s:\n\n%s\n\n%s\nReady to apply changes.",
 		task.Path, preview, llmSummary)
 
+	// CRITICAL FIX: Actually write the file immediately
+	task.Content = newContent
+	err = e.applyEditInternal(task)
+	if err != nil {
+		response.Error = fmt.Sprintf("failed to write file: %v", err)
+		return response
+	}
+
 	response.Success = true
 	// Show status message to user with edit summary
-	response.Output = fmt.Sprintf("Editing file: %s (processed diff-formatted content) - %s",
+	response.Output = fmt.Sprintf("File edited: %s (diff processed) - %s",
 		task.Path, editSummary.GetCompactSummary())
 
-	// Store the new content for later application
+	// Store the new content for reference
 	response.Task.Content = newContent
 	return response
 }
@@ -1965,6 +2056,25 @@ func (e *Executor) analyzeContentChanges(originalContent, newContent, filePath s
 	summary := &EditSummary{
 		FilePath:      filePath,
 		WasSuccessful: true,
+	}
+
+	// Check if content is identical (this is the key fix for the feedback loop issue)
+	if originalContent == newContent {
+		summary.IsIdenticalContent = true
+		summary.EditType = "modify" // Even though it's identical, we treat it as a modify for consistency
+		summary.TotalLines = len(strings.Split(newContent, "\n"))
+		if newContent == "" {
+			summary.TotalLines = 0
+		}
+
+		// Generate a clear summary for identical content
+		if task.Intent != "" {
+			summary.Summary = fmt.Sprintf("%s - File already contains the desired content", task.Intent)
+		} else {
+			summary.Summary = "File already contains the desired content - no changes needed"
+		}
+
+		return summary
 	}
 
 	// Determine edit type

@@ -922,77 +922,6 @@ EDIT_LINES: 36
 	t.Log("Successfully parsed exact user case SafeEdit format!")
 }
 
-// TestSafeEditFormatDebugParsing tests parsing with debug output to understand what's happening
-func TestSafeEditFormatDebugParsing(t *testing.T) {
-	// Enable debug mode for this test
-	origDebug := debugTaskParsing
-	debugTaskParsing = true
-	defer func() { debugTaskParsing = origDebug }()
-
-	llmResponse := `🔧 EDIT sample.json:36 -> bump version in metadata
-
---- BEFORE ---
-35      "generated_at": "2024-06-15T12:00:00Z",
-36      "version": "1.0.0"
-37    }
---- CHANGE ---
-EDIT_LINES: 36
-      "version": "1.1.0"
---- AFTER ---
-37    }
-38  }`
-
-	t.Log("Testing SafeEdit parsing with debug output...")
-
-	taskList, err := ParseTasks(llmResponse)
-
-	t.Logf("ParseTasks result: taskList=%v, err=%v", taskList, err)
-
-	if taskList != nil {
-		t.Logf("TaskList has %d tasks", len(taskList.Tasks))
-		for i, task := range taskList.Tasks {
-			t.Logf("Task %d: Type=%v, Path=%s, SafeEditMode=%v", i, task.Type, task.Path, task.SafeEditMode)
-		}
-	}
-
-	// Even if parsing fails, let's also test the internal parsing functions directly
-	t.Log("Testing parseSafeEditFormat directly...")
-
-	lines := strings.Split(llmResponse, "\n")
-
-	// Find the EDIT line
-	editLineIndex := -1
-	for i, line := range lines {
-		if strings.HasPrefix(strings.TrimSpace(line), "🔧 EDIT") {
-			editLineIndex = i
-			break
-		}
-	}
-
-	if editLineIndex >= 0 {
-		t.Logf("Found EDIT line at index %d: %s", editLineIndex, lines[editLineIndex])
-
-		// Create a basic task to test SafeEdit parsing
-		task := &Task{
-			Type: TaskTypeEditFile,
-			Path: "sample.json",
-		}
-
-		// Test parseSafeEditFormat directly
-		success := parseSafeEditFormat(task, lines, editLineIndex+1)
-		t.Logf("parseSafeEditFormat result: success=%v", success)
-
-		if success {
-			t.Logf("SafeEdit parsing succeeded:")
-			t.Logf("  SafeEditMode: %v", task.SafeEditMode)
-			t.Logf("  TargetLine: %d", task.TargetLine)
-			t.Logf("  BeforeContext: %q", task.BeforeContext)
-			t.Logf("  Content: %q", task.Content)
-			t.Logf("  AfterContext: %q", task.AfterContext)
-		}
-	}
-}
-
 // TestSafeEditExecutionExactUserCase tests the complete execution flow for the user's case
 func TestSafeEditExecutionExactUserCase(t *testing.T) {
 	// Create a temporary test file with sample.json content
@@ -1576,4 +1505,257 @@ EDIT_LINES: 36
 	t.Log("  - Task execution: ✓")
 	t.Log("  - File modification: ✓")
 	t.Log("  - No more repeated task suggestions: ✓")
+}
+
+// TestIdenticalContentFeedbackLoop tests the fix for the issue where AI keeps trying to create
+// the same file repeatedly because of unclear feedback when content is identical
+func TestIdenticalContentFeedbackLoop(t *testing.T) {
+	// Create a temporary directory for testing
+	tempDir, err := os.MkdirTemp("", "loom_identical_content_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create an executor
+	executor := NewExecutor(tempDir, false, 1024*1024)
+
+	// Create a sample file (simulating the AI's first successful creation)
+	testFile := filepath.Join(tempDir, "sample.go")
+	sampleContent := `package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("Hello, World!")
+	// This is a sample file demonstrating editing capabilities
+}
+`
+	err = os.WriteFile(testFile, []byte(sampleContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Now simulate the AI trying to "create" the same file again with identical content
+	// This was causing the feedback loop issue
+	task := &Task{
+		Type:    TaskTypeEditFile,
+		Path:    "sample.go",
+		Content: sampleContent, // Identical content
+		Intent:  "create sample file demonstrating editing capabilities",
+	}
+
+	// Execute the edit
+	response := executor.executeEditFile(task)
+
+	// Verify the response indicates success but no changes
+	if !response.Success {
+		t.Fatalf("Edit execution should succeed even with identical content, but got error: %s", response.Error)
+	}
+
+	// Verify the EditSummary correctly identifies this as identical content
+	if response.EditSummary == nil {
+		t.Fatalf("EditSummary should not be nil")
+	}
+
+	if !response.EditSummary.IsIdenticalContent {
+		t.Errorf("EditSummary.IsIdenticalContent should be true for identical content")
+	}
+
+	// Verify the compact summary provides clear messaging
+	compactSummary := response.EditSummary.GetCompactSummary()
+	expectedSummaryPhrases := []string{"already contains", "desired content", "no changes needed"}
+	for _, phrase := range expectedSummaryPhrases {
+		if !strings.Contains(strings.ToLower(compactSummary), phrase) {
+			t.Errorf("Compact summary should contain '%s' but got: %s", phrase, compactSummary)
+		}
+	}
+
+	// Verify the LLM summary provides clear analysis
+	llmSummary := response.GetLLMSummary()
+	expectedLLMPhrases := []string{"ANALYSIS", "already contained", "exact content", "RESULT", "no changes", "CONCLUSION", "task is complete"}
+	for _, phrase := range expectedLLMPhrases {
+		if !strings.Contains(llmSummary, phrase) {
+			t.Errorf("LLM summary should contain '%s' but got: %s", phrase, llmSummary)
+		}
+	}
+
+	// Verify the user output is clear
+	expectedOutputPhrases := []string{"unchanged", "already contains", "desired content"}
+	for _, phrase := range expectedOutputPhrases {
+		if !strings.Contains(strings.ToLower(response.Output), phrase) {
+			t.Errorf("User output should contain '%s' but got: %s", phrase, response.Output)
+		}
+	}
+
+	// Verify the file content remains unchanged
+	actualContent, err := os.ReadFile(testFile)
+	if err != nil {
+		t.Fatalf("Failed to read file after edit: %v", err)
+	}
+
+	if string(actualContent) != sampleContent {
+		t.Errorf("File content should remain unchanged but was modified")
+	}
+
+	// Test that the change counts are all zero
+	if response.EditSummary.LinesAdded != 0 || response.EditSummary.LinesRemoved != 0 || response.EditSummary.LinesModified != 0 {
+		t.Errorf("All change counts should be zero for identical content. Got: added=%d, removed=%d, modified=%d",
+			response.EditSummary.LinesAdded, response.EditSummary.LinesRemoved, response.EditSummary.LinesModified)
+	}
+
+	// Verify that characters added/removed are also zero
+	if response.EditSummary.CharactersAdded != 0 || response.EditSummary.CharactersRemoved != 0 {
+		t.Errorf("Character counts should be zero for identical content. Got: added=%d, removed=%d",
+			response.EditSummary.CharactersAdded, response.EditSummary.CharactersRemoved)
+	}
+}
+
+// TestTripleQuoteContentParsing tests the fix for parsing content delimited with triple quotes
+func TestTripleQuoteContentParsing(t *testing.T) {
+	// This reproduces the exact failing case the user reported
+	llmResponseWithEscapedContent := `🔧 EDIT README.md\n\"\"\"\n# Fatih Secilmis Dentist App\n\nA simple, responsive React application for a.....`
+
+	// Enable debug to see what's happening
+	EnableTaskDebug()
+	defer DisableTaskDebug()
+
+	taskList, err := ParseTasks(llmResponseWithEscapedContent)
+	if err != nil {
+		t.Fatalf("Failed to parse tasks: %v", err)
+	}
+
+	if taskList == nil || len(taskList.Tasks) == 0 {
+		t.Fatalf("Expected 1 task, got 0")
+	}
+
+	if len(taskList.Tasks) != 1 {
+		t.Fatalf("Expected 1 task, got %d", len(taskList.Tasks))
+	}
+
+	task := taskList.Tasks[0]
+
+	// Verify task type and path
+	if task.Type != TaskTypeEditFile {
+		t.Errorf("Expected task type %s, got %s", TaskTypeEditFile, task.Type)
+	}
+
+	if task.Path != "README.md" {
+		t.Errorf("Expected path 'README.md', got '%s'", task.Path)
+	}
+
+	// The critical test: content should be extracted from triple-quote format
+	if task.Content == "" {
+		t.Fatalf("Expected content to be extracted from triple quotes, but it was empty")
+	}
+
+	expectedContentStart := "# Fatih Secilmis Dentist App"
+	if !strings.Contains(task.Content, expectedContentStart) {
+		t.Errorf("Expected content to contain '%s', but got: %s", expectedContentStart, task.Content)
+	}
+
+	t.Logf("Successfully parsed content from triple quotes: %s", task.Content[:50])
+}
+
+// TestTripleQuoteContentFormat tests various triple-quote content formats
+func TestTripleQuoteContentFormat(t *testing.T) {
+	testCases := []struct {
+		name          string
+		llmResponse   string
+		expectContent bool
+	}{
+		{
+			name: "Standard triple quotes",
+			llmResponse: `🔧 EDIT test.md
+"""
+# Hello World
+
+This is a test file.
+"""`,
+			expectContent: true,
+		},
+		{
+			name:          "Escaped triple quotes",
+			llmResponse:   `🔧 EDIT test.md\n\"\"\"\n# Hello World\n\nThis is a test file.\n\"\"\"`,
+			expectContent: true,
+		},
+		{
+			name: "Mixed with backticks should still work",
+			llmResponse: `🔧 EDIT test.md
+` + "```" + `
+# Hello World
+
+This is a test file.
+` + "```",
+			expectContent: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			taskList, err := ParseTasks(tc.llmResponse)
+			if err != nil {
+				t.Fatalf("Failed to parse tasks: %v", err)
+			}
+
+			if tc.expectContent {
+				if taskList == nil || len(taskList.Tasks) == 0 {
+					t.Fatalf("Expected 1 task, got 0")
+				}
+
+				task := taskList.Tasks[0]
+				if task.Content == "" {
+					t.Errorf("Expected content to be extracted, but it was empty")
+				}
+
+				if !strings.Contains(task.Content, "Hello World") {
+					t.Errorf("Expected content to contain 'Hello World', but got: %s", task.Content)
+				}
+
+				t.Logf("Successfully parsed: %s", task.Content)
+			}
+		})
+	}
+}
+
+// TestEditTaskFailureRepro tests the exact error the user reported
+func TestEditTaskFailureRepro(t *testing.T) {
+	// Create a temporary directory for testing
+	tempDir, err := os.MkdirTemp("", "loom_triple_quote_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create an executor
+	executor := NewExecutor(tempDir, false, 1024*1024)
+
+	// Reproduce the exact failing case
+	llmResponse := `🔧 EDIT README.md\n\"\"\"\n# Fatih Secilmis Dentist App\n\nA simple, responsive React application for a dentist office.\n\"\"\"`
+
+	// Parse the task
+	taskList, err := ParseTasks(llmResponse)
+	if err != nil {
+		t.Fatalf("Failed to parse tasks: %v", err)
+	}
+
+	if taskList == nil || len(taskList.Tasks) == 0 {
+		t.Fatalf("No tasks parsed - this was the original issue")
+	}
+
+	task := &taskList.Tasks[0]
+
+	// Verify the task has content now
+	if task.Content == "" {
+		t.Fatalf("Task content is empty - this would cause 'EditFile requires either diff or content' error")
+	}
+
+	// Try to execute the task - should work now
+	response := executor.executeEditFile(task)
+	if !response.Success {
+		t.Fatalf("Edit execution failed: %s - the fix didn't work", response.Error)
+	}
+
+	t.Logf("SUCCESS: Triple-quote content parsing and execution now works!")
+	t.Logf("Parsed content: %s", task.Content)
 }

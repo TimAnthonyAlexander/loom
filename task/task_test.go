@@ -623,16 +623,16 @@ func TestTaskRequiresConfirmation(t *testing.T) {
 		t.Error("ReadFile should not require confirmation")
 	}
 
-	// EditFile should require confirmation
+	// UPDATED: EditFile no longer requires confirmation - executes immediately
 	task = &Task{Type: TaskTypeEditFile}
-	if !task.RequiresConfirmation() {
-		t.Error("EditFile should require confirmation")
+	if task.RequiresConfirmation() {
+		t.Error("EditFile should NOT require confirmation after removing confirmation system")
 	}
 
-	// RunShell should require confirmation
+	// UPDATED: RunShell no longer requires confirmation - executes immediately
 	task = &Task{Type: TaskTypeRunShell}
-	if !task.RequiresConfirmation() {
-		t.Error("RunShell should require confirmation")
+	if task.RequiresConfirmation() {
+		t.Error("RunShell should NOT require confirmation after removing confirmation system")
 	}
 }
 
@@ -1291,5 +1291,121 @@ These are the project rules.
 	// Should have content
 	if !strings.Contains(task.Content, "## Rules") {
 		t.Errorf("Expected content with Rules section, got %s", task.Content)
+	}
+}
+
+// TestParseEditTaskWithDirectContent tests parsing an edit task where content
+// follows directly after the task directive without code block wrapping
+func TestParseEditTaskWithDirectContent(t *testing.T) {
+	// This is the exact input that was failing according to the user's bug report
+	llmResponse := `🔧 EDIT package.json -> content
+{
+  "name": "fatih-secilmis-dentist-office",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-scripts": "5.0.1",
+    "web-vitals": "^2.1.4"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}`
+
+	taskList, err := ParseTasks(llmResponse)
+	if err != nil {
+		t.Fatalf("Failed to parse tasks: %v", err)
+	}
+
+	if len(taskList.Tasks) != 1 {
+		t.Fatalf("Expected 1 task, got %d", len(taskList.Tasks))
+	}
+
+	task := taskList.Tasks[0]
+
+	// Verify task type and path
+	if task.Type != TaskTypeEditFile {
+		t.Errorf("Expected task type %s, got %s", TaskTypeEditFile, task.Type)
+	}
+
+	if task.Path != "package.json" {
+		t.Errorf("Expected path 'package.json', got '%s'", task.Path)
+	}
+
+	if task.Intent != "content" {
+		t.Errorf("Expected intent 'content', got '%s'", task.Intent)
+	}
+
+	// The critical test: content should be extracted even without code block wrapping
+	if task.Content == "" {
+		t.Errorf("Expected content to be extracted, but it was empty")
+	}
+
+	// Verify the content contains the expected JSON structure
+	expectedSubstrings := []string{
+		`"name": "fatih-secilmis-dentist-office"`,
+		`"version": "0.1.0"`,
+		`"react": "^18.2.0"`,
+		`"start": "react-scripts start"`,
+	}
+
+	for _, expected := range expectedSubstrings {
+		if !strings.Contains(task.Content, expected) {
+			t.Errorf("Expected content to contain '%s', but it didn't. Content: %s", expected, task.Content)
+		}
+	}
+}
+
+// TestParseEditTaskWithCodeBlockContent tests the existing code block parsing
+func TestParseEditTaskWithCodeBlockContent(t *testing.T) {
+	llmResponse := `🔧 EDIT package.json -> content
+
+` + "```json" + `
+{
+  "name": "test-project",
+  "version": "1.0.0"
+}
+` + "```"
+
+	taskList, err := ParseTasks(llmResponse)
+	if err != nil {
+		t.Fatalf("Failed to parse tasks: %v", err)
+	}
+
+	if len(taskList.Tasks) != 1 {
+		t.Fatalf("Expected 1 task, got %d", len(taskList.Tasks))
+	}
+
+	task := taskList.Tasks[0]
+
+	if task.Content == "" {
+		t.Errorf("Expected content to be extracted from code block, but it was empty")
+	}
+
+	if !strings.Contains(task.Content, `"name": "test-project"`) {
+		t.Errorf("Expected content to contain test project name, got: %s", task.Content)
 	}
 }

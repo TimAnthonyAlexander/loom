@@ -141,6 +141,11 @@ func (stm *SequentialTaskManager) executeExplorationLoop() (*ExplorationResult, 
 		// Execute the task
 		taskResponse := stm.executor.Execute(task)
 
+		// Check if task requires confirmation (critical safety check missing!)
+		if taskResponse.Success && task.RequiresConfirmation() {
+			return nil, fmt.Errorf("sequential manager does not support destructive tasks that require confirmation. Task: %s requires user approval but sequential exploration cannot handle confirmations", task.Description())
+		}
+
 		// Add task result to exploration context (hidden from user)
 		taskResultMsg := stm.formatTaskResultForExploration(task, taskResponse)
 		stm.addToExplorationContext(taskResultMsg)

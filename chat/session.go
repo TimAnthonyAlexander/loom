@@ -247,6 +247,11 @@ func (s *Session) GetDisplayMessages() []string {
 				continue
 			}
 
+			// CRITICAL FIX: Skip internal TASK_RESULT messages that are meant for LLM only
+			if strings.HasPrefix(msg.Content, "TASK_RESULT:") {
+				continue
+			}
+
 			// Filter task result messages to show only status, not actual content
 			content := s.filterTaskResultForDisplay(msg.Content)
 

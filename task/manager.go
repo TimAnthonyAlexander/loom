@@ -101,29 +101,14 @@ func (m *Manager) HandleLLMResponse(llmResponse string, eventChan chan<- TaskExe
 			continue
 		}
 
-		// Check if task requires confirmation
-		if currentTask.RequiresConfirmation() {
-			eventChan <- TaskExecutionEvent{
-				Type:          "task_completed",
-				Task:          &currentTask,
-				Response:      response,
-				Execution:     execution,
-				Message:       fmt.Sprintf("Task completed, awaiting confirmation: %s", currentTask.Description()),
-				RequiresInput: true,
-			}
-
-			// Task execution is paused, waiting for user confirmation
-			// The TUI will handle the confirmation and call ConfirmTask
-			return execution, nil
-		} else {
-			// Task completed successfully
-			eventChan <- TaskExecutionEvent{
-				Type:      "task_completed",
-				Task:      &currentTask,
-				Response:  response,
-				Execution: execution,
-				Message:   fmt.Sprintf("Task completed: %s", currentTask.Description()),
-			}
+		// REMOVED: No more confirmations - files are applied immediately during execution
+		// Task completed successfully
+		eventChan <- TaskExecutionEvent{
+			Type:      "task_completed",
+			Task:      &currentTask,
+			Response:  response,
+			Execution: execution,
+			Message:   fmt.Sprintf("Task completed: %s", currentTask.Description()),
 		}
 
 		// Add task result to chat context for next LLM iteration
@@ -441,14 +426,7 @@ func (execution *TaskExecution) IsTaskCompleted(taskIndex int) bool {
 }
 
 // GetPendingTask returns the next task that requires confirmation
+// REMOVED: No more confirmations - all tasks execute immediately
 func (execution *TaskExecution) GetPendingTask() (*Task, *TaskResponse) {
-	for i, response := range execution.Responses {
-		task := execution.Tasks[i]
-		if response.Success && task.RequiresConfirmation() && !response.Approved {
-			// Return the updated task from the response, not the original task
-			// This ensures we use the correct content that was prepared during execution
-			return &response.Task, &response
-		}
-	}
 	return nil, nil
 }
