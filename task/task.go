@@ -762,7 +762,7 @@ func parseQuotedArgs(input string) []string {
 	var quoteChar rune
 
 	input = strings.TrimSpace(input)
-	
+
 	for _, char := range input {
 		switch {
 		case !inQuotes && (char == '"' || char == '\''):
@@ -770,32 +770,32 @@ func parseQuotedArgs(input string) []string {
 			inQuotes = true
 			quoteChar = char
 			current.WriteRune(char)
-			
+
 		case inQuotes && char == quoteChar:
 			// End of quoted string
 			current.WriteRune(char)
 			inQuotes = false
-			
+
 		case !inQuotes && char == ' ':
 			// Space outside quotes - end current argument
 			if current.Len() > 0 {
 				args = append(args, current.String())
 				current.Reset()
 			}
-			// Note: consecutive spaces will just result in empty current.Len() 
+			// Note: consecutive spaces will just result in empty current.Len()
 			// and will be skipped naturally
-			
+
 		default:
 			// Regular character or space inside quotes
 			current.WriteRune(char)
 		}
 	}
-	
+
 	// Add the last argument if there's one
 	if current.Len() > 0 {
 		args = append(args, current.String())
 	}
-	
+
 	return args
 }
 
