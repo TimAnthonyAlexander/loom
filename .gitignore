@@ -9,8 +9,8 @@ dist/
 loom
 
 # Go build artifacts
-*.exe
-*.exe~
+dist/*.exe
+dist/*.exe~
 *.dll
 *.so
 *.dylib

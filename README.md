@@ -300,7 +300,10 @@ For file modifications:
   "max_file_size": 512000,
   "max_context_tokens": 6000,
   "enable_test_first": false,
-  "auto_save_interval": "30s"
+  "auto_save_interval": "30s",
+  "llm_timeout": 120,
+  "llm_stream_timeout": 300,
+  "llm_max_retries": 3
 }
 ```
 
@@ -328,6 +331,48 @@ rm .loom/config.json
 - **`auto_save_interval`** — Session persistence frequency (default: "30s")
 - **`enable_shell`** — Allow shell command execution (default: false)
 - **`max_file_size`** — Maximum file size for indexing (default: 512KB)
+- **`llm_timeout`** — LLM request timeout in seconds (default: 120)
+- **`llm_stream_timeout`** — LLM streaming timeout in seconds (default: 300)
+- **`llm_max_retries`** — Maximum retry attempts for failed requests (default: 3)
+
+### LLM Timeout Configuration
+
+Loom includes robust timeout handling and retry logic to prevent "context deadline exceeded" errors:
+
+#### Default Timeouts
+- **Regular requests**: 120 seconds (2 minutes)
+- **Streaming requests**: 300 seconds (5 minutes)
+- **Retry attempts**: 3 with exponential backoff
+
+#### For Users Experiencing Frequent Timeouts
+
+If you frequently encounter timeout errors, especially during peak OpenAI usage periods, you can increase the timeout values:
+
+```json
+{
+  "llm_timeout": 300,
+  "llm_stream_timeout": 900,
+  "llm_max_retries": 5
+}
+```
+
+#### Retry Logic
+Loom automatically retries failed requests for:
+- **Network issues**: Connection timeouts, DNS failures, temporary network problems
+- **API issues**: Rate limiting (429), server errors (5xx), context deadline exceeded
+- **Temporary failures**: Transient OpenAI API fluctuations
+
+#### Configuration Commands
+```bash
+# Set longer timeouts for slow connections
+./loom config set llm_timeout 300
+./loom config set llm_stream_timeout 600
+./loom config set llm_max_retries 5
+
+# View current timeout settings
+./loom config get llm_timeout
+./loom config get llm_stream_timeout
+```
 
 ## Security Features
 
@@ -419,6 +464,17 @@ Loom provides detailed insights into your project:
 - **OpenAI errors** — Check API key with `echo $OPENAI_API_KEY`
 - **Ollama connection** — Ensure Ollama is running with `ollama serve`
 - **Model not found** — For Ollama, run `ollama pull <model-name>` first
+
+#### Timeout Errors
+- **"context deadline exceeded"** — LLM request timed out, increase timeout values:
+  ```bash
+  ./loom config set llm_timeout 300          # 5 minutes
+  ./loom config set llm_stream_timeout 600   # 10 minutes
+  ./loom config set llm_max_retries 5        # More retry attempts
+  ```
+- **Frequent timeouts** — May occur during peak OpenAI usage; Loom will automatically retry
+- **Streaming timeouts** — For long conversations, streaming timeout is separate from regular timeout
+- **Network issues** — Loom includes exponential backoff retry for transient network problems
 
 ### Task Execution Issues
 - **AI explains but doesn't act** — Enable debug mode with `/debug` command

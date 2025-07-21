@@ -10,19 +10,25 @@ import (
 
 // Config represents the loom configuration
 type Config struct {
-	Model       string `json:"model"`
-	EnableShell bool   `json:"enable_shell"`
-	MaxFileSize int64  `json:"max_file_size"` // Maximum file size to index in bytes
-	APIKey      string `json:"api_key"`       // API key for LLM providers
-	BaseURL     string `json:"base_url"`      // Base URL for LLM providers (optional)
+	Model            string `json:"model"`
+	EnableShell      bool   `json:"enable_shell"`
+	MaxFileSize      int64  `json:"max_file_size"`      // Maximum file size to index in bytes
+	APIKey           string `json:"api_key"`            // API key for LLM providers
+	BaseURL          string `json:"base_url"`           // Base URL for LLM providers (optional)
+	LLMTimeout       int    `json:"llm_timeout"`        // LLM request timeout in seconds (default: 120)
+	LLMStreamTimeout int    `json:"llm_stream_timeout"` // LLM streaming timeout in seconds (default: 300)
+	LLMMaxRetries    int    `json:"llm_max_retries"`    // Maximum number of retries for failed LLM requests (default: 3)
 }
 
 // DefaultConfig returns a config with default values
 func DefaultConfig() *Config {
 	return &Config{
-		Model:       "openai:gpt-4o",
-		EnableShell: false,
-		MaxFileSize: 500 * 1024, // 500 KB default
+		Model:            "openai:gpt-4o",
+		EnableShell:      false,
+		MaxFileSize:      500 * 1024, // 500 KB default
+		LLMTimeout:       120,        // 2 minutes default
+		LLMStreamTimeout: 300,        // 5 minutes default for streaming
+		LLMMaxRetries:    3,          // 3 retries default
 	}
 }
 
@@ -59,6 +65,12 @@ func (c *Config) Get(key string) (interface{}, error) {
 		return c.APIKey, nil
 	case "base_url":
 		return c.BaseURL, nil
+	case "llm_timeout":
+		return c.LLMTimeout, nil
+	case "llm_stream_timeout":
+		return c.LLMStreamTimeout, nil
+	case "llm_max_retries":
+		return c.LLMMaxRetries, nil
 	default:
 		return nil, fmt.Errorf("unknown config key: %s", key)
 	}
@@ -98,6 +110,36 @@ func (c *Config) Set(key string, value interface{}) error {
 		return nil
 	case "base_url":
 		c.BaseURL = str
+		return nil
+	case "llm_timeout":
+		val, err := strconv.Atoi(str)
+		if err != nil {
+			return fmt.Errorf("expected numeric value for llm_timeout, got: %s", str)
+		}
+		if val <= 0 {
+			return fmt.Errorf("llm_timeout must be positive, got: %d", val)
+		}
+		c.LLMTimeout = val
+		return nil
+	case "llm_stream_timeout":
+		val, err := strconv.Atoi(str)
+		if err != nil {
+			return fmt.Errorf("expected numeric value for llm_stream_timeout, got: %s", str)
+		}
+		if val <= 0 {
+			return fmt.Errorf("llm_stream_timeout must be positive, got: %d", val)
+		}
+		c.LLMStreamTimeout = val
+		return nil
+	case "llm_max_retries":
+		val, err := strconv.Atoi(str)
+		if err != nil {
+			return fmt.Errorf("expected numeric value for llm_max_retries, got: %s", str)
+		}
+		if val < 0 {
+			return fmt.Errorf("llm_max_retries must be non-negative, got: %d", val)
+		}
+		c.LLMMaxRetries = val
 		return nil
 	default:
 		return fmt.Errorf("unknown config key: %s", key)
@@ -163,4 +205,15 @@ func mergeCfg(dst, src *Config) {
 	// EnableShell is a bool, so we need to check if it was explicitly set
 	// For simplicity, we'll always take the source value if the source exists
 	dst.EnableShell = src.EnableShell
+
+	// Merge timeout settings if they're non-zero (explicitly set)
+	if src.LLMTimeout > 0 {
+		dst.LLMTimeout = src.LLMTimeout
+	}
+	if src.LLMStreamTimeout > 0 {
+		dst.LLMStreamTimeout = src.LLMStreamTimeout
+	}
+	if src.LLMMaxRetries >= 0 {
+		dst.LLMMaxRetries = src.LLMMaxRetries
+	}
 }

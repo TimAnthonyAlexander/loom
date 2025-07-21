@@ -253,6 +253,165 @@ func TestValidateTask(t *testing.T) {
 	}
 }
 
+func TestParseSearchTask(t *testing.T) {
+	// Test basic search
+	task := parseSearchTask("main")
+	if task == nil {
+		t.Fatal("Expected search task, got nil")
+	}
+	if task.Type != TaskTypeSearch {
+		t.Errorf("Expected TaskTypeSearch, got %s", task.Type)
+	}
+	if task.Query != "main" {
+		t.Errorf("Expected query 'main', got '%s'", task.Query)
+	}
+	if task.MaxResults != 100 {
+		t.Errorf("Expected default MaxResults 100, got %d", task.MaxResults)
+	}
+
+	// Test search with file types
+	task = parseSearchTask("func type:go,js")
+	if task.Query != "func" {
+		t.Errorf("Expected query 'func', got '%s'", task.Query)
+	}
+	if len(task.FileTypes) != 2 || task.FileTypes[0] != "go" || task.FileTypes[1] != "js" {
+		t.Errorf("Expected FileTypes [go, js], got %v", task.FileTypes)
+	}
+
+	// Test search with options
+	task = parseSearchTask("error case-insensitive whole-word context:3 max:50")
+	if task.Query != "error" {
+		t.Errorf("Expected query 'error', got '%s'", task.Query)
+	}
+	if !task.IgnoreCase {
+		t.Error("Expected IgnoreCase to be true")
+	}
+	if !task.WholeWord {
+		t.Error("Expected WholeWord to be true")
+	}
+	if task.ContextBefore != 3 || task.ContextAfter != 3 {
+		t.Errorf("Expected context 3/3, got %d/%d", task.ContextBefore, task.ContextAfter)
+	}
+	if task.MaxResults != 50 {
+		t.Errorf("Expected MaxResults 50, got %d", task.MaxResults)
+	}
+
+	// Test search with directory
+	task = parseSearchTask("TODO in:src/")
+	if task.Query != "TODO" {
+		t.Errorf("Expected query 'TODO', got '%s'", task.Query)
+	}
+	if task.Path != "src/" {
+		t.Errorf("Expected path 'src/', got '%s'", task.Path)
+	}
+}
+
+func TestValidateSearchTask(t *testing.T) {
+	// Test valid search task
+	task := &Task{
+		Type:       TaskTypeSearch,
+		Query:      "pattern",
+		Path:       ".",
+		MaxResults: 100,
+	}
+	if err := validateTask(task); err != nil {
+		t.Errorf("Expected valid search task, got error: %v", err)
+	}
+
+	// Test search task without query
+	task = &Task{
+		Type: TaskTypeSearch,
+		Path: ".",
+	}
+	if err := validateTask(task); err == nil {
+		t.Error("Expected error for search task without query")
+	}
+
+	// Test search task gets defaults
+	task = &Task{
+		Type:  TaskTypeSearch,
+		Query: "pattern",
+	}
+	if err := validateTask(task); err != nil {
+		t.Errorf("Expected valid task, got error: %v", err)
+	}
+	if task.Path != "." {
+		t.Errorf("Expected default path '.', got '%s'", task.Path)
+	}
+	if task.MaxResults != 100 {
+		t.Errorf("Expected default MaxResults 100, got %d", task.MaxResults)
+	}
+}
+
+func TestSearchTaskNaturalLanguageParsing(t *testing.T) {
+	// Test emoji format
+	llmResponse1 := "I'll search for that pattern.\n\n🔧 SEARCH \"IndexStats\"\n\nLet me find where it's defined."
+
+	taskList1, err := ParseTasks(llmResponse1)
+	if err != nil {
+		t.Fatalf("Failed to parse tasks: %v", err)
+	}
+
+	if taskList1 == nil || len(taskList1.Tasks) == 0 {
+		t.Fatal("Expected to find SEARCH task in emoji format")
+	}
+
+	task1 := taskList1.Tasks[0]
+	if task1.Type != TaskTypeSearch {
+		t.Errorf("Expected TaskTypeSearch, got %s", task1.Type)
+	}
+
+	if task1.Query != "IndexStats" {
+		t.Errorf("Expected query 'IndexStats', got '%s'", task1.Query)
+	}
+
+	// Test simple format
+	llmResponse2 := "SEARCH \"IndexStats\""
+
+	taskList2, err := ParseTasks(llmResponse2)
+	if err != nil {
+		t.Fatalf("Failed to parse tasks: %v", err)
+	}
+
+	if taskList2 == nil || len(taskList2.Tasks) == 0 {
+		t.Fatal("Expected to find SEARCH task in simple format")
+	}
+
+	task2 := taskList2.Tasks[0]
+	if task2.Type != TaskTypeSearch {
+		t.Errorf("Expected TaskTypeSearch, got %s", task2.Type)
+	}
+
+	// Test with options
+	llmResponse3 := "🔧 SEARCH \"pattern\" type:go context:2"
+
+	taskList3, err := ParseTasks(llmResponse3)
+	if err != nil {
+		t.Fatalf("Failed to parse tasks: %v", err)
+	}
+
+	if taskList3 == nil || len(taskList3.Tasks) == 0 {
+		t.Fatal("Expected to find SEARCH task with options")
+	}
+
+	task3 := taskList3.Tasks[0]
+	if task3.Type != TaskTypeSearch {
+		t.Errorf("Expected TaskTypeSearch, got %s", task3.Type)
+	}
+
+	if task3.Query != "pattern" {
+		t.Errorf("Expected query 'pattern', got '%s'", task3.Query)
+	}
+
+	if len(task3.FileTypes) == 0 || task3.FileTypes[0] != "go" {
+		t.Errorf("Expected FileTypes to contain 'go', got %v", task3.FileTypes)
+	}
+
+	if task3.ContextBefore != 2 || task3.ContextAfter != 2 {
+		t.Errorf("Expected context 2/2, got %d/%d", task3.ContextBefore, task3.ContextAfter)
+	}
+}
+
 func TestTaskDescription(t *testing.T) {
 	// Test ReadFile description
 	task := &Task{

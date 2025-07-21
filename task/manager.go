@@ -151,27 +151,59 @@ func (m *Manager) HandleLLMResponse(llmResponse string, eventChan chan<- TaskExe
 	return execution, nil
 }
 
-// ConfirmTask applies a confirmed destructive task
-func (m *Manager) ConfirmTask(task *Task, approve bool) error {
+// ConfirmTask applies a confirmed destructive task and sends enhanced feedback to LLM
+//
+// BREAKING CHANGE: This method signature was changed to include taskResponse parameter
+// to support enhanced edit summary feedback. The taskResponse should be the response
+// from the original task execution that generated the confirmation request.
+//
+// Parameters:
+//   - task: The task to confirm and apply
+//   - taskResponse: The original response containing edit summary data (required for enhanced feedback)
+//   - approve: Whether the user approved the task
+func (m *Manager) ConfirmTask(task *Task, taskResponse *TaskResponse, approve bool) error {
 	if !approve {
+		// Send cancellation feedback to LLM
+		cancelMessage := llm.Message{
+			Role:      "assistant",
+			Content:   m.FormatConfirmationResult(task, false, nil),
+			Timestamp: time.Now(),
+		}
+		if err := m.chatSession.AddMessage(cancelMessage); err != nil {
+			fmt.Printf("Warning: failed to add cancellation message to chat: %v\n", err)
+		}
 		return fmt.Errorf("task cancelled by user")
 	}
 
+	var applyError error
 	if task.Type == TaskTypeEditFile {
-		return m.executor.ApplyEdit(task)
+		applyError = m.executor.ApplyEditWithConfirmation(task)
 	} else if task.Type == TaskTypeRunShell {
 		// Check if this is an interactive shell command that needs real execution
 		if task.Interactive && task.AllowUserInput {
 			// For real interactive commands, we need to execute them now with user interaction
 			// This would require extending the TUI to handle real-time input
 			// For now, provide feedback that interactive execution is prepared
-			return nil
+			applyError = nil
 		}
 		// For non-interactive or auto-interactive commands, they were already executed in the preview
-		return nil
+		applyError = nil
+	} else {
+		applyError = fmt.Errorf("task type %s does not require confirmation", task.Type)
 	}
 
-	return fmt.Errorf("task type %s does not require confirmation", task.Type)
+	// Send enhanced confirmation result to LLM with EditSummary data
+	confirmationMessage := llm.Message{
+		Role:      "assistant",
+		Content:   m.FormatConfirmationResultEnhanced(task, taskResponse, approve, applyError),
+		Timestamp: time.Now(),
+	}
+
+	if err := m.chatSession.AddMessage(confirmationMessage); err != nil {
+		fmt.Printf("Warning: failed to add confirmation result to chat: %v\n", err)
+	}
+
+	return applyError
 }
 
 // ApplyInteractiveTask applies an interactive task with user input channel
@@ -235,12 +267,23 @@ func (m *Manager) formatTaskResult(task *Task, response *TaskResponse) string {
 
 	if response.Success {
 		result.WriteString("✅ Status: Success\n")
+
+		// Include EditSummary if available (for file edits)
+		if response.EditSummary != nil {
+			result.WriteString(fmt.Sprintf("📊 Edit Summary: %s\n", response.EditSummary.GetCompactSummary()))
+			llmSummary := response.GetLLMSummary()
+			if llmSummary != "" {
+				result.WriteString(fmt.Sprintf("📈 Change Details:\n%s\n", llmSummary))
+			}
+		}
+
 		// Use ActualContent for LLM if available, otherwise fall back to Output
 		if response.ActualContent != "" {
 			result.WriteString(fmt.Sprintf("📄 Output:\n%s\n", response.ActualContent))
 		} else if response.Output != "" {
 			result.WriteString(fmt.Sprintf("📄 Output:\n%s\n", response.Output))
 		}
+
 		if response.Approved {
 			result.WriteString("👍 User approved changes\n")
 		}
@@ -270,6 +313,60 @@ func (m *Manager) FormatConfirmationResult(task *Task, approved bool, err error)
 	} else {
 		result.WriteString("✅ Status: Successfully applied\n")
 		result.WriteString("📄 Result: File has been modified as requested\n")
+	}
+
+	return result.String()
+}
+
+// FormatConfirmationResultEnhanced formats enhanced confirmation result with EditSummary data
+func (m *Manager) FormatConfirmationResultEnhanced(task *Task, taskResponse *TaskResponse, approved bool, err error) string {
+	var result strings.Builder
+
+	result.WriteString(fmt.Sprintf("🔧 Task Confirmation: %s\n", task.Description()))
+
+	if !approved {
+		result.WriteString("❌ Status: Cancelled by user\n")
+		result.WriteString("📄 Result: Task was not applied\n")
+	} else if err != nil {
+		result.WriteString("❌ Status: Application failed\n")
+		result.WriteString(fmt.Sprintf("💥 Error: %s\n", err.Error()))
+		result.WriteString("📄 Result: Changes were not applied due to error\n")
+	} else {
+		result.WriteString("✅ Status: Successfully applied\n")
+
+		// Include rich EditSummary data if available
+		if taskResponse != nil && taskResponse.EditSummary != nil {
+			editSummary := taskResponse.EditSummary
+			result.WriteString(fmt.Sprintf("📊 Edit Summary: %s\n", editSummary.GetCompactSummary()))
+
+			// Include detailed change information
+			llmSummary := taskResponse.GetLLMSummary()
+			if llmSummary != "" {
+				result.WriteString(fmt.Sprintf("📈 Change Details:\n%s\n", llmSummary))
+			}
+
+			result.WriteString("📄 Result: File has been modified with the following changes:\n")
+			result.WriteString(fmt.Sprintf("   • Edit Type: %s\n", editSummary.EditType))
+			result.WriteString(fmt.Sprintf("   • Total Lines: %d\n", editSummary.TotalLines))
+
+			if editSummary.EditType == "modify" {
+				if editSummary.LinesAdded > 0 {
+					result.WriteString(fmt.Sprintf("   • Lines Added: %d\n", editSummary.LinesAdded))
+				}
+				if editSummary.LinesRemoved > 0 {
+					result.WriteString(fmt.Sprintf("   • Lines Removed: %d\n", editSummary.LinesRemoved))
+				}
+				if editSummary.LinesModified > 0 {
+					result.WriteString(fmt.Sprintf("   • Lines Modified: %d\n", editSummary.LinesModified))
+				}
+			}
+
+			if editSummary.Summary != "" {
+				result.WriteString(fmt.Sprintf("   • Description: %s\n", editSummary.Summary))
+			}
+		} else {
+			result.WriteString("📄 Result: File has been modified as requested\n")
+		}
 	}
 
 	return result.String()

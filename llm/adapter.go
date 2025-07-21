@@ -36,11 +36,19 @@ type LLMAdapter interface {
 
 // AdapterConfig contains common configuration for LLM adapters
 type AdapterConfig struct {
-	Model   string
-	APIKey  string
-	BaseURL string
-	Timeout time.Duration
+	Model          string
+	APIKey         string
+	BaseURL        string
+	Timeout        time.Duration // General timeout for non-streaming requests
+	StreamTimeout  time.Duration // Timeout for streaming requests (usually longer)
+	MaxRetries     int           // Maximum number of retries for failed requests
+	RetryDelayBase time.Duration // Base delay for exponential backoff (e.g., 1s)
 }
 
-// DefaultTimeout for LLM requests
-const DefaultTimeout = 30 * time.Second
+// Default timeout values
+const (
+	DefaultTimeout        = 120 * time.Second // Increased from 30s to 120s
+	DefaultStreamTimeout  = 300 * time.Second // 5 minutes for streaming (can be long)
+	DefaultMaxRetries     = 3                 // Retry up to 3 times
+	DefaultRetryDelayBase = 1 * time.Second   // Start with 1s delay, then 2s, 4s, etc.
+)

@@ -70,6 +70,8 @@ func (e *Executor) Execute(task *Task) *TaskResponse {
 		return e.executeListDir(task)
 	case TaskTypeRunShell:
 		return e.executeRunShell(task)
+	case TaskTypeSearch:
+		return e.executeSearch(task)
 	default:
 		response.Error = fmt.Sprintf("unknown task type: %s", task.Type)
 		return response
@@ -353,12 +355,19 @@ func (e *Executor) applyDiff(task *Task, fullPath string) *TaskResponse {
 	diff := dmp.DiffMain(originalContent, newContent, false)
 	preview := dmp.DiffPrettyText(diff)
 
-	// Store actual diff preview for LLM
-	response.ActualContent = fmt.Sprintf("Diff preview for %s:\n\n%s\n\nReady to apply changes.", task.Path, preview)
+	// Generate edit summary
+	editSummary := e.analyzeContentChanges(originalContent, newContent, task.Path, task)
+	response.EditSummary = editSummary
+
+	// Store actual diff preview for LLM with edit summary
+	llmSummary := response.GetLLMSummary()
+	response.ActualContent = fmt.Sprintf("Diff preview for %s:\n\n%s\n\n%s\nReady to apply changes.",
+		task.Path, preview, llmSummary)
 
 	response.Success = true
-	// Show only status message to user, not the actual diff
-	response.Output = fmt.Sprintf("Editing file: %s (diff preview prepared)", task.Path)
+	// Show status message to user with edit summary
+	response.Output = fmt.Sprintf("Editing file: %s (diff preview prepared) - %s",
+		task.Path, editSummary.GetCompactSummary())
 
 	// Store the new content for later application
 	response.Task.Content = newContent
@@ -413,12 +422,19 @@ func (e *Executor) replaceContent(task *Task, fullPath string) *TaskResponse {
 	diff := dmp.DiffMain(originalContent, task.Content, false)
 	preview := dmp.DiffPrettyText(diff)
 
-	// Store actual preview for LLM
-	response.ActualContent = fmt.Sprintf("Content replacement preview for %s:\n\n%s\n\nReady to apply changes.", task.Path, preview)
+	// Generate edit summary
+	editSummary := e.analyzeContentChanges(originalContent, task.Content, task.Path, task)
+	response.EditSummary = editSummary
+
+	// Store actual preview for LLM with edit summary
+	llmSummary := response.GetLLMSummary()
+	response.ActualContent = fmt.Sprintf("Content replacement preview for %s:\n\n%s\n\n%s\nReady to apply changes.",
+		task.Path, preview, llmSummary)
 
 	response.Success = true
-	// Show only status message to user, not the actual diff
-	response.Output = fmt.Sprintf("Editing file: %s (content replacement prepared)", task.Path)
+	// Show status message to user with edit summary
+	response.Output = fmt.Sprintf("Editing file: %s (content replacement prepared) - %s",
+		task.Path, editSummary.GetCompactSummary())
 
 	// Store the new content for later application
 	response.Task.Content = task.Content
@@ -494,16 +510,23 @@ func (e *Executor) applySafeEdit(task *Task, fullPath string) *TaskResponse {
 	diff := dmp.DiffMain(originalContent, newContent, false)
 	preview := dmp.DiffPrettyText(diff)
 
-	// Store actual preview for LLM
-	response.ActualContent = fmt.Sprintf("SafeEdit preview for %s (lines %d-%d):\n\n%s\n\nContext validation: PASSED ✓\nReady to apply changes.",
-		task.Path, targetStart, targetEnd, preview)
+	// Generate edit summary
+	editSummary := e.analyzeContentChanges(originalContent, newContent, task.Path, task)
+	response.EditSummary = editSummary
+
+	// Store actual preview for LLM with edit summary
+	llmSummary := response.GetLLMSummary()
+	response.ActualContent = fmt.Sprintf("SafeEdit preview for %s (lines %d-%d):\n\n%s\n\nContext validation: PASSED ✓\n%s\nReady to apply changes.",
+		task.Path, targetStart, targetEnd, preview, llmSummary)
 
 	response.Success = true
-	// Show status message to user
+	// Show status message to user with edit summary
 	if targetStart == targetEnd {
-		response.Output = fmt.Sprintf("Editing file: %s (SafeEdit line %d, context validated)", task.Path, targetStart)
+		response.Output = fmt.Sprintf("Editing file: %s (SafeEdit line %d, context validated) - %s",
+			task.Path, targetStart, editSummary.GetCompactSummary())
 	} else {
-		response.Output = fmt.Sprintf("Editing file: %s (SafeEdit lines %d-%d, context validated)", task.Path, targetStart, targetEnd)
+		response.Output = fmt.Sprintf("Editing file: %s (SafeEdit lines %d-%d, context validated) - %s",
+			task.Path, targetStart, targetEnd, editSummary.GetCompactSummary())
 	}
 
 	// Store the new content for later application
@@ -521,25 +544,69 @@ func (e *Executor) validateSafeEditContext(lines []string, task *Task, targetSta
 	}
 
 	beforeLines := strings.Split(task.BeforeContext, "\n")
-	beforeStartIdx := targetStart - len(beforeLines) - 1 // Convert to 0-indexed
 
-	if beforeStartIdx < 0 {
-		return fmt.Errorf("not enough lines before target for context validation (need %d lines before line %d)", len(beforeLines), targetStart)
+	// Try multiple interpretations of BeforeContext to be more flexible
+	var beforeStartIdx int
+	var validationPassed bool
+
+	// Declare variables here to avoid goto issues
+	searchRange := 5 // Search within 5 lines of expected position
+	bestMatchScore := 0
+	bestMatchIdx := -1
+
+	// Try interpretation 1: BeforeContext ends right before target (traditional)
+	beforeStartIdx = targetStart - len(beforeLines) - 1 // Convert to 0-indexed
+	if beforeStartIdx >= 0 {
+		validationPassed = e.tryContextValidation(lines, beforeLines, beforeStartIdx)
+		if validationPassed {
+			goto validateAfter // Success with interpretation 1
+		}
 	}
 
-	// Check each line of before context
-	for i, expectedLine := range beforeLines {
-		actualIdx := beforeStartIdx + i
-		if actualIdx >= len(lines) {
-			return fmt.Errorf("before context validation failed: line index out of range")
-		}
-
-		actualLine := lines[actualIdx]
-		if strings.TrimSpace(actualLine) != strings.TrimSpace(expectedLine) {
-			return fmt.Errorf("before context mismatch at line %d:\nExpected: %q\nActual: %q", actualIdx+1, expectedLine, actualLine)
+	// Try interpretation 2: BeforeContext includes target line(s) - common with AI output
+	beforeStartIdx = targetStart - len(beforeLines) // Convert to 0-indexed
+	if beforeStartIdx >= 0 {
+		validationPassed = e.tryContextValidation(lines, beforeLines, beforeStartIdx)
+		if validationPassed {
+			goto validateAfter // Success with interpretation 2
 		}
 	}
 
+	// Try interpretation 3: BeforeContext is exactly the lines leading up to and including target
+	// This handles cases where AI provides "line 35, line 36, line 37" for target line 36
+	if len(beforeLines) >= 2 {
+		// Try matching the context ending exactly at the target line
+		beforeStartIdx = targetStart - len(beforeLines) + 1 // Convert to 0-indexed, ending at target
+		if beforeStartIdx >= 0 {
+			validationPassed = e.tryContextValidation(lines, beforeLines, beforeStartIdx)
+			if validationPassed {
+				goto validateAfter // Success with interpretation 3
+			}
+		}
+	}
+
+	// Try interpretation 4: Smart context matching - find the best match within a reasonable range
+	// This is for cases where line numbers don't align perfectly but content matches
+	for offset := -searchRange; offset <= searchRange; offset++ {
+		testIdx := (targetStart - len(beforeLines)) + offset
+		if testIdx >= 0 && testIdx+len(beforeLines) <= totalLines {
+			score := e.calculateContextMatchScore(lines, beforeLines, testIdx)
+			minRequiredScore := int(float64(len(beforeLines)) * 0.8) // At least 80% match
+			if score > bestMatchScore && score >= minRequiredScore {
+				bestMatchScore = score
+				bestMatchIdx = testIdx
+			}
+		}
+	}
+
+	if bestMatchIdx >= 0 {
+		validationPassed = true
+		goto validateAfter // Success with smart matching
+	}
+
+	return fmt.Errorf("before context validation failed: context does not match file content around target lines")
+
+validateAfter:
 	// Validate AFTER_CONTEXT
 	if task.AfterContext == "" {
 		return fmt.Errorf("AfterContext is required for SafeEdit")
@@ -552,20 +619,107 @@ func (e *Executor) validateSafeEditContext(lines []string, task *Task, targetSta
 		return fmt.Errorf("not enough lines after target for context validation (need %d lines after line %d)", len(afterLines), targetEnd)
 	}
 
-	// Check each line of after context
-	for i, expectedLine := range afterLines {
-		actualIdx := afterStartIdx + i
-		if actualIdx >= len(lines) {
-			return fmt.Errorf("after context validation failed: line index out of range")
-		}
-
-		actualLine := lines[actualIdx]
-		if strings.TrimSpace(actualLine) != strings.TrimSpace(expectedLine) {
-			return fmt.Errorf("after context mismatch at line %d:\nExpected: %q\nActual: %q", actualIdx+1, expectedLine, actualLine)
+	// Try flexible after context validation as well
+	for offset := 0; offset <= 2; offset++ { // Try exact position and a couple of lines after
+		testIdx := afterStartIdx + offset
+		if testIdx < totalLines && e.tryContextValidation(lines, afterLines, testIdx) {
+			return nil // Success!
 		}
 	}
 
-	return nil // All context validation passed
+	return fmt.Errorf("after context validation failed: context does not match file content after target lines")
+}
+
+// calculateContextMatchScore calculates how well the expected context matches the actual lines
+func (e *Executor) calculateContextMatchScore(lines []string, expectedLines []string, startIdx int) int {
+	if startIdx < 0 || startIdx >= len(lines) {
+		return 0
+	}
+
+	score := 0
+	for i, expectedLine := range expectedLines {
+		actualIdx := startIdx + i
+		if actualIdx >= len(lines) {
+			break
+		}
+
+		actualLine := lines[actualIdx]
+		cleanActual := e.cleanLineForComparison(actualLine)
+		cleanExpected := e.cleanLineForComparison(expectedLine)
+
+		if cleanActual == cleanExpected {
+			score++
+		}
+	}
+
+	return score
+}
+
+// tryContextValidation attempts to validate context at a specific starting position
+func (e *Executor) tryContextValidation(lines []string, expectedLines []string, startIdx int) bool {
+	if startIdx < 0 || startIdx >= len(lines) {
+		return false
+	}
+
+	// Check each line of context
+	for i, expectedLine := range expectedLines {
+		actualIdx := startIdx + i
+		if actualIdx >= len(lines) {
+			return false
+		}
+
+		actualLine := lines[actualIdx]
+
+		// Clean both lines for comparison
+		cleanActual := e.cleanLineForComparison(actualLine)
+		cleanExpected := e.cleanLineForComparison(expectedLine)
+
+		if cleanActual != cleanExpected {
+			return false
+		}
+	}
+
+	return true
+}
+
+// cleanLineForComparison cleans a line for context validation comparison
+func (e *Executor) cleanLineForComparison(line string) string {
+	// Remove line number prefixes (e.g., "35      " or "  15: ")
+	cleaned := e.stripLineNumberPrefix(line)
+
+	// Simple approach: just trim whitespace and compare the core content
+	// This is more reliable than trying to normalize indentation perfectly
+	return strings.TrimSpace(cleaned)
+}
+
+// normalizeWhitespace normalizes whitespace in a line for comparison while preserving structure
+// NOTE: This function is now simplified - we use simple TrimSpace instead of complex normalization
+func (e *Executor) normalizeWhitespace(line string) string {
+	return strings.TrimSpace(line)
+}
+
+// stripLineNumberPrefix removes line number prefixes from context lines
+func (e *Executor) stripLineNumberPrefix(line string) string {
+	// Pattern 1: "35      content" (number followed by spaces)
+	pattern1 := regexp.MustCompile(`^\s*\d+\s+(.*)$`)
+	if matches := pattern1.FindStringSubmatch(line); len(matches) > 1 {
+		return matches[1]
+	}
+
+	// Pattern 2: "  15: content" (spaces, number, colon, space)
+	pattern2 := regexp.MustCompile(`^\s*\d+:\s+(.*)$`)
+	if matches := pattern2.FindStringSubmatch(line); len(matches) > 1 {
+		return matches[1]
+	}
+
+	// Pattern 3: "15|content" (number, pipe, content)
+	pattern3 := regexp.MustCompile(`^\s*\d+\|\s*(.*)$`)
+	if matches := pattern3.FindStringSubmatch(line); len(matches) > 1 {
+		return matches[1]
+	}
+
+	// If no line number prefix found, return original line
+	return line
 }
 
 // performSafeEdit performs the actual SafeEdit with validated context
@@ -574,7 +728,10 @@ func (e *Executor) performSafeEdit(originalContent string, task *Task, targetSta
 
 	// Replace the target lines with new content
 	newLines := make([]string, 0, len(lines))
-	newLines = append(newLines, lines[:targetStart-1]...) // Lines before target (convert to 0-indexed)
+
+	// Add lines before the target range (convert 1-indexed to 0-indexed)
+	beforeLines := lines[:targetStart-1]
+	newLines = append(newLines, beforeLines...)
 
 	// Add new content (split by newlines if multi-line)
 	if task.Content != "" {
@@ -583,15 +740,39 @@ func (e *Executor) performSafeEdit(originalContent string, task *Task, targetSta
 	}
 
 	// Add lines after target range
-	if targetEnd < len(lines) {
-		newLines = append(newLines, lines[targetEnd:]...) // Lines after target (0-indexed)
+	// Since targetEnd is 1-indexed and inclusive, we need lines starting from targetEnd (0-indexed)
+	afterIndex := targetEnd // This gives us the lines after the target range
+	if afterIndex < len(lines) {
+		afterLines := lines[afterIndex:]
+		newLines = append(newLines, afterLines...)
 	}
 
-	return strings.Join(newLines, "\n"), nil
+	result := strings.Join(newLines, "\n")
+
+	return result, nil
 }
 
-// ApplyEdit actually writes the file changes (called after user confirmation)
+// ApplyEditWithConfirmation applies file changes after user confirmation
+// This method should be used by Manager.ConfirmTask() to ensure proper edit summary
+// feedback is sent to the LLM. For testing purposes, use ApplyEditForTesting().
+func (e *Executor) ApplyEditWithConfirmation(task *Task) error {
+	return e.applyEditInternal(task)
+}
+
+// ApplyEditForTesting applies file changes for testing purposes only
+// This bypasses the confirmation flow and should not be used in production code.
+func (e *Executor) ApplyEditForTesting(task *Task) error {
+	return e.applyEditInternal(task)
+}
+
+// Deprecated: Use ApplyEditWithConfirmation() instead
+// This method is kept for backward compatibility but will be removed.
 func (e *Executor) ApplyEdit(task *Task) error {
+	return e.applyEditInternal(task)
+}
+
+// applyEditInternal contains the actual implementation
+func (e *Executor) applyEditInternal(task *Task) error {
 	fullPath, err := e.securePath(task.Path)
 	if err != nil {
 		return err
@@ -690,16 +871,23 @@ func (e *Executor) applyLineBasedEdit(task *Task, fullPath string) *TaskResponse
 	diff := dmp.DiffMain(originalContent, newContent, false)
 	preview := dmp.DiffPrettyText(diff)
 
-	// Store actual preview for LLM
-	response.ActualContent = fmt.Sprintf("Line-based edit preview for %s (lines %d-%d):\n\n%s\n\nReady to apply changes.",
-		task.Path, targetStart, targetEnd, preview)
+	// Generate edit summary
+	editSummary := e.analyzeContentChanges(originalContent, newContent, task.Path, task)
+	response.EditSummary = editSummary
+
+	// Store actual preview for LLM with edit summary
+	llmSummary := response.GetLLMSummary()
+	response.ActualContent = fmt.Sprintf("Line-based edit preview for %s (lines %d-%d):\n\n%s\n\n%s\nReady to apply changes.",
+		task.Path, targetStart, targetEnd, preview, llmSummary)
 
 	response.Success = true
-	// Show status message to user
+	// Show status message to user with edit summary
 	if targetStart == targetEnd {
-		response.Output = fmt.Sprintf("Editing file: %s (line %d)", task.Path, targetStart)
+		response.Output = fmt.Sprintf("Editing file: %s (line %d) - %s",
+			task.Path, targetStart, editSummary.GetCompactSummary())
 	} else {
-		response.Output = fmt.Sprintf("Editing file: %s (lines %d-%d)", task.Path, targetStart, targetEnd)
+		response.Output = fmt.Sprintf("Editing file: %s (lines %d-%d) - %s",
+			task.Path, targetStart, targetEnd, editSummary.GetCompactSummary())
 	}
 
 	// Store the new content for later application
@@ -1050,6 +1238,239 @@ func (e *Executor) executeRegularShellCommand(task *Task) *TaskResponse {
 	return response
 }
 
+// executeSearch runs a ripgrep search with specified parameters
+func (e *Executor) executeSearch(task *Task) *TaskResponse {
+	response := &TaskResponse{Task: *task}
+
+	// Security: ensure search path is within workspace
+	searchPath, err := e.securePath(task.Path)
+	if err != nil {
+		response.Error = err.Error()
+		return response
+	}
+
+	// Build ripgrep command arguments
+	args := []string{}
+
+	// Add pattern (query)
+	args = append(args, task.Query)
+
+	// Add search path
+	args = append(args, searchPath)
+
+	// Add flags based on task options
+	if task.IgnoreCase {
+		args = append([]string{"-i"}, args...)
+	}
+
+	if task.WholeWord {
+		args = append([]string{"-w"}, args...)
+	}
+
+	if task.FixedString {
+		args = append([]string{"-F"}, args...)
+	}
+
+	if task.FilenamesOnly {
+		args = append([]string{"-l"}, args...)
+	}
+
+	if task.CountMatches {
+		args = append([]string{"-c"}, args...)
+	}
+
+	if task.UsePCRE2 {
+		args = append([]string{"-P"}, args...)
+	}
+
+	// Add context options
+	if task.ContextBefore > 0 {
+		args = append([]string{fmt.Sprintf("-B%d", task.ContextBefore)}, args...)
+	}
+
+	if task.ContextAfter > 0 {
+		args = append([]string{fmt.Sprintf("-A%d", task.ContextAfter)}, args...)
+	}
+
+	// Add file type filters
+	for _, fileType := range task.FileTypes {
+		args = append([]string{"-t", fileType}, args...)
+	}
+
+	for _, excludeType := range task.ExcludeTypes {
+		args = append([]string{"-T", excludeType}, args...)
+	}
+
+	// Add glob patterns
+	for _, glob := range task.GlobPatterns {
+		args = append([]string{"-g", glob}, args...)
+	}
+
+	for _, excludeGlob := range task.ExcludeGlobs {
+		args = append([]string{"-g", "!" + excludeGlob}, args...)
+	}
+
+	// Add search hidden files option
+	if task.SearchHidden {
+		args = append([]string{"--hidden"}, args...)
+	}
+
+	// Limit output to prevent overwhelming results
+	if task.MaxResults > 0 {
+		args = append([]string{"-m", fmt.Sprintf("%d", task.MaxResults)}, args...)
+	}
+
+	// Always add line numbers for better context
+	if !task.FilenamesOnly && !task.CountMatches {
+		args = append([]string{"-n"}, args...)
+	}
+
+	// Add color output for better readability
+	args = append([]string{"--color=always"}, args...)
+
+	// Execute ripgrep
+	output, err := indexer.RunRipgrepWithArgs(args...)
+	if err != nil {
+		// Check if it's just "no matches found" (exit code 1)
+		if strings.Contains(err.Error(), "exit status 1") {
+			// No matches found is not an error, just empty results
+			response.Success = true
+			response.Output = fmt.Sprintf("Search completed: '%s' - No matches found", task.Query)
+			response.ActualContent = fmt.Sprintf("No matches found for search query: '%s'\n\nSearch parameters:\n- Path: %s\n- Options: %s",
+				task.Query, task.Path, e.formatSearchOptions(task))
+			return response
+		}
+
+		response.Error = fmt.Sprintf("ripgrep search failed: %v", err)
+		return response
+	}
+
+	// Process and format output
+	outputStr := string(output)
+
+	// Count matches and files for summary
+	lines := strings.Split(strings.TrimSpace(outputStr), "\n")
+	if len(lines) == 1 && lines[0] == "" {
+		// Empty output
+		response.Success = true
+		response.Output = fmt.Sprintf("Search completed: '%s' - No matches found", task.Query)
+		response.ActualContent = fmt.Sprintf("No matches found for search query: '%s'\n\nSearch parameters:\n- Path: %s\n- Options: %s",
+			task.Query, task.Path, e.formatSearchOptions(task))
+		return response
+	}
+
+	// Count matches and files
+	matchCount := 0
+	fileSet := make(map[string]bool)
+
+	for _, line := range lines {
+		if line != "" {
+			matchCount++
+			// Extract filename (everything before first colon)
+			if colonIdx := strings.Index(line, ":"); colonIdx > 0 {
+				filename := line[:colonIdx]
+				fileSet[filename] = true
+			}
+		}
+	}
+
+	fileCount := len(fileSet)
+
+	// Format search results with intelligent truncation
+	formattedOutput := e.formatSearchResults(outputStr, task, matchCount, fileCount)
+
+	// Store actual search results for LLM
+	response.ActualContent = formattedOutput
+
+	response.Success = true
+
+	// Create concise user status message
+	if task.FilenamesOnly {
+		response.Output = fmt.Sprintf("Search completed: '%s' - Found %d files with matches", task.Query, fileCount)
+	} else if task.CountMatches {
+		response.Output = fmt.Sprintf("Search completed: '%s' - Found %d total matches", task.Query, matchCount)
+	} else {
+		response.Output = fmt.Sprintf("Search completed: '%s' - Found %d matches in %d files", task.Query, matchCount, fileCount)
+	}
+
+	return response
+}
+
+// formatSearchOptions formats search options for display
+func (e *Executor) formatSearchOptions(task *Task) string {
+	var options []string
+
+	if task.IgnoreCase {
+		options = append(options, "case-insensitive")
+	}
+	if task.WholeWord {
+		options = append(options, "whole words")
+	}
+	if task.FixedString {
+		options = append(options, "literal string")
+	}
+	if len(task.FileTypes) > 0 {
+		options = append(options, fmt.Sprintf("file types: %s", strings.Join(task.FileTypes, ",")))
+	}
+	if len(task.ExcludeTypes) > 0 {
+		options = append(options, fmt.Sprintf("exclude types: %s", strings.Join(task.ExcludeTypes, ",")))
+	}
+	if len(task.GlobPatterns) > 0 {
+		options = append(options, fmt.Sprintf("include: %s", strings.Join(task.GlobPatterns, ",")))
+	}
+	if task.ContextBefore > 0 || task.ContextAfter > 0 {
+		options = append(options, fmt.Sprintf("context: %d/%d", task.ContextBefore, task.ContextAfter))
+	}
+
+	if len(options) == 0 {
+		return "default"
+	}
+
+	return strings.Join(options, ", ")
+}
+
+// formatSearchResults formats ripgrep output for better readability
+func (e *Executor) formatSearchResults(output string, task *Task, matchCount, fileCount int) string {
+	var result strings.Builder
+
+	// Add search summary header
+	result.WriteString(fmt.Sprintf("🔍 Search Results for: '%s'\n", task.Query))
+	result.WriteString(fmt.Sprintf("📁 Path: %s\n", task.Path))
+	result.WriteString(fmt.Sprintf("📊 Summary: %d matches in %d files\n", matchCount, fileCount))
+
+	if len(task.FileTypes) > 0 {
+		result.WriteString(fmt.Sprintf("📋 File types: %s\n", strings.Join(task.FileTypes, ", ")))
+	}
+
+	if task.IgnoreCase || task.WholeWord || task.FixedString {
+		options := []string{}
+		if task.IgnoreCase {
+			options = append(options, "case-insensitive")
+		}
+		if task.WholeWord {
+			options = append(options, "whole words")
+		}
+		if task.FixedString {
+			options = append(options, "literal")
+		}
+		result.WriteString(fmt.Sprintf("⚙️  Options: %s\n", strings.Join(options, ", ")))
+	}
+
+	result.WriteString("\n" + strings.Repeat("─", 50) + "\n\n")
+
+	// Add the actual ripgrep output
+	result.WriteString(output)
+
+	// Add usage hints for large result sets
+	if matchCount > 50 {
+		result.WriteString("\n\n💡 Tip: Use more specific search terms or file type filters to narrow results:")
+		result.WriteString("\n   🔧 SEARCH \"specific phrase\" type:go")
+		result.WriteString("\n   🔧 SEARCH pattern glob:*.ts -glob:*.test.ts")
+	}
+
+	return result.String()
+}
+
 // securePath ensures the path is within the workspace and returns the full path
 func (e *Executor) securePath(relPath string) (string, error) {
 	// Clean the path to prevent directory traversal
@@ -1251,12 +1672,19 @@ func (e *Executor) applyTargetedEdit(task *Task, fullPath string) *TaskResponse 
 	diff := dmp.DiffMain(originalContent, newContent, false)
 	preview := dmp.DiffPrettyText(diff)
 
-	// Store actual preview for LLM
-	response.ActualContent = fmt.Sprintf("Targeted edit preview for %s:\n\n%s\n\nReady to apply changes.", task.Path, preview)
+	// Generate edit summary
+	editSummary := e.analyzeContentChanges(originalContent, newContent, task.Path, task)
+	response.EditSummary = editSummary
+
+	// Store actual preview for LLM with edit summary
+	llmSummary := response.GetLLMSummary()
+	response.ActualContent = fmt.Sprintf("Targeted edit preview for %s:\n\n%s\n\n%s\nReady to apply changes.",
+		task.Path, preview, llmSummary)
 
 	response.Success = true
-	// Show status message to user
-	response.Output = fmt.Sprintf("Editing file: %s (targeted edit prepared - %s)", task.Path, task.InsertMode)
+	// Show status message to user with edit summary
+	response.Output = fmt.Sprintf("Editing file: %s (targeted edit prepared - %s) - %s",
+		task.Path, task.InsertMode, editSummary.GetCompactSummary())
 
 	// Store the new content for later application
 	response.Task.Content = newContent
@@ -1357,6 +1785,17 @@ func (e *Executor) performTargetedEdit(originalContent string, task *Task) (stri
 
 		// Perform global replacement in the entire content
 		result := strings.ReplaceAll(originalContent, findText, replaceText)
+
+		// Enhanced feedback: Detect if no replacements were made
+		if result == originalContent {
+			// Check if the text exists in the file at all (for better error messages)
+			if strings.Contains(strings.ToLower(originalContent), strings.ToLower(findText)) {
+				return "", fmt.Errorf("no exact matches for '%s' found in file - found similar text with different case. Replace operations are case-sensitive. Try using the exact case or a case-insensitive search", findText)
+			} else {
+				return "", fmt.Errorf("no occurrences of '%s' found in file - please verify the exact text exists and check spelling", findText)
+			}
+		}
+
 		return result, nil
 
 	case "insert_between":
@@ -1466,12 +1905,19 @@ func (e *Executor) applyDiffFormattedContent(task *Task, fullPath string) *TaskR
 	diff := dmp.DiffMain(originalContent, newContent, false)
 	preview := dmp.DiffPrettyText(diff)
 
-	// Store actual preview for LLM
-	response.ActualContent = fmt.Sprintf("Processed diff-formatted content for %s:\n\n%s\n\nReady to apply changes.", task.Path, preview)
+	// Generate edit summary
+	editSummary := e.analyzeContentChanges(originalContent, newContent, task.Path, task)
+	response.EditSummary = editSummary
+
+	// Store actual preview for LLM with edit summary
+	llmSummary := response.GetLLMSummary()
+	response.ActualContent = fmt.Sprintf("Processed diff-formatted content for %s:\n\n%s\n\n%s\nReady to apply changes.",
+		task.Path, preview, llmSummary)
 
 	response.Success = true
-	// Show status message to user
-	response.Output = fmt.Sprintf("Editing file: %s (processed diff-formatted content)", task.Path)
+	// Show status message to user with edit summary
+	response.Output = fmt.Sprintf("Editing file: %s (processed diff-formatted content) - %s",
+		task.Path, editSummary.GetCompactSummary())
 
 	// Store the new content for later application
 	response.Task.Content = newContent
@@ -1504,4 +1950,544 @@ func (e *Executor) parseDiffFormattedContent(diffContent string, originalContent
 	}
 
 	return strings.Join(result, "\n"), nil
+}
+
+// analyzeContentChanges generates an EditSummary by analyzing differences between old and new content
+func (e *Executor) analyzeContentChanges(originalContent, newContent, filePath string, task *Task) *EditSummary {
+	summary := &EditSummary{
+		FilePath:      filePath,
+		WasSuccessful: true,
+	}
+
+	// Determine edit type
+	originalExists := originalContent != ""
+	newExists := newContent != ""
+
+	if !originalExists && newExists {
+		summary.EditType = "create"
+	} else if originalExists && !newExists {
+		summary.EditType = "delete"
+	} else {
+		summary.EditType = "modify"
+	}
+
+	// Calculate line-based changes
+	originalLines := strings.Split(originalContent, "\n")
+	newLines := strings.Split(newContent, "\n")
+
+	if !originalExists {
+		originalLines = []string{}
+	}
+	if !newExists {
+		newLines = []string{}
+	}
+
+	// Calculate total lines after edit
+	summary.TotalLines = len(newLines)
+
+	// Calculate character changes
+	summary.CharactersAdded = len(newContent) - len(originalContent)
+	if summary.CharactersAdded < 0 {
+		summary.CharactersRemoved = -summary.CharactersAdded
+		summary.CharactersAdded = 0
+	}
+
+	// For detailed line analysis, use diffmatchpatch to get precise changes
+	if originalExists && newExists {
+		dmp := diffmatchpatch.New()
+		diffs := dmp.DiffMain(originalContent, newContent, false)
+
+		// Analyze diffs to count line changes
+		linesAdded, linesRemoved, linesModified := e.analyzeDiffs(diffs)
+		summary.LinesAdded = linesAdded
+		summary.LinesRemoved = linesRemoved
+		summary.LinesModified = linesModified
+	} else if summary.EditType == "create" {
+		summary.LinesAdded = len(newLines)
+		summary.CharactersAdded = len(newContent)
+	} else if summary.EditType == "delete" {
+		summary.LinesRemoved = len(originalLines)
+		summary.CharactersRemoved = len(originalContent)
+	}
+
+	// Generate a descriptive summary based on the task and changes
+	summary.Summary = e.generateChangeSummary(task, summary)
+
+	return summary
+}
+
+// analyzeDiffs analyzes diffmatchpatch diffs to count line-level changes using
+// sophisticated pattern matching to distinguish modifications from additions/deletions
+func (e *Executor) analyzeDiffs(diffs []diffmatchpatch.Diff) (linesAdded, linesRemoved, linesModified int) {
+	// Convert character-level diffs to line-level analysis
+	return e.analyzeContentChangesLineBased(diffs)
+}
+
+// analyzeContentChangesLineBased performs line-based diff analysis
+func (e *Executor) analyzeContentChangesLineBased(diffs []diffmatchpatch.Diff) (linesAdded, linesRemoved, linesModified int) {
+	// Reconstruct original and new content from diffs
+	var originalContent, newContent string
+
+	for _, diff := range diffs {
+		switch diff.Type {
+		case diffmatchpatch.DiffEqual:
+			originalContent += diff.Text
+			newContent += diff.Text
+		case diffmatchpatch.DiffDelete:
+			originalContent += diff.Text
+		case diffmatchpatch.DiffInsert:
+			newContent += diff.Text
+		}
+	}
+
+	// Split into lines for line-based analysis
+	originalLines := strings.Split(originalContent, "\n")
+	newLines := strings.Split(newContent, "\n")
+
+	// Remove empty trailing lines
+	originalLines = e.removeTrailingEmpty(originalLines)
+	newLines = e.removeTrailingEmpty(newLines)
+
+	// Use line-based diff matching
+	return e.performLineDiffAnalysis(originalLines, newLines)
+}
+
+// removeTrailingEmpty removes trailing empty strings from a slice
+func (e *Executor) removeTrailingEmpty(lines []string) []string {
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
+}
+
+// performLineDiffAnalysis performs sophisticated line-by-line diff analysis
+func (e *Executor) performLineDiffAnalysis(originalLines, newLines []string) (linesAdded, linesRemoved, linesModified int) {
+	// Create line-level diffs using a custom LCS approach
+	lineDiffs := e.createLineLevelDiffs(originalLines, newLines)
+
+	// Analyze the line diffs to detect modifications
+	i := 0
+	for i < len(lineDiffs) {
+		diff := lineDiffs[i]
+
+		switch diff.Type {
+		case diffmatchpatch.DiffEqual:
+			// Skip equal lines
+			i++
+
+		case diffmatchpatch.DiffDelete:
+			// Look ahead for potential modification (delete followed by insert)
+			if i+1 < len(lineDiffs) && lineDiffs[i+1].Type == diffmatchpatch.DiffInsert {
+				// This is a modification pattern: delete + insert
+				deletedLines := diff.Lines
+				insertedLines := lineDiffs[i+1].Lines
+
+				// Calculate modifications using content similarity analysis
+				modifications, pureDeletes, pureInserts := e.analyzeModificationPattern(
+					deletedLines, insertedLines)
+
+				linesModified += modifications
+				linesRemoved += pureDeletes
+				linesAdded += pureInserts
+
+				// Skip the insert operation since we processed it
+				i += 2
+			} else {
+				// Standalone deletion
+				linesRemoved += len(diff.Lines)
+				i++
+			}
+
+		case diffmatchpatch.DiffInsert:
+			// Standalone insertion (not part of a delete+insert modification)
+			linesAdded += len(diff.Lines)
+			i++
+		}
+	}
+
+	return linesAdded, linesRemoved, linesModified
+}
+
+// LineDiff represents a line-level diff operation
+type LineDiff struct {
+	Type  diffmatchpatch.Operation
+	Lines []string
+}
+
+// createLineLevelDiffs creates line-level diffs using LCS algorithm
+func (e *Executor) createLineLevelDiffs(originalLines, newLines []string) []LineDiff {
+	// Use Myers algorithm / LCS to find line-level differences
+	lcs := e.longestCommonSubsequence(originalLines, newLines)
+
+	var diffs []LineDiff
+
+	i, j := 0, 0
+	for k := 0; k < len(lcs); k++ {
+		// Handle deletions before this LCS point
+		var deletedLines []string
+		for i < len(originalLines) && (k >= len(lcs) || originalLines[i] != lcs[k]) {
+			deletedLines = append(deletedLines, originalLines[i])
+			i++
+		}
+		if len(deletedLines) > 0 {
+			diffs = append(diffs, LineDiff{Type: diffmatchpatch.DiffDelete, Lines: deletedLines})
+		}
+
+		// Handle insertions before this LCS point
+		var insertedLines []string
+		for j < len(newLines) && (k >= len(lcs) || newLines[j] != lcs[k]) {
+			insertedLines = append(insertedLines, newLines[j])
+			j++
+		}
+		if len(insertedLines) > 0 {
+			diffs = append(diffs, LineDiff{Type: diffmatchpatch.DiffInsert, Lines: insertedLines})
+		}
+
+		// Handle equal line
+		if k < len(lcs) {
+			diffs = append(diffs, LineDiff{Type: diffmatchpatch.DiffEqual, Lines: []string{lcs[k]}})
+			i++
+			j++
+		}
+	}
+
+	// Handle remaining deletions
+	var remainingDeleted []string
+	for i < len(originalLines) {
+		remainingDeleted = append(remainingDeleted, originalLines[i])
+		i++
+	}
+	if len(remainingDeleted) > 0 {
+		diffs = append(diffs, LineDiff{Type: diffmatchpatch.DiffDelete, Lines: remainingDeleted})
+	}
+
+	// Handle remaining insertions
+	var remainingInserted []string
+	for j < len(newLines) {
+		remainingInserted = append(remainingInserted, newLines[j])
+		j++
+	}
+	if len(remainingInserted) > 0 {
+		diffs = append(diffs, LineDiff{Type: diffmatchpatch.DiffInsert, Lines: remainingInserted})
+	}
+
+	return diffs
+}
+
+// longestCommonSubsequence finds the LCS of two string slices
+func (e *Executor) longestCommonSubsequence(a, b []string) []string {
+	m, n := len(a), len(b)
+
+	// Create LCS table
+	dp := make([][]int, m+1)
+	for i := range dp {
+		dp[i] = make([]int, n+1)
+	}
+
+	// Fill LCS table
+	for i := 1; i <= m; i++ {
+		for j := 1; j <= n; j++ {
+			if a[i-1] == b[j-1] {
+				dp[i][j] = dp[i-1][j-1] + 1
+			} else {
+				dp[i][j] = maxInt(dp[i-1][j], dp[i][j-1])
+			}
+		}
+	}
+
+	// Reconstruct LCS
+	var lcs []string
+	i, j := m, n
+	for i > 0 && j > 0 {
+		if a[i-1] == b[j-1] {
+			lcs = append([]string{a[i-1]}, lcs...)
+			i--
+			j--
+		} else if dp[i-1][j] > dp[i][j-1] {
+			i--
+		} else {
+			j--
+		}
+	}
+
+	return lcs
+}
+
+// maxInt returns the maximum of two integers
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+// DiffOperation represents a preprocessed diff operation with line information
+type DiffOperation struct {
+	Type      diffmatchpatch.Operation
+	Lines     []string
+	LineCount int
+}
+
+// preprocessDiffOperations converts raw diffs into line-aware operations
+func (e *Executor) preprocessDiffOperations(diffs []diffmatchpatch.Diff) []DiffOperation {
+	var operations []DiffOperation
+
+	for _, diff := range diffs {
+		lines := strings.Split(diff.Text, "\n")
+
+		// Handle trailing newlines consistently
+		if len(lines) > 0 && lines[len(lines)-1] == "" {
+			lines = lines[:len(lines)-1]
+		}
+
+		// Skip empty operations
+		if len(lines) == 0 || (len(lines) == 1 && lines[0] == "") {
+			continue
+		}
+
+		operations = append(operations, DiffOperation{
+			Type:      diff.Type,
+			Lines:     lines,
+			LineCount: len(lines),
+		})
+	}
+
+	return operations
+}
+
+// analyzeModificationPattern analyzes a delete+insert pair to distinguish
+// between true modifications and independent deletions/insertions
+func (e *Executor) analyzeModificationPattern(deletedLines, insertedLines []string) (modifications, pureDeletes, pureInserts int) {
+	deletedCount := len(deletedLines)
+	insertedCount := len(insertedLines)
+
+	// Use content similarity to determine actual modifications
+	modifications = e.countSimilarLines(deletedLines, insertedLines)
+
+	// Calculate remaining pure operations
+	pureDeletes = deletedCount - modifications
+	pureInserts = insertedCount - modifications
+
+	// Ensure non-negative values
+	if pureDeletes < 0 {
+		pureDeletes = 0
+	}
+	if pureInserts < 0 {
+		pureInserts = 0
+	}
+
+	return modifications, pureDeletes, pureInserts
+}
+
+// countSimilarLines counts how many deleted lines have similar counterparts
+// in the inserted lines, indicating modifications rather than complete rewrites
+func (e *Executor) countSimilarLines(deletedLines, insertedLines []string) int {
+	modifications := 0
+	usedInserted := make(map[int]bool)
+
+	// For each deleted line, find the most similar inserted line
+	for _, deletedLine := range deletedLines {
+		bestMatch := -1
+		bestSimilarity := 0.0
+
+		for i, insertedLine := range insertedLines {
+			if usedInserted[i] {
+				continue // Already matched
+			}
+
+			similarity := e.calculateLineSimilarity(deletedLine, insertedLine)
+
+			// Consider it a modification if similarity is above threshold
+			// This threshold can be tuned based on requirements
+			if similarity > 0.3 && similarity > bestSimilarity {
+				bestSimilarity = similarity
+				bestMatch = i
+			}
+		}
+
+		if bestMatch != -1 {
+			modifications++
+			usedInserted[bestMatch] = true
+		}
+	}
+
+	return modifications
+}
+
+// calculateLineSimilarity calculates similarity between two lines using
+// a combination of character overlap and structural similarity
+func (e *Executor) calculateLineSimilarity(line1, line2 string) float64 {
+	// Normalize lines for comparison
+	norm1 := strings.TrimSpace(line1)
+	norm2 := strings.TrimSpace(line2)
+
+	if norm1 == norm2 {
+		return 1.0 // Identical
+	}
+
+	if norm1 == "" || norm2 == "" {
+		return 0.0 // One is empty
+	}
+
+	// Use Levenshtein distance to calculate similarity
+	distance := e.levenshteinDistance(norm1, norm2)
+	maxLen := len(norm1)
+	if len(norm2) > maxLen {
+		maxLen = len(norm2)
+	}
+
+	if maxLen == 0 {
+		return 1.0
+	}
+
+	similarity := 1.0 - float64(distance)/float64(maxLen)
+
+	// Boost similarity for lines that share common structure (indentation, brackets, etc.)
+	structuralBonus := e.calculateStructuralSimilarity(line1, line2)
+	similarity += structuralBonus * 0.2 // 20% weight for structural similarity
+
+	if similarity > 1.0 {
+		similarity = 1.0
+	}
+
+	return similarity
+}
+
+// levenshteinDistance calculates the Levenshtein distance between two strings
+func (e *Executor) levenshteinDistance(s1, s2 string) int {
+	if len(s1) == 0 {
+		return len(s2)
+	}
+	if len(s2) == 0 {
+		return len(s1)
+	}
+
+	// Create matrix
+	matrix := make([][]int, len(s1)+1)
+	for i := range matrix {
+		matrix[i] = make([]int, len(s2)+1)
+	}
+
+	// Initialize first row and column
+	for i := 0; i <= len(s1); i++ {
+		matrix[i][0] = i
+	}
+	for j := 0; j <= len(s2); j++ {
+		matrix[0][j] = j
+	}
+
+	// Fill matrix
+	for i := 1; i <= len(s1); i++ {
+		for j := 1; j <= len(s2); j++ {
+			cost := 1
+			if s1[i-1] == s2[j-1] {
+				cost = 0
+			}
+
+			matrix[i][j] = minOfThree(
+				matrix[i-1][j]+1,      // deletion
+				matrix[i][j-1]+1,      // insertion
+				matrix[i-1][j-1]+cost, // substitution
+			)
+		}
+	}
+
+	return matrix[len(s1)][len(s2)]
+}
+
+// calculateStructuralSimilarity calculates similarity based on code structure
+func (e *Executor) calculateStructuralSimilarity(line1, line2 string) float64 {
+	score := 0.0
+
+	// Check indentation similarity
+	indent1 := len(line1) - len(strings.TrimLeft(line1, " \t"))
+	indent2 := len(line2) - len(strings.TrimLeft(line2, " \t"))
+
+	if indent1 == indent2 {
+		score += 0.3 // Same indentation level
+	} else if abs(indent1-indent2) <= 2 {
+		score += 0.1 // Similar indentation level
+	}
+
+	// Check for common patterns
+	patterns := []string{"{", "}", "(", ")", "[", "]", "=", ";", ":", ","}
+	for _, pattern := range patterns {
+		if strings.Contains(line1, pattern) && strings.Contains(line2, pattern) {
+			score += 0.1
+		}
+	}
+
+	// Limit total structural bonus
+	if score > 1.0 {
+		score = 1.0
+	}
+
+	return score
+}
+
+// Helper function for minimum of three integers
+func minOfThree(a, b, c int) int {
+	if a < b {
+		if a < c {
+			return a
+		}
+		return c
+	}
+	if b < c {
+		return b
+	}
+	return c
+}
+
+// Helper function for absolute value
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+// generateChangeSummary creates a human-readable summary of what changed
+func (e *Executor) generateChangeSummary(task *Task, summary *EditSummary) string {
+	switch summary.EditType {
+	case "create":
+		if task.Intent != "" {
+			return fmt.Sprintf("Created new file: %s", task.Intent)
+		}
+		return "Created new file"
+
+	case "delete":
+		return "Deleted file"
+
+	case "modify":
+		if task.Intent != "" {
+			return task.Intent
+		}
+
+		// Generate summary based on change patterns
+		totalChanges := summary.LinesAdded + summary.LinesRemoved + summary.LinesModified
+		if totalChanges == 0 {
+			return "No significant changes"
+		}
+
+		var changes []string
+		if summary.LinesAdded > 0 {
+			changes = append(changes, fmt.Sprintf("added %d lines", summary.LinesAdded))
+		}
+		if summary.LinesRemoved > 0 {
+			changes = append(changes, fmt.Sprintf("removed %d lines", summary.LinesRemoved))
+		}
+		if summary.LinesModified > 0 {
+			changes = append(changes, fmt.Sprintf("modified %d lines", summary.LinesModified))
+		}
+
+		if len(changes) > 0 {
+			return "Code changes: " + strings.Join(changes, ", ")
+		}
+
+		return "Content modified"
+
+	default:
+		return "File edited"
+	}
 }

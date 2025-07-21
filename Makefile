@@ -41,6 +41,31 @@ build-all: ## Build for all platforms
 	GOOS=windows GOARCH=amd64 go build -o build/$(BINARY_NAME)-windows-amd64.exe .
 	@echo "$(GREEN)✅ Multi-platform build complete!$(NC)"
 
+RIPGREP_VERSION=14.1.0
+RIPGREP_DIR=bin
+
+download-ripgrep: ## Download ripgrep binaries for Linux, macOS, and Windows
+	@echo "$(BLUE)⬇️  Downloading ripgrep v$(RIPGREP_VERSION)...$(NC)"
+	# Linux
+	curl -Ls -o /tmp/rg-linux.tar.gz https://github.com/BurntSushi/ripgrep/releases/download/$(RIPGREP_VERSION)/ripgrep-$(RIPGREP_VERSION)-x86_64-unknown-linux-musl.tar.gz
+	mkdir -p $(RIPGREP_DIR)
+	tar -xzf /tmp/rg-linux.tar.gz --strip-components=1 -C $(RIPGREP_DIR) 'ripgrep-$(RIPGREP_VERSION)-x86_64-unknown-linux-musl/rg'
+	mv $(RIPGREP_DIR)/rg $(RIPGREP_DIR)/rg-linux
+	chmod +x $(RIPGREP_DIR)/rg-linux
+
+	# macOS
+	curl -Ls -o /tmp/rg-macos.tar.gz https://github.com/BurntSushi/ripgrep/releases/download/$(RIPGREP_VERSION)/ripgrep-$(RIPGREP_VERSION)-x86_64-apple-darwin.tar.gz
+	tar -xzf /tmp/rg-macos.tar.gz --strip-components=1 -C $(RIPGREP_DIR) 'ripgrep-$(RIPGREP_VERSION)-x86_64-apple-darwin/rg'
+	mv $(RIPGREP_DIR)/rg $(RIPGREP_DIR)/rg-macos
+	chmod +x $(RIPGREP_DIR)/rg-macos
+
+	# Windows
+	curl -Ls -o /tmp/rg-windows.zip https://github.com/BurntSushi/ripgrep/releases/download/$(RIPGREP_VERSION)/ripgrep-$(RIPGREP_VERSION)-x86_64-pc-windows-msvc.zip
+	unzip -j -o /tmp/rg-windows.zip 'ripgrep-$(RIPGREP_VERSION)-x86_64-pc-windows-msvc/rg.exe' -d $(RIPGREP_DIR)
+	mv $(RIPGREP_DIR)/rg.exe $(RIPGREP_DIR)/rg-windows.exe
+
+	@echo "$(GREEN)✅ ripgrep binaries downloaded to $(RIPGREP_DIR)/$(NC)"
+
 # Testing
 test: ## Run tests
 	@echo "$(BLUE)🧪 Running tests...$(NC)"

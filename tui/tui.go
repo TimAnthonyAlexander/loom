@@ -724,7 +724,7 @@ func (m model) View() string {
 		// Input area at the bottom
 		inputPrefix := "> "
 		if m.isStreaming {
-			inputPrefix = "> (streaming...) "
+			inputPrefix = "> 🧠 Thinking... "
 		}
 		input := inputStyle.Render(fmt.Sprintf("%s%s%s", inputPrefix, m.input, scrollIndicator))
 
@@ -1290,6 +1290,8 @@ func (m model) handleTaskConfirmation(approved bool) (tea.Model, tea.Cmd) {
 
 	// Use the response task which contains the properly combined content for targeted edits
 	task := m.pendingConfirmation.Response.Task
+	// Save the response before clearing pendingConfirmation
+	taskResponse := m.pendingConfirmation.Response
 	m.pendingConfirmation = nil
 
 	// Add user confirmation decision to chat
@@ -1315,10 +1317,10 @@ func (m model) handleTaskConfirmation(approved bool) (tea.Model, tea.Cmd) {
 		// Apply the task using the appropriate manager
 		if m.enhancedManager != nil {
 			// Use enhanced manager if available
-			err = m.enhancedManager.ConfirmTask(&task, true)
+			err = m.enhancedManager.ConfirmTask(&task, taskResponse, true)
 		} else if m.taskManager != nil {
 			// Fall back to basic manager
-			err = m.taskManager.ConfirmTask(&task, true)
+			err = m.taskManager.ConfirmTask(&task, taskResponse, true)
 		} else {
 			err = fmt.Errorf("no task manager available")
 		}
@@ -1670,7 +1672,7 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 	var llmAdapter llm.LLMAdapter
 	var llmError error
 
-	adapter, err := llm.CreateAdapter(cfg.Model, cfg.APIKey, cfg.BaseURL)
+	adapter, err := llm.CreateAdapterFromConfig(cfg)
 	if err != nil {
 		llmError = err
 		fmt.Printf("Warning: LLM not available: %v\n", err)
@@ -2016,6 +2018,7 @@ Current workspace summary:
 You can emit tasks to interact with the workspace using simple natural language commands:
 
 🔧 READ main.go (max: 150 lines)
+🔧 SEARCH "IndexStats" (find patterns - USE THIS INSTEAD OF GREP!)
 🔧 EDIT main.go -> describe changes
 🔧 EDIT newfile.go -> create new file
 🔧 LIST src/
