@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"loom/indexer"
+	"loom/memory"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,6 +32,7 @@ type Executor struct {
 	maxFileSize         int64
 	gitIgnore           *indexer.GitIgnore
 	interactiveExecutor *InteractiveExecutor
+	memoryStore         *memory.MemoryStore
 }
 
 // NewExecutor creates a new task executor
@@ -45,12 +47,16 @@ func NewExecutor(workspacePath string, enableShell bool, maxFileSize int64) *Exe
 	// Create interactive executor
 	interactiveExecutor := NewInteractiveExecutor(workspacePath, enableShell)
 
+	// Create memory store
+	memoryStore := memory.NewMemoryStore(workspacePath)
+
 	return &Executor{
 		workspacePath:       workspacePath,
 		enableShell:         enableShell,
 		maxFileSize:         maxFileSize,
 		gitIgnore:           gitIgnore,
 		interactiveExecutor: interactiveExecutor,
+		memoryStore:         memoryStore,
 	}
 }
 
@@ -72,6 +78,8 @@ func (e *Executor) Execute(task *Task) *TaskResponse {
 		return e.executeRunShell(task)
 	case TaskTypeSearch:
 		return e.executeSearch(task)
+	case TaskTypeMemory:
+		return e.executeMemory(task)
 	default:
 		response.Error = fmt.Sprintf("unknown task type: %s", task.Type)
 		return response
@@ -2490,4 +2498,91 @@ func (e *Executor) generateChangeSummary(task *Task, summary *EditSummary) strin
 	default:
 		return "File edited"
 	}
+}
+
+// executeMemory handles memory operations
+func (e *Executor) executeMemory(task *Task) *TaskResponse {
+	response := &TaskResponse{Task: *task}
+
+	// Create memory request from task
+	req := &memory.MemoryRequest{
+		Operation:   memory.MemoryOperation(task.MemoryOperation),
+		ID:          task.MemoryID,
+		Content:     task.MemoryContent,
+		Tags:        task.MemoryTags,
+		Active:      task.MemoryActive,
+		Description: task.MemoryDescription,
+	}
+
+	// Process the memory request
+	memResponse := e.memoryStore.ProcessRequest(req)
+
+	// Convert memory response to task response
+	response.Success = memResponse.Success
+	if !memResponse.Success {
+		response.Error = memResponse.Error
+		return response
+	}
+
+	// Format output based on operation
+	var output strings.Builder
+	output.WriteString(fmt.Sprintf("Memory Operation: %s\n", task.MemoryOperation))
+
+	if memResponse.Message != "" {
+		output.WriteString(fmt.Sprintf("Result: %s\n", memResponse.Message))
+	}
+
+	switch strings.ToLower(task.MemoryOperation) {
+	case "create", "update", "get":
+		if memResponse.Memory != nil {
+			output.WriteString(fmt.Sprintf("\nMemory Details:\n"))
+			output.WriteString(fmt.Sprintf("  ID: %s\n", memResponse.Memory.ID))
+			output.WriteString(fmt.Sprintf("  Content: %s\n", memResponse.Memory.Content))
+			if memResponse.Memory.Description != "" {
+				output.WriteString(fmt.Sprintf("  Description: %s\n", memResponse.Memory.Description))
+			}
+			if len(memResponse.Memory.Tags) > 0 {
+				output.WriteString(fmt.Sprintf("  Tags: %s\n", strings.Join(memResponse.Memory.Tags, ", ")))
+			}
+			output.WriteString(fmt.Sprintf("  Active: %t\n", memResponse.Memory.Active))
+			output.WriteString(fmt.Sprintf("  Created: %s\n", memResponse.Memory.CreatedAt.Format("2006-01-02 15:04:05")))
+			output.WriteString(fmt.Sprintf("  Updated: %s\n", memResponse.Memory.UpdatedAt.Format("2006-01-02 15:04:05")))
+		}
+
+	case "list":
+		if len(memResponse.Memories) > 0 {
+			output.WriteString(fmt.Sprintf("\nFound %d memories:\n", len(memResponse.Memories)))
+			for i, mem := range memResponse.Memories {
+				output.WriteString(fmt.Sprintf("\n%d. %s\n", i+1, mem.ID))
+				output.WriteString(fmt.Sprintf("   Content: %s\n", mem.Content))
+				if mem.Description != "" {
+					output.WriteString(fmt.Sprintf("   Description: %s\n", mem.Description))
+				}
+				if len(mem.Tags) > 0 {
+					output.WriteString(fmt.Sprintf("   Tags: %s\n", strings.Join(mem.Tags, ", ")))
+				}
+				output.WriteString(fmt.Sprintf("   Active: %t\n", mem.Active))
+				output.WriteString(fmt.Sprintf("   Created: %s\n", mem.CreatedAt.Format("2006-01-02 15:04:05")))
+			}
+		} else {
+			output.WriteString("\nNo memories found.\n")
+		}
+
+	case "delete":
+		if memResponse.Memory != nil {
+			output.WriteString(fmt.Sprintf("\nDeleted memory: %s\n", memResponse.Memory.ID))
+		}
+	}
+
+	// Add memory count summary
+	total, active := e.memoryStore.GetMemoryCount()
+	output.WriteString(fmt.Sprintf("\nMemory Store Summary: %d total memories, %d active\n", total, active))
+
+	response.Output = output.String()
+	return response
+}
+
+// GetMemoryStore returns the memory store for external access
+func (e *Executor) GetMemoryStore() *memory.MemoryStore {
+	return e.memoryStore
 }

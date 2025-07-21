@@ -42,6 +42,7 @@ const (
 	TaskTypeListDir  TaskType = "ListDir"
 	TaskTypeRunShell TaskType = "RunShell"
 	TaskTypeSearch   TaskType = "Search" // NEW: Search files using ripgrep
+	TaskTypeMemory   TaskType = "Memory" // NEW: Memory management operations
 )
 
 // Task represents a single task to be executed
@@ -109,6 +110,14 @@ type Task struct {
 	CountMatches  bool     `json:"count_matches,omitempty"`  // Count matches per file
 	SearchHidden  bool     `json:"search_hidden,omitempty"`  // Search hidden files and directories
 	UsePCRE2      bool     `json:"use_pcre2,omitempty"`      // Use PCRE2 regex engine for advanced features
+
+	// Memory specific (NEW)
+	MemoryOperation   string   `json:"memory_operation,omitempty"`   // "create", "update", "delete", "get", "list"
+	MemoryID          string   `json:"memory_id,omitempty"`          // Memory identifier
+	MemoryContent     string   `json:"memory_content,omitempty"`     // Memory content
+	MemoryTags        []string `json:"memory_tags,omitempty"`        // Memory tags
+	MemoryActive      *bool    `json:"memory_active,omitempty"`      // Whether memory is active (nil means no change for update)
+	MemoryDescription string   `json:"memory_description,omitempty"` // Memory description
 }
 
 // InteractivePrompt represents an expected prompt and its response in interactive commands
@@ -162,7 +171,7 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 	seenTasks := make(map[string]bool)
 
 	// Look for task indicators with emoji prefixes
-	taskPattern := regexp.MustCompile(`^🔧\s+(READ|EDIT|LIST|RUN|SEARCH)\s+(.+)`)
+	taskPattern := regexp.MustCompile(`^🔧\s+(READ|EDIT|LIST|RUN|SEARCH|MEMORY)\s+(.+)`)
 
 	for i, line := range lines {
 		line = strings.TrimSpace(line)
@@ -203,7 +212,7 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 	}
 
 	// Also look for simpler patterns without emoji
-	simplePattern := regexp.MustCompile(`(?i)^(read|edit|list|run|search)\s+(.+)`)
+	simplePattern := regexp.MustCompile(`(?i)^(read|edit|list|run|search|memory)\s+(.+)`)
 
 	for i, line := range lines {
 		line = strings.TrimSpace(line)
@@ -265,6 +274,8 @@ func parseNaturalLanguageTask(taskType, args string) *Task {
 		return parseRunTask(args)
 	case "SEARCH":
 		return parseSearchTask(args)
+	case "MEMORY":
+		return parseMemoryTask(args)
 	default:
 		return nil
 	}
@@ -645,6 +656,147 @@ func parseSearchTask(args string) *Task {
 	}
 
 	return task
+}
+
+// parseMemoryTask parses natural language MEMORY commands
+func parseMemoryTask(args string) *Task {
+	task := &Task{Type: TaskTypeMemory}
+
+	// Parse memory operation and options with quote-aware parsing
+	// Examples:
+	// - "create user-preferences content:\"Remember user prefers dark mode\""
+	// - "update user-preferences content:\"User prefers dark mode and large fonts\""
+	// - "delete user-preferences"
+	// - "get user-preferences"
+	// - "list"
+	// - "list active:true"
+
+	parts := parseQuotedArgs(args)
+	if len(parts) == 0 {
+		return nil
+	}
+
+	// First part is the operation
+	operation := strings.ToLower(parts[0])
+	task.MemoryOperation = operation
+
+	// For operations other than list, second part is the memory ID
+	if operation != "list" && len(parts) > 1 {
+		task.MemoryID = parts[1]
+	}
+
+	// Parse additional options
+	for i := 2; i < len(parts); i++ {
+		part := parts[i]
+
+		switch {
+		case strings.HasPrefix(part, "content:"):
+			// Memory content: content:"Remember user preferences"
+			content := strings.TrimPrefix(part, "content:")
+			// Remove quotes if present
+			if len(content) >= 2 {
+				if (strings.HasPrefix(content, "\"") && strings.HasSuffix(content, "\"")) ||
+					(strings.HasPrefix(content, "'") && strings.HasSuffix(content, "'")) {
+					content = content[1 : len(content)-1]
+				}
+			}
+			task.MemoryContent = content
+
+		case strings.HasPrefix(part, "description:"):
+			// Memory description: description:"User interface preferences"
+			desc := strings.TrimPrefix(part, "description:")
+			// Remove quotes if present
+			if len(desc) >= 2 {
+				if (strings.HasPrefix(desc, "\"") && strings.HasSuffix(desc, "\"")) ||
+					(strings.HasPrefix(desc, "'") && strings.HasSuffix(desc, "'")) {
+					desc = desc[1 : len(desc)-1]
+				}
+			}
+			task.MemoryDescription = desc
+
+		case strings.HasPrefix(part, "tags:"):
+			// Memory tags: tags:ui,preferences,user
+			tags := strings.TrimPrefix(part, "tags:")
+			task.MemoryTags = strings.Split(tags, ",")
+
+		case strings.HasPrefix(part, "active:"):
+			// Memory active status: active:true or active:false
+			activeStr := strings.ToLower(strings.TrimPrefix(part, "active:"))
+			if activeStr == "true" {
+				active := true
+				task.MemoryActive = &active
+			} else if activeStr == "false" {
+				active := false
+				task.MemoryActive = &active
+			}
+		}
+	}
+
+	// For operations that require content, try to extract it from the remaining arguments
+	// if not already specified with content: prefix
+	if task.MemoryContent == "" && (operation == "create" || operation == "update") {
+		// Look for content in the remaining arguments
+		if len(parts) > 2 {
+			contentParts := parts[2:]
+			// Skip parts that are options (contain colons)
+			var contentWords []string
+			for _, part := range contentParts {
+				if !strings.Contains(part, ":") {
+					contentWords = append(contentWords, part)
+				}
+			}
+			if len(contentWords) > 0 {
+				task.MemoryContent = strings.Join(contentWords, " ")
+			}
+		}
+	}
+
+	return task
+}
+
+// parseQuotedArgs parses a string into arguments while respecting quoted strings
+func parseQuotedArgs(input string) []string {
+	var args []string
+	var current strings.Builder
+	var inQuotes bool
+	var quoteChar rune
+
+	input = strings.TrimSpace(input)
+	
+	for _, char := range input {
+		switch {
+		case !inQuotes && (char == '"' || char == '\''):
+			// Start of quoted string
+			inQuotes = true
+			quoteChar = char
+			current.WriteRune(char)
+			
+		case inQuotes && char == quoteChar:
+			// End of quoted string
+			current.WriteRune(char)
+			inQuotes = false
+			
+		case !inQuotes && char == ' ':
+			// Space outside quotes - end current argument
+			if current.Len() > 0 {
+				args = append(args, current.String())
+				current.Reset()
+			}
+			// Note: consecutive spaces will just result in empty current.Len() 
+			// and will be skipped naturally
+			
+		default:
+			// Regular character or space inside quotes
+			current.WriteRune(char)
+		}
+	}
+	
+	// Add the last argument if there's one
+	if current.Len() > 0 {
+		args = append(args, current.String())
+	}
+	
+	return args
 }
 
 // isLikelyInteractiveCommand checks if a command typically requires user interaction
@@ -1136,6 +1288,39 @@ func validateTask(task *Task) error {
 			task.MaxResults = 100 // Default limit
 		}
 
+	case TaskTypeMemory:
+		if task.MemoryOperation == "" {
+			return fmt.Errorf("Memory requires operation (create, update, delete, get, list)")
+		}
+
+		operation := strings.ToLower(task.MemoryOperation)
+		switch operation {
+		case "create":
+			if task.MemoryID == "" {
+				return fmt.Errorf("Memory create requires ID")
+			}
+			if task.MemoryContent == "" {
+				return fmt.Errorf("Memory create requires content")
+			}
+		case "update":
+			if task.MemoryID == "" {
+				return fmt.Errorf("Memory update requires ID")
+			}
+			// For updates, at least one field must be provided
+			if task.MemoryContent == "" && len(task.MemoryTags) == 0 &&
+				task.MemoryActive == nil && task.MemoryDescription == "" {
+				return fmt.Errorf("Memory update requires at least one field to update (content, tags, active, description)")
+			}
+		case "delete", "get":
+			if task.MemoryID == "" {
+				return fmt.Errorf("Memory %s requires ID", operation)
+			}
+		case "list":
+			// List doesn't require any additional validation
+		default:
+			return fmt.Errorf("unknown memory operation: %s (supported: create, update, delete, get, list)", operation)
+		}
+
 	default:
 		return fmt.Errorf("unknown task type: %s", task.Type)
 	}
@@ -1218,6 +1403,29 @@ func (t *Task) Description() string {
 			description += " (whole words)"
 		}
 		return description
+
+	case TaskTypeMemory:
+		switch strings.ToLower(t.MemoryOperation) {
+		case "create":
+			return fmt.Sprintf("Create memory '%s'", t.MemoryID)
+		case "update":
+			return fmt.Sprintf("Update memory '%s'", t.MemoryID)
+		case "delete":
+			return fmt.Sprintf("Delete memory '%s'", t.MemoryID)
+		case "get":
+			return fmt.Sprintf("Get memory '%s'", t.MemoryID)
+		case "list":
+			if t.MemoryActive != nil {
+				if *t.MemoryActive {
+					return "List active memories"
+				} else {
+					return "List inactive memories"
+				}
+			}
+			return "List all memories"
+		default:
+			return fmt.Sprintf("Memory operation '%s' on '%s'", t.MemoryOperation, t.MemoryID)
+		}
 
 	default:
 		return fmt.Sprintf("Unknown task: %s", t.Type)

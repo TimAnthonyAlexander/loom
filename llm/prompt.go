@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"loom/indexer"
+	"loom/memory"
 	"os"
 	"path/filepath"
 	"sort"
@@ -44,6 +45,7 @@ type PromptEnhancer struct {
 	workspacePath string
 	index         *indexer.Index
 	conventions   *ProjectConventions
+	memoryStore   *memory.MemoryStore
 }
 
 // NewPromptEnhancer creates a new prompt enhancer
@@ -55,6 +57,11 @@ func NewPromptEnhancer(workspacePath string, index *indexer.Index) *PromptEnhanc
 
 	enhancer.conventions = enhancer.analyzeProjectConventions()
 	return enhancer
+}
+
+// SetMemoryStore sets the memory store for the prompt enhancer
+func (pe *PromptEnhancer) SetMemoryStore(memoryStore *memory.MemoryStore) {
+	pe.memoryStore = memoryStore
 }
 
 // CreateEnhancedSystemPrompt generates a comprehensive system prompt with project conventions
@@ -95,6 +102,7 @@ func (pe *PromptEnhancer) CreateEnhancedSystemPrompt(enableShell bool) Message {
 	guidelines := pe.extractProjectGuidelines()
 	testingGuidance := pe.generateTestingGuidance()
 	qualityStandards := pe.generateQualityStandards()
+	memoriesSection := pe.generateMemoriesSection()
 
 	prompt := fmt.Sprintf(`# Loom Prompt v2025-01-21
 
@@ -118,13 +126,15 @@ You are Loom, an AI coding assistant with advanced autonomous task execution cap
 ## Testing Best Practices
 %[10]s
 
+%[11]s
+
 ## CRITICAL: Autonomous Exploration Behavior
 
 **BE COMPREHENSIVE BY DEFAULT** - When users ask about the project or architecture, immediately launch comprehensive exploration.
 
 ### Exploration Triggers:
 - "Tell me about this project"
-- "How does X work?"  
+- "How does X work?"
 - "Explain the architecture"
 - "Analyze this project"
 - "Search for X" or "Find X" → **USE SEARCH TASK, NOT grep**
@@ -134,7 +144,7 @@ You are Loom, an AI coding assistant with advanced autonomous task execution cap
 
 ### Default Response: AUTONOMOUS COMPREHENSIVE EXPLORATION
 1. **Read key files systematically** (README, main files, config files, core packages)
-2. **Analyze project structure progressively** (directories, patterns, dependencies)  
+2. **Analyze project structure progressively** (directories, patterns, dependencies)
 3. **Understand complete functionality** (entry points, data flow, interfaces)
 4. **Provide detailed comprehensive analysis** with architectural insights
 
@@ -149,12 +159,12 @@ ACTION target [line-range] -> description
 
 **Golden path example (READ -> EDIT -> VERIFY):**
 🔧 READ config.go (with line numbers)
-🔧 EDIT config.go:15 -> replace database host  
+🔧 EDIT config.go:15 -> replace database host
 🔧 READ config.go:10-20 (verify change)
 
 **Natural language format (preferred):**
 🔧 READ README.md (max: 300 lines)
-🔧 LIST . recursive  
+🔧 LIST . recursive
 🔧 EDIT main.go:42-45 -> replace panic with error
 
 ### MANDATORY Task Rules:
@@ -230,7 +240,7 @@ EDIT_LINES: 15-17
         return fmt.Errorf("operation failed: %%w", err)
     }
 --- AFTER ---
-    
+
     return result
 
 ### SafeEdit Format Rules:
@@ -283,7 +293,7 @@ EDIT_LINES: 28-31
         }
 --- AFTER ---
     }
-    
+
     return processData(req.Data)
 
 **Large Range Edit (with override):**
@@ -308,14 +318,14 @@ func LoadConfig() *Config {
 
 2. **SEARCH**: Fast code search using ripgrep (**USE THIS INSTEAD OF GREP**)
    ⭐ **PRIMARY TOOL for finding code patterns, functions, types, and symbols**
-   
+
    **Common Search Use Cases:**
    - Finding function definitions: 🔧 SEARCH "func IndexStats" type:go
    - Locating types/structs: 🔧 SEARCH "type.*IndexStats" type:go
    - Finding imports: 🔧 SEARCH "import.*IndexStats" type:go
    - General patterns: 🔧 SEARCH "IndexStats" context:2
    - TODOs and comments: 🔧 SEARCH "TODO|FIXME" case-insensitive
-   
+
    **Examples:**
    - 🔧 SEARCH "pattern" (basic search in current directory)
    - 🔧 SEARCH "func main" type:go (search only Go files)
@@ -336,10 +346,26 @@ func LoadConfig() *Config {
    - 🔧 RUN npm install (timeout: 60)
    - 🔧 RUN npm init --interactive (for commands requiring user input)
    - 🔧 RUN ssh-keygen --interactive auto (automatic responses to common prompts)
-   
+
+6. **MEMORY**: Persistent memory management for session context
+   ⭐ **Store and retrieve important information across conversations**
+
+   **Memory Operations:**
+   - 🔧 MEMORY create user-preferences content:"User prefers dark mode and concise responses"
+   - 🔧 MEMORY update user-preferences content:"User prefers dark mode, concise responses, and Go examples"
+   - 🔧 MEMORY get user-preferences
+   - 🔧 MEMORY delete user-preferences
+   - 🔧 MEMORY list
+   - 🔧 MEMORY list active:true (list only active memories)
+
+   **Memory Options:**
+   - description:"Human readable description"
+   - tags:ui,preferences,user (comma-separated tags)
+   - active:true/false (whether memory is active and included in prompts)
+
    **Search Options:**
    - type:go,js - file types to include
-   - -type:md,txt - file types to exclude  
+   - -type:md,txt - file types to exclude
    - glob:*.tf - include files matching pattern
    - -glob:*.test.js - exclude files matching pattern
    - context:3 - show 3 lines before/after matches
@@ -352,17 +378,17 @@ func LoadConfig() *Config {
    - pcre2 - advanced regex with lookarounds
    - in:path/ - search in specific directory
    - max:50 - limit number of results
-   
+
    **Interactive Command Modes:**
    - `+"`"+`--interactive`+"`"+` or `+"`"+`--interactive prompt`+"`"+`: User will be prompted for each input
    - `+"`"+`--interactive auto`+"`"+`: Automatic responses for common prompts (npm init, git config, etc.)
    - `+"`"+`--interactive predefined`+"`"+`: Use predefined responses (advanced usage)
-   
+
    **Auto-detected Interactive Commands:** npm init, yarn init, git config `+"`"+`--global`+"`"+`, ssh-keygen, sudo commands
 
 ### FORBIDDEN Operations:
 ❌ **NEVER edit without fenced context validation for existing files**
-❌ **NEVER provide partial file content without line ranges**  
+❌ **NEVER provide partial file content without line ranges**
 ❌ **NEVER edit large ranges (>20 lines) without EDIT_OVERRIDE_CONFIRMED**
 ❌ **NEVER edit without reading the file first to get line numbers**
 ❌ **NEVER use RUN+grep when SEARCH is available** (use 🔧 SEARCH instead)
@@ -392,7 +418,7 @@ For NEW files only, use simple format:
 
 ### For Project Exploration:
 1. **START with README** (usually the most important context)
-2. **Continue step-by-step** based on findings  
+2. **Continue step-by-step** based on findings
 3. **Signal completion** with EXPLORATION_COMPLETE: [analysis]
 
 ## Security & Constraints:
@@ -405,7 +431,7 @@ For NEW files only, use simple format:
 - Line numbers counted after LF normalization
 
 ## Project-Specific Guidelines:
-%[11]s
+%[12]s
 
 **Remember**: Be autonomous, comprehensive, and proactive. Always use SafeEdit format with fenced sections for maximum safety. Think like Cursor - dive deep immediately and build complete understanding before responding.`,
 		stats.TotalFiles,
@@ -418,6 +444,7 @@ For NEW files only, use simple format:
 		pe.formatConventions(),
 		qualityStandards,
 		testingGuidance,
+		memoriesSection,
 		guidelines)
 
 	return Message{
@@ -664,6 +691,20 @@ func (pe *PromptEnhancer) generateQualityStandards() string {
 	standards.WriteString("- **Explore the entire codebase** when asked about architecture or functionality\n")
 
 	return standards.String()
+}
+
+// generateMemoriesSection creates the active memories section for the system prompt
+func (pe *PromptEnhancer) generateMemoriesSection() string {
+	if pe.memoryStore == nil {
+		return "" // No memory store available
+	}
+
+	memoriesContent := pe.memoryStore.FormatMemoriesForPrompt()
+	if memoriesContent == "" {
+		return "" // No active memories
+	}
+
+	return memoriesContent
 }
 
 // formatConventions formats the detected conventions for display

@@ -1764,6 +1764,10 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 	// Add enhanced system prompt if this is a new session (no previous messages)
 	if len(chatSession.GetMessages()) == 0 {
 		promptEnhancer := llm.NewPromptEnhancer(workspacePath, idx)
+		// Set memory store for memory integration in system prompt
+		if taskExecutor != nil {
+			promptEnhancer.SetMemoryStore(taskExecutor.GetMemoryStore())
+		}
 		systemPrompt := promptEnhancer.CreateEnhancedSystemPrompt(cfg.EnableShell)
 		if err := chatSession.AddMessage(systemPrompt); err != nil {
 			fmt.Printf("Warning: failed to add system prompt: %v\n", err)
