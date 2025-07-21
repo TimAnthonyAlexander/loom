@@ -1290,6 +1290,8 @@ func (m model) handleTaskConfirmation(approved bool) (tea.Model, tea.Cmd) {
 
 	// Use the response task which contains the properly combined content for targeted edits
 	task := m.pendingConfirmation.Response.Task
+	// Save the response before clearing pendingConfirmation
+	taskResponse := m.pendingConfirmation.Response
 	m.pendingConfirmation = nil
 
 	// Add user confirmation decision to chat
@@ -1315,10 +1317,10 @@ func (m model) handleTaskConfirmation(approved bool) (tea.Model, tea.Cmd) {
 		// Apply the task using the appropriate manager
 		if m.enhancedManager != nil {
 			// Use enhanced manager if available
-			err = m.enhancedManager.ConfirmTask(&task, true)
+			err = m.enhancedManager.ConfirmTask(&task, taskResponse, true)
 		} else if m.taskManager != nil {
 			// Fall back to basic manager
-			err = m.taskManager.ConfirmTask(&task, true)
+			err = m.taskManager.ConfirmTask(&task, taskResponse, true)
 		} else {
 			err = fmt.Errorf("no task manager available")
 		}

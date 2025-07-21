@@ -107,14 +107,29 @@ type TaskList struct {
 	Tasks []Task `json:"tasks"`
 }
 
+// EditSummary represents detailed information about a file edit operation
+type EditSummary struct {
+	FilePath          string `json:"file_path"`
+	EditType          string `json:"edit_type"` // "create", "modify", "delete"
+	LinesAdded        int    `json:"lines_added"`
+	LinesRemoved      int    `json:"lines_removed"`
+	LinesModified     int    `json:"lines_modified"`
+	TotalLines        int    `json:"total_lines"` // Total lines after edit
+	CharactersAdded   int    `json:"characters_added"`
+	CharactersRemoved int    `json:"characters_removed"`
+	Summary           string `json:"summary"` // Brief description of changes
+	WasSuccessful     bool   `json:"was_successful"`
+}
+
 // TaskResponse represents the result of executing a task
 type TaskResponse struct {
-	Task          Task   `json:"task"`
-	Success       bool   `json:"success"`
-	Output        string `json:"output,omitempty"`         // Display message for user
-	ActualContent string `json:"actual_content,omitempty"` // Actual content for LLM (hidden from user)
-	Error         string `json:"error,omitempty"`
-	Approved      bool   `json:"approved,omitempty"` // For tasks requiring confirmation
+	Task          Task         `json:"task"`
+	Success       bool         `json:"success"`
+	Output        string       `json:"output,omitempty"`         // Display message for user
+	ActualContent string       `json:"actual_content,omitempty"` // Actual content for LLM (hidden from user)
+	EditSummary   *EditSummary `json:"edit_summary,omitempty"`   // Detailed edit information (for EditFile tasks)
+	Error         string       `json:"error,omitempty"`
+	Approved      bool         `json:"approved,omitempty"` // For tasks requiring confirmation
 }
 
 // tryNaturalLanguageParsing attempts to parse natural language task commands
@@ -1056,4 +1071,113 @@ func (t *Task) Description() string {
 	default:
 		return fmt.Sprintf("Unknown task: %s", t.Type)
 	}
+}
+
+// GetEditSummaryText returns a human-readable summary of the edit changes
+func (es *EditSummary) GetEditSummaryText() string {
+	if es == nil {
+		return ""
+	}
+
+	var parts []string
+
+	// Add edit type and file
+	parts = append(parts, fmt.Sprintf("%s %s", es.EditType, es.FilePath))
+
+	// Add change statistics
+	if es.EditType == "create" {
+		parts = append(parts, fmt.Sprintf("(%d lines, %d characters)",
+			es.TotalLines, es.CharactersAdded))
+	} else if es.EditType == "modify" {
+		var changes []string
+		if es.LinesAdded > 0 {
+			changes = append(changes, fmt.Sprintf("+%d lines", es.LinesAdded))
+		}
+		if es.LinesRemoved > 0 {
+			changes = append(changes, fmt.Sprintf("-%d lines", es.LinesRemoved))
+		}
+		if es.LinesModified > 0 {
+			changes = append(changes, fmt.Sprintf("~%d lines", es.LinesModified))
+		}
+		if len(changes) > 0 {
+			parts = append(parts, fmt.Sprintf("(%s)", strings.Join(changes, ", ")))
+		}
+	}
+
+	// Add summary if available
+	if es.Summary != "" {
+		parts = append(parts, "- "+es.Summary)
+	}
+
+	// Add success status
+	if es.WasSuccessful {
+		parts = append(parts, "✓")
+	} else {
+		parts = append(parts, "✗")
+	}
+
+	return strings.Join(parts, " ")
+}
+
+// GetCompactSummary returns a brief one-line summary of the edit
+func (es *EditSummary) GetCompactSummary() string {
+	if es == nil {
+		return ""
+	}
+
+	switch es.EditType {
+	case "create":
+		return fmt.Sprintf("Created %s (%d lines)", es.FilePath, es.TotalLines)
+	case "modify":
+		totalChanges := es.LinesAdded + es.LinesRemoved + es.LinesModified
+		return fmt.Sprintf("Modified %s (%d changes)", es.FilePath, totalChanges)
+	case "delete":
+		return fmt.Sprintf("Deleted %s", es.FilePath)
+	default:
+		return fmt.Sprintf("Edited %s", es.FilePath)
+	}
+}
+
+// GetLLMSummary returns a detailed summary formatted for LLM consumption
+func (tr *TaskResponse) GetLLMSummary() string {
+	if tr.EditSummary == nil {
+		return ""
+	}
+
+	es := tr.EditSummary
+	var summary strings.Builder
+
+	summary.WriteString(fmt.Sprintf("Edit completed: %s\n", es.GetCompactSummary()))
+	summary.WriteString(fmt.Sprintf("Success: %t\n", es.WasSuccessful))
+
+	if es.EditType == "create" {
+		summary.WriteString(fmt.Sprintf("- Created new file with %d lines (%d characters)\n",
+			es.TotalLines, es.CharactersAdded))
+	} else if es.EditType == "modify" {
+		summary.WriteString("Changes made:\n")
+		if es.LinesAdded > 0 {
+			summary.WriteString(fmt.Sprintf("- Added %d lines\n", es.LinesAdded))
+		}
+		if es.LinesRemoved > 0 {
+			summary.WriteString(fmt.Sprintf("- Removed %d lines\n", es.LinesRemoved))
+		}
+		if es.LinesModified > 0 {
+			summary.WriteString(fmt.Sprintf("- Modified %d lines\n", es.LinesModified))
+		}
+
+		netLineChange := es.LinesAdded - es.LinesRemoved
+		if netLineChange > 0 {
+			summary.WriteString(fmt.Sprintf("- Net increase: +%d lines\n", netLineChange))
+		} else if netLineChange < 0 {
+			summary.WriteString(fmt.Sprintf("- Net decrease: %d lines\n", netLineChange))
+		}
+
+		summary.WriteString(fmt.Sprintf("- File now has %d total lines\n", es.TotalLines))
+	}
+
+	if es.Summary != "" {
+		summary.WriteString(fmt.Sprintf("Description: %s\n", es.Summary))
+	}
+
+	return summary.String()
 }
