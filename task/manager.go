@@ -160,12 +160,32 @@ func (m *Manager) ConfirmTask(task *Task, approve bool) error {
 	if task.Type == TaskTypeEditFile {
 		return m.executor.ApplyEdit(task)
 	} else if task.Type == TaskTypeRunShell {
-		// For shell commands, they were already executed in the preview
-		// This is just confirming the result
+		// Check if this is an interactive shell command that needs real execution
+		if task.Interactive && task.AllowUserInput {
+			// For real interactive commands, we need to execute them now with user interaction
+			// This would require extending the TUI to handle real-time input
+			// For now, provide feedback that interactive execution is prepared
+			return nil
+		}
+		// For non-interactive or auto-interactive commands, they were already executed in the preview
 		return nil
 	}
 
 	return fmt.Errorf("task type %s does not require confirmation", task.Type)
+}
+
+// ApplyInteractiveTask applies an interactive task with user input channel
+func (m *Manager) ApplyInteractiveTask(task *Task, userInputChannel chan string) error {
+	if task.Type != TaskTypeRunShell {
+		return fmt.Errorf("interactive tasks are only supported for shell commands")
+	}
+
+	if !task.Interactive {
+		return fmt.Errorf("task is not configured as interactive")
+	}
+
+	// Use the interactive executor directly
+	return m.executor.interactiveExecutor.ApplyInteractiveTask(task, userInputChannel)
 }
 
 // ContinueRecursiveChat continues the chat loop with LLM after task completion

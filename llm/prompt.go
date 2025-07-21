@@ -292,6 +292,15 @@ func LoadConfig() *Config {
 4. **RUN**: Shell commands (**shell tasks run in disposable container unless user adds --prod**)
    - 🔧 RUN go test
    - 🔧 RUN npm install (timeout: 60)
+   - 🔧 RUN npm init --interactive (for commands requiring user input)
+   - 🔧 RUN ssh-keygen --interactive auto (automatic responses to common prompts)
+   
+   **Interactive Command Modes:**
+   - `+"`"+`--interactive`+"`"+` or `+"`"+`--interactive prompt`+"`"+`: User will be prompted for each input
+   - `+"`"+`--interactive auto`+"`"+`: Automatic responses for common prompts (npm init, git config, etc.)
+   - `+"`"+`--interactive predefined`+"`"+`: Use predefined responses (advanced usage)
+   
+   **Auto-detected Interactive Commands:** npm init, yarn init, git config `+"`"+`--global`+"`"+`, ssh-keygen, sudo commands
 
 ### FORBIDDEN Operations:
 ❌ **NEVER edit without fenced context validation for existing files**

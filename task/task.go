@@ -80,10 +80,26 @@ type Task struct {
 
 	// RunShell specific
 	Command string `json:"command,omitempty"`
-	Timeout int    `json:"timeout,omitempty"` // seconds
+	Timeout int    `json:"timeout,omitempty"` // Timeout in seconds
+
+	// NEW: Interactive shell support
+	Interactive     bool                `json:"interactive,omitempty"`      // Flag indicating this command needs interaction
+	InputMode       string              `json:"input_mode,omitempty"`       // "auto", "prompt", "predefined"
+	PredefinedInput []string            `json:"predefined_input,omitempty"` // Pre-defined responses to prompts
+	ExpectedPrompts []InteractivePrompt `json:"expected_prompts,omitempty"` // Expected prompts and their responses
+	AllowUserInput  bool                `json:"allow_user_input,omitempty"` // Whether to allow real-time user input during execution
 
 	// ListDir specific
 	Recursive bool `json:"recursive,omitempty"`
+}
+
+// InteractivePrompt represents an expected prompt and its response in interactive commands
+type InteractivePrompt struct {
+	Prompt      string `json:"prompt"`      // Expected prompt text (can be regex)
+	Response    string `json:"response"`    // Response to send
+	IsRegex     bool   `json:"is_regex"`    // Whether prompt is a regex pattern
+	Optional    bool   `json:"optional"`    // Whether this prompt might not appear
+	Description string `json:"description"` // Human-readable description of what this prompt is for
 }
 
 // TaskList represents a list of tasks from the LLM
@@ -452,6 +468,19 @@ func parseListTask(args string) *Task {
 func parseRunTask(args string) *Task {
 	task := &Task{Type: TaskTypeRunShell}
 
+	// Look for interactive flags
+	interactivePattern := regexp.MustCompile(`--interactive(?:\s+(\w+))?`)
+	if matches := interactivePattern.FindStringSubmatch(args); len(matches) > 0 {
+		task.Interactive = true
+		if len(matches) > 1 && matches[1] != "" {
+			task.InputMode = matches[1] // auto, prompt, predefined
+		} else {
+			task.InputMode = "prompt" // default
+		}
+		// Remove interactive flag from command
+		args = interactivePattern.ReplaceAllString(args, "")
+	}
+
 	// Look for timeout specification
 	timeoutPattern := regexp.MustCompile(`^(.+?)\s*\(timeout:\s*(\d+)s?\)$`)
 	matches := timeoutPattern.FindStringSubmatch(args)
@@ -470,7 +499,42 @@ func parseRunTask(args string) *Task {
 		task.Timeout = DefaultTimeout
 	}
 
+	// Auto-detect interactive commands if not explicitly specified
+	if !task.Interactive && isLikelyInteractiveCommand(task.Command) {
+		task.Interactive = true
+		task.InputMode = "auto" // Use automatic response handling
+	}
+
 	return task
+}
+
+// isLikelyInteractiveCommand checks if a command typically requires user interaction
+func isLikelyInteractiveCommand(command string) bool {
+	interactivePatterns := []string{
+		"npm init",
+		"yarn init",
+		"git config --global",
+		"ssh-keygen",
+		"openssl",
+		"gpg",
+		"sudo",
+		"apt install",
+		"yum install",
+		"brew install",
+		"pip install",
+		"docker run.*-it",
+		"mysql.*-p",
+		"psql.*-W",
+	}
+
+	cmdLower := strings.ToLower(command)
+	for _, pattern := range interactivePatterns {
+		if matched, _ := regexp.MatchString(pattern, cmdLower); matched {
+			return true
+		}
+	}
+
+	return false
 }
 
 // parseSafeEditFormat attempts to parse SafeEdit format (both old and new fenced formats)

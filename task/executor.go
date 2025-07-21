@@ -26,10 +26,11 @@ const (
 
 // Executor handles task execution with security constraints
 type Executor struct {
-	workspacePath string
-	enableShell   bool
-	maxFileSize   int64
-	gitIgnore     *indexer.GitIgnore
+	workspacePath       string
+	enableShell         bool
+	maxFileSize         int64
+	gitIgnore           *indexer.GitIgnore
+	interactiveExecutor *InteractiveExecutor
 }
 
 // NewExecutor creates a new task executor
@@ -41,11 +42,15 @@ func NewExecutor(workspacePath string, enableShell bool, maxFileSize int64) *Exe
 		gitIgnore = &indexer.GitIgnore{}
 	}
 
+	// Create interactive executor
+	interactiveExecutor := NewInteractiveExecutor(workspacePath, enableShell)
+
 	return &Executor{
-		workspacePath: workspacePath,
-		enableShell:   enableShell,
-		maxFileSize:   maxFileSize,
-		gitIgnore:     gitIgnore,
+		workspacePath:       workspacePath,
+		enableShell:         enableShell,
+		maxFileSize:         maxFileSize,
+		gitIgnore:           gitIgnore,
+		interactiveExecutor: interactiveExecutor,
 	}
 }
 
@@ -985,6 +990,20 @@ func (e *Executor) executeRunShell(task *Task) *TaskResponse {
 		response.Error = "shell execution is disabled (set enable_shell: true in config)"
 		return response
 	}
+
+	// Check if this is an interactive command or has interactive flags set
+	if task.Interactive || task.InputMode != "" || len(task.ExpectedPrompts) > 0 || len(task.PredefinedInput) > 0 {
+		// Delegate to interactive executor
+		return e.interactiveExecutor.ExecuteInteractiveCommand(task)
+	}
+
+	// For non-interactive commands, use the existing implementation
+	return e.executeRegularShellCommand(task)
+}
+
+// executeRegularShellCommand handles traditional non-interactive shell commands
+func (e *Executor) executeRegularShellCommand(task *Task) *TaskResponse {
+	response := &TaskResponse{Task: *task}
 
 	// Create context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(task.Timeout)*time.Second)
