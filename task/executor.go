@@ -542,20 +542,20 @@ func (e *Executor) validateSafeEditContext(lines []string, task *Task, targetSta
 	}
 
 	beforeLines := strings.Split(task.BeforeContext, "\n")
-	
+
 	// Try two different interpretations of BeforeContext:
 	// 1. BeforeContext ends right before target (traditional)
 	// 2. BeforeContext includes target lines (user's format)
-	
+
 	var beforeStartIdx int
 	var validationPassed bool
-	
+
 	// Try interpretation 1: BeforeContext ends before target
 	beforeStartIdx = targetStart - len(beforeLines) - 1 // Convert to 0-indexed
 	if beforeStartIdx >= 0 {
 		validationPassed = e.tryContextValidation(lines, beforeLines, beforeStartIdx)
 	}
-	
+
 	// If first interpretation failed, try interpretation 2: BeforeContext includes target
 	if !validationPassed {
 		beforeStartIdx = targetStart - len(beforeLines) // Convert to 0-indexed
@@ -563,7 +563,7 @@ func (e *Executor) validateSafeEditContext(lines []string, task *Task, targetSta
 			validationPassed = e.tryContextValidation(lines, beforeLines, beforeStartIdx)
 		}
 	}
-	
+
 	if !validationPassed {
 		return fmt.Errorf("before context validation failed: context does not match file content around target lines")
 	}
@@ -601,7 +601,7 @@ func (e *Executor) tryContextValidation(lines []string, expectedLines []string, 
 	if startIdx < 0 || startIdx >= len(lines) {
 		return false
 	}
-	
+
 	// Check each line of context
 	for i, expectedLine := range expectedLines {
 		actualIdx := startIdx + i
@@ -614,7 +614,7 @@ func (e *Executor) tryContextValidation(lines []string, expectedLines []string, 
 			return false
 		}
 	}
-	
+
 	return true
 }
 

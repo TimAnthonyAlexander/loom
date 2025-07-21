@@ -156,7 +156,7 @@ func (m *Manager) ConfirmTask(task *Task, taskResponse *TaskResponse, approve bo
 	if !approve {
 		// Send cancellation feedback to LLM
 		cancelMessage := llm.Message{
-			Role:      "assistant", 
+			Role:      "assistant",
 			Content:   m.FormatConfirmationResult(task, false, nil),
 			Timestamp: time.Now(),
 		}
@@ -189,7 +189,7 @@ func (m *Manager) ConfirmTask(task *Task, taskResponse *TaskResponse, approve bo
 		Content:   m.FormatConfirmationResultEnhanced(task, taskResponse, approve, applyError),
 		Timestamp: time.Now(),
 	}
-	
+
 	if err := m.chatSession.AddMessage(confirmationMessage); err != nil {
 		fmt.Printf("Warning: failed to add confirmation result to chat: %v\n", err)
 	}
@@ -258,7 +258,7 @@ func (m *Manager) formatTaskResult(task *Task, response *TaskResponse) string {
 
 	if response.Success {
 		result.WriteString("✅ Status: Success\n")
-		
+
 		// Include EditSummary if available (for file edits)
 		if response.EditSummary != nil {
 			result.WriteString(fmt.Sprintf("📊 Edit Summary: %s\n", response.EditSummary.GetCompactSummary()))
@@ -267,14 +267,14 @@ func (m *Manager) formatTaskResult(task *Task, response *TaskResponse) string {
 				result.WriteString(fmt.Sprintf("📈 Change Details:\n%s\n", llmSummary))
 			}
 		}
-		
+
 		// Use ActualContent for LLM if available, otherwise fall back to Output
 		if response.ActualContent != "" {
 			result.WriteString(fmt.Sprintf("📄 Output:\n%s\n", response.ActualContent))
 		} else if response.Output != "" {
 			result.WriteString(fmt.Sprintf("📄 Output:\n%s\n", response.Output))
 		}
-		
+
 		if response.Approved {
 			result.WriteString("👍 User approved changes\n")
 		}
@@ -324,22 +324,22 @@ func (m *Manager) FormatConfirmationResultEnhanced(task *Task, taskResponse *Tas
 		result.WriteString("📄 Result: Changes were not applied due to error\n")
 	} else {
 		result.WriteString("✅ Status: Successfully applied\n")
-		
+
 		// Include rich EditSummary data if available
 		if taskResponse != nil && taskResponse.EditSummary != nil {
 			editSummary := taskResponse.EditSummary
 			result.WriteString(fmt.Sprintf("📊 Edit Summary: %s\n", editSummary.GetCompactSummary()))
-			
+
 			// Include detailed change information
 			llmSummary := taskResponse.GetLLMSummary()
 			if llmSummary != "" {
 				result.WriteString(fmt.Sprintf("📈 Change Details:\n%s\n", llmSummary))
 			}
-			
+
 			result.WriteString("📄 Result: File has been modified with the following changes:\n")
 			result.WriteString(fmt.Sprintf("   • Edit Type: %s\n", editSummary.EditType))
 			result.WriteString(fmt.Sprintf("   • Total Lines: %d\n", editSummary.TotalLines))
-			
+
 			if editSummary.EditType == "modify" {
 				if editSummary.LinesAdded > 0 {
 					result.WriteString(fmt.Sprintf("   • Lines Added: %d\n", editSummary.LinesAdded))
@@ -351,7 +351,7 @@ func (m *Manager) FormatConfirmationResultEnhanced(task *Task, taskResponse *Tas
 					result.WriteString(fmt.Sprintf("   • Lines Modified: %d\n", editSummary.LinesModified))
 				}
 			}
-			
+
 			if editSummary.Summary != "" {
 				result.WriteString(fmt.Sprintf("   • Description: %s\n", editSummary.Summary))
 			}
