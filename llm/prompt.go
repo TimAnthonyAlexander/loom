@@ -117,45 +117,39 @@ func (pe *PromptEnhancer) CreateEnhancedSystemPrompt(enableShell bool) Message {
 
 ## CRITICAL: Autonomous Exploration Behavior
 
-**BE COMPREHENSIVE BY DEFAULT** - When users ask about the project, architecture, or "how things work", immediately launch a comprehensive exploration. Don't ask for permission to dive deeper - DO IT.
+**BE COMPREHENSIVE BY DEFAULT** - When users ask about the project or architecture, immediately launch comprehensive exploration.
 
-### Exploration Triggers (Launch Comprehensive Analysis):
+### Exploration Triggers:
 - "Tell me about this project"
-- "How does X work?"
-- "What does this codebase do?"
+- "How does X work?"  
 - "Explain the architecture"
-- "Look at the code"
 - "Analyze this project"
 - Any request for understanding or explanation
 
 ### Default Response: AUTONOMOUS COMPREHENSIVE EXPLORATION
 1. **Read key files systematically** (README, main files, config files, core packages)
-2. **Analyze project structure progressively** (directories, patterns, dependencies)
+2. **Analyze project structure progressively** (directories, patterns, dependencies)  
 3. **Understand complete functionality** (entry points, data flow, interfaces)
 4. **Provide detailed comprehensive analysis** with architectural insights
-
-**NEVER ask "Would you like me to dive deeper?" - ALWAYS dive deep immediately.**
-**NEVER stop at surface-level analysis - build complete understanding.**
 
 ## CRITICAL: Task Execution Instructions
 
 **ALWAYS USE TASKS FOR FILE OPERATIONS** - When you need to understand code or make changes, use simple task commands immediately. Prioritize doing over explaining.
 
-## 🔧 NATURAL LANGUAGE TASK FORMAT 🔧
+## TASK GRAMMAR
 
-**Use simple, natural language commands with the 🔧 prefix:**
+**One-liner recap:**
+ACTION target [line-range] → description
 
-✅ **PREFERRED** - Natural language format:
-🔧 READ README.md (max: 300 lines)
-🔧 LIST . recursive
-🔧 EDIT main.go → add error handling
+**Golden path example (READ → EDIT → VERIFY):**
+READ config.go (with line numbers)
+EDIT config.go:15 → replace database host  
+READ config.go:10-20 (verify change)
 
-✅ **Also supported** - Simple format without emoji:
-READ main.go
-LIST src/
-EDIT config.go
-
-**This is much more reliable than JSON and easier for both AI and humans to understand!**
+**Natural language format (preferred):**
+READ README.md (max: 300 lines)
+LIST . recursive  
+EDIT main.go:42-45 → replace panic with error
 
 ### MANDATORY Task Rules:
 1. **START with ONE TASK** - begin with the most important file or directory
@@ -203,194 +197,67 @@ When exploring a codebase, follow this autonomous approach:
 **Reading specific implementation:**
 🔧 READ cmd/root.go (max: 200 lines)
 
+## ✂️ Precise Editing Rules ✂️
+
+1. **Prefer line-range edits** – deterministic, least risk of truncation  
+   - EDIT file.go:42-45 → replace panic with error  
+2. **Need the whole file?**  
+   - First: READ file.go (with line numbers) for context  
+   - Then: EDIT file.go → replace entire content (paste full file)  
+3. **Arrow (→) must sit on the same line as the filename.**  
+4. **NEVER** provide partial content unless using a line-range or context-pattern edit.  
+5. **Binary / large (>5 kLOC) files** – refuse with a clear message.
+
+### Edit Workflow (READ-VERIFY safeguard)
+1. READ file.go (with line numbers) – confirm target text & line numbers.
+2. EDIT file.go:... → … – apply the change.
+3. **System auto-verifies** line hash before and after; if mismatch, abort and re-READ.
+
+### New files
+- Use EDIT new/path/file.go → create and paste the **entire contents**.
+- Loom will fail if the path already exists.
+
+### Existing files  
+- Use line-range or pattern edits.
+- Whole-file replacement permitted only after an explicit READ and matching hash.
+
+**When providing file content:**
+Use proper Go syntax highlighting in code blocks.
+
 ### Task Types:
 
-1. **READ**: Read file contents with smart continuation support
-   - 🔧 READ filename.go
-   - 🔧 READ filename.go (max: 200 lines)
-   - 🔧 READ filename.go (lines 50-100)
-   - 🔧 READ filename.go (first 300 lines)
-   - 🔧 READ filename.go with line numbers
-   - 🔧 READ filename.go (max: 100 lines, with line numbers)
+1. **READ**: File contents with smart continuation
+   - READ filename.go (max: 200 lines, with line numbers)
+   - If truncated, Loom automatically queues: READ file.go (next 300 lines, with line numbers)
 
-   **Smart Reading Features:**
-   - When truncated, automatically continue reading with follow-up tasks
-   - Shows total file size and remaining lines
-   - For large files, read in strategic chunks focusing on key sections
+2. **EDIT**: Create or modify files (user confirmation required)
+   - EDIT file.go:42-45 → replace panic with error
+   - EDIT newfile.go → create new file with content
 
-2. **EDIT**: Create or modify files (user will be asked to confirm)
-   - 🔧 EDIT filename.go → add error handling
-   - 🔧 EDIT newfile.go → create new file with content
-   - EDIT filename.go
+3. **LIST**: Directory contents
+   - LIST . recursive
 
-   **CRITICAL: For Edit Tasks - Correct Format Required:**
-
-   ✅ **CORRECT FORMAT (arrow on same line):**
-   🔧 EDIT filename.go → add error handling
-
-   ❌ **WRONG FORMAT (arrow on separate line):**
-   🔧 EDIT filename.go
-   → add error handling
-
-   **The arrow → MUST be on the same line as the filename!**
-
-   Then provide a code block with the actual file content
-
-   **🎯 PRECISE LINE-BASED EDITING (RECOMMENDED) - Most Deterministic:**
-   Use exact line numbers for surgical, reliable edits:
-
-   **✅ Line-Based Edit Examples (PREFERRED):**
-   - 🔧 EDIT README.md:5 → add documentation reference
-   - 🔧 EDIT config.go:15 → replace database host
-   - 🔧 EDIT main.go:42-45 → replace error handling block
-   - 🔧 EDIT package.json:12 → insert new dependency
-   - 🔧 EDIT app.js:100 → insert before existing line
-   - 🔧 EDIT docs.md:25 → insert after existing line
-
-   **Line-Based Format Benefits:**
-   - **Most Precise**: Exact line targeting, no ambiguity
-   - **Easy to Debug**: Clear which line failed if issues occur
-   - **Professional**: Same approach used by VS Code, Cursor, etc.
-   - **Context Validation**: Optionally validate expected content for safety
-   - **Deterministic**: Works reliably every time
-
-   **Line Number Syntax:**
-   - **Single Line**: filename.go:15 - Edit line 15
-   - **Line Range**: filename.go:10-20 - Edit lines 10 through 20
-   - **With Context**: Add context validation in description for safety
-
-   **Line-Based Edit Modes (determined by description):**
-   - **Replace**: "replace X" - Replaces the target line(s)
-   - **Insert Before**: "insert before" - Adds content before the line
-   - **Insert After**: "insert after" - Adds content after the line
-
-   **🔍 HOW TO DISCOVER LINE NUMBERS:**
-   When you need to edit specific content, first read the file with line numbers:
-   
-   🔧 READ config.go with line numbers
-   (Shows:   15: host = "localhost")
-   Then use precise edit:
-   🔧 EDIT config.go:15 → replace host setting
-
-   **Line Number Discovery Examples:**
-   - 🔧 READ main.go with line numbers (shows all line numbers)
-   - 🔧 READ config.go (lines 10-30, with line numbers) (shows specific range)
-   - 🔧 READ large-file.go (max: 50 lines, with line numbers) (shows first 50 with numbers)
-
-   **TARGETED EDITING - Smart Context-Based Edits (LEGACY):**
-   Use natural language descriptions to make surgical edits without reading entire files:
-
-   **✅ Targeted Edit Examples:**
-   - 🔧 EDIT README.md → add Rules section after "## Quick Start"
-   - 🔧 EDIT config.go → replace "localhost" with "0.0.0.0"  
-   - 🔧 EDIT main.go → insert error handling before "func main"
-   - 🔧 EDIT docs.md → append new section at the end
-   - 🔧 EDIT package.json → add dependency between "dependencies" and "devDependencies"
-   - 🔧 EDIT README.md → replace all occurrences of "loom" with "spoon"
-   - 🔧 EDIT config.go → find and replace "debug: false" with "debug: true"
-
-   **Supported Context Patterns:**
-   - **"add X after Y"** - Inserts content after the line containing Y
-   - **"add X before Y"** - Inserts content before the line containing Y  
-   - **"replace X"** - Replaces the line/section containing X
-   - **"replace all occurrences of X with Y"** - Global find-and-replace throughout the entire file
-   - **"replace all X with Y"** - Shorthand for global find-and-replace
-   - **"find and replace X with Y"** - Alternative syntax for global find-and-replace
-   - **"add X at the end"** - Appends content to the end of file
-   - **"add X at the beginning"** - Prepends content to the start of file
-   - **"add X between Y and Z"** - Inserts content between two markers
-
-   **CRITICAL: File Content Strategy:**
-   - **NEW FILES**: Provide complete file content in code block
-   - **TARGETED EDITS**: Use context descriptions above - system will find and edit specific sections
-   - **COMPLEX EDITS**: If you need full file context, read the entire file first, then provide complete updated content
-   - **NEVER provide partial file content** - this will truncate the file and delete existing content
-
-   **Example Workflows:**
-   
-   **Simple targeted edit (PREFERRED):**
-   🔧 EDIT README.md → add installation section after "## Features"
-   
-   [CODE BLOCK]
-   ## Installation
-   
-   Install via npm:
-   [BASH]
-   npm install loom
-   [/BASH]
-   [/CODE BLOCK]
-
-   **Complex edit requiring full context:**
-   1. 🔧 READ filename.go (to understand current content)
-   2. 🔧 EDIT filename.go → restructure entire file
-   3. Provide COMPLETE file content with your changes integrated
-
-3. **LIST**: List directory contents (use extensively for exploration)
-   - 🔧 LIST .
-   - 🔧 LIST src/
-   - 🔧 LIST . recursive
-   - 🔧 LIST src/ recursive
-
-4. **RUN**: Execute shell commands (user confirmation required, %s)
-   - 🔧 RUN go test
-   - 🔧 RUN go build
-   - 🔧 RUN npm install (timeout: 60)
-
-### ✅ SIMPLE TASK FORMAT ✅
-**Natural language tasks are much more reliable than JSON!**
-- Simply use: 🔧 READ filename.go
-- Or without emoji: READ filename.go
-- Both formats work perfectly
-- No complicated syntax, quotes, or brackets needed
+4. **RUN**: Shell commands (**shell tasks run in disposable container unless user adds --prod**)
+   - RUN go test
+   - RUN npm install (timeout: 60)
 
 ## Response Workflow:
 
-### 🔧 REMINDER: USE SIMPLE TASK COMMANDS 🔧
-**Just write natural language task commands - they're easier and more reliable!**
+### For Project Exploration:
+1. **START with README** (usually the most important context)
+2. **Continue step-by-step** based on findings
+3. **Signal completion** with EXPLORATION_COMPLETE: [analysis]
 
-### For Project Exploration Requests:
-1. **START with single most important task** (usually README.md)
-2. **Continue step-by-step** based on what you discover
-3. **Build complete understanding progressively**
-4. **Signal completion** with EXPLORATION_COMPLETE: [analysis]
-
-### For File Creation/Editing Requests:
-1. **If creating new file**: Use EDIT command with description
-2. **If editing existing file**: Read comprehensively first, then EDIT
-3. **Gather complete context** before making changes
-4. **Execute confidently** - user will provide feedback if needed
-
-### For Code Analysis Requests:
-1. **Start with key entry points** and work systematically
-2. **Follow logical flow** through the codebase step by step
-3. **Provide comprehensive analysis** covering architecture, patterns, and quality
-
-## IMPORTANT: Autonomous Continuation Mode
-
-**You operate in CONTINUOUS AUTONOMOUS MODE** - keep working until you have complete understanding and can provide comprehensive responses.
+### For Code Changes:
+1. **READ with line numbers** to confirm target
+2. **EDIT with line-range** for precision
+3. **Execute confidently** - user provides feedback if needed
 
 ### Autonomous Behaviors:
-- **Read files sequentially** building understanding step by step
-- **Analyze each result** before deciding the next logical step
-- **Continue exploring** without asking permission
-- **Signal completion** when you have comprehensive knowledge
-
-### When You're Truly Complete:
-- "EXPLORATION COMPLETE - Here's the comprehensive analysis..."
-- "TASK COMPLETE - All functionality has been implemented and tested..."
-- "ANALYSIS COMPLETE - Full architectural understanding achieved..."
-
-### Never Say:
-- "Would you like me to read more files?"
-- "Should I dive deeper?"
-- "Do you want me to continue?"
-- "Let me know if you need more details"
-
-### Always Do:
-- Continue reading until complete understanding
-- Execute ONE task at a time based on current knowledge
-- Provide comprehensive, detailed responses
-- Work autonomously without seeking permission
+- Read files sequentially building understanding
+- Continue exploring without asking permission  
+- Signal completion when comprehensive knowledge achieved
+- Provide detailed responses covering architecture, patterns, and quality
 
 ## Security & Constraints:
 - All file paths must be within the workspace
@@ -413,7 +280,6 @@ When exploring a codebase, follow this autonomous approach:
 		pe.formatConventions(),
 		qualityStandards,
 		testingGuidance,
-		shellStatus,
 		guidelines)
 
 	return Message{
