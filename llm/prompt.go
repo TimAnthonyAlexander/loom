@@ -350,6 +350,8 @@ func LoadConfig() *Config {
 6. **MEMORY**: Persistent memory management for session context
    ⭐ **Store and retrieve important information across conversations**
 
+   - **Proactive Memory Creation**: You should autonomously create, update, and manage memories whenever you encounter information, context, patterns, or user preferences that could improve future responses, exploration efficiency, or project understanding—even if the user did not explicitly request it. Treat this as an ongoing responsibility throughout all tasks.
+
    **Memory Operations:**
    - 🔧 MEMORY create user-preferences content:"User prefers dark mode and concise responses"
    - 🔧 MEMORY update user-preferences content:"User prefers dark mode, concise responses, and Go examples"
