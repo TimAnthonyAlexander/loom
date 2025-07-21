@@ -62,9 +62,9 @@ type Task struct {
 	Intent  string `json:"intent,omitempty"` // Natural language description of what to do
 
 	// Line-based editing (NEW - more precise than context-based)
-	TargetLine      int    `json:"target_line,omitempty"`       // Single line to edit (1-indexed)
-	TargetStartLine int    `json:"target_start_line,omitempty"` // Start of line range to edit (1-indexed)
-	TargetEndLine   int    `json:"target_end_line,omitempty"`   // End of line range to edit (1-indexed)
+	TargetLine        int    `json:"target_line,omitempty"`        // Single line to edit (1-indexed)
+	TargetStartLine   int    `json:"target_start_line,omitempty"`  // Start of line range to edit (1-indexed)
+	TargetEndLine     int    `json:"target_end_line,omitempty"`    // End of line range to edit (1-indexed)
 	ContextValidation string `json:"context_validation,omitempty"` // Optional: expected content for safety validation
 
 	// Targeted editing fields (LEGACY - kept for backward compatibility)
@@ -261,22 +261,22 @@ func parseReadTask(args string) *Task {
 		}
 
 		// Check for line numbers request
-		if strings.Contains(strings.ToLower(options), "line numbers") || 
-		   strings.Contains(strings.ToLower(options), "with numbers") ||
-		   strings.Contains(strings.ToLower(options), "numbered") {
+		if strings.Contains(strings.ToLower(options), "line numbers") ||
+			strings.Contains(strings.ToLower(options), "with numbers") ||
+			strings.Contains(strings.ToLower(options), "numbered") {
 			task.ShowLineNumbers = true
 		}
 	} else {
 		// Check for line numbers request in simple format like "file.go with line numbers"
 		if strings.Contains(strings.ToLower(args), " with line numbers") ||
-		   strings.Contains(strings.ToLower(args), " with numbers") ||
-		   strings.Contains(strings.ToLower(args), " numbered") {
+			strings.Contains(strings.ToLower(args), " with numbers") ||
+			strings.Contains(strings.ToLower(args), " numbered") {
 			task.ShowLineNumbers = true
 			// Remove the line numbers request from the path
 			args = regexp.MustCompile(`\s+with\s+(?:line\s+)?numbers?`).ReplaceAllString(args, "")
 			args = regexp.MustCompile(`\s+numbered`).ReplaceAllString(args, "")
 		}
-		
+
 		// Simple path without options
 		task.Path = strings.TrimSpace(args)
 	}

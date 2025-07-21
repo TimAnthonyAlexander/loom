@@ -952,11 +952,11 @@ func TestParseLineBasedEditTasks(t *testing.T) {
 			expectedIntent: "add error handling",
 		},
 		{
-			name:         "Line range edit",
-			llmResponse:  "🔧 EDIT config.go:10-20 → replace database settings",
-			expectedPath: "config.go",
-			expectedStart: 10,
-			expectedEnd:   20,
+			name:           "Line range edit",
+			llmResponse:    "🔧 EDIT config.go:10-20 → replace database settings",
+			expectedPath:   "config.go",
+			expectedStart:  10,
+			expectedEnd:    20,
 			expectedIntent: "replace database settings",
 		},
 		{
@@ -967,11 +967,11 @@ func TestParseLineBasedEditTasks(t *testing.T) {
 			expectedIntent: "fix bug",
 		},
 		{
-			name:         "Simple format range",
-			llmResponse:  "EDIT styles.css:5-8 → update colors",
-			expectedPath: "styles.css",
-			expectedStart: 5,
-			expectedEnd:   8,
+			name:           "Simple format range",
+			llmResponse:    "EDIT styles.css:5-8 → update colors",
+			expectedPath:   "styles.css",
+			expectedStart:  5,
+			expectedEnd:    8,
 			expectedIntent: "update colors",
 		},
 	}
@@ -1118,17 +1118,17 @@ These are the project rules.
 	if task.Path != "README.md" {
 		t.Errorf("Expected README.md, got %s", task.Path)
 	}
-	
+
 	// Should NOT have line numbers set (legacy mode)
 	if task.TargetLine > 0 {
 		t.Errorf("Expected no target line for legacy task, got %d", task.TargetLine)
 	}
-	
+
 	// Should have context information
 	if task.Intent != "add Rules section after \"## Quick Start\"" {
 		t.Errorf("Expected intent with context, got %s", task.Intent)
 	}
-	
+
 	// Should have content
 	if !strings.Contains(task.Content, "## Rules") {
 		t.Errorf("Expected content with Rules section, got %s", task.Content)
