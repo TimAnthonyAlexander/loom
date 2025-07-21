@@ -724,7 +724,7 @@ func (m model) View() string {
 		// Input area at the bottom
 		inputPrefix := "> "
 		if m.isStreaming {
-			inputPrefix = "> (streaming...) "
+			inputPrefix = "> 🧠 Thinking... "
 		}
 		input := inputStyle.Render(fmt.Sprintf("%s%s%s", inputPrefix, m.input, scrollIndicator))
 
@@ -1672,7 +1672,7 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 	var llmAdapter llm.LLMAdapter
 	var llmError error
 
-	adapter, err := llm.CreateAdapter(cfg.Model, cfg.APIKey, cfg.BaseURL)
+	adapter, err := llm.CreateAdapterFromConfig(cfg)
 	if err != nil {
 		llmError = err
 		fmt.Printf("Warning: LLM not available: %v\n", err)

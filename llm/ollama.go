@@ -47,13 +47,23 @@ func NewOllamaAdapter(config AdapterConfig) *OllamaAdapter {
 		baseURL = "http://localhost:11434"
 	}
 
+	// Set default timeouts if not provided
 	if config.Timeout == 0 {
 		config.Timeout = DefaultTimeout
+	}
+	if config.StreamTimeout == 0 {
+		config.StreamTimeout = DefaultStreamTimeout
+	}
+	if config.MaxRetries == 0 {
+		config.MaxRetries = DefaultMaxRetries
+	}
+	if config.RetryDelayBase == 0 {
+		config.RetryDelayBase = DefaultRetryDelayBase
 	}
 
 	return &OllamaAdapter{
 		client: &http.Client{
-			Timeout: config.Timeout,
+			Timeout: config.StreamTimeout, // Use longer timeout for Ollama
 		},
 		config:  config,
 		baseURL: baseURL,
