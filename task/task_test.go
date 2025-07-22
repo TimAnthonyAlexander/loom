@@ -1409,3 +1409,220 @@ func TestParseEditTaskWithCodeBlockContent(t *testing.T) {
 		t.Errorf("Expected content to contain test project name, got: %s", task.Content)
 	}
 }
+
+func TestParseMemoryTaskBugWithQuotedID(t *testing.T) {
+	// Test the specific bug reported by the user
+	testCases := []struct {
+		name              string
+		input             string
+		expectedOperation string
+		expectedID        string
+		expectedContent   string
+		shouldSucceed     bool
+		description       string
+	}{
+		{
+			name:              "Bug reproduction - quoted ID with colon and content",
+			input:             `"CHECK24 Hotelapi App Middleware":\n- Purpose: PHP-based API gateway`,
+			expectedOperation: "create", // Should default to create when no operation specified
+			expectedID:        "CHECK24 Hotelapi App Middleware",
+			expectedContent:   "- Purpose: PHP-based API gateway",
+			shouldSucceed:     true,
+			description:       "Should handle quoted ID followed by colon and content, defaulting to create operation",
+		},
+		{
+			name:              "Explicit create with quoted ID",
+			input:             `create "CHECK24 Hotelapi App Middleware" content:"- Purpose: PHP-based API gateway"`,
+			expectedOperation: "create",
+			expectedID:        "CHECK24 Hotelapi App Middleware",
+			expectedContent:   "- Purpose: PHP-based API gateway",
+			shouldSucceed:     true,
+			description:       "Should handle explicit create operation with quoted ID",
+		},
+		{
+			name:              "Simple quoted ID without operation",
+			input:             `"my-memory-id" content:"some content here"`,
+			expectedOperation: "create",
+			expectedID:        "my-memory-id",
+			expectedContent:   "some content here",
+			shouldSucceed:     true,
+			description:       "Should default to create when first arg is quoted ID",
+		},
+		{
+			name:              "Quoted ID with colon format - simple",
+			input:             `"simple-id": some content here`,
+			expectedOperation: "create",
+			expectedID:        "simple-id",
+			expectedContent:   "some content here",
+			shouldSucceed:     true,
+			description:       "Should handle simple colon format",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			task := parseMemoryTask(tc.input)
+
+			if tc.shouldSucceed {
+				if task == nil {
+					t.Fatalf("Expected task to be parsed successfully, got nil. Input: %s", tc.input)
+				}
+
+				if task.MemoryOperation != tc.expectedOperation {
+					t.Errorf("Expected operation '%s', got '%s'", tc.expectedOperation, task.MemoryOperation)
+				}
+
+				if task.MemoryID != tc.expectedID {
+					t.Errorf("Expected ID '%s', got '%s'", tc.expectedID, task.MemoryID)
+				}
+
+				if task.MemoryContent != tc.expectedContent {
+					t.Errorf("Expected content '%s', got '%s'", tc.expectedContent, task.MemoryContent)
+				}
+
+				// Test validation
+				if err := validateTask(task); err != nil {
+					t.Errorf("Task validation failed: %v", err)
+				}
+			} else {
+				if task != nil {
+					t.Errorf("Expected parsing to fail, but got task: %+v", task)
+				}
+			}
+		})
+	}
+}
+
+func TestParseMemoryTaskEndToEnd(t *testing.T) {
+	// Test the full parsing pipeline with the problematic input
+	llmResponse := `I'll create a memory for this project information.
+
+🔧 MEMORY "CHECK24 Hotelapi App Middleware":\n- Purpose: PHP-based API gateway
+
+This will help remember key details about the project.`
+
+	taskList, err := ParseTasks(llmResponse)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if taskList == nil {
+		t.Fatal("Expected task list, got nil")
+	}
+
+	if len(taskList.Tasks) != 1 {
+		t.Fatalf("Expected 1 task, got %d", len(taskList.Tasks))
+	}
+
+	task := taskList.Tasks[0]
+	if task.Type != TaskTypeMemory {
+		t.Errorf("Expected TaskTypeMemory, got %s", task.Type)
+	}
+
+	// Should default to create operation
+	if task.MemoryOperation != "create" {
+		t.Errorf("Expected operation 'create', got '%s'", task.MemoryOperation)
+	}
+
+	// Should extract the quoted ID correctly
+	if task.MemoryID != "CHECK24 Hotelapi App Middleware" {
+		t.Errorf("Expected ID 'CHECK24 Hotelapi App Middleware', got '%s'", task.MemoryID)
+	}
+
+	// Should extract content after colon
+	expectedContent := "- Purpose: PHP-based API gateway"
+	if task.MemoryContent != expectedContent {
+		t.Errorf("Expected content '%s', got '%s'", expectedContent, task.MemoryContent)
+	}
+}
+
+func TestMemoryParsingNotTooAggressive(t *testing.T) {
+	// Test that conversational text mentioning "memory" doesn't get parsed as commands
+	testCases := []struct {
+		name            string
+		llmResponse     string
+		shouldParseTask bool
+		description     string
+	}{
+		{
+			name:            "Conversational memory mention should not parse",
+			llmResponse:     "Memory saved! I'll remember that this is the CHECK24 Hotel App middleware project.",
+			shouldParseTask: false,
+			description:     "Conversational text starting with 'Memory saved!' should not be treated as a MEMORY command",
+		},
+		{
+			name:            "Task completion message should not parse",
+			llmResponse:     "Memory created successfully! The information has been stored.",
+			shouldParseTask: false,
+			description:     "Success messages should not be parsed as commands",
+		},
+		{
+			name:            "Actual memory command should parse",
+			llmResponse:     "🔧 MEMORY create \"project-info\" content:\"CHECK24 Hotel App middleware\"",
+			shouldParseTask: true,
+			description:     "Actual MEMORY commands with emoji should still work",
+		},
+		{
+			name:            "Simple memory command should parse",
+			llmResponse:     "MEMORY create \"test-id\" content:\"test content\"",
+			shouldParseTask: true,
+			description:     "Simple MEMORY commands should still work",
+		},
+		{
+			name:            "Memory colon format should parse",
+			llmResponse:     "MEMORY \"test-id\": test content here",
+			shouldParseTask: true,
+			description:     "Colon format MEMORY commands should still work",
+		},
+		{
+			name:            "General memory discussion should not parse",
+			llmResponse:     "The memory usage of this application is quite high. We should optimize it.",
+			shouldParseTask: false,
+			description:     "General discussion mentioning memory should not be parsed",
+		},
+		{
+			name:            "Edit command discussion should not parse",
+			llmResponse:     "Edit completed successfully! The file has been updated.",
+			shouldParseTask: false,
+			description:     "Edit completion messages should not be parsed as commands",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			taskList, err := ParseTasks(tc.llmResponse)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			hasTasks := taskList != nil && len(taskList.Tasks) > 0
+
+			if tc.shouldParseTask && !hasTasks {
+				t.Errorf("Expected to parse task but none found. Input: %q", tc.llmResponse)
+			}
+
+			if !tc.shouldParseTask && hasTasks {
+				t.Errorf("Expected no tasks but found %d task(s). Input: %q", len(taskList.Tasks), tc.llmResponse)
+				if len(taskList.Tasks) > 0 {
+					task := taskList.Tasks[0]
+					t.Errorf("Incorrectly parsed task: Type=%s, Operation=%s, ID=%s",
+						task.Type, task.MemoryOperation, task.MemoryID)
+				}
+			}
+
+			// Additional validation for memory tasks
+			if hasTasks && taskList.Tasks[0].Type == TaskTypeMemory {
+				task := taskList.Tasks[0]
+
+				// Memory tasks should have reasonable IDs, not conversational fragments
+				suspiciousIDs := []string{"saved!", "created", "completed", "successfully!", "usage", "high."}
+				for _, suspicious := range suspiciousIDs {
+					if strings.Contains(task.MemoryID, suspicious) {
+						t.Errorf("Memory ID contains suspicious conversational fragment: '%s' in ID: '%s'",
+							suspicious, task.MemoryID)
+					}
+				}
+			}
+		})
+	}
+}

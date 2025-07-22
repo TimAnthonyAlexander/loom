@@ -3,8 +3,8 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"loom/paths"
 	"os"
-	"path/filepath"
 	"strconv"
 )
 
@@ -148,18 +148,22 @@ func (c *Config) Set(key string, value interface{}) error {
 
 // loadGlobalConfig loads configuration from ~/.loom/config.json
 func loadGlobalConfig() (*Config, error) {
-	homeDir, err := os.UserHomeDir()
+	configPath, err := paths.GetGlobalConfigPath()
 	if err != nil {
 		return nil, err
 	}
 
-	configPath := filepath.Join(homeDir, ".loom", "config.json")
 	return loadConfigFromFile(configPath)
 }
 
-// loadLocalConfig loads configuration from <workspace>/.loom/config.json
+// loadLocalConfig loads configuration from user loom directory for the project
 func loadLocalConfig(workspacePath string) (*Config, error) {
-	configPath := filepath.Join(workspacePath, ".loom", "config.json")
+	projectPaths, err := paths.NewProjectPaths(workspacePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create project paths: %w", err)
+	}
+
+	configPath := projectPaths.ConfigPath()
 	return loadConfigFromFile(configPath)
 }
 
@@ -179,9 +183,19 @@ func loadConfigFromFile(configPath string) (*Config, error) {
 	return &cfg, nil
 }
 
-// SaveLocalConfig saves configuration to <workspace>/.loom/config.json
+// SaveLocalConfig saves configuration to user loom directory for the project
 func SaveLocalConfig(workspacePath string, cfg *Config) error {
-	configPath := filepath.Join(workspacePath, ".loom", "config.json")
+	projectPaths, err := paths.NewProjectPaths(workspacePath)
+	if err != nil {
+		return fmt.Errorf("failed to create project paths: %w", err)
+	}
+
+	// Ensure project directories exist
+	if err := projectPaths.EnsureProjectDir(); err != nil {
+		return fmt.Errorf("failed to create project directories: %w", err)
+	}
+
+	configPath := projectPaths.ConfigPath()
 
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {

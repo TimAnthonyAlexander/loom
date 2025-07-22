@@ -6,6 +6,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"io"
+	"loom/paths"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -30,6 +31,7 @@ type Index struct {
 	WorkspacePath string               `json:"workspace_path"`
 	Files         map[string]*FileMeta `json:"files"`
 	LastUpdated   time.Time            `json:"last_updated"`
+	projectPaths  *paths.ProjectPaths  `json:"-"`
 	gitIgnore     *GitIgnore           `json:"-"`
 	watcher       *fsnotify.Watcher    `json:"-"`
 	watcherMutex  sync.RWMutex         `json:"-"`
@@ -48,10 +50,24 @@ type IndexStats struct {
 
 // NewIndex creates a new Index instance
 func NewIndex(workspacePath string, maxFileSize int64) *Index {
+	// Get project paths
+	projectPaths, err := paths.NewProjectPaths(workspacePath)
+	if err != nil {
+		// Fallback to nil if paths creation fails - cache will be disabled
+		fmt.Printf("Warning: failed to create project paths: %v\n", err)
+		projectPaths = nil
+	} else {
+		// Ensure project directories exist
+		if err := projectPaths.EnsureProjectDir(); err != nil {
+			fmt.Printf("Warning: failed to create project directories: %v\n", err)
+		}
+	}
+
 	return &Index{
 		WorkspacePath: workspacePath,
 		Files:         make(map[string]*FileMeta),
 		LastUpdated:   time.Now(),
+		projectPaths:  projectPaths,
 		maxFileSize:   maxFileSize,
 		updateChan:    make(chan string, 100),
 		stopChan:      make(chan bool, 1),
@@ -201,8 +217,8 @@ func (idx *Index) calculateFileHash(path string) (string, error) {
 
 // shouldSkipDirectory checks if a directory should be skipped
 func (idx *Index) shouldSkipDirectory(relPath string) bool {
-	// Skip common ignored directories
-	skipDirs := []string{".git", "node_modules", "vendor", ".loom", ".vscode", ".idea", "target", "dist", "__pycache__"}
+	// Skip common ignored directories - removed .loom since it's no longer in workspace
+	skipDirs := []string{".git", "node_modules", "vendor", ".vscode", ".idea", "target", "dist", "__pycache__"}
 
 	dirName := filepath.Base(relPath)
 	for _, skip := range skipDirs {
@@ -271,9 +287,14 @@ func (idx *Index) GetStats() IndexStats {
 	}
 }
 
-// SaveToCache saves the index to .loom/index.cache
+// SaveToCache saves the index to user loom directory
 func (idx *Index) SaveToCache() error {
-	cachePath := filepath.Join(idx.WorkspacePath, ".loom", "index.cache")
+	if idx.projectPaths == nil {
+		// No project paths available, skip caching
+		return nil
+	}
+
+	cachePath := idx.projectPaths.IndexCachePath()
 
 	file, err := os.Create(cachePath)
 	if err != nil {
@@ -289,9 +310,15 @@ func (idx *Index) SaveToCache() error {
 	return encoder.Encode(idx)
 }
 
-// LoadFromCache loads the index from .loom/index.cache
+// LoadFromCache loads the index from user loom directory
 func LoadFromCache(workspacePath string, maxFileSize int64) (*Index, error) {
-	cachePath := filepath.Join(workspacePath, ".loom", "index.cache")
+	// Get project paths
+	projectPaths, err := paths.NewProjectPaths(workspacePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create project paths: %w", err)
+	}
+
+	cachePath := projectPaths.IndexCachePath()
 
 	file, err := os.Open(cachePath)
 	if err != nil {
@@ -313,6 +340,7 @@ func LoadFromCache(workspacePath string, maxFileSize int64) (*Index, error) {
 	}
 
 	// Restore runtime fields
+	idx.projectPaths = projectPaths
 	idx.updateChan = make(chan string, 100)
 	idx.stopChan = make(chan bool, 1)
 	idx.maxFileSize = maxFileSize

@@ -3,9 +3,9 @@ package memory
 import (
 	"encoding/json"
 	"fmt"
+	"loom/paths"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 )
@@ -21,9 +21,10 @@ type Memory struct {
 	Description string    `json:"description,omitempty"`
 }
 
-// MemoryStore manages persistent memories
+// MemoryStore manages project-specific memories
 type MemoryStore struct {
 	workspacePath string
+	projectPaths  *paths.ProjectPaths
 	memories      map[string]*Memory
 }
 
@@ -31,14 +32,14 @@ type MemoryStore struct {
 type MemoryOperation string
 
 const (
-	MemoryOperationCreate MemoryOperation = "create"
-	MemoryOperationUpdate MemoryOperation = "update"
-	MemoryOperationDelete MemoryOperation = "delete"
-	MemoryOperationGet    MemoryOperation = "get"
-	MemoryOperationList   MemoryOperation = "list"
+	MemoryOpCreate MemoryOperation = "create"
+	MemoryOpUpdate MemoryOperation = "update"
+	MemoryOpDelete MemoryOperation = "delete"
+	MemoryOpGet    MemoryOperation = "get"
+	MemoryOpList   MemoryOperation = "list"
 )
 
-// MemoryRequest represents a memory operation request
+// MemoryRequest represents a request to modify memories
 type MemoryRequest struct {
 	Operation   MemoryOperation `json:"operation"`
 	ID          string          `json:"id"`
@@ -48,7 +49,7 @@ type MemoryRequest struct {
 	Description string          `json:"description,omitempty"`
 }
 
-// MemoryResponse represents the result of a memory operation
+// MemoryResponse represents the response from a memory operation
 type MemoryResponse struct {
 	Success  bool      `json:"success"`
 	Error    string    `json:"error,omitempty"`
@@ -57,10 +58,28 @@ type MemoryResponse struct {
 	Message  string    `json:"message,omitempty"`
 }
 
-// NewMemoryStore creates a new memory store
+// NewMemoryStore creates a new memory store for the workspace
 func NewMemoryStore(workspacePath string) *MemoryStore {
+	// Get project paths
+	projectPaths, err := paths.NewProjectPaths(workspacePath)
+	if err != nil {
+		fmt.Printf("Warning: failed to create project paths for memory store: %v\n", err)
+		// Fallback to legacy behavior
+		return &MemoryStore{
+			workspacePath: workspacePath,
+			projectPaths:  nil,
+			memories:      make(map[string]*Memory),
+		}
+	}
+
+	// Ensure project directories exist
+	if err := projectPaths.EnsureProjectDir(); err != nil {
+		fmt.Printf("Warning: failed to create project directories: %v\n", err)
+	}
+
 	ms := &MemoryStore{
 		workspacePath: workspacePath,
+		projectPaths:  projectPaths,
 		memories:      make(map[string]*Memory),
 	}
 
@@ -75,6 +94,10 @@ func NewMemoryStore(workspacePath string) *MemoryStore {
 
 // memoriesPath returns the path to the memories.json file
 func (ms *MemoryStore) memoriesPath() string {
+	if ms.projectPaths != nil {
+		return ms.projectPaths.MemoriesPath()
+	}
+	// Fallback to legacy path
 	return filepath.Join(ms.workspacePath, ".loom", "memories.json")
 }
 
@@ -109,29 +132,30 @@ func (ms *MemoryStore) Load() error {
 
 // Save saves memories to disk
 func (ms *MemoryStore) Save() error {
-	// Ensure .loom directory exists
-	loomDir := filepath.Join(ms.workspacePath, ".loom")
-	if err := os.MkdirAll(loomDir, 0755); err != nil {
-		return fmt.Errorf("failed to create .loom directory: %w", err)
+	memoriesPath := ms.memoriesPath()
+
+	// Ensure parent directory exists
+	if ms.projectPaths != nil {
+		// Already ensured by EnsureProjectDir in NewMemoryStore
+	} else {
+		// Legacy fallback - ensure .loom directory exists
+		loomDir := filepath.Dir(memoriesPath)
+		if err := os.MkdirAll(loomDir, 0755); err != nil {
+			return fmt.Errorf("failed to create directory: %w", err)
+		}
 	}
 
-	// Convert map to slice for consistent ordering
+	// Convert map to slice for JSON serialization
 	var memoriesSlice []*Memory
 	for _, memory := range ms.memories {
 		memoriesSlice = append(memoriesSlice, memory)
 	}
-
-	// Sort by ID for consistent output
-	sort.Slice(memoriesSlice, func(i, j int) bool {
-		return memoriesSlice[i].ID < memoriesSlice[j].ID
-	})
 
 	data, err := json.MarshalIndent(memoriesSlice, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal memories: %w", err)
 	}
 
-	memoriesPath := ms.memoriesPath()
 	if err := os.WriteFile(memoriesPath, data, 0644); err != nil {
 		return fmt.Errorf("failed to write memories file: %w", err)
 	}
@@ -139,23 +163,23 @@ func (ms *MemoryStore) Save() error {
 	return nil
 }
 
-// ProcessRequest processes a memory operation request
+// ProcessRequest handles memory operations
 func (ms *MemoryStore) ProcessRequest(req *MemoryRequest) *MemoryResponse {
 	switch req.Operation {
-	case MemoryOperationCreate:
+	case MemoryOpCreate:
 		return ms.createMemory(req)
-	case MemoryOperationUpdate:
+	case MemoryOpUpdate:
 		return ms.updateMemory(req)
-	case MemoryOperationDelete:
+	case MemoryOpDelete:
 		return ms.deleteMemory(req)
-	case MemoryOperationGet:
+	case MemoryOpGet:
 		return ms.getMemory(req)
-	case MemoryOperationList:
+	case MemoryOpList:
 		return ms.listMemories(req)
 	default:
 		return &MemoryResponse{
 			Success: false,
-			Error:   fmt.Sprintf("unknown memory operation: %s", req.Operation),
+			Error:   fmt.Sprintf("unknown operation: %s", req.Operation),
 		}
 	}
 }
@@ -165,18 +189,18 @@ func (ms *MemoryStore) createMemory(req *MemoryRequest) *MemoryResponse {
 	if req.ID == "" {
 		return &MemoryResponse{
 			Success: false,
-			Error:   "memory ID is required for create operation",
+			Error:   "memory ID is required",
 		}
 	}
 
 	if req.Content == "" {
 		return &MemoryResponse{
 			Success: false,
-			Error:   "memory content is required for create operation",
+			Error:   "memory content is required",
 		}
 	}
 
-	// Check if memory with this ID already exists
+	// Check if memory already exists
 	if _, exists := ms.memories[req.ID]; exists {
 		return &MemoryResponse{
 			Success: false,
@@ -184,6 +208,7 @@ func (ms *MemoryStore) createMemory(req *MemoryRequest) *MemoryResponse {
 		}
 	}
 
+	// Set default active state
 	active := true
 	if req.Active != nil {
 		active = *req.Active
@@ -201,6 +226,7 @@ func (ms *MemoryStore) createMemory(req *MemoryRequest) *MemoryResponse {
 
 	ms.memories[req.ID] = memory
 
+	// Save to disk
 	if err := ms.Save(); err != nil {
 		return &MemoryResponse{
 			Success: false,
@@ -211,7 +237,7 @@ func (ms *MemoryStore) createMemory(req *MemoryRequest) *MemoryResponse {
 	return &MemoryResponse{
 		Success: true,
 		Memory:  memory,
-		Message: fmt.Sprintf("Created memory '%s'", req.ID),
+		Message: fmt.Sprintf("Memory '%s' created successfully", req.ID),
 	}
 }
 
@@ -220,7 +246,7 @@ func (ms *MemoryStore) updateMemory(req *MemoryRequest) *MemoryResponse {
 	if req.ID == "" {
 		return &MemoryResponse{
 			Success: false,
-			Error:   "memory ID is required for update operation",
+			Error:   "memory ID is required",
 		}
 	}
 
@@ -232,25 +258,23 @@ func (ms *MemoryStore) updateMemory(req *MemoryRequest) *MemoryResponse {
 		}
 	}
 
-	// Update fields that are provided
+	// Update fields if provided
 	if req.Content != "" {
 		memory.Content = req.Content
 	}
-
 	if req.Tags != nil {
 		memory.Tags = req.Tags
 	}
-
 	if req.Active != nil {
 		memory.Active = *req.Active
 	}
-
 	if req.Description != "" {
 		memory.Description = req.Description
 	}
 
 	memory.UpdatedAt = time.Now()
 
+	// Save to disk
 	if err := ms.Save(); err != nil {
 		return &MemoryResponse{
 			Success: false,
@@ -261,16 +285,16 @@ func (ms *MemoryStore) updateMemory(req *MemoryRequest) *MemoryResponse {
 	return &MemoryResponse{
 		Success: true,
 		Memory:  memory,
-		Message: fmt.Sprintf("Updated memory '%s'", req.ID),
+		Message: fmt.Sprintf("Memory '%s' updated successfully", req.ID),
 	}
 }
 
-// deleteMemory deletes a memory
+// deleteMemory deletes an existing memory
 func (ms *MemoryStore) deleteMemory(req *MemoryRequest) *MemoryResponse {
 	if req.ID == "" {
 		return &MemoryResponse{
 			Success: false,
-			Error:   "memory ID is required for delete operation",
+			Error:   "memory ID is required",
 		}
 	}
 
@@ -284,17 +308,18 @@ func (ms *MemoryStore) deleteMemory(req *MemoryRequest) *MemoryResponse {
 
 	delete(ms.memories, req.ID)
 
+	// Save to disk
 	if err := ms.Save(); err != nil {
 		return &MemoryResponse{
 			Success: false,
-			Error:   fmt.Sprintf("failed to save memory: %v", err),
+			Error:   fmt.Sprintf("failed to save after deletion: %v", err),
 		}
 	}
 
 	return &MemoryResponse{
 		Success: true,
 		Memory:  memory,
-		Message: fmt.Sprintf("Deleted memory '%s'", req.ID),
+		Message: fmt.Sprintf("Memory '%s' deleted successfully", req.ID),
 	}
 }
 
@@ -303,7 +328,7 @@ func (ms *MemoryStore) getMemory(req *MemoryRequest) *MemoryResponse {
 	if req.ID == "" {
 		return &MemoryResponse{
 			Success: false,
-			Error:   "memory ID is required for get operation",
+			Error:   "memory ID is required",
 		}
 	}
 
@@ -318,99 +343,66 @@ func (ms *MemoryStore) getMemory(req *MemoryRequest) *MemoryResponse {
 	return &MemoryResponse{
 		Success: true,
 		Memory:  memory,
-		Message: fmt.Sprintf("Retrieved memory '%s'", req.ID),
 	}
 }
 
-// listMemories lists all memories or active memories
+// listMemories lists all memories
 func (ms *MemoryStore) listMemories(req *MemoryRequest) *MemoryResponse {
 	var memories []*Memory
-
 	for _, memory := range ms.memories {
-		// If active filter is specified, only include memories matching that filter
-		if req.Active != nil && memory.Active != *req.Active {
-			continue
-		}
 		memories = append(memories, memory)
-	}
-
-	// Sort by creation time (newest first)
-	sort.Slice(memories, func(i, j int) bool {
-		return memories[i].CreatedAt.After(memories[j].CreatedAt)
-	})
-
-	activeFilter := ""
-	if req.Active != nil {
-		if *req.Active {
-			activeFilter = " (active only)"
-		} else {
-			activeFilter = " (inactive only)"
-		}
 	}
 
 	return &MemoryResponse{
 		Success:  true,
 		Memories: memories,
-		Message:  fmt.Sprintf("Listed %d memories%s", len(memories), activeFilter),
+		Message:  fmt.Sprintf("Found %d memories", len(memories)),
 	}
 }
 
-// GetActiveMemories returns all active memories for injection into system prompt
+// GetActiveMemories returns all active memories
 func (ms *MemoryStore) GetActiveMemories() []*Memory {
-	var activeMemories []*Memory
-
+	var active []*Memory
 	for _, memory := range ms.memories {
 		if memory.Active {
-			activeMemories = append(activeMemories, memory)
+			active = append(active, memory)
 		}
 	}
-
-	// Sort by creation time (oldest first for system prompt context)
-	sort.Slice(activeMemories, func(i, j int) bool {
-		return activeMemories[i].CreatedAt.Before(activeMemories[j].CreatedAt)
-	})
-
-	return activeMemories
+	return active
 }
 
-// FormatMemoriesForPrompt formats active memories for inclusion in system prompt
+// FormatMemoriesForPrompt formats active memories for inclusion in system prompts
 func (ms *MemoryStore) FormatMemoriesForPrompt() string {
 	activeMemories := ms.GetActiveMemories()
-
 	if len(activeMemories) == 0 {
 		return ""
 	}
 
 	var builder strings.Builder
-	builder.WriteString("## Active Memories\n\n")
-	builder.WriteString("The following memories contain important context for this session:\n\n")
+	builder.WriteString("## Project Memories\n\n")
+	builder.WriteString("The following memories contain important context about this project:\n\n")
 
 	for _, memory := range activeMemories {
-		builder.WriteString(fmt.Sprintf("### Memory: %s\n", memory.ID))
+		builder.WriteString(fmt.Sprintf("### %s\n", memory.ID))
 		if memory.Description != "" {
 			builder.WriteString(fmt.Sprintf("*%s*\n\n", memory.Description))
 		}
 		builder.WriteString(fmt.Sprintf("%s\n\n", memory.Content))
-
 		if len(memory.Tags) > 0 {
-			builder.WriteString(fmt.Sprintf("*Tags: %s*\n\n", strings.Join(memory.Tags, ", ")))
+			builder.WriteString(fmt.Sprintf("Tags: %s\n\n", strings.Join(memory.Tags, ", ")))
 		}
-
-		builder.WriteString("---\n\n")
 	}
 
 	return builder.String()
 }
 
-// GetMemoryCount returns the total number of memories and active memories
+// GetMemoryCount returns total and active memory counts
 func (ms *MemoryStore) GetMemoryCount() (total int, active int) {
 	total = len(ms.memories)
-
 	for _, memory := range ms.memories {
 		if memory.Active {
 			active++
 		}
 	}
-
 	return total, active
 }

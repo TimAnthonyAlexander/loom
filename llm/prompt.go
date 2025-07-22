@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"loom/indexer"
 	"loom/memory"
+	"loom/paths"
 	"os"
 	"path/filepath"
 	"sort"
@@ -161,6 +162,33 @@ You are Loom, an AI coding assistant with advanced autonomous task execution cap
 3. Use SafeEdit format (see §5.3)
 4. System validates context before applying
 5. Edit confidently - validation ensures safety
+
+### 4.3 Memory Management Flow
+**When users ask you to remember something**:
+- **DON'T** just say "I'll remember that" or "Memory saved!"
+- **DO** create an actual MEMORY task with meaningful ID and content
+
+**Triggers**: User requests like "remember this", "save this info", "keep track of", "note that", "don't forget"
+
+**Process**:
+1. Extract the key information to remember
+2. Create a descriptive memory ID (kebab-case recommended)
+3. Use MEMORY command to actually store it
+
+**Examples**:
+- User: "Remember this is a React project using TypeScript"
+  → MEMORY "project-tech-stack" content:"React project using TypeScript"
+
+- User: "Keep track that the API endpoint is /api/v2/users"  
+  → MEMORY "api-endpoint-users" content:"API endpoint: /api/v2/users"
+
+- User: "Note that deployments happen via GitHub Actions"
+  → MEMORY "deployment-method" content:"Deployments via GitHub Actions"
+
+**Memory ID Guidelines**:
+- Use descriptive, searchable names
+- Prefer kebab-case: "project-config", "api-endpoints", "deployment-notes"
+- Avoid generic names like "info", "data", "note"
 
 ## 5. Tool Details
 
@@ -584,42 +612,54 @@ func (pe *PromptEnhancer) formatConventions() string {
 	return formatted.String()
 }
 
-// LoadProjectRules loads user-defined project rules from .loom/rules.json
+// LoadProjectRules loads user-defined project rules from user loom directory
 func (pe *PromptEnhancer) LoadProjectRules() (*ProjectRules, error) {
-	rulesPath := filepath.Join(pe.workspacePath, ".loom", "rules.json")
+	projectPaths, err := paths.NewProjectPaths(pe.workspacePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create project paths: %w", err)
+	}
 
-	// Return empty rules if file doesn't exist
+	rulesPath := projectPaths.RulesPath()
+
+	// Check if rules file exists
 	if _, err := os.Stat(rulesPath); os.IsNotExist(err) {
+		// No rules file exists, return empty rules
 		return &ProjectRules{Rules: []ProjectRule{}}, nil
 	}
 
 	data, err := os.ReadFile(rulesPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read rules file: %w", err)
+		return nil, fmt.Errorf("failed to read project rules: %w", err)
 	}
 
 	var rules ProjectRules
 	if err := json.Unmarshal(data, &rules); err != nil {
-		return nil, fmt.Errorf("failed to parse rules file: %w", err)
+		return nil, fmt.Errorf("failed to parse project rules: %w", err)
 	}
 
 	return &rules, nil
 }
 
-// SaveProjectRules saves user-defined project rules to .loom/rules.json
+// SaveProjectRules saves user-defined project rules to user loom directory
 func (pe *PromptEnhancer) SaveProjectRules(rules *ProjectRules) error {
-	rulesPath := filepath.Join(pe.workspacePath, ".loom", "rules.json")
+	projectPaths, err := paths.NewProjectPaths(pe.workspacePath)
+	if err != nil {
+		return fmt.Errorf("failed to create project paths: %w", err)
+	}
+
+	// Ensure project directories exist
+	if err := projectPaths.EnsureProjectDir(); err != nil {
+		return fmt.Errorf("failed to create project directories: %w", err)
+	}
+
+	rulesPath := projectPaths.RulesPath()
 
 	data, err := json.MarshalIndent(rules, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal rules: %w", err)
+		return fmt.Errorf("failed to marshal project rules: %w", err)
 	}
 
-	if err := os.WriteFile(rulesPath, data, 0644); err != nil {
-		return fmt.Errorf("failed to write rules file: %w", err)
-	}
-
-	return nil
+	return os.WriteFile(rulesPath, data, 0644)
 }
 
 // AddProjectRule adds a new user-defined rule to the project

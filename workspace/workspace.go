@@ -45,26 +45,9 @@ func findGitRoot(startPath string) string {
 	return ""
 }
 
-// EnsureLoomDir creates the .loom directory if it doesn't exist
+// EnsureLoomDir creates a .loom directory in the given workspace path
+// This is kept for backward compatibility with tests
 func EnsureLoomDir(workspacePath string) error {
 	loomDir := filepath.Join(workspacePath, ".loom")
-
-	// Check if .loom directory already exists
-	if _, err := os.Stat(loomDir); os.IsNotExist(err) {
-		// Create .loom directory
-		err := os.MkdirAll(loomDir, 0755)
-		if err != nil {
-			return err
-		}
-
-		// Create empty index.cache file
-		indexPath := filepath.Join(loomDir, "index.cache")
-		file, err := os.Create(indexPath)
-		if err != nil {
-			return err
-		}
-		file.Close()
-	}
-
-	return nil
+	return os.MkdirAll(loomDir, 0755)
 }

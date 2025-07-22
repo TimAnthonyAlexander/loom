@@ -37,13 +37,6 @@ interface to modify and extend their codebase.`,
 			os.Exit(1)
 		}
 
-		// Ensure .loom directory exists
-		err = workspace.EnsureLoomDir(workspacePath)
-		if err != nil {
-			fmt.Printf("Error creating .loom directory: %v\n", err)
-			os.Exit(1)
-		}
-
 		// Initialize or load index
 		idx, err := indexer.LoadFromCache(workspacePath, cfg.MaxFileSize)
 		if err != nil {
@@ -77,7 +70,9 @@ interface to modify and extend their codebase.`,
 			ContinueLatest: continueSession,
 			SessionID:      sessionID,
 		}
-		if err := tui.StartTUI(workspacePath, cfg, idx, sessionOptions); err != nil {
+
+		err = tui.StartTUI(workspacePath, cfg, idx, sessionOptions)
+		if err != nil {
 			fmt.Printf("Error starting TUI: %v\n", err)
 			os.Exit(1)
 		}

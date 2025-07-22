@@ -10,20 +10,13 @@ import (
 
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Initialize .loom folder and config in current directory",
-	Long:  `Initialize .loom folder and config in current directory`,
+	Short: "Initialize loom configuration for current directory",
+	Long:  `Initialize loom configuration for current directory`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Detect workspace
 		workspacePath, err := workspace.DetectWorkspace()
 		if err != nil {
 			fmt.Printf("Error detecting workspace: %v\n", err)
-			return
-		}
-
-		// Ensure .loom directory exists
-		err = workspace.EnsureLoomDir(workspacePath)
-		if err != nil {
-			fmt.Printf("Error creating .loom directory: %v\n", err)
 			return
 		}
 
@@ -35,7 +28,11 @@ var initCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Printf("Initialized loom in %s\n", workspacePath)
-		fmt.Println("Created .loom/config.json with default settings")
+		fmt.Printf("Initialized loom for %s\n", workspacePath)
+		fmt.Println("Created project-specific configuration with default settings")
 	},
+}
+
+func init() {
+	rootCmd.AddCommand(initCmd)
 }

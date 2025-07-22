@@ -1,6 +1,7 @@
 package indexer
 
 import (
+	"loom/paths"
 	"os"
 	"path/filepath"
 	"strings"
@@ -231,12 +232,7 @@ func TestSaveAndLoadCache(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Create .loom directory
-	loomDir := filepath.Join(tempDir, ".loom")
-	err = os.MkdirAll(loomDir, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create .loom directory: %v", err)
-	}
+	// Note: No need to manually create .loom directory - the new system uses user-level directories
 
 	// Create test files
 	testFiles := map[string]string{
@@ -264,8 +260,12 @@ func TestSaveAndLoadCache(t *testing.T) {
 		t.Fatalf("Failed to save cache: %v", err)
 	}
 
-	// Verify cache file exists
-	cachePath := filepath.Join(loomDir, "index.cache")
+	// Verify cache file exists at the correct path (using paths package)
+	projectPaths, err := paths.NewProjectPaths(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create project paths: %v", err)
+	}
+	cachePath := projectPaths.IndexCachePath()
 	if _, err := os.Stat(cachePath); os.IsNotExist(err) {
 		t.Error("Cache file was not created")
 	}

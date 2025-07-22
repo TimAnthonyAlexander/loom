@@ -29,13 +29,6 @@ var indexCmd = &cobra.Command{
 			return
 		}
 
-		// Ensure .loom directory exists
-		err = workspace.EnsureLoomDir(workspacePath)
-		if err != nil {
-			fmt.Printf("Error creating .loom directory: %v\n", err)
-			return
-		}
-
 		fmt.Printf("Rebuilding index for workspace: %s\n", workspacePath)
 		start := time.Now()
 
@@ -73,4 +66,8 @@ var indexCmd = &cobra.Command{
 			}
 		}
 	},
+}
+
+func init() {
+	rootCmd.AddCommand(indexCmd)
 }

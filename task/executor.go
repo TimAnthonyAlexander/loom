@@ -1215,7 +1215,7 @@ func (e *Executor) executeListDir(task *Task) *TaskResponse {
 // shouldSkipPath checks if a path should be skipped based on gitignore patterns and common ignore rules
 func (e *Executor) shouldSkipPath(relPath string, isDir bool) bool {
 	// Skip common directories that should never be listed
-	skipDirs := []string{".git", "node_modules", "vendor", ".loom", ".vscode", ".idea", "target", "dist", "__pycache__", ".next", ".nuxt", "build", "out"}
+	skipDirs := []string{".git", "node_modules", "vendor", ".vscode", ".idea", "target", "dist", "__pycache__", ".next", ".nuxt", "build", "out"}
 
 	if isDir {
 		dirName := filepath.Base(relPath)

@@ -1,8 +1,8 @@
 package config
 
 import (
+	"loom/paths"
 	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -185,13 +185,6 @@ func TestSaveConfig(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Create .loom directory
-	loomDir := filepath.Join(tempDir, ".loom")
-	err = os.MkdirAll(loomDir, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create .loom dir: %v", err)
-	}
-
 	cfg := &Config{
 		Model:       "ollama:codellama", // Use a different model to ensure it's saved
 		EnableShell: true,
@@ -206,8 +199,12 @@ func TestSaveConfig(t *testing.T) {
 		t.Fatalf("Failed to save config: %v", err)
 	}
 
-	// Verify config file exists
-	configPath := filepath.Join(loomDir, "config.json")
+	// Verify config file exists at the correct path (using paths package)
+	projectPaths, err := paths.NewProjectPaths(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create project paths: %v", err)
+	}
+	configPath := projectPaths.ConfigPath()
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		t.Error("Config file was not created")
 	}

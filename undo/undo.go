@@ -3,6 +3,7 @@ package undo
 import (
 	"encoding/json"
 	"fmt"
+	"loom/paths"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,7 +25,7 @@ type UndoAction struct {
 // UndoStack represents a stack of undo actions
 type UndoStack struct {
 	workspacePath string
-	undoDir       string
+	projectPaths  *paths.ProjectPaths
 	actions       []*UndoAction
 	maxActions    int
 }
@@ -36,15 +37,20 @@ type UndoManager struct {
 
 // NewUndoManager creates a new undo manager
 func NewUndoManager(workspacePath string) (*UndoManager, error) {
-	// Create undo directory
-	undoDir := filepath.Join(workspacePath, ".loom", "undo")
-	if err := os.MkdirAll(undoDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create undo directory: %w", err)
+	// Get project paths
+	projectPaths, err := paths.NewProjectPaths(workspacePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create project paths: %w", err)
+	}
+
+	// Ensure project directories exist
+	if err := projectPaths.EnsureProjectDir(); err != nil {
+		return nil, fmt.Errorf("failed to create project directories: %w", err)
 	}
 
 	stack := &UndoStack{
 		workspacePath: workspacePath,
-		undoDir:       undoDir,
+		projectPaths:  projectPaths,
 		actions:       make([]*UndoAction, 0),
 		maxActions:    50, // Keep last 50 undo actions
 	}
@@ -329,7 +335,7 @@ func (um *UndoManager) createBackup(filePath string) (string, error) {
 		return "", fmt.Errorf("failed to read file for backup: %w", err)
 	}
 
-	// Create backup file path
+	// Create backup file path using user loom directory
 	timestamp := time.Now().Format("20060102_150405_000")
 	cleanPath := filepath.Clean(filePath)
 	cleanPath = filepath.ToSlash(cleanPath) // Normalize separators
@@ -337,7 +343,7 @@ func (um *UndoManager) createBackup(filePath string) (string, error) {
 	cleanPath = strings.ReplaceAll(cleanPath, "\\", "_")
 
 	backupName := fmt.Sprintf("%s_%s.backup", cleanPath, timestamp)
-	backupPath := filepath.Join(um.stack.undoDir, backupName)
+	backupPath := filepath.Join(um.stack.projectPaths.UndoDir(), backupName)
 
 	// Write backup file
 	if err := os.WriteFile(backupPath, content, 0644); err != nil {
@@ -378,9 +384,9 @@ func (us *UndoStack) findAction(actionID string) *UndoAction {
 	return nil
 }
 
-// save saves the undo stack to disk
+// save saves the undo stack to disk in user loom directory
 func (us *UndoStack) save() error {
-	stackFile := filepath.Join(us.undoDir, "stack.json")
+	stackFile := filepath.Join(us.projectPaths.UndoDir(), "stack.json")
 
 	data, err := json.MarshalIndent(us.actions, "", "  ")
 	if err != nil {
@@ -394,9 +400,9 @@ func (us *UndoStack) save() error {
 	return nil
 }
 
-// load loads the undo stack from disk
+// load loads the undo stack from disk in user loom directory
 func (us *UndoStack) load() error {
-	stackFile := filepath.Join(us.undoDir, "stack.json")
+	stackFile := filepath.Join(us.projectPaths.UndoDir(), "stack.json")
 
 	// Check if file exists
 	if _, err := os.Stat(stackFile); os.IsNotExist(err) {
