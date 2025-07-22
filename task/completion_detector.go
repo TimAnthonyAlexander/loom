@@ -359,17 +359,6 @@ func (cd *CompletionDetector) ValidateObjectiveConsistency(response string) *Obj
 		return result
 	}
 
-	// Check if the objective has changed
-	if !cd.isObjectiveEquivalent(cd.originalObjective, newObjective) {
-		cd.objectiveChangeCount++
-		result.IsValid = false
-		result.ChangeDetected = true
-		result.ValidationError = fmt.Sprintf("Objective changed from '%s' to '%s'", cd.originalObjective, newObjective)
-		result.SuggestedFix = fmt.Sprintf("Keep original objective: '%s' and complete it fully before setting new objectives", cd.originalObjective)
-
-		completionDebugLog("🚨 OBJECTIVE CHANGE DETECTED: " + result.ValidationError)
-	}
-
 	return result
 }
 

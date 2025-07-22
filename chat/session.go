@@ -297,8 +297,14 @@ func (s *Session) GetDisplayMessages() []string {
 				continue
 			}
 
-			// Filter task result messages to show only status, not actual content
-			content := s.filterTaskResultForDisplay(msg.Content)
+			var content string
+			if msg.Role == "assistant" {
+				// Only filter assistant messages, not user messages
+				content = s.filterTaskResultForDisplay(msg.Content)
+			} else {
+				// User messages should be displayed as-is without any task filtering
+				content = msg.Content
+			}
 
 			// Skip empty content (like completion detector interactions)
 			if strings.TrimSpace(content) == "" {
