@@ -7,6 +7,8 @@ A sophisticated terminal-based AI coding assistant written in Go that provides a
 
 [![CI/CD Pipeline](https://github.com/TimAnthonyAlexander/loom/actions/workflows/ci.yml/badge.svg)](https://github.com/TimAnthonyAlexander/loom/actions/workflows/ci.yml)
 
++![Loom Screenshot](./screenshot.png)
+
 ---
 
 ## Core Capabilities
