@@ -612,48 +612,65 @@ Ask me anything about your code, architecture, or programming questions!`
 }
 
 func (m model) View() string {
-	// Title
-	title := titleStyle.Render("Loom - AI Coding Assistant")
-
-	// Index stats for info panel
-	stats := m.index.GetStats()
-	langSummary := m.getLanguageSummary(stats)
-
-	// Workspace info
-	var modelStatus string
-	if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
-		modelStatus = m.config.Model + " ✓"
-	} else {
-		modelStatus = m.config.Model + " ✗"
-	}
-
-	var taskStatus string
-	var changeStatus string
-
-	if m.currentExecution != nil {
-		taskStatus = fmt.Sprintf("Tasks: %s", m.currentExecution.Status)
-	} else {
-		taskStatus = "Tasks: Ready"
-	}
-
-	// Add change summary information if enhanced manager is available
-	if m.enhancedManager != nil {
-		changeSummaryMgr := m.enhancedManager.GetChangeSummaryManager()
-		recentChanges := changeSummaryMgr.GetRecentSummaries(1)
-		if len(recentChanges) > 0 {
-			changeStatus = fmt.Sprintf("Changes: %d", len(changeSummaryMgr.GetSummaries()))
-		} else {
-			changeStatus = "Changes: None"
-		}
-	} else {
-		changeStatus = "Changes: N/A"
-	}
-
-	// Build header components conditionally
-	headerParts := []string{title}
+	// Calculate heights first
+	headerHeight := 1 // Title
 	if m.showInfoPanel {
-		headerParts = append(headerParts, "", infoStyle.Render(fmt.Sprintf(
-			"Workspace: %s\nModel: %s\nShell: %t\nFiles: %d %s\n%s\n%s",
+		headerHeight += 9 // Info panel + border + spacing
+	}
+	navHeight := 1 // Navigation at bottom
+
+	// Available height for content (messages + input)
+	contentHeight := m.height - headerHeight - navHeight
+	if contentHeight < 5 {
+		contentHeight = 5
+	}
+
+	// Title with enhanced styling
+	title := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FAFAFA")).
+		Background(lipgloss.AdaptiveColor{Light: "#7D56F4", Dark: "#7D56F4"}).
+		Padding(0, 2).
+		Width(m.width).
+		Align(lipgloss.Center).
+		Render("✨ Loom - AI Coding Assistant")
+
+	// Header section
+	var header string
+	if m.showInfoPanel {
+		// Index stats for info panel
+		stats := m.index.GetStats()
+		langSummary := m.getLanguageSummary(stats)
+
+		// Workspace info
+		var modelStatus string
+		if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
+			modelStatus = "🟢 " + m.config.Model
+		} else {
+			modelStatus = "🔴 " + m.config.Model
+		}
+
+		var taskStatus, changeStatus string
+		if m.currentExecution != nil {
+			taskStatus = fmt.Sprintf("⚡ %s", m.currentExecution.Status)
+		} else {
+			taskStatus = "✅ Ready"
+		}
+
+		if m.enhancedManager != nil {
+			changeSummaryMgr := m.enhancedManager.GetChangeSummaryManager()
+			recentChanges := changeSummaryMgr.GetRecentSummaries(1)
+			if len(recentChanges) > 0 {
+				changeStatus = fmt.Sprintf("📝 %d changes", len(changeSummaryMgr.GetSummaries()))
+			} else {
+				changeStatus = "📝 No changes"
+			}
+		} else {
+			changeStatus = "📝 N/A"
+		}
+
+		infoContent := fmt.Sprintf(
+			"📁 %s\n🤖 %s  |  🛡️ Shell: %t\n📊 %d files %s\n%s  |  %s",
 			m.workspacePath,
 			modelStatus,
 			m.config.EnableShell,
@@ -661,36 +678,57 @@ func (m model) View() string {
 			langSummary,
 			taskStatus,
 			changeStatus,
-		)))
+		)
+
+		infoPanel := lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.AdaptiveColor{Light: "#874BFD", Dark: "#874BFD"}).
+			Padding(1, 2).
+			Width(m.width - 4).
+			Render(infoContent)
+
+		header = lipgloss.JoinVertical(lipgloss.Left, title, infoPanel)
+	} else {
+		header = title
 	}
 
-	header := lipgloss.JoinVertical(lipgloss.Left, headerParts...)
+	// Show confirmation dialog if needed (full screen override)
+	if m.showingConfirmation && m.pendingConfirmation != nil {
+		confirmDialog := m.renderConfirmationDialog()
+		// Navigation for confirmation
+		nav := lipgloss.NewStyle().
+			Background(lipgloss.AdaptiveColor{Light: "#f0f0f0", Dark: "#2a2a2a"}).
+			Foreground(lipgloss.AdaptiveColor{Light: "#666666", Dark: "#888888"}).
+			Width(m.width).
+			Align(lipgloss.Center).
+			Render("Press 'y' to approve, 'n' to cancel, Ctrl+C to quit")
+
+		content := lipgloss.NewStyle().Height(contentHeight).Render(confirmDialog)
+		return lipgloss.JoinVertical(lipgloss.Left, header, content, nav)
+	}
 
 	var mainContent string
 
-	// Show confirmation dialog if needed
-	if m.showingConfirmation && m.pendingConfirmation != nil {
-		confirmDialog := m.renderConfirmationDialog()
-		return lipgloss.JoinVertical(lipgloss.Left, header, "", confirmDialog)
-	}
-
 	switch m.currentView {
 	case viewChat:
-		// Update wrapped messages when needed - force auto-scroll during streaming
+		// Update wrapped messages when needed
 		if m.isStreaming {
 			m.updateWrappedMessagesWithOptions(true)
 		} else {
 			m.updateWrappedMessages()
 		}
 
-		// Calculate available height for messages
-		availableHeight := m.getAvailableMessageHeight()
+		// Calculate message area height (subtract 2 for input + spacing)
+		messageHeight := contentHeight - 2
+		if messageHeight < 3 {
+			messageHeight = 3
+		}
 
 		// Get visible message lines based on scroll position
 		var visibleLines []string
 		if len(m.messageLines) > 0 {
 			start := m.messageScroll
-			end := m.messageScroll + availableHeight
+			end := m.messageScroll + messageHeight
 
 			if start < 0 {
 				start = 0
@@ -704,59 +742,94 @@ func (m model) View() string {
 			}
 		}
 
-		// Join visible lines and apply style with width constraint
+		// Message area with proper height
 		messageText := strings.Join(visibleLines, "\n")
-		messageWidth := m.width - 6 // Account for padding
+		messageWidth := m.width - 4 // Account for padding
 		if messageWidth < 40 {
 			messageWidth = 40
 		}
 
-		messages := messageStyle.Width(messageWidth).Render(messageText)
+		messages := lipgloss.NewStyle().
+			Width(messageWidth).
+			Height(messageHeight).
+			Padding(0, 1).
+			Render(messageText)
 
 		// Show scroll indicator if there are more messages
 		var scrollIndicator string
-		if len(m.messageLines) > availableHeight {
-			scrollIndicator = fmt.Sprintf(" [%d/%d]",
-				m.messageScroll+1,
-				len(m.messageLines)-availableHeight+1)
+		if len(m.messageLines) > messageHeight {
+			scrollIndicator = lipgloss.NewStyle().
+				Foreground(lipgloss.AdaptiveColor{Light: "#666666", Dark: "#888888"}).
+				Render(fmt.Sprintf(" [%d/%d]",
+					m.messageScroll+1,
+					len(m.messageLines)-messageHeight+1))
 		}
 
-		// Input area at the bottom
-		inputPrefix := "> "
+		// Input area with enhanced styling
+		inputPrefix := "💬 "
 		if m.isStreaming {
-			inputPrefix = "> 🧠 Thinking... "
+			inputPrefix = "🧠 "
 		}
-		input := inputStyle.Render(fmt.Sprintf("%s%s%s", inputPrefix, m.input, scrollIndicator))
 
-		mainContent = lipgloss.JoinVertical(lipgloss.Left, messages, "", input)
+		inputContent := fmt.Sprintf("%s%s%s", inputPrefix, m.input, scrollIndicator)
+		input := lipgloss.NewStyle().
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderTop(true).
+			BorderForeground(lipgloss.AdaptiveColor{Light: "#dddddd", Dark: "#444444"}).
+			Padding(0, 1).
+			Width(m.width - 2).
+			Render(inputContent)
+
+		mainContent = lipgloss.JoinVertical(lipgloss.Left, messages, input)
 
 	case viewFileTree:
-		// File tree view
+		// File tree view with proper height
 		treeContent := m.renderFileTree()
-		fileTree := fileTreeStyle.Render(treeContent)
+		fileTree := lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.AdaptiveColor{Light: "#A550DF", Dark: "#A550DF"}).
+			Padding(1, 2).
+			Width(m.width - 4).
+			Height(contentHeight - 2).
+			Render(treeContent)
 		mainContent = fileTree
 
 	case viewTasks:
-		// Task execution view
+		// Task execution view with proper height
 		taskContent := m.renderTaskView()
-		taskView := taskStyle.Render(taskContent)
+		taskView := lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.AdaptiveColor{Light: "#FFA500", Dark: "#FFA500"}).
+			Padding(1, 2).
+			Width(m.width - 4).
+			Height(contentHeight - 2).
+			Render(taskContent)
 		mainContent = taskView
 	}
 
-	// Help
+	// Navigation bar at the very bottom with enhanced styling
 	var helpText string
 	switch m.currentView {
 	case viewChat:
-		helpText = "Tab: Views | ↑↓: Scroll | Ctrl+S: Summary | /help: Commands | /test: Tests | /debug: Debug | Ctrl+C: Quit"
+		helpText = "Tab: Views  •  ↑↓: Scroll  •  Ctrl+S: Summary  •  /help: Commands  •  Ctrl+C: Quit"
 	case viewFileTree:
-		helpText = "Tab: Chat/Tasks | /help: All Commands | Ctrl+C: Quit"
+		helpText = "Tab: Chat/Tasks  •  /help: All Commands  •  Ctrl+C: Quit"
 	case viewTasks:
-		helpText = "Tab: Chat/File Tree | /help: All Commands | Ctrl+C: Quit"
+		helpText = "Tab: Chat/File Tree  •  /help: All Commands  •  Ctrl+C: Quit"
 	}
 
-	help := lipgloss.NewStyle().Foreground(lipgloss.Color("#626262")).Render(helpText)
+	nav := lipgloss.NewStyle().
+		Background(lipgloss.AdaptiveColor{Light: "#f8f9fa", Dark: "#1a1a1a"}).
+		Foreground(lipgloss.AdaptiveColor{Light: "#6c757d", Dark: "#adb5bd"}).
+		Width(m.width).
+		Align(lipgloss.Center).
+		Padding(0, 1).
+		Render(helpText)
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, "", mainContent, "", help)
+	// Ensure content takes up exactly the right height
+	content := lipgloss.NewStyle().Height(contentHeight).Render(mainContent)
+
+	return lipgloss.JoinVertical(lipgloss.Left, header, content, nav)
 }
 
 // renderConfirmationDialog renders the task confirmation dialog
@@ -1502,13 +1575,26 @@ func (m model) getLanguageSummary(stats indexer.IndexStats) string {
 
 // getAvailableMessageHeight calculates how many lines are available for messages
 func (m model) getAvailableMessageHeight() int {
-	// Calculate used height: title (3), info panel (~7), input (3), help (3), spacing (4)
-	usedHeight := 20
-	availableHeight := m.height - usedHeight
-	if availableHeight < 5 {
-		return 5 // Minimum height
+	// Use the same logic as the View() function
+	headerHeight := 1 // Title
+	if m.showInfoPanel {
+		headerHeight += 9 // Info panel + border + spacing
 	}
-	return availableHeight
+	navHeight := 1 // Navigation at bottom
+
+	// Available height for content (messages + input)
+	contentHeight := m.height - headerHeight - navHeight
+	if contentHeight < 5 {
+		contentHeight = 5
+	}
+
+	// Message area height (subtract 2 for input + its border)
+	messageHeight := contentHeight - 2
+	if messageHeight < 3 {
+		messageHeight = 3
+	}
+
+	return messageHeight
 }
 
 // wrapText wraps text to fit within the given width
