@@ -348,69 +348,7 @@ func parseEditTask(args string) *Task {
 
 // NOTE: Natural language parsing functions removed - only LOOM_EDIT and JSON formats are supported
 
-// parseListTask parses natural language LIST commands
-func parseListTask(args string) *Task {
-	task := &Task{Type: TaskTypeListDir}
-
-	// Check for recursive indication
-	if strings.Contains(strings.ToLower(args), "recursive") {
-		task.Recursive = true
-		// Remove "recursively" or "recursive" from path
-		args = regexp.MustCompile(`\s+recursively?\s*$`).ReplaceAllString(args, "")
-		args = regexp.MustCompile(`\s+recursive\s*$`).ReplaceAllString(args, "")
-	}
-
-	task.Path = strings.TrimSpace(args)
-	if task.Path == "" {
-		task.Path = "."
-	}
-
-	return task
-}
-
-// parseRunTask parses natural language RUN commands
-func parseRunTask(args string) *Task {
-	task := &Task{Type: TaskTypeRunShell}
-
-	// Look for interactive flags
-	interactivePattern := regexp.MustCompile(`--interactive(?:\s+(\w+))?`)
-	if matches := interactivePattern.FindStringSubmatch(args); len(matches) > 0 {
-		task.Interactive = true
-		if len(matches) > 1 && matches[1] != "" {
-			task.InputMode = matches[1] // auto, prompt, predefined
-		} else {
-			task.InputMode = "prompt" // default
-		}
-		// Remove interactive flag from command
-		args = interactivePattern.ReplaceAllString(args, "")
-	}
-
-	// Look for timeout specification
-	timeoutPattern := regexp.MustCompile(`^(.+?)\s*\(timeout:\s*(\d+)s?\)$`)
-	matches := timeoutPattern.FindStringSubmatch(args)
-
-	if len(matches) == 3 {
-		task.Command = strings.TrimSpace(matches[1])
-		if timeout, err := strconv.Atoi(matches[2]); err == nil {
-			task.Timeout = timeout
-		}
-	} else {
-		task.Command = strings.TrimSpace(args)
-	}
-
-	// Set default timeout
-	if task.Timeout == 0 {
-		task.Timeout = DefaultTimeout
-	}
-
-	// Auto-detect interactive commands if not explicitly specified
-	if !task.Interactive && isLikelyInteractiveCommand(task.Command) {
-		task.Interactive = true
-		task.InputMode = "auto" // Use automatic response handling
-	}
-
-	return task
-}
+// NOTE: Natural language parsing functions removed - only LOOM_EDIT and JSON formats are supported
 
 // parseSearchTask parses natural language SEARCH commands
 func parseSearchTask(args string) *Task {
