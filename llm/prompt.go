@@ -214,7 +214,7 @@ OBJECTIVE_COMPLETE: Here's how the task execution system works... [comprehensive
 | READ | READ file.go (lines 40-80) | Inspect code with line numbers |
 | SEARCH | SEARCH "pattern" type:go context:3 | Locate symbols/patterns |
 | LIST | LIST src/ recursive | View directory structure |
-| EDIT | >>LOOM_EDIT file=path v=sha ACTION lines | Modify files (see §7.3) |
+| EDIT | >>LOOM_EDIT file=path ACTION lines | Modify files (see §7.3) |
 | RUN | RUN go test | Execute shell commands |
 | MEMORY | MEMORY create key content:"text" | Persist information (see §7.B) |
 
@@ -332,7 +332,7 @@ Be explicit about next steps:
 
 **Syntax**:
 `+"`"+`
->>LOOM_EDIT file=<RELATIVE_PATH> v=<FILE_SHA> <ACTION> <START>-<END>
+>>LOOM_EDIT file=<RELATIVE_PATH> <ACTION> <START>-<END>
 <NEW TEXT LINES…>
 <<LOOM_EDIT
 `+"`"+`
@@ -345,7 +345,6 @@ Be explicit about next steps:
 
 **Rules**:
 - Always READ file first to get current SHA and line numbers (SHA provided automatically)
-- File SHA (v=) prevents applying to changed files
 - Line numbers are 1-based inclusive
 - System handles cross-platform newlines automatically
 
@@ -380,14 +379,14 @@ Basic operations: create, update, get, delete, list
 
 **Single line replacement**:
 `+"`"+`
->>LOOM_EDIT file=main.go v=a1b2c3d4e5f6 REPLACE 42
+>>LOOM_EDIT file=main.go REPLACE 42
     username := "john"
 <<LOOM_EDIT
 `+"`"+`
 
 **Multi-line replacement**:
 `+"`"+`
->>LOOM_EDIT file=handler.go v=abc123def456 REPLACE 28-31
+>>LOOM_EDIT file=handler.go REPLACE 28-31
         return &ValidationError{
             Field:   "request", 
             Message: "request cannot be nil",
@@ -397,14 +396,14 @@ Basic operations: create, update, get, delete, list
 
 **Insert after line**:
 `+"`"+`
->>LOOM_EDIT file=config.go v=xyz789 INSERT_AFTER 15
+>>LOOM_EDIT file=config.go INSERT_AFTER 15
     newConfigOption := "value"
 <<LOOM_EDIT
 `+"`"+`
 
 **Delete lines**:
 `+"`"+`
->>LOOM_EDIT file=utils.go v=def789 DELETE 20-22
+>>LOOM_EDIT file=utils.go DELETE 20-22
 <<LOOM_EDIT
 `+"`"+`
 

@@ -2266,7 +2266,7 @@ You can emit tasks to interact with the workspace using simple natural language 
 🔧 READ main.go (max: 150 lines)
 🔧 SEARCH "IndexStats" (find patterns - USE THIS INSTEAD OF GREP!)
 🔧 READ main.go (to get SHA and line numbers)
-Then: >>LOOM_EDIT file=main.go v=sha REPLACE 42
+Then: >>LOOM_EDIT file=main.go REPLACE 42
 🔧 LIST src/
 🔧 RUN go build (timeout: 10)
 
@@ -2278,7 +2278,7 @@ Then: >>LOOM_EDIT file=main.go v=sha REPLACE 42
 
 2. **EDIT**: Apply file changes using LOOM_EDIT syntax (requires user confirmation)
    - Read file first: 🔧 READ filename.go
-   - Then use: >>LOOM_EDIT file=filename.go v=sha ACTION lines
+   - Then use: >>LOOM_EDIT file=filename.go ACTION lines
    - For new files: provide complete content in code block
 
 3. **LIST**: List directory contents

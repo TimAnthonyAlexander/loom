@@ -9,7 +9,7 @@ The Loom Edit module implements a precise, machine-readable syntax for file edit
 ## Command Syntax
 
 ```
->>LOOM_EDIT file=<RELATIVE_PATH> v=<FILE_SHA> <ACTION> <START>-<END>
+>>LOOM_EDIT file=<RELATIVE_PATH> <ACTION> <START>-<END>
 <NEW TEXT LINES…>
 <<LOOM_EDIT
 ```
@@ -17,7 +17,6 @@ The Loom Edit module implements a precise, machine-readable syntax for file edit
 ### Fields
 
 - `file=` - Target file path (relative)
-- `v=` - SHA-1 hash of the entire file when read (prevents applying to changed files)
 - `<ACTION>` - One of: `REPLACE`, `INSERT_AFTER`, `INSERT_BEFORE`, `DELETE`
 - `<START>-<END>` - 1-based inclusive line numbers
 - Body - The replacement/insertion text (empty for DELETE)
@@ -27,7 +26,7 @@ The Loom Edit module implements a precise, machine-readable syntax for file edit
 ### REPLACE
 Replaces lines START through END with new content.
 ```
->>LOOM_EDIT file=docs/README.md v=abc123... REPLACE 4-5
+>>LOOM_EDIT file=docs/README.md REPLACE 4-5
 New line 4
 New line 5
 <<LOOM_EDIT
@@ -36,7 +35,7 @@ New line 5
 ### INSERT_AFTER
 Inserts new content after the specified line.
 ```
->>LOOM_EDIT file=docs/README.md v=abc123... INSERT_AFTER 9
+>>LOOM_EDIT file=docs/README.md INSERT_AFTER 9
 New content to insert
 <<LOOM_EDIT
 ```
@@ -44,7 +43,7 @@ New content to insert
 ### INSERT_BEFORE
 Inserts new content before the specified line.
 ```
->>LOOM_EDIT file=docs/README.md v=abc123... INSERT_BEFORE 5
+>>LOOM_EDIT file=docs/README.md INSERT_BEFORE 5
 New content to insert
 <<LOOM_EDIT
 ```
@@ -52,7 +51,7 @@ New content to insert
 ### DELETE
 Removes lines START through END.
 ```
->>LOOM_EDIT file=docs/README.md v=abc123... DELETE 15-17
+>>LOOM_EDIT file=docs/README.md DELETE 15-17
 <<LOOM_EDIT
 ```
 

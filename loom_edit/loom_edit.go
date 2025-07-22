@@ -12,7 +12,6 @@ import (
 // EditCommand represents a parsed LOOM_EDIT command
 type EditCommand struct {
 	File    string // The target file path
-	FileSHA string // SHA of the entire file when LLM read it
 	Action  string // REPLACE, INSERT_AFTER, INSERT_BEFORE, or DELETE
 	Start   int    // 1-based inclusive start line number
 	End     int    // 1-based inclusive end line number
@@ -22,7 +21,7 @@ type EditCommand struct {
 // ParseEditCommand parses a LOOM_EDIT command block into an EditCommand struct
 func ParseEditCommand(input string) (*EditCommand, error) {
 	// Regex to match the LOOM_EDIT header line - support both >>LOOM_EDIT and 🔧 LOOM_EDIT formats
-	headerRegex := regexp.MustCompile(`(?:>>|🔧 )LOOM_EDIT file=([^\s]+) v=([^\s]+) (REPLACE|INSERT_AFTER|INSERT_BEFORE|DELETE) (\d+)(?:-(\d+))?`)
+	headerRegex := regexp.MustCompile(`(?:>>|🔧 )LOOM_EDIT file=([^\s]+) (REPLACE|INSERT_AFTER|INSERT_BEFORE|DELETE) (\d+)(?:-(\d+))?`)
 
 	lines := strings.Split(input, "\n")
 	if len(lines) < 2 {
@@ -36,13 +35,12 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 	}
 
 	cmd := &EditCommand{
-		File:    headerMatches[1],
-		FileSHA: headerMatches[2],
-		Action:  headerMatches[3],
+		File:   headerMatches[1],
+		Action: headerMatches[2],
 	}
 
 	// Parse start line number
-	start, err := strconv.Atoi(headerMatches[4])
+	start, err := strconv.Atoi(headerMatches[3])
 	if err != nil {
 		return nil, fmt.Errorf("invalid start line number: %v", err)
 	}
@@ -50,7 +48,7 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 
 	// Parse end line number (optional for some operations)
 	if headerMatches[5] != "" {
-		end, err := strconv.Atoi(headerMatches[5])
+		end, err := strconv.Atoi(headerMatches[4])
 		if err != nil {
 			return nil, fmt.Errorf("invalid end line number: %v", err)
 		}
@@ -75,7 +73,6 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 	return cmd, nil
 }
 
-// HashContent computes SHA1 hash of the given content
 func HashContent(content string) string {
 	return fmt.Sprintf("%x", sha1.Sum([]byte(content)))
 }

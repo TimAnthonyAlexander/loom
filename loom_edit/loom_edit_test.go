@@ -88,7 +88,7 @@ func TestLoomEditCases(t *testing.T) {
 }
 
 func TestParseEditCommand(t *testing.T) {
-	input := `>>LOOM_EDIT file=docs/CHANGELOG.md v=2eee673e114363992ac6afd6769ddca5986d1645 REPLACE 4-5
+	input := `>>LOOM_EDIT file=docs/CHANGELOG.md REPLACE 4-5
 - First stable release
 - Integrated API layer
 <<LOOM_EDIT`
@@ -100,9 +100,6 @@ func TestParseEditCommand(t *testing.T) {
 
 	if cmd.File != "docs/CHANGELOG.md" {
 		t.Errorf("Expected file 'docs/CHANGELOG.md', got '%s'", cmd.File)
-	}
-	if cmd.FileSHA != "2eee673e114363992ac6afd6769ddca5986d1645" {
-		t.Errorf("Expected FileSHA '2eee673e114363992ac6afd6769ddca5986d1645', got '%s'", cmd.FileSHA)
 	}
 	if cmd.Action != "REPLACE" {
 		t.Errorf("Expected action 'REPLACE', got '%s'", cmd.Action)
@@ -150,7 +147,7 @@ func TestParseEditCommandErrors(t *testing.T) {
 		},
 		{
 			name:  "invalid_line_number",
-			input: ">>LOOM_EDIT file=test.txt v=abc123 REPLACE abc-2\n<<LOOM_EDIT",
+			input: ">>LOOM_EDIT file=test.txt REPLACE abc-2\n<<LOOM_EDIT",
 		},
 	}
 
@@ -179,21 +176,9 @@ func TestApplyEditErrors(t *testing.T) {
 		cmd  *EditCommand
 	}{
 		{
-			name: "wrong_file_sha",
-			cmd: &EditCommand{
-				File:    "test.txt",
-				FileSHA: "wrongsha",
-				Action:  "REPLACE",
-				Start:   1,
-				End:     1,
-				NewText: "new content",
-			},
-		},
-		{
 			name: "out_of_range_start",
 			cmd: &EditCommand{
 				File:    "test.txt",
-				FileSHA: HashContent(content),
 				Action:  "REPLACE",
 				Start:   0, // Invalid start line
 				End:     1,
@@ -204,7 +189,6 @@ func TestApplyEditErrors(t *testing.T) {
 			name: "out_of_range_end",
 			cmd: &EditCommand{
 				File:    "test.txt",
-				FileSHA: HashContent(content),
 				Action:  "REPLACE",
 				Start:   1,
 				End:     10, // Invalid end line
@@ -235,7 +219,6 @@ func TestInsertBeforeOperation(t *testing.T) {
 
 	cmd := &EditCommand{
 		File:    "test.txt",
-		FileSHA: HashContent(content),
 		Action:  "INSERT_BEFORE",
 		Start:   2, // Insert before line2
 		End:     2,
@@ -301,7 +284,6 @@ func TestNewlineNormalization(t *testing.T) {
 
 			cmd := &EditCommand{
 				File:    "test.txt",
-				FileSHA: HashContent(normalizedOriginal),
 				Action:  "REPLACE",
 				Start:   1,
 				End:     1,
@@ -386,7 +368,6 @@ func TestTrailingNewlinePreservation(t *testing.T) {
 
 			cmd := &EditCommand{
 				File:    "test.txt",
-				FileSHA: HashContent(tc.originalContent),
 				Action:  tc.action,
 				Start:   start,
 				End:     end,
