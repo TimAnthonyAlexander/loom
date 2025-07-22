@@ -94,8 +94,19 @@ func TestFindModuleRoot(t *testing.T) {
 		t.Fatalf("Failed to find module root from nested directory: %v", err)
 	}
 
-	if foundRoot != tempDir {
-		t.Errorf("Expected module root %s, got %s", tempDir, foundRoot)
+	// Resolve both paths to handle symlinks (e.g., /var -> /private/var on macOS)
+	expectedRoot, err := filepath.EvalSymlinks(tempDir)
+	if err != nil {
+		expectedRoot = tempDir // fallback to original path if symlink resolution fails
+	}
+
+	actualRoot, err := filepath.EvalSymlinks(foundRoot)
+	if err != nil {
+		actualRoot = foundRoot // fallback to original path if symlink resolution fails
+	}
+
+	if actualRoot != expectedRoot {
+		t.Errorf("Expected module root %s, got %s", expectedRoot, actualRoot)
 	}
 }
 
