@@ -10,7 +10,6 @@ The Loom Edit module implements a precise, machine-readable syntax for file edit
 
 ```
 >>LOOM_EDIT file=<RELATIVE_PATH> v=<FILE_SHA> <ACTION> <START>-<END>
-#OLD_HASH:<SHA-of-old-slice>
 <NEW TEXT LINES…>
 <<LOOM_EDIT
 ```
@@ -21,7 +20,6 @@ The Loom Edit module implements a precise, machine-readable syntax for file edit
 - `v=` - SHA-1 hash of the entire file when read (prevents applying to changed files)
 - `<ACTION>` - One of: `REPLACE`, `INSERT_AFTER`, `INSERT_BEFORE`, `DELETE`
 - `<START>-<END>` - 1-based inclusive line numbers
-- `#OLD_HASH:` - SHA-1 hash of the slice being modified (validation gate)
 - Body - The replacement/insertion text (empty for DELETE)
 
 ## Supported Actions
@@ -30,7 +28,6 @@ The Loom Edit module implements a precise, machine-readable syntax for file edit
 Replaces lines START through END with new content.
 ```
 >>LOOM_EDIT file=docs/README.md v=abc123... REPLACE 4-5
-#OLD_HASH:def456...
 New line 4
 New line 5
 <<LOOM_EDIT
@@ -40,7 +37,6 @@ New line 5
 Inserts new content after the specified line.
 ```
 >>LOOM_EDIT file=docs/README.md v=abc123... INSERT_AFTER 9
-#OLD_HASH:def456...
 New content to insert
 <<LOOM_EDIT
 ```
@@ -49,7 +45,6 @@ New content to insert
 Inserts new content before the specified line.
 ```
 >>LOOM_EDIT file=docs/README.md v=abc123... INSERT_BEFORE 5
-#OLD_HASH:def456...
 New content to insert
 <<LOOM_EDIT
 ```
@@ -58,7 +53,6 @@ New content to insert
 Removes lines START through END.
 ```
 >>LOOM_EDIT file=docs/README.md v=abc123... DELETE 15-17
-#OLD_HASH:def456...
 <<LOOM_EDIT
 ```
 

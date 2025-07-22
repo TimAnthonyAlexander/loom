@@ -1,5 +1,4 @@
 >>LOOM_EDIT file=docs/CHANGELOG.md v=485fbc339c9b490ca712a2ba19dc54322fc0ef3b REPLACE 4-5
-#OLD_HASH:c8b4b64e46dc544b1e69a01551fa0ad9f3e9396a
 - First stable release
 - Integrated API layer
 <<LOOM_EDIT

@@ -406,6 +406,12 @@ func (s *Session) filterJSONTaskBlocks(content string) string {
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 
+		// Skip LOOM_EDIT commands - they should be shown as-is, not filtered
+		if strings.Contains(trimmed, "LOOM_EDIT") {
+			filteredLines = append(filteredLines, line)
+			continue
+		}
+
 		// Check for natural language tasks (only the explicit 🔧 format)
 		if matches := taskPattern.FindStringSubmatch(trimmed); len(matches) == 3 {
 			taskType := strings.ToUpper(matches[1])
@@ -628,7 +634,7 @@ func (s *Session) isCompletionDetectorInteraction(content string) bool {
 	}
 
 	// Don't hide LOOM_EDIT commands - they should always be shown even if they contain completion patterns
-	if strings.Contains(content, ">>LOOM_EDIT") && strings.Contains(content, "<<LOOM_EDIT") {
+	if (strings.Contains(content, ">>LOOM_EDIT") || strings.Contains(content, "🔧 LOOM_EDIT")) && strings.Contains(content, "<<LOOM_EDIT") {
 		return false
 	}
 

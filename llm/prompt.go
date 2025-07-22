@@ -333,7 +333,6 @@ Be explicit about next steps:
 **Syntax**:
 `+"`"+`
 >>LOOM_EDIT file=<RELATIVE_PATH> v=<FILE_SHA> <ACTION> <START>-<END>
-#OLD_HASH:<SHA-of-old-slice>
 <NEW TEXT LINES…>
 <<LOOM_EDIT
 `+"`"+`
@@ -347,7 +346,6 @@ Be explicit about next steps:
 **Rules**:
 - Always READ file first to get current SHA and line numbers (SHA provided automatically)
 - File SHA (v=) prevents applying to changed files
-- Old slice SHA validates target lines haven't changed
 - Line numbers are 1-based inclusive
 - System handles cross-platform newlines automatically
 
@@ -383,7 +381,6 @@ Basic operations: create, update, get, delete, list
 **Single line replacement**:
 `+"`"+`
 >>LOOM_EDIT file=main.go v=a1b2c3d4e5f6 REPLACE 42
-#OLD_HASH:f6e5d4c3b2a1
     username := "john"
 <<LOOM_EDIT
 `+"`"+`
@@ -391,7 +388,6 @@ Basic operations: create, update, get, delete, list
 **Multi-line replacement**:
 `+"`"+`
 >>LOOM_EDIT file=handler.go v=abc123def456 REPLACE 28-31
-#OLD_HASH:def456abc123
         return &ValidationError{
             Field:   "request", 
             Message: "request cannot be nil",
@@ -402,7 +398,6 @@ Basic operations: create, update, get, delete, list
 **Insert after line**:
 `+"`"+`
 >>LOOM_EDIT file=config.go v=xyz789 INSERT_AFTER 15
-#OLD_HASH:789xyz
     newConfigOption := "value"
 <<LOOM_EDIT
 `+"`"+`
@@ -410,7 +405,6 @@ Basic operations: create, update, get, delete, list
 **Delete lines**:
 `+"`"+`
 >>LOOM_EDIT file=utils.go v=def789 DELETE 20-22
-#OLD_HASH:789def
 <<LOOM_EDIT
 `+"`"+`
 

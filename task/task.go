@@ -183,8 +183,8 @@ type TaskResponse struct {
 func tryLoomEditParsing(llmResponse string) *TaskList {
 	debugLog("DEBUG: Attempting LOOM_EDIT parsing...")
 
-	// Look for LOOM_EDIT command blocks
-	re := regexp.MustCompile(`(?s)>>LOOM_EDIT.*?<<LOOM_EDIT`)
+	// Look for LOOM_EDIT command blocks - support both >>LOOM_EDIT and 🔧 LOOM_EDIT formats
+	re := regexp.MustCompile(`(?s)(?:>>|🔧 )LOOM_EDIT.*?<<LOOM_EDIT`)
 	matches := re.FindAllString(llmResponse, -1)
 
 	if len(matches) == 0 {
@@ -197,7 +197,7 @@ func tryLoomEditParsing(llmResponse string) *TaskList {
 		// Parse the LOOM_EDIT command - we'll need to create a basic task
 		// that contains the raw LOOM_EDIT command for the executor to handle
 
-		// Extract the file path from the command for the task
+		// Extract the file path from the command for the task - handle both formats
 		filePathRe := regexp.MustCompile(`file=([^\s]+)`)
 		fileMatches := filePathRe.FindStringSubmatch(match)
 

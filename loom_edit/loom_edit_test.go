@@ -89,7 +89,6 @@ func TestLoomEditCases(t *testing.T) {
 
 func TestParseEditCommand(t *testing.T) {
 	input := `>>LOOM_EDIT file=docs/CHANGELOG.md v=2eee673e114363992ac6afd6769ddca5986d1645 REPLACE 4-5
-#OLD_HASH:cdca25044369b5e81f8073f02fc3e412a6a86360
 - First stable release
 - Integrated API layer
 <<LOOM_EDIT`
@@ -113,9 +112,6 @@ func TestParseEditCommand(t *testing.T) {
 	}
 	if cmd.End != 5 {
 		t.Errorf("Expected end 5, got %d", cmd.End)
-	}
-	if cmd.OldHash != "cdca25044369b5e81f8073f02fc3e412a6a86360" {
-		t.Errorf("Expected OldHash 'cdca25044369b5e81f8073f02fc3e412a6a86360', got '%s'", cmd.OldHash)
 	}
 	expectedNewText := "- First stable release\n- Integrated API layer"
 	if cmd.NewText != expectedNewText {
@@ -153,12 +149,8 @@ func TestParseEditCommandErrors(t *testing.T) {
 			input: "invalid header format",
 		},
 		{
-			name:  "missing_old_hash",
-			input: ">>LOOM_EDIT file=test.txt v=abc123 REPLACE 1-2\nsome content\n<<LOOM_EDIT",
-		},
-		{
 			name:  "invalid_line_number",
-			input: ">>LOOM_EDIT file=test.txt v=abc123 REPLACE abc-2\n#OLD_HASH:def456\n<<LOOM_EDIT",
+			input: ">>LOOM_EDIT file=test.txt v=abc123 REPLACE abc-2\n<<LOOM_EDIT",
 		},
 	}
 
@@ -194,7 +186,6 @@ func TestApplyEditErrors(t *testing.T) {
 				Action:  "REPLACE",
 				Start:   1,
 				End:     1,
-				OldHash: "somehash",
 				NewText: "new content",
 			},
 		},
@@ -206,7 +197,6 @@ func TestApplyEditErrors(t *testing.T) {
 				Action:  "REPLACE",
 				Start:   0, // Invalid start line
 				End:     1,
-				OldHash: "somehash",
 				NewText: "new content",
 			},
 		},
@@ -218,19 +208,6 @@ func TestApplyEditErrors(t *testing.T) {
 				Action:  "REPLACE",
 				Start:   1,
 				End:     10, // Invalid end line
-				OldHash: "somehash",
-				NewText: "new content",
-			},
-		},
-		{
-			name: "wrong_old_hash",
-			cmd: &EditCommand{
-				File:    "test.txt",
-				FileSHA: HashContent(content),
-				Action:  "REPLACE",
-				Start:   1,
-				End:     1,
-				OldHash: "wronghash",
 				NewText: "new content",
 			},
 		},
@@ -256,17 +233,12 @@ func TestInsertBeforeOperation(t *testing.T) {
 		t.Fatalf("Failed to write temp file: %v", err)
 	}
 
-	lines := strings.Split(content, "\n")
-	oldSlice := lines[1:2] // line2
-	oldHash := HashContent(strings.Join(oldSlice, "\n"))
-
 	cmd := &EditCommand{
 		File:    "test.txt",
 		FileSHA: HashContent(content),
 		Action:  "INSERT_BEFORE",
 		Start:   2, // Insert before line2
 		End:     2,
-		OldHash: oldHash,
 		NewText: "inserted line",
 	}
 
@@ -327,17 +299,12 @@ func TestNewlineNormalization(t *testing.T) {
 			normalizedOriginal := strings.ReplaceAll(tc.originalContent, "\r\n", "\n")
 			normalizedOriginal = strings.ReplaceAll(normalizedOriginal, "\r", "\n")
 
-			lines := strings.Split(normalizedOriginal, "\n")
-			oldSlice := lines[0:1] // First line
-			oldHash := HashContent(strings.Join(oldSlice, "\n"))
-
 			cmd := &EditCommand{
 				File:    "test.txt",
 				FileSHA: HashContent(normalizedOriginal),
 				Action:  "REPLACE",
 				Start:   1,
 				End:     1,
-				OldHash: oldHash,
 				NewText: tc.newText,
 			}
 
@@ -406,23 +373,16 @@ func TestTrailingNewlinePreservation(t *testing.T) {
 				t.Fatalf("Failed to write temp file: %v", err)
 			}
 
-			lines := strings.Split(tc.originalContent, "\n")
-			var oldSlice []string
 			var start, end int
 
 			switch tc.action {
 			case "REPLACE":
 				start, end = 1, 1
-				oldSlice = lines[0:1]
 			case "INSERT_AFTER":
 				start, end = 1, 1
-				oldSlice = lines[0:1]
 			case "DELETE":
 				start, end = 3, 3
-				oldSlice = lines[2:3]
 			}
-
-			oldHash := HashContent(strings.Join(oldSlice, "\n"))
 
 			cmd := &EditCommand{
 				File:    "test.txt",
@@ -430,7 +390,6 @@ func TestTrailingNewlinePreservation(t *testing.T) {
 				Action:  tc.action,
 				Start:   start,
 				End:     end,
-				OldHash: oldHash,
 				NewText: tc.newText,
 			}
 

@@ -16,20 +16,16 @@ type EditCommand struct {
 	Action  string // REPLACE, INSERT_AFTER, INSERT_BEFORE, or DELETE
 	Start   int    // 1-based inclusive start line number
 	End     int    // 1-based inclusive end line number
-	OldHash string // SHA of the old slice for validation
 	NewText string // The replacement/insertion text
 }
 
 // ParseEditCommand parses a LOOM_EDIT command block into an EditCommand struct
 func ParseEditCommand(input string) (*EditCommand, error) {
-	// Regex to match the LOOM_EDIT header line
-	headerRegex := regexp.MustCompile(`>>LOOM_EDIT file=([^\s]+) v=([^\s]+) (REPLACE|INSERT_AFTER|INSERT_BEFORE|DELETE) (\d+)(?:-(\d+))?`)
-
-	// Regex to match the OLD_HASH line
-	hashRegex := regexp.MustCompile(`#OLD_HASH:([a-fA-F0-9]+)`)
+	// Regex to match the LOOM_EDIT header line - support both >>LOOM_EDIT and 🔧 LOOM_EDIT formats
+	headerRegex := regexp.MustCompile(`(?:>>|🔧 )LOOM_EDIT file=([^\s]+) v=([^\s]+) (REPLACE|INSERT_AFTER|INSERT_BEFORE|DELETE) (\d+)(?:-(\d+))?`)
 
 	lines := strings.Split(input, "\n")
-	if len(lines) < 3 {
+	if len(lines) < 2 {
 		return nil, fmt.Errorf("invalid LOOM_EDIT format: too few lines")
 	}
 
@@ -64,29 +60,14 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 		cmd.End = start
 	}
 
-	// Parse OLD_HASH line
-	hashMatches := hashRegex.FindStringSubmatch(lines[1])
-	if hashMatches == nil {
-		return nil, fmt.Errorf("invalid OLD_HASH format")
-	}
-	cmd.OldHash = hashMatches[1]
-
-	// Extract new text (everything between OLD_HASH line and <<LOOM_EDIT)
+	// Extract new text (everything between header line and <<LOOM_EDIT)
 	var newTextLines []string
-	inBody := false
-	for i, line := range lines {
-		if i == 0 || strings.HasPrefix(line, "#OLD_HASH:") {
-			if strings.HasPrefix(line, "#OLD_HASH:") {
-				inBody = true
-			}
-			continue
-		}
+	for i := 1; i < len(lines); i++ {
+		line := lines[i]
 		if line == "<<LOOM_EDIT" {
 			break
 		}
-		if inBody {
-			newTextLines = append(newTextLines, line)
-		}
+		newTextLines = append(newTextLines, line)
 	}
 
 	cmd.NewText = strings.Join(newTextLines, "\n")
@@ -131,21 +112,6 @@ func ApplyEdit(filePath string, cmd *EditCommand) error {
 	}
 	if cmd.End < cmd.Start || cmd.End > len(lines) {
 		return fmt.Errorf("end line %d is out of range (%d-%d)", cmd.End, cmd.Start, len(lines))
-	}
-
-	// Extract old slice and validate hash
-	var oldSlice []string
-	if cmd.Action == "DELETE" || cmd.Action == "REPLACE" {
-		oldSlice = lines[cmd.Start-1 : cmd.End]
-	} else if cmd.Action == "INSERT_AFTER" || cmd.Action == "INSERT_BEFORE" {
-		// For insert operations, we still need to validate the reference line
-		oldSlice = lines[cmd.Start-1 : cmd.Start]
-	}
-
-	oldSliceContent := strings.Join(oldSlice, "\n")
-	oldSliceHash := HashContent(oldSliceContent)
-	if oldSliceHash != cmd.OldHash {
-		return fmt.Errorf("old slice hash mismatch: expected %s, got %s", cmd.OldHash, oldSliceHash)
 	}
 
 	// Apply the edit based on action

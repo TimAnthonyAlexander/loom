@@ -136,9 +136,6 @@ func (e *Executor) executeReadFile(task *Task) *TaskResponse {
 	normalizedContent := strings.ReplaceAll(string(fullContent), "\r\n", "\n")
 	normalizedContent = strings.ReplaceAll(normalizedContent, "\r", "\n")
 
-	// Calculate SHA hash using loom_edit module function
-	fileSHA := loom_edit.HashContent(normalizedContent)
-
 	// Read file to get total line count first
 	totalLines, err := e.countFileLines(fullPath)
 	if err != nil {
@@ -154,8 +151,8 @@ func (e *Executor) executeReadFile(task *Task) *TaskResponse {
 	}
 	defer file.Close()
 
-	var content strings.Builder
 	scanner := bufio.NewScanner(file)
+	var content strings.Builder
 	lineNum := 0
 	linesRead := 0
 	skippedLines := 0
@@ -262,8 +259,7 @@ func (e *Executor) executeReadFile(task *Task) *TaskResponse {
 	// Redact secrets from the actual content for LLM
 	actualContent := e.redactSecrets(result.String())
 
-	// Add SHA hash for LOOM_EDIT compatibility
-	contentWithSHA := fmt.Sprintf("File: %s\nSHA: %s\nLines: %d\n\n%s", task.Path, fileSHA, totalLines, actualContent)
+	contentWithSHA := fmt.Sprintf("File: %s\nLines: %d\n\n%s", task.Path, totalLines, actualContent)
 
 	// Store actual content for LLM (will be used internally)
 	response.ActualContent = contentWithSHA
@@ -273,11 +269,11 @@ func (e *Executor) executeReadFile(task *Task) *TaskResponse {
 	// Enhanced status message for user
 	var statusMsg string
 	if task.StartLine > 0 || task.EndLine > 0 {
-		statusMsg = fmt.Sprintf("Reading file: %s (lines %d-%d, %d lines read, %d total lines, SHA: %s)",
-			task.Path, startLine, lastLineRead, linesRead, totalLines, fileSHA)
+		statusMsg = fmt.Sprintf("Reading file: %s (lines %d-%d, %d lines read, %d total lines)",
+			task.Path, startLine, lastLineRead, linesRead, totalLines)
 	} else {
-		statusMsg = fmt.Sprintf("Reading file: %s (%d lines read, %d total lines, SHA: %s)",
-			task.Path, linesRead, totalLines, fileSHA)
+		statusMsg = fmt.Sprintf("Reading file: %s (%d lines read, %d total lines)",
+			task.Path, linesRead, totalLines)
 	}
 
 	if remainingLines > 0 {
@@ -327,14 +323,14 @@ func (e *Executor) applyLoomEdit(task *Task, fullPath string) *TaskResponse {
 	// Parse the LOOM_EDIT command from the task content
 	editCmd, err := loom_edit.ParseEditCommand(task.Content)
 	if err != nil {
-		response.Error = fmt.Sprintf("Failed to parse LOOM_EDIT command: %v\n\nPlease ensure your LOOM_EDIT command follows the correct format:\n>>LOOM_EDIT file=path v=sha ACTION start-end\n#OLD_HASH:hash\nnew content\n<<LOOM_EDIT", err)
+		response.Error = fmt.Sprintf("Failed to parse LOOM_EDIT command: %v\n\nPlease ensure your LOOM_EDIT command follows the correct format:\n>>LOOM_EDIT file=path v=sha ACTION start-end\nnew content\n<<LOOM_EDIT", err)
 		return response
 	}
 
 	// Apply the edit using the loom_edit module
 	err = loom_edit.ApplyEdit(fullPath, editCmd)
 	if err != nil {
-		response.Error = fmt.Sprintf("Failed to apply LOOM_EDIT: %v\n\nThis could be due to:\n- File SHA mismatch (file was modified since you read it)\n- Invalid line numbers\n- Old slice hash mismatch (target lines have changed)\n\nPlease READ the file again to get the current state and try again.", err)
+		response.Error = fmt.Sprintf("Failed to apply LOOM_EDIT: %v\n\nThis could be due to:\n- File SHA mismatch (file was modified since you read it)\n- Invalid line numbers\n\nPlease READ the file again to get the current state and try again.", err)
 		return response
 	}
 
