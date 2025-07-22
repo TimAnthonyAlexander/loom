@@ -15,6 +15,9 @@ type CompletionDetector struct {
 	objectiveSet          bool
 	objectiveChangeCount  int
 	allowObjectiveChanges bool
+	// Context tracking to detect responses to completion checks
+	lastCompletionCheckSent bool
+	lastPromptWasCheck      bool
 }
 
 // ObjectiveValidationResult represents the result of objective validation
@@ -50,6 +53,10 @@ func NewCompletionDetector() *CompletionDetector {
 		regexp.MustCompile(`(?i)\bno\s+(?:further|additional|more)\s+(?:action|work|tasks|steps)\s+(?:is\s+)?(?:required|needed)`),
 		regexp.MustCompile(`(?i)\b(?:ready\s+)?(?:for\s+)?(?:review|testing|deployment|use)`),
 		regexp.MustCompile(`(?i)\ball\s+(?:requirements|specifications|features)\s+(?:have\s+been\s+)?(?:met|implemented|satisfied)`),
+		// Context-specific completion patterns (longer YES responses that are unambiguous)
+		regexp.MustCompile(`^(?i)\s*YES,?\s+(?:the\s+)?(?:objective|task|work)\s+is\s+complete`),
+		regexp.MustCompile(`^(?i)\s*YES,?\s+(?:all\s+)?(?:work|tasks)\s+(?:is|are)\s+(?:finished|done|complete)`),
+		regexp.MustCompile(`(?i)^YES.*(?:complete|finished|done).*$`),
 	}
 
 	// Patterns that indicate work is still in progress
@@ -64,6 +71,9 @@ func NewCompletionDetector() *CompletionDetector {
 		regexp.MustCompile(`(?i)\b(?:let\s+me|i'll|i\s+will)\s+(?:also\s+)?(?:add|implement|create|modify|continue)`),
 		regexp.MustCompile(`(?i)\b(?:additionally|furthermore|moreover)\b`),
 		regexp.MustCompile(`(?i)\b(?:remaining|pending)\s+(?:work|tasks|steps)`),
+		// Context-specific incomplete patterns (longer NO responses that are unambiguous)
+		regexp.MustCompile(`^(?i)\s*NO,?\s+(?:more|additional)\s+work\s+(?:is\s+)?(?:needed|required)`),
+		regexp.MustCompile(`(?i)^NO.*(?:still|more|additional|remaining).*$`),
 	}
 
 	return &CompletionDetector{
@@ -80,6 +90,24 @@ func (cd *CompletionDetector) IsComplete(response string) bool {
 	}
 
 	cleanResponse := strings.TrimSpace(response)
+
+	// Check if this is a response to a completion check
+	if cd.lastPromptWasCheck {
+		completionDebugLog("Evaluating response to completion check")
+		// Reset the flag after use
+		cd.lastPromptWasCheck = false
+
+		// For completion check responses, prioritize YES/NO detection
+		if cd.isCompletionCheckResponse(cleanResponse) {
+			completionDebugLog("Found completion check response indicating completion")
+			return true
+		}
+
+		if cd.isIncompleteCheckResponse(cleanResponse) {
+			completionDebugLog("Found completion check response indicating more work needed")
+			return false
+		}
+	}
 
 	// First check for explicit incomplete signals
 	for _, pattern := range cd.incompletePatterns {
@@ -192,8 +220,73 @@ func (cd *CompletionDetector) hasFutureTense(response string) bool {
 	return false
 }
 
+// isCompletionCheckResponse checks if response indicates completion in response to a direct check
+func (cd *CompletionDetector) isCompletionCheckResponse(response string) bool {
+	// Trim and normalize response
+	trimmed := strings.TrimSpace(response)
+	if len(trimmed) == 0 {
+		return false
+	}
+
+	// Check for simple YES responses
+	if strings.ToUpper(trimmed) == "YES" {
+		return true
+	}
+
+	// Check for YES with additional completion text
+	patterns := []string{
+		`^(?i)\s*YES\s*[,.]?\s*(?:the\s+)?(?:objective|task|work)\s+is\s+complete`,
+		`^(?i)\s*YES\s*[,.]?\s*(?:all\s+)?(?:work|tasks)\s+(?:is|are)\s+(?:finished|done|complete)`,
+		`^(?i)\s*YES\s*[,.]?\s*(?:everything|all)\s+(?:is\s+)?(?:finished|done|complete)`,
+		`^(?i)\s*YES\s*[,.]?\s*(?:i've|i\s+have)\s+(?:finished|completed|done)`,
+		`^(?i)\s*YES\s*[,.]?\s*(?:no\s+)?(?:further|additional|more)\s+work\s+(?:is\s+)?(?:needed|required)`,
+	}
+
+	for _, pattern := range patterns {
+		if matched, _ := regexp.MatchString(pattern, trimmed); matched {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isIncompleteCheckResponse checks if response indicates work is not complete in response to a direct check
+func (cd *CompletionDetector) isIncompleteCheckResponse(response string) bool {
+	// Trim and normalize response
+	trimmed := strings.TrimSpace(response)
+	if len(trimmed) == 0 {
+		return false
+	}
+
+	// Check for simple NO responses
+	if strings.ToUpper(trimmed) == "NO" {
+		return true
+	}
+
+	// Check for NO with additional explanation text
+	patterns := []string{
+		`^(?i)\s*NO\s*[,.]?\s*(?:more|additional|further)\s+work\s+(?:is\s+)?(?:needed|required)`,
+		`^(?i)\s*NO\s*[,.]?\s*(?:i\s+)?(?:still|also)\s+need\s+to`,
+		`^(?i)\s*NO\s*[,.]?\s*(?:there|i)\s+(?:is|are|have)\s+(?:still|more)`,
+		`^(?i)\s*NO\s*[,.]?\s*(?:not\s+)?(?:yet|quite|completely)\s+(?:finished|done|complete)`,
+	}
+
+	for _, pattern := range patterns {
+		if matched, _ := regexp.MatchString(pattern, trimmed); matched {
+			return true
+		}
+	}
+
+	return false
+}
+
 // GenerateCompletionCheckPrompt creates a comprehensive prompt to check if work is complete
 func (cd *CompletionDetector) GenerateCompletionCheckPrompt(userObjective string) string {
+	// Set flag to indicate we just sent a completion check
+	cd.lastPromptWasCheck = true
+	cd.lastCompletionCheckSent = true
+
 	if userObjective != "" {
 		return `COMPLETION_CHECK: Has your stated objective been fully achieved?
 
@@ -381,7 +474,16 @@ func (cd *CompletionDetector) ResetObjective() {
 	cd.originalObjective = ""
 	cd.objectiveSet = false
 	cd.objectiveChangeCount = 0
+	cd.lastCompletionCheckSent = false
+	cd.lastPromptWasCheck = false
 	completionDebugLog("🎯 Objective tracking reset")
+}
+
+// ResetContext resets only the context tracking flags (for new user inputs)
+func (cd *CompletionDetector) ResetContext() {
+	cd.lastCompletionCheckSent = false
+	cd.lastPromptWasCheck = false
+	completionDebugLog("🔄 Context tracking reset")
 }
 
 // FormatObjectiveWarning creates a warning message for objective changes

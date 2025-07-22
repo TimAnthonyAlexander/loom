@@ -1062,6 +1062,10 @@ func (m *model) sendToLLMWithTasks(userInput string) tea.Cmd {
 			m.objectiveExtracted = false
 			m.completionCheckCount = 0
 			m.recursiveDepth = 0
+			// Reset context tracking for the completion detector
+			if m.completionDetector != nil {
+				m.completionDetector.ResetContext()
+			}
 		}
 
 		// Refresh display messages from chat session
