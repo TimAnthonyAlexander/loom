@@ -285,3 +285,174 @@ func TestInsertBeforeOperation(t *testing.T) {
 		t.Errorf("INSERT_BEFORE failed.\nGot:\n%s\nExpected:\n%s", string(result), expected)
 	}
 }
+
+func TestNewlineNormalization(t *testing.T) {
+	testCases := []struct {
+		name            string
+		originalContent string
+		newText         string
+		expectedResult  string
+	}{
+		{
+			name:            "crlf_to_lf",
+			originalContent: "line1\r\nline2\r\nline3\r\n",
+			newText:         "replaced line",
+			expectedResult:  "replaced line\nline2\nline3\n",
+		},
+		{
+			name:            "mixed_line_endings",
+			originalContent: "line1\r\nline2\nline3\r",
+			newText:         "replaced\r\nwith\rmixed",
+			expectedResult:  "replaced\nwith\nmixed\nline2\nline3\n",
+		},
+		{
+			name:            "cr_only",
+			originalContent: "line1\rline2\rline3\r",
+			newText:         "new line",
+			expectedResult:  "new line\nline2\nline3\n",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create temporary file with original content
+			tmpDir := t.TempDir()
+			tmpFile := filepath.Join(tmpDir, "test.txt")
+			err := ioutil.WriteFile(tmpFile, []byte(tc.originalContent), 0644)
+			if err != nil {
+				t.Fatalf("Failed to write temp file: %v", err)
+			}
+
+			// Normalize for SHA calculation
+			normalizedOriginal := strings.ReplaceAll(tc.originalContent, "\r\n", "\n")
+			normalizedOriginal = strings.ReplaceAll(normalizedOriginal, "\r", "\n")
+
+			lines := strings.Split(normalizedOriginal, "\n")
+			oldSlice := lines[0:1] // First line
+			oldHash := HashContent(strings.Join(oldSlice, "\n"))
+
+			cmd := &EditCommand{
+				File:    "test.txt",
+				FileSHA: HashContent(normalizedOriginal),
+				Action:  "REPLACE",
+				Start:   1,
+				End:     1,
+				OldHash: oldHash,
+				NewText: tc.newText,
+			}
+
+			err = ApplyEdit(tmpFile, cmd)
+			if err != nil {
+				t.Fatalf("Failed to apply edit: %v", err)
+			}
+
+			result, err := ioutil.ReadFile(tmpFile)
+			if err != nil {
+				t.Fatalf("Failed to read result: %v", err)
+			}
+
+			if string(result) != tc.expectedResult {
+				t.Errorf("Normalization failed.\nGot:\n%q\nExpected:\n%q", string(result), tc.expectedResult)
+			}
+		})
+	}
+}
+
+func TestTrailingNewlinePreservation(t *testing.T) {
+	testCases := []struct {
+		name            string
+		originalContent string
+		action          string
+		newText         string
+		expectedEnding  string
+	}{
+		{
+			name:            "preserve_trailing_newline",
+			originalContent: "line1\nline2\nline3\n",
+			action:          "REPLACE",
+			newText:         "replaced",
+			expectedEnding:  "\n",
+		},
+		{
+			name:            "preserve_no_trailing_newline",
+			originalContent: "line1\nline2\nline3",
+			action:          "REPLACE",
+			newText:         "replaced",
+			expectedEnding:  "",
+		},
+		{
+			name:            "insert_preserves_trailing_newline",
+			originalContent: "line1\nline2\n",
+			action:          "INSERT_AFTER",
+			newText:         "inserted",
+			expectedEnding:  "\n",
+		},
+		{
+			name:            "delete_preserves_no_trailing_newline",
+			originalContent: "line1\nline2\nline3",
+			action:          "DELETE",
+			newText:         "",
+			expectedEnding:  "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create temporary file
+			tmpDir := t.TempDir()
+			tmpFile := filepath.Join(tmpDir, "test.txt")
+			err := ioutil.WriteFile(tmpFile, []byte(tc.originalContent), 0644)
+			if err != nil {
+				t.Fatalf("Failed to write temp file: %v", err)
+			}
+
+			lines := strings.Split(tc.originalContent, "\n")
+			var oldSlice []string
+			var start, end int
+
+			switch tc.action {
+			case "REPLACE":
+				start, end = 1, 1
+				oldSlice = lines[0:1]
+			case "INSERT_AFTER":
+				start, end = 1, 1
+				oldSlice = lines[0:1]
+			case "DELETE":
+				start, end = 3, 3
+				oldSlice = lines[2:3]
+			}
+
+			oldHash := HashContent(strings.Join(oldSlice, "\n"))
+
+			cmd := &EditCommand{
+				File:    "test.txt",
+				FileSHA: HashContent(tc.originalContent),
+				Action:  tc.action,
+				Start:   start,
+				End:     end,
+				OldHash: oldHash,
+				NewText: tc.newText,
+			}
+
+			err = ApplyEdit(tmpFile, cmd)
+			if err != nil {
+				t.Fatalf("Failed to apply edit: %v", err)
+			}
+
+			result, err := ioutil.ReadFile(tmpFile)
+			if err != nil {
+				t.Fatalf("Failed to read result: %v", err)
+			}
+
+			actualEnding := ""
+			if strings.HasSuffix(string(result), "\n") {
+				actualEnding = "\n"
+			}
+
+			if actualEnding != tc.expectedEnding {
+				t.Errorf("Trailing newline not preserved.\nExpected ending: %q\nActual ending: %q\nFull result: %q",
+					tc.expectedEnding, actualEnding, string(result))
+			}
+		})
+	}
+}

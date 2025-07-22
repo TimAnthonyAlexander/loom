@@ -107,14 +107,23 @@ func ApplyEdit(filePath string, cmd *EditCommand) error {
 		return fmt.Errorf("failed to read file: %v", err)
 	}
 
-	// Validate file SHA
-	currentFileSHA := HashContent(string(content))
+	// Normalize line endings to LF and detect trailing newline
+	contentStr := strings.ReplaceAll(string(content), "\r\n", "\n")
+	contentStr = strings.ReplaceAll(contentStr, "\r", "\n")
+	hasFinalNewline := strings.HasSuffix(contentStr, "\n")
+
+	// Validate file SHA (using normalized content)
+	currentFileSHA := HashContent(contentStr)
 	if currentFileSHA != cmd.FileSHA {
 		return fmt.Errorf("file SHA mismatch: expected %s, got %s", cmd.FileSHA, currentFileSHA)
 	}
 
-	// Split content into lines
-	lines := strings.Split(string(content), "\n")
+	// Split content into lines (using normalized content)
+	lines := strings.Split(contentStr, "\n")
+
+	// Normalize newlines in the new text
+	normalizedNewText := strings.ReplaceAll(cmd.NewText, "\r\n", "\n")
+	normalizedNewText = strings.ReplaceAll(normalizedNewText, "\r", "\n")
 
 	// Validate line range
 	if cmd.Start < 1 || cmd.Start > len(lines) {
@@ -146,24 +155,24 @@ func ApplyEdit(filePath string, cmd *EditCommand) error {
 	case "REPLACE":
 		// Replace lines Start through End with NewText
 		newLines = append(newLines, lines[:cmd.Start-1]...)
-		if cmd.NewText != "" {
-			newLines = append(newLines, strings.Split(cmd.NewText, "\n")...)
+		if normalizedNewText != "" {
+			newLines = append(newLines, strings.Split(normalizedNewText, "\n")...)
 		}
 		newLines = append(newLines, lines[cmd.End:]...)
 
 	case "INSERT_AFTER":
 		// Insert NewText after line Start
 		newLines = append(newLines, lines[:cmd.Start]...)
-		if cmd.NewText != "" {
-			newLines = append(newLines, strings.Split(cmd.NewText, "\n")...)
+		if normalizedNewText != "" {
+			newLines = append(newLines, strings.Split(normalizedNewText, "\n")...)
 		}
 		newLines = append(newLines, lines[cmd.Start:]...)
 
 	case "INSERT_BEFORE":
 		// Insert NewText before line Start
 		newLines = append(newLines, lines[:cmd.Start-1]...)
-		if cmd.NewText != "" {
-			newLines = append(newLines, strings.Split(cmd.NewText, "\n")...)
+		if normalizedNewText != "" {
+			newLines = append(newLines, strings.Split(normalizedNewText, "\n")...)
 		}
 		newLines = append(newLines, lines[cmd.Start-1:]...)
 
@@ -178,6 +187,14 @@ func ApplyEdit(filePath string, cmd *EditCommand) error {
 
 	// Write the modified content back to file
 	newContent := strings.Join(newLines, "\n")
+
+	// Preserve original trailing newline behavior
+	if hasFinalNewline && !strings.HasSuffix(newContent, "\n") {
+		newContent += "\n"
+	} else if !hasFinalNewline && strings.HasSuffix(newContent, "\n") {
+		newContent = strings.TrimSuffix(newContent, "\n")
+	}
+
 	err = ioutil.WriteFile(filePath, []byte(newContent), 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write file: %v", err)

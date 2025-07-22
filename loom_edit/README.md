@@ -83,6 +83,21 @@ Computes SHA-1 hash of content for validation.
 2. **Slice hash validation** - Ensures the target lines haven't changed
 3. **Range validation** - Checks line numbers are within bounds
 4. **Deterministic operations** - Each action has explicit, unambiguous semantics
+5. **Newline normalization** - Handles CRLF, LF, and mixed line endings consistently
+6. **Trailing newline preservation** - Maintains original file's trailing newline behavior
+
+## Robustness Features
+
+### Cross-Platform Line Ending Support
+The module automatically normalizes different line ending formats:
+- Windows (`\r\n`) → Unix (`\n`)
+- Classic Mac (`\r`) → Unix (`\n`) 
+- Mixed line endings are handled consistently
+
+This prevents hash mismatches and parsing errors when working with files from different platforms.
+
+### Trailing Newline Preservation
+Files ending with a newline character maintain that behavior after editing. Files without trailing newlines keep that format. This ensures compatibility with POSIX tools and maintains the original file's formatting conventions.
 
 ## Testing
 
