@@ -400,21 +400,14 @@ func (s *Session) filterJSONTaskBlocks(content string) string {
 	var taskDescriptions []string
 
 	taskPattern := regexp.MustCompile(`^🔧\s+(READ|EDIT|LIST|RUN)\s+(.+)`)
-	simplePattern := regexp.MustCompile(`(?i)^(read|edit|list|run)\s+(.+)`)
+	// Remove the overly broad simplePattern that incorrectly matches natural language
+	// Only match the explicit task format with 🔧 prefix
 
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 
-		// Check for natural language tasks
+		// Check for natural language tasks (only the explicit 🔧 format)
 		if matches := taskPattern.FindStringSubmatch(trimmed); len(matches) == 3 {
-			taskType := strings.ToUpper(matches[1])
-			taskArgs := strings.TrimSpace(matches[2])
-			desc := formatNaturalLanguageTaskDescription(taskType, taskArgs)
-			taskDescriptions = append(taskDescriptions, desc)
-			continue // Skip this line in output
-		}
-
-		if matches := simplePattern.FindStringSubmatch(trimmed); len(matches) == 3 {
 			taskType := strings.ToUpper(matches[1])
 			taskArgs := strings.TrimSpace(matches[2])
 			desc := formatNaturalLanguageTaskDescription(taskType, taskArgs)
