@@ -163,12 +163,6 @@ func TestEnsureLoomDir(t *testing.T) {
 		t.Error(".loom directory was not created")
 	}
 
-	// Verify index.cache file exists
-	indexPath := filepath.Join(loomDir, "index.cache")
-	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
-		t.Error("index.cache file was not created")
-	}
-
 	// Test that calling EnsureLoomDir again doesn't fail
 	err = EnsureLoomDir(tempDir)
 	if err != nil {

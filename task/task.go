@@ -208,6 +208,16 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 					}
 				}
 
+				// For MEMORY tasks, look for content on subsequent lines if not already set
+				if task.Type == TaskTypeMemory && task.MemoryContent == "" {
+					if content := extractMemoryContent(lines, i+1); content != "" {
+						task.MemoryContent = content
+						if debugTaskParsing {
+							fmt.Printf("DEBUG: Found memory content on subsequent lines\n")
+						}
+					}
+				}
+
 				// Create unique key for duplicate detection
 				taskKey := fmt.Sprintf("%s:%s", task.Type, task.Path)
 				if !seenTasks[taskKey] {
@@ -221,7 +231,7 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 		}
 	}
 
-	// Also look for simpler patterns without emoji
+	// Also look for simpler patterns without emoji, but be more restrictive to avoid conversational text
 	simplePattern := regexp.MustCompile(`(?i)^(read|edit|list|run|search|memory)\s+(.+)`)
 
 	for i, line := range lines {
@@ -231,6 +241,11 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 		if len(matches) == 3 {
 			taskType := strings.ToUpper(matches[1])
 			taskArgs := strings.TrimSpace(matches[2])
+
+			// Skip lines that look like conversational text rather than commands
+			if isConversationalText(line, taskType, taskArgs) {
+				continue
+			}
 
 			task := parseNaturalLanguageTask(taskType, taskArgs)
 			if task != nil {
@@ -248,6 +263,16 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 							task.Content = content
 							if debugTaskParsing {
 								fmt.Printf("DEBUG: Found direct content for simple edit task\n")
+							}
+						}
+					}
+
+					// For MEMORY tasks, look for content on subsequent lines if not already set
+					if task.Type == TaskTypeMemory && task.MemoryContent == "" {
+						if content := extractMemoryContent(lines, i+1); content != "" {
+							task.MemoryContent = content
+							if debugTaskParsing {
+								fmt.Printf("DEBUG: Found memory content on subsequent lines (simple pattern)\n")
 							}
 						}
 					}
@@ -685,23 +710,106 @@ func parseMemoryTask(args string) *Task {
 	// - "get user-preferences"
 	// - "list"
 	// - "list active:true"
+	// - "\"memory-id\": content" (defaults to create)
+	// - "\"memory-id\" content:\"some content\"" (defaults to create)
+
+	// Handle literal \n sequences in the input
+	args = strings.ReplaceAll(args, "\\n", "\n")
+
+	// Check for colon-separated format: "memory-id": content
+	// This should only match when the format is like '"id": content' or 'id: content'
+	// and NOT match 'content:"value"' patterns
+	colonIndex := strings.Index(args, ":")
+	if colonIndex > 0 {
+		// Extract the memory ID part (before colon)
+		idPart := strings.TrimSpace(args[:colonIndex])
+
+		// Only use colon format if:
+		// 1. The part before colon doesn't contain spaces (except within quotes), OR
+		// 2. The part before colon is fully quoted
+		isQuotedID := len(idPart) >= 2 && ((idPart[0] == '"' && idPart[len(idPart)-1] == '"') ||
+			(idPart[0] == '\'' && idPart[len(idPart)-1] == '\''))
+
+		// Check if this looks like a simple ID followed by colon (not a content: prefix)
+		containsSpaceOutsideQuotes := false
+		if !isQuotedID {
+			// For unquoted strings, check if there are spaces (which would indicate multiple args)
+			containsSpaceOutsideQuotes = strings.Contains(idPart, " ")
+		}
+
+		// Only treat as colon format if it's a simple quoted ID or unquoted ID without spaces
+		if isQuotedID || !containsSpaceOutsideQuotes {
+			contentPart := strings.TrimSpace(args[colonIndex+1:])
+
+			// Remove quotes from ID if present
+			if isQuotedID {
+				idPart = idPart[1 : len(idPart)-1]
+			}
+
+			// Clean up content - remove leading/trailing whitespace and normalize newlines
+			contentPart = strings.TrimSpace(contentPart)
+			// Handle cases where content starts with a newline or dash
+			contentPart = strings.TrimLeft(contentPart, "\n\r")
+			contentPart = strings.TrimSpace(contentPart)
+
+			// Default to create operation for colon format
+			task.MemoryOperation = "create"
+			task.MemoryID = idPart
+			task.MemoryContent = contentPart
+			return task
+		}
+	}
 
 	parts := parseQuotedArgs(args)
 	if len(parts) == 0 {
 		return nil
 	}
 
-	// First part is the operation
-	operation := strings.ToLower(parts[0])
+	// Check if first part is a valid operation
+	firstPart := strings.ToLower(parts[0])
+	validOperations := []string{"create", "update", "delete", "get", "list"}
+	isValidOperation := false
+	for _, op := range validOperations {
+		if firstPart == op {
+			isValidOperation = true
+			break
+		}
+	}
+
+	var operation string
+	var memoryIDIndex int
+
+	if isValidOperation {
+		// First part is the operation
+		operation = firstPart
+		memoryIDIndex = 1
+	} else {
+		// First part is the memory ID, default to create operation
+		operation = "create"
+		memoryIDIndex = 0
+	}
+
 	task.MemoryOperation = operation
 
-	// For operations other than list, second part is the memory ID
-	if operation != "list" && len(parts) > 1 {
-		task.MemoryID = parts[1]
+	// For operations other than list, extract the memory ID
+	if operation != "list" && len(parts) > memoryIDIndex {
+		memoryID := parts[memoryIDIndex]
+		// Remove quotes if present
+		if len(memoryID) >= 2 {
+			if (strings.HasPrefix(memoryID, "\"") && strings.HasSuffix(memoryID, "\"")) ||
+				(strings.HasPrefix(memoryID, "'") && strings.HasSuffix(memoryID, "'")) {
+				memoryID = memoryID[1 : len(memoryID)-1]
+			}
+		}
+		task.MemoryID = memoryID
 	}
 
 	// Parse additional options
-	for i := 2; i < len(parts); i++ {
+	optionsStartIndex := memoryIDIndex + 1
+	if operation == "list" {
+		optionsStartIndex = memoryIDIndex
+	}
+	for i := optionsStartIndex; i < len(parts); i++ {
 		part := parts[i]
 
 		switch {
@@ -751,8 +859,8 @@ func parseMemoryTask(args string) *Task {
 	// if not already specified with content: prefix
 	if task.MemoryContent == "" && (operation == "create" || operation == "update") {
 		// Look for content in the remaining arguments
-		if len(parts) > 2 {
-			contentParts := parts[2:]
+		if len(parts) > optionsStartIndex {
+			contentParts := parts[optionsStartIndex:]
 			// Skip parts that are options (contain colons)
 			var contentWords []string
 			for _, part := range contentParts {
@@ -812,6 +920,82 @@ func parseQuotedArgs(input string) []string {
 	}
 
 	return args
+}
+
+// isConversationalText checks if a line that matches a command pattern is actually conversational text
+func isConversationalText(line, taskType, taskArgs string) bool {
+	// Convert to lowercase for pattern matching
+	lowerLine := strings.ToLower(line)
+	lowerArgs := strings.ToLower(taskArgs)
+
+	// Exclude lines that end with exclamation marks (conversational tone)
+	if strings.HasSuffix(strings.TrimSpace(line), "!") {
+		return true
+	}
+
+	// Exclude lines containing typical completion/status words
+	conversationalWords := []string{
+		"saved!", "created!", "completed!", "successfully!", "finished!",
+		"saved", "created successfully", "completed successfully", "finished successfully",
+		"usage of", "performance of", "behavior of", "implementation of",
+		"i'll remember", "has been", "will be", "let me", "i can",
+	}
+
+	for _, word := range conversationalWords {
+		if strings.Contains(lowerLine, word) {
+			return true
+		}
+	}
+
+	// For MEMORY specifically, exclude typical conversational patterns
+	if taskType == "MEMORY" {
+		memoryConversationalPatterns := []string{
+			"saved!", "created", "stored", "remembered", "updated successfully",
+			"usage", "allocation", "leak", "consumption", "performance",
+		}
+
+		for _, pattern := range memoryConversationalPatterns {
+			if strings.Contains(lowerArgs, pattern) {
+				return true
+			}
+		}
+
+		// If the args start with typical conversational words, it's probably not a command
+		if strings.HasPrefix(lowerArgs, "saved") ||
+			strings.HasPrefix(lowerArgs, "created") ||
+			strings.HasPrefix(lowerArgs, "updated") ||
+			strings.HasPrefix(lowerArgs, "stored") {
+			return true
+		}
+	}
+
+	// For EDIT specifically, exclude completion messages
+	if taskType == "EDIT" {
+		editConversationalPatterns := []string{
+			"completed", "finished", "successful", "done", "applied",
+			"has been updated", "has been modified", "has been changed",
+		}
+
+		for _, pattern := range editConversationalPatterns {
+			if strings.Contains(lowerArgs, pattern) {
+				return true
+			}
+		}
+	}
+
+	// Additional heuristic: if the args contain common sentence patterns, it's conversational
+	sentencePatterns := []string{
+		"i'll", "i will", "this is", "this has", "the file", "the memory",
+		"has been", "will be", "it is", "it has", "we should", "you can",
+	}
+
+	for _, pattern := range sentencePatterns {
+		if strings.Contains(lowerArgs, pattern) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // isLikelyInteractiveCommand checks if a command typically requires user interaction
@@ -1013,6 +1197,69 @@ func extractContentFromCodeBlock(lines []string, startIdx int) string {
 				return strings.Join(content, "\n")
 			}
 		}
+	}
+
+	return ""
+}
+
+// extractMemoryContent looks for memory content on subsequent lines after a MEMORY command
+func extractMemoryContent(lines []string, startIdx int) string {
+	if startIdx >= len(lines) {
+		return ""
+	}
+
+	var content []string
+
+	// Look for content on the next few lines
+	for i := startIdx; i < len(lines) && i < startIdx+5; i++ {
+		line := lines[i]
+		trimmedLine := strings.TrimSpace(line)
+
+		// Stop if we encounter another task directive
+		taskPattern := regexp.MustCompile(`^🔧\s+(READ|EDIT|LIST|RUN|SEARCH|MEMORY)\s+`)
+		if taskPattern.MatchString(trimmedLine) {
+			break
+		}
+
+		// Stop if we encounter what looks like another major section
+		if strings.HasPrefix(trimmedLine, "#") || strings.HasPrefix(trimmedLine, "---") {
+			break
+		}
+
+		// Stop if we encounter explanatory text (sentences that explain what will happen)
+		if strings.Contains(strings.ToLower(trimmedLine), "this will") ||
+			strings.Contains(strings.ToLower(trimmedLine), "this helps") ||
+			strings.Contains(strings.ToLower(trimmedLine), "let me") ||
+			strings.Contains(strings.ToLower(trimmedLine), "i'll") ||
+			strings.Contains(strings.ToLower(trimmedLine), "remember key details") {
+			break
+		}
+
+		// Skip empty lines at the beginning
+		if len(content) == 0 && trimmedLine == "" {
+			continue
+		}
+
+		// Stop after we encounter an empty line (end of memory content block)
+		if len(content) > 0 && trimmedLine == "" {
+			break
+		}
+
+		// Include this line as memory content
+		content = append(content, line)
+
+		// For memory content, we typically want just one meaningful line
+		// Stop after we get the first substantive content line
+		if len(content) >= 1 && trimmedLine != "" {
+			break
+		}
+	}
+
+	if len(content) > 0 {
+		// Join the lines and clean up
+		fullContent := strings.Join(content, "\n")
+		fullContent = strings.TrimSpace(fullContent)
+		return fullContent
 	}
 
 	return ""

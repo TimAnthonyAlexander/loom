@@ -3,6 +3,7 @@ package llm
 import (
 	"encoding/json"
 	"loom/indexer"
+	"loom/paths"
 	"os"
 	"path/filepath"
 	"testing"
@@ -191,12 +192,6 @@ func TestProjectRulesFileFormat(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Create .loom directory
-	loomDir := filepath.Join(tempDir, ".loom")
-	if err := os.MkdirAll(loomDir, 0755); err != nil {
-		t.Fatalf("Failed to create .loom dir: %v", err)
-	}
-
 	// Create a simple index for testing
 	idx := indexer.NewIndex(tempDir, 500*1024)
 	enhancer := NewPromptEnhancer(tempDir, idx)
@@ -210,8 +205,12 @@ func TestProjectRulesFileFormat(t *testing.T) {
 		t.Fatalf("Failed to add project rule: %v", err)
 	}
 
-	// Read the raw file and verify JSON format
-	rulesPath := filepath.Join(tempDir, ".loom", "rules.json")
+	// Read the raw file and verify JSON format (using correct path via paths package)
+	projectPaths, err := paths.NewProjectPaths(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create project paths: %v", err)
+	}
+	rulesPath := projectPaths.RulesPath()
 	data, err := os.ReadFile(rulesPath)
 	if err != nil {
 		t.Fatalf("Failed to read rules file: %v", err)
