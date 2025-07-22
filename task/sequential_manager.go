@@ -204,7 +204,7 @@ func (stm *SequentialTaskManager) CreateSequentialSystemMessage() llm.Message {
 	}
 }
 
-// createObjectiveSettingPrompt creates the initial objective-setting prompt
+// createObjectiveSettingPrompt creates the objective setting prompt
 func (stm *SequentialTaskManager) createObjectiveSettingPrompt() string {
 	return `You are Loom starting an OBJECTIVE-DRIVEN EXPLORATION.
 
@@ -216,27 +216,30 @@ Analyze the user's request and establish a clear exploration objective:
 2. **Begin First Task**: Immediately provide the first logical task
 3. **Stay Focused**: Keep the objective specific and achievable
 
-### 🔧 CRITICAL: Use Simple Task Commands:
+### 🔧 CRITICAL: Use LOOM_EDIT Format for File Editing:
 
-✅ **CORRECT** - Natural language format:
-🔧 READ README.md (max: 300 lines)
+✅ **CORRECT** - For reading files, use JSON format:
+{"type": "ReadFile", "path": "README.md", "max_lines": 300}
 
-✅ **Also supported** - Simple format:
-READ README.md
+✅ **CORRECT** - For editing files, use LOOM_EDIT format:
+>>LOOM_EDIT file=filename.go REPLACE 42-45
+new content here
+<<LOOM_EDIT
 
-**Much easier than JSON and more reliable!**
+✅ **CORRECT** - For other operations, use JSON format:
+{"type": "Search", "query": "IndexStats", "file_types": ["go"]}
 
 ### Available Task Types:
-- **READ**: Read file contents (🔧 READ filename.go)
-- **SEARCH**: Find code patterns (🔧 SEARCH "IndexStats" - USE THIS INSTEAD OF GREP!)
-- **LIST**: List directory contents (🔧 LIST . recursive)
-- **EDIT**: Create/modify files (🔧 EDIT filename.go -> changes)
-- **RUN**: Execute commands (🔧 RUN command)
+- **ReadFile**: Read file contents (JSON format)
+- **Search**: Find code patterns (JSON format) - USE THIS INSTEAD OF GREP!
+- **ListDir**: List directory contents (JSON format)
+- **EditFile**: Create/modify files (LOOM_EDIT format ONLY)
+- **RunShell**: Execute commands (JSON format)
 
 ### Example Response:
 OBJECTIVE: Understand this Go project's architecture and key components
 
-🔧 READ README.md (max: 300 lines)
+{"type": "ReadFile", "path": "README.md", "max_lines": 300}
 
 Set your objective and begin exploration immediately.`
 }
