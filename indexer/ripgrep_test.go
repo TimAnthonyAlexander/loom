@@ -22,11 +22,19 @@ func TestRgPath(t *testing.T) {
 		t.Errorf("Binary does not exist at returned path: %s", actualPath)
 	}
 
-	// Verify the binary is executable (check permissions)
+	// Verify the binary is executable (platform-specific check)
 	if info, err := os.Stat(actualPath); err == nil {
 		mode := info.Mode()
-		if mode&0111 == 0 { // Check if any execute bit is set
-			t.Errorf("Binary at %s is not executable (mode: %s)", actualPath, mode)
+		if runtime.GOOS == "windows" {
+			// On Windows, check for .exe extension instead of permission bits
+			if !strings.HasSuffix(strings.ToLower(actualPath), ".exe") {
+				t.Errorf("Binary at %s should have .exe extension on Windows", actualPath)
+			}
+		} else {
+			// On Unix-like systems, check executable permission bits
+			if mode&0111 == 0 { // Check if any execute bit is set
+				t.Errorf("Binary at %s is not executable (mode: %s)", actualPath, mode)
+			}
 		}
 	}
 
@@ -44,13 +52,13 @@ func TestRgPath(t *testing.T) {
 	t.Logf("✅ Ripgrep found and working at: %s", actualPath)
 	t.Logf("   Platform: %s", runtime.GOOS)
 
-	// Log which type of ripgrep installation we found
+	// Log which type of ripgrep installation we found (improved detection)
 	if strings.Contains(actualPath, "/usr/bin") || strings.Contains(actualPath, "/opt/homebrew/bin") || strings.Contains(actualPath, "Program Files") {
 		t.Logf("   Type: System-wide installation")
-	} else if strings.Contains(actualPath, "tmp") || strings.Contains(actualPath, "temp") {
+	} else if strings.Contains(actualPath, "tmp") || strings.Contains(actualPath, "temp") || strings.Contains(actualPath, "/T/") {
 		t.Logf("   Type: Embedded binary (extracted to temp)")
-	} else if strings.Contains(actualPath, "bin") {
-		t.Logf("   Type: Bundled binary")
+	} else if strings.Contains(actualPath, "bin") || strings.Contains(actualPath, "ripgrep-") {
+		t.Logf("   Type: Bundled/Downloaded binary")
 	} else {
 		t.Logf("   Type: Unknown")
 	}
