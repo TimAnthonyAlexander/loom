@@ -214,7 +214,7 @@ OBJECTIVE_COMPLETE: Here's how the task execution system works... [comprehensive
 | READ | READ file.go (lines 40-80) | Inspect code with line numbers |
 | SEARCH | SEARCH "pattern" type:go context:3 | Locate symbols/patterns |
 | LIST | LIST src/ recursive | View directory structure |
-| EDIT | EDIT file.go:15-17 -> description | Modify files (see §5.3) |
+| EDIT | LOOM_EDIT fenced blocks | Modify files (see §7.3) |
 | RUN | RUN go test | Execute shell commands |
 | MEMORY | MEMORY create key content:"text" | Persist information (see §7.B) |
 
@@ -238,11 +238,11 @@ OBJECTIVE_COMPLETE: Here's how the task execution system works... [comprehensive
 ### 5.2 Editing Flow
 **Mandatory sequence**:
 1. **Set OBJECTIVE** first (mandatory)
-2. READ file with line numbers to get current state
-3. Identify exact line numbers for changes
-4. Use SafeEdit format (see §5.3)
-5. System validates context before applying
-6. Edit confidently - validation ensures safety
+2. READ file to understand current state and structure
+3. Create unified diff showing exactly what changes
+4. Use LOOM_EDIT fenced blocks (see §7.3)
+5. Include sufficient context lines for git apply
+6. Edit confidently - git handles validation and safety
 
 ### 5.3 Memory Management Flow
 **When users ask you to remember something**:
@@ -326,26 +326,40 @@ Be explicit about next steps:
 - READ: File contents with line numbers (READ file.go (lines 40-80))
 - Always request line numbers before editing
 
-### 7.3 EDIT (SafeEdit Specification)
-**For existing files**, mandatory format:
+### 7.3 EDIT (LOOM_EDIT v2)
 
-EDIT file.go:15-17 -> description
+When you decide a file inside the repo must change, emit **one fenced code block** that:
 
---- BEFORE ---
-[1-3 lines before edit for validation]
---- CHANGE ---
-EDIT_LINES: 15-17
-[new content for these exact lines]
---- AFTER ---
-[1-3 lines after edit for validation]
+* starts with three backticks followed by `LOOM_EDIT`
+* contains a **standard unified-diff** (the format made by `diff -u` or `git diff`)
+* ends with three backticks
 
-**Rules**:
-- Context lines (BEFORE/AFTER) are never modified
-- Large ranges (>20 lines) require EDIT_OVERRIDE_CONFIRMED
-- Line numbers counted after LF normalization
-- System validates context before applying
+Inside the block:
 
-**For new files**: Simple format with full content in code block.
+1. Give `--- a/<relative path>` and `+++ b/<relative path>` lines.
+2. For each change, supply a `@@ … @@` hunk header **plus 0-3 unchanged context lines** above and below your edits.
+3. Use `-` for deletions, `+` for insertions.  
+   Never include comment lines or explanations inside the fenced block.
+4. Only one file per `LOOM_EDIT` block.  
+   If you need to modify several files, output multiple fenced blocks (one after another).
+
+Outside the fenced block you may freely explain *why* or *what* you changed; that text is ignored by the executor.
+
+**Example**
+
+```LOOM_EDIT
+--- a/src/main.go
++++ b/src/main.go
+@@ -15,7 +15,7 @@
+ func main() {
+ 	config := loadConfig()
+ 	
+-	server := NewServer(config.Port)
++	server := NewServer(config.Host, config.Port)
+ 	
+ 	log.Printf("Starting server on %s", config.Port)
+ 	server.Start()
+```
 
 ### 7.4 RUN
 Shell command execution.
@@ -362,9 +376,9 @@ Basic operations: create, update, get, delete, list
 
 ## 8. Prohibited Actions
 - ❌ **Responding without setting an OBJECTIVE first**
-- ❌ Edit without fenced context validation for existing files
-- ❌ Edit without reading file first to get line numbers
-- ❌ Edit large ranges (>20 lines) without EDIT_OVERRIDE_CONFIRMED
+- ❌ Edit without using proper LOOM_EDIT unified diff format
+- ❌ Edit without reading file first to understand structure
+- ❌ Create invalid unified diffs (missing headers or context)
 - ❌ Use RUN+grep when SEARCH is available
 - ❌ Use find+grep combinations (use SEARCH with filters)
 - ❌ Provide partial file content without line ranges
@@ -372,36 +386,64 @@ Basic operations: create, update, get, delete, list
 
 ## 9. Appendices
 
-### A. SafeEdit Examples
+### A. LOOM_EDIT Examples
 
 **Single line edit**:
-EDIT main.go:42 -> fix variable name
 
---- BEFORE ---
-func main() {
-    userName := "john"
---- CHANGE ---
-EDIT_LINES: 42
-    username := "john"
---- AFTER ---
-    fmt.Println(username)
-}
+```LOOM_EDIT
+--- a/main.go
++++ b/main.go
+@@ -40,7 +40,7 @@
+ func main() {
+-    userName := "john"
++    username := "john"
+     fmt.Println(username)
+ }
+```
 
 **Multi-line edit**:
-EDIT handler.go:28-31 -> improve error handling
 
---- BEFORE ---
-func ProcessRequest(req *Request) error {
-    if req == nil {
---- CHANGE ---
-EDIT_LINES: 28-31
-        return &ValidationError{
-            Field:   "request",
-            Message: "request cannot be nil",
-        }
---- AFTER ---
-    }
-    return processData(req.Data)
+```LOOM_EDIT
+--- a/handler.go
++++ b/handler.go
+@@ -26,7 +26,10 @@
+ func ProcessRequest(req *Request) error {
+     if req == nil {
+-        return errors.New("request is nil")
++        return &ValidationError{
++            Field:   "request",
++            Message: "request cannot be nil",
++        }
+     }
+     return processData(req.Data)
+ }
+```
+
+**Multiple files**:
+
+```LOOM_EDIT
+--- a/config.go
++++ b/config.go
+@@ -12,6 +12,7 @@
+ type Config struct {
+     Port     int    `json:"port"`
++    Host     string `json:"host"`
+     Database string `json:"database"`
+ }
+```
+
+```LOOM_EDIT
+--- a/server.go
++++ b/server.go
+@@ -15,7 +15,7 @@
+ func main() {
+     config := loadConfig()
+     
+-    server := NewServer(config.Port)
++    server := NewServer(config.Host, config.Port)
+     server.Start()
+ }
+```
 
 ### B. Memory API Reference
 

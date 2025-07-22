@@ -33,6 +33,7 @@ type Executor struct {
 	gitIgnore           *indexer.GitIgnore
 	interactiveExecutor *InteractiveExecutor
 	memoryStore         *memory.MemoryStore
+	loomEditProcessor   *LoomEditProcessor
 }
 
 // NewExecutor creates a new task executor
@@ -50,6 +51,9 @@ func NewExecutor(workspacePath string, enableShell bool, maxFileSize int64) *Exe
 	// Create memory store
 	memoryStore := memory.NewMemoryStore(workspacePath)
 
+	// Create LOOM_EDIT processor
+	loomEditProcessor := NewLoomEditProcessor(workspacePath)
+
 	return &Executor{
 		workspacePath:       workspacePath,
 		enableShell:         enableShell,
@@ -57,6 +61,7 @@ func NewExecutor(workspacePath string, enableShell bool, maxFileSize int64) *Exe
 		gitIgnore:           gitIgnore,
 		interactiveExecutor: interactiveExecutor,
 		memoryStore:         memoryStore,
+		loomEditProcessor:   loomEditProcessor,
 	}
 }
 
@@ -2695,4 +2700,34 @@ func (e *Executor) executeMemory(task *Task) *TaskResponse {
 // GetMemoryStore returns the memory store for external access
 func (e *Executor) GetMemoryStore() *memory.MemoryStore {
 	return e.memoryStore
+}
+
+// ProcessLoomEditMessage processes a message that may contain LOOM_EDIT blocks
+func (e *Executor) ProcessLoomEditMessage(message string) (*LoomEditResponse, error) {
+	result, err := e.loomEditProcessor.ProcessMessage(message)
+	if err != nil {
+		return nil, err
+	}
+
+	response := &LoomEditResponse{
+		LoomEditResult: *result,
+		Success:        true,
+	}
+
+	if result.BlocksFound > 0 {
+		response.Message = fmt.Sprintf("Applied %d LOOM_EDIT blocks, edited %d files: %s", 
+			result.BlocksFound, len(result.FilesEdited), strings.Join(result.FilesEdited, ", "))
+	} else {
+		response.Message = "No LOOM_EDIT blocks found in message"
+	}
+
+	return response, nil
+}
+
+// LoomEditResponse contains the result of processing LOOM_EDIT blocks
+type LoomEditResponse struct {
+	LoomEditResult
+	Success bool
+	Message string
+	Error   string
 }
