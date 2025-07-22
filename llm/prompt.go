@@ -153,7 +153,50 @@ OBJECTIVE: [Clear, specific goal for what you plan to accomplish]
 - Prevents scope creep and endless exploration
 - Helps determine when work is finished
 
-## 3. Project-Specific Guidelines
+## 3. FOCUSED EXPLORATION WITHIN OBJECTIVES
+
+**✅ How to Explore While Staying Focused:**
+
+**Pattern 1: Progressive Investigation**
+Example:
+OBJECTIVE: Read and understand the README file
+
+🔧 READ README.md
+
+(After reading README) 
+Current focus: Understanding the dependencies section
+🔧 READ package.json
+
+(After reading package.json)
+Current focus: Checking build configuration  
+🔧 READ webpack.config.js
+
+OBJECTIVE_COMPLETE: I have fully read and understood the README file and its related configuration.
+
+**Pattern 2: Natural Context Expansion**
+Example:
+OBJECTIVE: Explain how the task execution system works
+
+🔧 READ task/executor.go
+🔧 SEARCH "Execute" type:go
+🔧 READ task/manager.go
+
+(Continue exploring task-related files until objective is complete)
+OBJECTIVE_COMPLETE: Here's how the task execution system works... [comprehensive explanation]
+
+**🚨 Anti-Patterns to Avoid:**
+❌ **WRONG**: "OBJECTIVE: Read README" → "OBJECTIVE: Analyze entire architecture"
+❌ **WRONG**: "OBJECTIVE: Fix bug X" → "OBJECTIVE: Refactor and document all features"  
+❌ **WRONG**: "OBJECTIVE: Explain feature Y" → "OBJECTIVE: Create complete project documentation"
+
+**✅ Correct Motivation Patterns:**
+- "Next, I'll check the configuration to better understand the README requirements"
+- "To fully explain this feature, I need to examine how it's implemented"  
+- "Let me read the related files to complete my understanding of this component"
+
+**Key Principle**: Your curiosity and thorough investigation are valuable - just channel them toward completing your current objective rather than changing it.
+
+## 4. Project-Specific Guidelines
 %[12]s
 
 %[8]s
@@ -164,7 +207,7 @@ OBJECTIVE: [Clear, specific goal for what you plan to accomplish]
 
 %[11]s
 
-## 4. Task Reference
+## 5. Task Reference
 
 | Task | Syntax | Purpose |
 |------|--------|---------|

@@ -10,9 +10,10 @@ import (
 
 // Manager orchestrates task execution and recursive chat loops
 type Manager struct {
-	executor    *Executor
-	llmAdapter  llm.LLMAdapter
-	chatSession ChatSession
+	executor           *Executor
+	llmAdapter         llm.LLMAdapter
+	chatSession        ChatSession
+	completionDetector *CompletionDetector // Add completion detector for objective tracking
 }
 
 // ChatSession interface for managing chat history
@@ -43,15 +44,44 @@ type TaskExecutionEvent struct {
 // NewManager creates a new task manager
 func NewManager(executor *Executor, llmAdapter llm.LLMAdapter, chatSession ChatSession) *Manager {
 	return &Manager{
-		executor:    executor,
-		llmAdapter:  llmAdapter,
-		chatSession: chatSession,
+		executor:           executor,
+		llmAdapter:         llmAdapter,
+		chatSession:        chatSession,
+		completionDetector: NewCompletionDetector(), // Initialize completion detector
 	}
 }
 
 // HandleLLMResponse processes an LLM response and executes any tasks found
 func (m *Manager) HandleLLMResponse(llmResponse string, eventChan chan<- TaskExecutionEvent) (*TaskExecution, error) {
-	// Parse tasks from LLM response
+	// STEP 1: Validate objective consistency
+	objectiveValidation := m.completionDetector.ValidateObjectiveConsistency(llmResponse)
+
+	// If objective changed, send warning and request correction
+	if !objectiveValidation.IsValid {
+		warningMessage := m.completionDetector.FormatObjectiveWarning(objectiveValidation)
+
+		// Add warning to chat to redirect LLM back to original objective
+		correctionMessage := llm.Message{
+			Role:      "system",
+			Content:   warningMessage,
+			Timestamp: time.Now(),
+		}
+
+		if err := m.chatSession.AddMessage(correctionMessage); err != nil {
+			fmt.Printf("Warning: failed to add objective correction to chat: %v\n", err)
+		}
+
+		// Create a special event to notify the UI about objective change
+		eventChan <- TaskExecutionEvent{
+			Type:    "objective_change_detected",
+			Message: fmt.Sprintf("Objective change detected: %s", objectiveValidation.ValidationError),
+		}
+
+		// Return without executing tasks to force LLM to correct course
+		return nil, fmt.Errorf("objective change detected - redirecting to original objective")
+	}
+
+	// STEP 2: Parse tasks from LLM response (original logic)
 	taskList, err := ParseTasks(llmResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse tasks: %w", err)
@@ -62,6 +92,7 @@ func (m *Manager) HandleLLMResponse(llmResponse string, eventChan chan<- TaskExe
 		return nil, nil
 	}
 
+	// STEP 3: Execute tasks (original logic continues...)
 	// Create execution session
 	execution := &TaskExecution{
 		Tasks:     taskList.Tasks,
@@ -389,6 +420,36 @@ func (m *Manager) createTaskSummary(execution *TaskExecution) string {
 		successCount, len(execution.Tasks)-successCount))
 
 	return summary.String()
+}
+
+// ResetObjectiveTracking resets objective tracking for a new conversation
+func (m *Manager) ResetObjectiveTracking() {
+	if m.completionDetector != nil {
+		m.completionDetector.ResetObjective()
+	}
+}
+
+// GetObjectiveStatus returns the current objective tracking status
+func (m *Manager) GetObjectiveStatus() (string, bool, int) {
+	if m.completionDetector != nil {
+		return m.completionDetector.GetObjectiveStatus()
+	}
+	return "", false, 0
+}
+
+// IsObjectiveComplete checks if the current objective is complete
+func (m *Manager) IsObjectiveComplete(response string) bool {
+	if m.completionDetector != nil {
+		return m.completionDetector.IsComplete(response)
+	}
+	return false
+}
+
+// AllowNewObjective allows setting a new objective (call after current one is complete)
+func (m *Manager) AllowNewObjective() {
+	if m.completionDetector != nil {
+		m.completionDetector.ResetObjective()
+	}
 }
 
 // GetTaskHistory returns formatted task history for display
