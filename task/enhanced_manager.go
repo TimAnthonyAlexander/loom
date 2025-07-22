@@ -41,7 +41,7 @@ func (em *EnhancedManager) HandleLLMResponseEnhanced(llmResponse string, eventCh
 		em.changeSummaryMgr.AddSummary(llmResponse, nil)
 	}
 
-	// Handle task execution with the base manager
+	// Handle task execution with the base manager (includes objective validation)
 	execution, err := em.Manager.HandleLLMResponse(llmResponse, eventChan)
 	if err != nil {
 		return nil, err

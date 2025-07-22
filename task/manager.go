@@ -71,14 +71,25 @@ func (m *Manager) HandleLLMResponse(llmResponse string, eventChan chan<- TaskExe
 			fmt.Printf("Warning: failed to add objective correction to chat: %v\n", err)
 		}
 
-		// Create a special event to notify the UI about objective change
-		eventChan <- TaskExecutionEvent{
-			Type:    "objective_change_detected",
-			Message: fmt.Sprintf("Objective change detected: %s", objectiveValidation.ValidationError),
+		// Add follow-up instruction to continue with original objective
+		continuationMessage := llm.Message{
+			Role:      "user",
+			Content:   fmt.Sprintf("Please continue working on your original objective: \"%s\". Focus on completing this objective rather than expanding the scope.", objectiveValidation.OriginalObjective),
+			Timestamp: time.Now(),
 		}
 
-		// Return without executing tasks to force LLM to correct course
-		return nil, fmt.Errorf("objective change detected - redirecting to original objective")
+		if err := m.chatSession.AddMessage(continuationMessage); err != nil {
+			fmt.Printf("Warning: failed to add continuation message to chat: %v\n", err)
+		}
+
+		// Create a special event to notify the UI about objective change and trigger auto-continuation
+		eventChan <- TaskExecutionEvent{
+			Type:    "objective_change_auto_continue",
+			Message: fmt.Sprintf("Objective change detected. Redirecting LLM back to original objective: %s", objectiveValidation.OriginalObjective),
+		}
+
+		// Return nil instead of error to allow conversation to continue
+		return nil, nil
 	}
 
 	// STEP 2: Parse tasks from LLM response (original logic)

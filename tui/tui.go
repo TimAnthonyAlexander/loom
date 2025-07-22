@@ -1353,6 +1353,32 @@ func (m model) handleTaskEvent(event taskPkg.TaskExecutionEvent) (tea.Model, tea
 		m.taskHistory = append(m.taskHistory, event.Message)
 	}
 
+	// Handle objective change with auto-continuation
+	if event.Type == "objective_change_auto_continue" {
+		// Add the warning message to the display
+		warningMessage := fmt.Sprintf("🚨 %s", event.Message)
+		
+		// Add warning as a system message visible to user
+		systemMsg := llm.Message{
+			Role:      "assistant", 
+			Content:   warningMessage,
+			Timestamp: time.Now(),
+		}
+		m.chatSession.AddMessage(systemMsg)
+		
+		// Refresh display to show the warning
+		m.messages = m.chatSession.GetDisplayMessages()
+		m.updateWrappedMessages()
+		
+		// Automatically continue the LLM conversation
+		if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
+			return m, func() tea.Msg {
+				return ContinueLLMMsg{}
+			}
+		}
+		return m, nil
+	}
+
 	// Handle confirmation requests
 	if event.RequiresInput && event.Task != nil && event.Response != nil {
 		return m, func() tea.Msg {
