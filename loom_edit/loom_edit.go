@@ -24,34 +24,34 @@ type EditCommand struct {
 func ParseEditCommand(input string) (*EditCommand, error) {
 	// Regex to match the LOOM_EDIT header line
 	headerRegex := regexp.MustCompile(`>>LOOM_EDIT file=([^\s]+) v=([^\s]+) (REPLACE|INSERT_AFTER|INSERT_BEFORE|DELETE) (\d+)(?:-(\d+))?`)
-	
+
 	// Regex to match the OLD_HASH line
 	hashRegex := regexp.MustCompile(`#OLD_HASH:([a-fA-F0-9]+)`)
-	
+
 	lines := strings.Split(input, "\n")
 	if len(lines) < 3 {
 		return nil, fmt.Errorf("invalid LOOM_EDIT format: too few lines")
 	}
-	
+
 	// Parse header line
 	headerMatches := headerRegex.FindStringSubmatch(lines[0])
 	if headerMatches == nil {
 		return nil, fmt.Errorf("invalid LOOM_EDIT header format")
 	}
-	
+
 	cmd := &EditCommand{
-		File:   headerMatches[1],
+		File:    headerMatches[1],
 		FileSHA: headerMatches[2],
-		Action: headerMatches[3],
+		Action:  headerMatches[3],
 	}
-	
+
 	// Parse start line number
 	start, err := strconv.Atoi(headerMatches[4])
 	if err != nil {
 		return nil, fmt.Errorf("invalid start line number: %v", err)
 	}
 	cmd.Start = start
-	
+
 	// Parse end line number (optional for some operations)
 	if headerMatches[5] != "" {
 		end, err := strconv.Atoi(headerMatches[5])
@@ -63,14 +63,14 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 		// For INSERT_AFTER and INSERT_BEFORE, end equals start
 		cmd.End = start
 	}
-	
+
 	// Parse OLD_HASH line
 	hashMatches := hashRegex.FindStringSubmatch(lines[1])
 	if hashMatches == nil {
 		return nil, fmt.Errorf("invalid OLD_HASH format")
 	}
 	cmd.OldHash = hashMatches[1]
-	
+
 	// Extract new text (everything between OLD_HASH line and <<LOOM_EDIT)
 	var newTextLines []string
 	inBody := false
@@ -88,9 +88,9 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 			newTextLines = append(newTextLines, line)
 		}
 	}
-	
+
 	cmd.NewText = strings.Join(newTextLines, "\n")
-	
+
 	return cmd, nil
 }
 
@@ -106,16 +106,16 @@ func ApplyEdit(filePath string, cmd *EditCommand) error {
 	if err != nil {
 		return fmt.Errorf("failed to read file: %v", err)
 	}
-	
+
 	// Validate file SHA
 	currentFileSHA := HashContent(string(content))
 	if currentFileSHA != cmd.FileSHA {
 		return fmt.Errorf("file SHA mismatch: expected %s, got %s", cmd.FileSHA, currentFileSHA)
 	}
-	
+
 	// Split content into lines
 	lines := strings.Split(string(content), "\n")
-	
+
 	// Validate line range
 	if cmd.Start < 1 || cmd.Start > len(lines) {
 		return fmt.Errorf("start line %d is out of range (1-%d)", cmd.Start, len(lines))
@@ -123,25 +123,25 @@ func ApplyEdit(filePath string, cmd *EditCommand) error {
 	if cmd.End < cmd.Start || cmd.End > len(lines) {
 		return fmt.Errorf("end line %d is out of range (%d-%d)", cmd.End, cmd.Start, len(lines))
 	}
-	
+
 	// Extract old slice and validate hash
 	var oldSlice []string
 	if cmd.Action == "DELETE" || cmd.Action == "REPLACE" {
-		oldSlice = lines[cmd.Start-1:cmd.End]
+		oldSlice = lines[cmd.Start-1 : cmd.End]
 	} else if cmd.Action == "INSERT_AFTER" || cmd.Action == "INSERT_BEFORE" {
 		// For insert operations, we still need to validate the reference line
-		oldSlice = lines[cmd.Start-1:cmd.Start]
+		oldSlice = lines[cmd.Start-1 : cmd.Start]
 	}
-	
+
 	oldSliceContent := strings.Join(oldSlice, "\n")
 	oldSliceHash := HashContent(oldSliceContent)
 	if oldSliceHash != cmd.OldHash {
 		return fmt.Errorf("old slice hash mismatch: expected %s, got %s", cmd.OldHash, oldSliceHash)
 	}
-	
+
 	// Apply the edit based on action
 	var newLines []string
-	
+
 	switch cmd.Action {
 	case "REPLACE":
 		// Replace lines Start through End with NewText
@@ -150,7 +150,7 @@ func ApplyEdit(filePath string, cmd *EditCommand) error {
 			newLines = append(newLines, strings.Split(cmd.NewText, "\n")...)
 		}
 		newLines = append(newLines, lines[cmd.End:]...)
-		
+
 	case "INSERT_AFTER":
 		// Insert NewText after line Start
 		newLines = append(newLines, lines[:cmd.Start]...)
@@ -158,7 +158,7 @@ func ApplyEdit(filePath string, cmd *EditCommand) error {
 			newLines = append(newLines, strings.Split(cmd.NewText, "\n")...)
 		}
 		newLines = append(newLines, lines[cmd.Start:]...)
-		
+
 	case "INSERT_BEFORE":
 		// Insert NewText before line Start
 		newLines = append(newLines, lines[:cmd.Start-1]...)
@@ -166,22 +166,22 @@ func ApplyEdit(filePath string, cmd *EditCommand) error {
 			newLines = append(newLines, strings.Split(cmd.NewText, "\n")...)
 		}
 		newLines = append(newLines, lines[cmd.Start-1:]...)
-		
+
 	case "DELETE":
 		// Delete lines Start through End
 		newLines = append(newLines, lines[:cmd.Start-1]...)
 		newLines = append(newLines, lines[cmd.End:]...)
-		
+
 	default:
 		return fmt.Errorf("unsupported action: %s", cmd.Action)
 	}
-	
+
 	// Write the modified content back to file
 	newContent := strings.Join(newLines, "\n")
 	err = ioutil.WriteFile(filePath, []byte(newContent), 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write file: %v", err)
 	}
-	
+
 	return nil
-} 
+}

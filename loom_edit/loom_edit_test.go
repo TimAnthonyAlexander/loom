@@ -11,23 +11,23 @@ import (
 
 func TestLoomEditCases(t *testing.T) {
 	testCases := []struct {
-		name        string
-		editFile    string
+		name         string
+		editFile     string
 		expectedFile string
 	}{
 		{
-			name:        "case1_replace",
-			editFile:    "example/case1/edit.txt",
+			name:         "case1_replace",
+			editFile:     "example/case1/edit.txt",
 			expectedFile: "example/case1/final.md",
 		},
 		{
-			name:        "case2_insert_after",
-			editFile:    "example/case2/edit.txt", 
+			name:         "case2_insert_after",
+			editFile:     "example/case2/edit.txt",
 			expectedFile: "example/case2/final.md",
 		},
 		{
-			name:        "case3_delete",
-			editFile:    "example/case3/edit.txt",
+			name:         "case3_delete",
+			editFile:     "example/case3/edit.txt",
 			expectedFile: "example/case3/final.txt",
 		},
 	}
@@ -80,7 +80,7 @@ func TestLoomEditCases(t *testing.T) {
 
 			// Compare with expected
 			if string(resultContent) != string(expectedContent) {
-				t.Errorf("Result doesn't match expected.\nGot:\n%s\nExpected:\n%s", 
+				t.Errorf("Result doesn't match expected.\nGot:\n%s\nExpected:\n%s",
 					string(resultContent), string(expectedContent))
 			}
 		})
@@ -284,4 +284,4 @@ func TestInsertBeforeOperation(t *testing.T) {
 	if string(result) != expected {
 		t.Errorf("INSERT_BEFORE failed.\nGot:\n%s\nExpected:\n%s", string(result), expected)
 	}
-} 
+}
