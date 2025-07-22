@@ -212,12 +212,8 @@ func (e *Executor) executeReadFile(task *Task) *TaskResponse {
 			content.WriteString("\n")
 		}
 
-		// Add line numbers if requested
-		if task.ShowLineNumbers {
-			content.WriteString(fmt.Sprintf("%4d: %s", lineNum, scanner.Text()))
-		} else {
-			content.WriteString(scanner.Text())
-		}
+		// Always add line numbers for LLM content
+		content.WriteString(fmt.Sprintf("%4d: %s", lineNum, scanner.Text()))
 		linesRead++
 	}
 

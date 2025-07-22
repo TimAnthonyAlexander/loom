@@ -93,12 +93,6 @@ func ApplyEdit(filePath string, cmd *EditCommand) error {
 	contentStr = strings.ReplaceAll(contentStr, "\r", "\n")
 	hasFinalNewline := strings.HasSuffix(contentStr, "\n")
 
-	// Validate file SHA (using normalized content)
-	currentFileSHA := HashContent(contentStr)
-	if currentFileSHA != cmd.FileSHA {
-		return fmt.Errorf("file SHA mismatch: expected %s, got %s", cmd.FileSHA, currentFileSHA)
-	}
-
 	// Split content into lines (using normalized content)
 	lines := strings.Split(contentStr, "\n")
 
