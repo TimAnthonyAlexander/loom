@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"loom/git"
 	"loom/llm"
+	"loom/paths"
 	"loom/task"
 	"loom/undo"
 	"os"
@@ -67,7 +68,7 @@ type RecoveryState struct {
 // SessionManager manages session persistence and recovery
 type SessionManager struct {
 	workspacePath   string
-	sessionDir      string
+	projectPaths    *paths.ProjectPaths
 	currentSession  *SessionState
 	saveInterval    time.Duration
 	autoSaveEnabled bool
@@ -85,14 +86,19 @@ type RecoveryInfo struct {
 
 // NewSessionManager creates a new session manager
 func NewSessionManager(workspacePath string) (*SessionManager, error) {
-	sessionDir := filepath.Join(workspacePath, ".loom", "sessions")
-	if err := os.MkdirAll(sessionDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create session directory: %w", err)
+	projectPaths, err := paths.NewProjectPaths(workspacePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create project paths: %w", err)
+	}
+
+	// Ensure project directories exist
+	if err := projectPaths.EnsureProjectDir(); err != nil {
+		return nil, fmt.Errorf("failed to create project directories: %w", err)
 	}
 
 	return &SessionManager{
 		workspacePath:   workspacePath,
-		sessionDir:      sessionDir,
+		projectPaths:    projectPaths,
 		saveInterval:    30 * time.Second, // Auto-save every 30 seconds
 		autoSaveEnabled: true,
 	}, nil
@@ -124,7 +130,7 @@ func (sm *SessionManager) CreateSession() *SessionState {
 
 // LoadSession loads a session from disk
 func (sm *SessionManager) LoadSession(sessionID string) (*SessionState, error) {
-	sessionFile := filepath.Join(sm.sessionDir, fmt.Sprintf("%s.json", sessionID))
+	sessionFile := filepath.Join(sm.projectPaths.SessionsDir(), fmt.Sprintf("%s.json", sessionID))
 
 	data, err := os.ReadFile(sessionFile)
 	if err != nil {
@@ -162,7 +168,7 @@ func (sm *SessionManager) SaveSession() error {
 
 // saveSessionRegular saves the complete session (may contain secrets)
 func (sm *SessionManager) saveSessionRegular() error {
-	sessionFile := filepath.Join(sm.sessionDir, fmt.Sprintf("%s.json", sm.currentSession.SessionID))
+	sessionFile := filepath.Join(sm.projectPaths.SessionsDir(), fmt.Sprintf("%s.json", sm.currentSession.SessionID))
 
 	data, err := json.MarshalIndent(sm.currentSession, "", "  ")
 	if err != nil {
@@ -196,7 +202,7 @@ func (sm *SessionManager) saveSessionSafe() error {
 		}
 	}
 
-	safeFile := filepath.Join(sm.sessionDir, fmt.Sprintf("%s.safe.json", sm.currentSession.SessionID))
+	safeFile := filepath.Join(sm.projectPaths.SessionsDir(), fmt.Sprintf("%s.safe.json", sm.currentSession.SessionID))
 
 	data, err := json.MarshalIndent(&safeCopy, "", "  ")
 	if err != nil {
@@ -212,7 +218,7 @@ func (sm *SessionManager) saveSessionSafe() error {
 
 // GetRecoverableSessions returns information about sessions that can be recovered
 func (sm *SessionManager) GetRecoverableSessions() ([]RecoveryInfo, error) {
-	files, err := os.ReadDir(sm.sessionDir)
+	files, err := os.ReadDir(sm.projectPaths.SessionsDir())
 	if err != nil {
 		return nil, fmt.Errorf("failed to read session directory: %w", err)
 	}
@@ -221,7 +227,7 @@ func (sm *SessionManager) GetRecoverableSessions() ([]RecoveryInfo, error) {
 
 	for _, file := range files {
 		if !file.IsDir() && filepath.Ext(file.Name()) == ".json" && !strings.Contains(file.Name(), ".safe.") {
-			sessionFile := filepath.Join(sm.sessionDir, file.Name())
+			sessionFile := filepath.Join(sm.projectPaths.SessionsDir(), file.Name())
 
 			// Try to load basic info from the session
 			data, err := os.ReadFile(sessionFile)
@@ -341,7 +347,7 @@ func (sm *SessionManager) GetCurrentSession() *SessionState {
 
 // CleanupOldSessions removes sessions older than the specified duration
 func (sm *SessionManager) CleanupOldSessions(maxAge time.Duration) error {
-	files, err := os.ReadDir(sm.sessionDir)
+	files, err := os.ReadDir(sm.projectPaths.SessionsDir())
 	if err != nil {
 		return fmt.Errorf("failed to read session directory: %w", err)
 	}
@@ -356,7 +362,7 @@ func (sm *SessionManager) CleanupOldSessions(maxAge time.Duration) error {
 			}
 
 			if info.ModTime().Before(cutoff) {
-				sessionFile := filepath.Join(sm.sessionDir, file.Name())
+				sessionFile := filepath.Join(sm.projectPaths.SessionsDir(), file.Name())
 				os.Remove(sessionFile) // Ignore errors
 
 				// Also remove safe version
@@ -569,7 +575,7 @@ func (sm *SessionManager) calculateConsistencyHash(session *SessionState) string
 
 // loadFromBackup attempts to load a session from backup file
 func (sm *SessionManager) loadFromBackup(sessionID string) (*SessionState, error) {
-	backupFile := filepath.Join(sm.sessionDir, fmt.Sprintf("%s.backup.json", sessionID))
+	backupFile := filepath.Join(sm.projectPaths.BackupsDir(), fmt.Sprintf("%s.backup.json", sessionID))
 
 	data, err := os.ReadFile(backupFile)
 	if err != nil {

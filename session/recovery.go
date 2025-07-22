@@ -3,6 +3,7 @@ package session
 import (
 	"fmt"
 	"loom/llm"
+	"loom/paths"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,7 @@ import (
 // RecoveryManager handles session recovery operations
 type RecoveryManager struct {
 	workspacePath string
+	projectPaths  *paths.ProjectPaths
 	sessionMgr    *SessionManager
 }
 
@@ -22,8 +24,14 @@ func NewRecoveryManager(workspacePath string) (*RecoveryManager, error) {
 		return nil, fmt.Errorf("failed to create session manager: %w", err)
 	}
 
+	projectPaths, err := paths.NewProjectPaths(workspacePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create project paths: %w", err)
+	}
+
 	return &RecoveryManager{
 		workspacePath: workspacePath,
+		projectPaths:  projectPaths,
 		sessionMgr:    sessionMgr,
 	}, nil
 }
@@ -140,8 +148,8 @@ func (rm *RecoveryManager) backupExistingSessions() error {
 		return err
 	}
 
-	backupDir := filepath.Join(rm.workspacePath, ".loom", "backups")
-	if err := os.MkdirAll(backupDir, 0755); err != nil {
+	// Ensure backup directory exists
+	if err := os.MkdirAll(rm.projectPaths.BackupsDir(), 0755); err != nil {
 		return fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
@@ -153,7 +161,7 @@ func (rm *RecoveryManager) backupExistingSessions() error {
 			continue
 		}
 
-		backupPath := filepath.Join(backupDir, fmt.Sprintf("%s_%s.backup", sessionInfo.SessionID, timestamp))
+		backupPath := filepath.Join(rm.projectPaths.BackupsDir(), fmt.Sprintf("%s_%s.backup", sessionInfo.SessionID, timestamp))
 		if err := rm.sessionMgr.ExportSession(sessionInfo.SessionID, backupPath); err != nil {
 			fmt.Printf("Warning: failed to backup session %s: %v\n", sessionInfo.SessionID, err)
 		}
@@ -262,7 +270,7 @@ func (rm *RecoveryManager) AddRecoveryMessage(session *SessionState, recoveryTyp
 
 // CleanupOldBackups removes old backup files
 func (rm *RecoveryManager) CleanupOldBackups(olderThan time.Duration) error {
-	backupDir := filepath.Join(rm.workspacePath, ".loom", "backups")
+	backupDir := rm.projectPaths.BackupsDir()
 
 	files, err := os.ReadDir(backupDir)
 	if err != nil {

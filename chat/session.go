@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"loom/indexer"
 	"loom/llm"
+	"loom/paths"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -35,6 +36,7 @@ type TaskAuditEntry struct {
 // Session represents a chat session with message history
 type Session struct {
 	workspacePath string
+	projectPaths  *paths.ProjectPaths
 	messages      []llm.Message
 	maxMessages   int
 	historyFile   string
@@ -47,12 +49,35 @@ func NewSession(workspacePath string, maxMessages int) *Session {
 		maxMessages = 50 // Default to keeping 50 messages
 	}
 
+	// Get project paths
+	projectPaths, err := paths.NewProjectPaths(workspacePath)
+	if err != nil {
+		// Fallback to old behavior if paths creation fails
+		timestamp := time.Now().Format("2006-01-02-1504")
+		historyFile := filepath.Join(workspacePath, ".loom", "history", fmt.Sprintf("%s.jsonl", timestamp))
+
+		return &Session{
+			workspacePath: workspacePath,
+			projectPaths:  nil,
+			messages:      make([]llm.Message, 0),
+			maxMessages:   maxMessages,
+			historyFile:   historyFile,
+			taskAudit:     make([]TaskAuditEntry, 0),
+		}
+	}
+
+	// Ensure project directories exist
+	if err := projectPaths.EnsureProjectDir(); err != nil {
+		fmt.Printf("Warning: failed to create project directories: %v\n", err)
+	}
+
 	// Create history filename with current timestamp
 	timestamp := time.Now().Format("2006-01-02-1504")
-	historyFile := filepath.Join(workspacePath, ".loom", "history", fmt.Sprintf("%s.jsonl", timestamp))
+	historyFile := filepath.Join(projectPaths.HistoryDir(), fmt.Sprintf("%s.jsonl", timestamp))
 
 	return &Session{
 		workspacePath: workspacePath,
+		projectPaths:  projectPaths,
 		messages:      make([]llm.Message, 0),
 		maxMessages:   maxMessages,
 		historyFile:   historyFile,
@@ -62,12 +87,18 @@ func NewSession(workspacePath string, maxMessages int) *Session {
 
 // LoadLatestSession loads the most recent chat session or creates a new one
 func LoadLatestSession(workspacePath string, maxMessages int) (*Session, error) {
-	historyDir := filepath.Join(workspacePath, ".loom", "history")
-
-	// Ensure history directory exists
-	if err := os.MkdirAll(historyDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create history directory: %w", err)
+	// Get project paths
+	projectPaths, err := paths.NewProjectPaths(workspacePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create project paths: %w", err)
 	}
+
+	// Ensure project directories exist
+	if err := projectPaths.EnsureProjectDir(); err != nil {
+		return nil, fmt.Errorf("failed to create project directories: %w", err)
+	}
+
+	historyDir := projectPaths.HistoryDir()
 
 	// Find the latest history file
 	files, err := os.ReadDir(historyDir)
@@ -86,6 +117,7 @@ func LoadLatestSession(workspacePath string, maxMessages int) (*Session, error) 
 
 	session := &Session{
 		workspacePath: workspacePath,
+		projectPaths:  projectPaths,
 		messages:      make([]llm.Message, 0),
 		maxMessages:   maxMessages,
 		taskAudit:     make([]TaskAuditEntry, 0),
@@ -109,12 +141,18 @@ func LoadLatestSession(workspacePath string, maxMessages int) (*Session, error) 
 
 // LoadSessionByID loads a specific session by ID (timestamp format)
 func LoadSessionByID(workspacePath string, sessionID string, maxMessages int) (*Session, error) {
-	historyDir := filepath.Join(workspacePath, ".loom", "history")
-
-	// Ensure history directory exists
-	if err := os.MkdirAll(historyDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create history directory: %w", err)
+	// Get project paths
+	projectPaths, err := paths.NewProjectPaths(workspacePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create project paths: %w", err)
 	}
+
+	// Ensure project directories exist
+	if err := projectPaths.EnsureProjectDir(); err != nil {
+		return nil, fmt.Errorf("failed to create project directories: %w", err)
+	}
+
+	historyDir := projectPaths.HistoryDir()
 
 	// Construct the expected filename
 	historyFile := filepath.Join(historyDir, fmt.Sprintf("%s.jsonl", sessionID))
@@ -126,6 +164,7 @@ func LoadSessionByID(workspacePath string, sessionID string, maxMessages int) (*
 
 	session := &Session{
 		workspacePath: workspacePath,
+		projectPaths:  projectPaths,
 		messages:      make([]llm.Message, 0),
 		maxMessages:   maxMessages,
 		historyFile:   historyFile,
@@ -141,12 +180,18 @@ func LoadSessionByID(workspacePath string, sessionID string, maxMessages int) (*
 
 // ListAvailableSessions returns a list of available session IDs
 func ListAvailableSessions(workspacePath string) ([]string, error) {
-	historyDir := filepath.Join(workspacePath, ".loom", "history")
-
-	// Ensure history directory exists
-	if err := os.MkdirAll(historyDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create history directory: %w", err)
+	// Get project paths
+	projectPaths, err := paths.NewProjectPaths(workspacePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create project paths: %w", err)
 	}
+
+	// Ensure project directories exist
+	if err := projectPaths.EnsureProjectDir(); err != nil {
+		return nil, fmt.Errorf("failed to create project directories: %w", err)
+	}
+
+	historyDir := projectPaths.HistoryDir()
 
 	// Read all files in the history directory
 	files, err := os.ReadDir(historyDir)

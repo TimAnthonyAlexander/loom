@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"loom/context"
+	"loom/paths"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,28 +17,26 @@ import (
 type StagedExecutor struct {
 	*Executor      // Embed the base executor
 	contextManager *context.ContextManager
-	stagingDir     string
-	backupDir      string
+	projectPaths   *paths.ProjectPaths
 }
 
 // NewStagedExecutor creates a new staged executor
 func NewStagedExecutor(baseExecutor *Executor, contextManager *context.ContextManager, workspacePath string) (*StagedExecutor, error) {
-	// Create staging and backup directories
-	loomDir := filepath.Join(workspacePath, ".loom")
-	stagingDir := filepath.Join(loomDir, "staging")
-	backupDir := filepath.Join(loomDir, "backups")
+	// Get project paths
+	projectPaths, err := paths.NewProjectPaths(workspacePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create project paths: %w", err)
+	}
 
-	for _, dir := range []string{stagingDir, backupDir} {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return nil, fmt.Errorf("failed to create directory %s: %w", dir, err)
-		}
+	// Ensure project directories exist
+	if err := projectPaths.EnsureProjectDir(); err != nil {
+		return nil, fmt.Errorf("failed to create project directories: %w", err)
 	}
 
 	return &StagedExecutor{
 		Executor:       baseExecutor,
 		contextManager: contextManager,
-		stagingDir:     stagingDir,
-		backupDir:      backupDir,
+		projectPaths:   projectPaths,
 	}, nil
 }
 
@@ -345,7 +344,7 @@ func (se *StagedExecutor) createBackupPath(filePath string) string {
 	timestamp := time.Now().Format("20060102_150405")
 	backupName := fmt.Sprintf("%s_%s.backup", cleanPath, timestamp)
 
-	return filepath.Join(se.backupDir, backupName)
+	return filepath.Join(se.projectPaths.BackupsDir(), backupName)
 }
 
 // ValidateStagedEdits validates that staged edits are still applicable
