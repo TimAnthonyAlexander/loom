@@ -330,24 +330,24 @@ Be explicit about next steps:
 
 When you decide a file inside the repo must change, emit **one fenced code block** that:
 
-* starts with three backticks followed by `LOOM_EDIT`
-* contains a **standard unified-diff** (the format made by `diff -u` or `git diff`)
+* starts with three backticks followed by LOOM_EDIT
+* contains a **standard unified-diff** (the format made by diff -u or git diff)
 * ends with three backticks
 
 Inside the block:
 
-1. Give `--- a/<relative path>` and `+++ b/<relative path>` lines.
-2. For each change, supply a `@@ … @@` hunk header **plus 0-3 unchanged context lines** above and below your edits.
-3. Use `-` for deletions, `+` for insertions.  
+1. Give --- a/relative-path and +++ b/relative-path lines.
+2. For each change, supply a @@ -lines,count +lines,count @@ hunk header **plus 0-3 unchanged context lines** above and below your edits.
+3. Use - for deletions, + for insertions.  
    Never include comment lines or explanations inside the fenced block.
-4. Only one file per `LOOM_EDIT` block.  
+4. Only one file per LOOM_EDIT block.  
    If you need to modify several files, output multiple fenced blocks (one after another).
 
 Outside the fenced block you may freely explain *why* or *what* you changed; that text is ignored by the executor.
 
 **Example**
 
-```LOOM_EDIT
+Three backticks + LOOM_EDIT
 --- a/src/main.go
 +++ b/src/main.go
 @@ -15,7 +15,7 @@
@@ -359,7 +359,7 @@ Outside the fenced block you may freely explain *why* or *what* you changed; tha
  	
  	log.Printf("Starting server on %s", config.Port)
  	server.Start()
-```
+Three backticks
 
 ### 7.4 RUN
 Shell command execution.
@@ -390,7 +390,7 @@ Basic operations: create, update, get, delete, list
 
 **Single line edit**:
 
-```LOOM_EDIT
+Three backticks + LOOM_EDIT
 --- a/main.go
 +++ b/main.go
 @@ -40,7 +40,7 @@
@@ -399,11 +399,11 @@ Basic operations: create, update, get, delete, list
 +    username := "john"
      fmt.Println(username)
  }
-```
+Three backticks
 
 **Multi-line edit**:
 
-```LOOM_EDIT
+Three backticks + LOOM_EDIT
 --- a/handler.go
 +++ b/handler.go
 @@ -26,7 +26,10 @@
@@ -417,22 +417,22 @@ Basic operations: create, update, get, delete, list
      }
      return processData(req.Data)
  }
-```
+Three backticks
 
 **Multiple files**:
 
-```LOOM_EDIT
+Three backticks + LOOM_EDIT
 --- a/config.go
 +++ b/config.go
 @@ -12,6 +12,7 @@
  type Config struct {
-     Port     int    `json:"port"`
-+    Host     string `json:"host"`
-     Database string `json:"database"`
+     Port     int    (json:"port")
++    Host     string (json:"host")
+     Database string (json:"database")
  }
-```
+Three backticks
 
-```LOOM_EDIT
+Three backticks + LOOM_EDIT
 --- a/server.go
 +++ b/server.go
 @@ -15,7 +15,7 @@
@@ -443,7 +443,7 @@ Basic operations: create, update, get, delete, list
 +    server := NewServer(config.Host, config.Port)
      server.Start()
  }
-```
+Three backticks
 
 ### B. Memory API Reference
 
