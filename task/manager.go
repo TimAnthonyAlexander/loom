@@ -139,6 +139,17 @@ func (m *Manager) HandleLLMResponse(llmResponse string, eventChan chan<- TaskExe
 				Message:   fmt.Sprintf("Task failed: %s", response.Error),
 			}
 
+			// CRITICAL FIX: Add failed task result to chat so LLM can see the error
+			taskResultMessage := llm.Message{
+				Role:      "assistant",
+				Content:   m.formatTaskResult(&currentTask, response),
+				Timestamp: time.Now(),
+			}
+
+			if err := m.chatSession.AddMessage(taskResultMessage); err != nil {
+				fmt.Printf("Warning: failed to add failed task result to chat: %v\n", err)
+			}
+
 			// Continue with other tasks or stop based on configuration
 			continue
 		}
