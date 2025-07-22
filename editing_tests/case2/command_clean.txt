@@ -1,0 +1,11 @@
+--- a/editing_tests/thefile.md
++++ b/editing_tests/thefile.md
+@@ -2,7 +2,7 @@
+ 
+ This is a line beneath the headline.
+ 
+-## Whats up bro
++## What's new?
+ 
+ - Bullet
+ - Points

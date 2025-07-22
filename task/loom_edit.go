@@ -28,7 +28,7 @@ type EditBlock struct {
 }
 
 // editRE matches LOOM_EDIT fenced code blocks
-var editRE = regexp.MustCompile(`(?s)` + "`" + `{3}LOOM_EDIT\n(.*?)` + "`" + `{3}`)
+var editRE = regexp.MustCompile(`(?s)` + "`" + `{3}LOOM_EDIT\n(.*?)\n` + "`" + `{3}`)
 
 // ParseLoomEdits extracts all LOOM_EDIT blocks from an LLM message
 func (p *LoomEditProcessor) ParseLoomEdits(message string) ([]EditBlock, error) {
@@ -94,8 +94,14 @@ func (p *LoomEditProcessor) applyEditBlock(block EditBlock, blockIndex int) erro
 	tmpDir := os.TempDir()
 	patchFile := filepath.Join(tmpDir, fmt.Sprintf("loom_edit_%d.patch", blockIndex))
 	
+	// Ensure patch content ends with a newline
+	patchContent := block.DiffContent
+	if !strings.HasSuffix(patchContent, "\n") {
+		patchContent += "\n"
+	}
+	
 	// Write the diff content to the temp file
-	if err := os.WriteFile(patchFile, []byte(block.DiffContent), 0600); err != nil {
+	if err := os.WriteFile(patchFile, []byte(patchContent), 0600); err != nil {
 		return fmt.Errorf("failed to write patch file: %v", err)
 	}
 	

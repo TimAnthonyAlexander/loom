@@ -1,0 +1,12 @@
+diff --git a/before.md b/before.md
+index 1737f9d..11459f1 100644
+--- a/before.md
++++ b/before.md
+@@ -8,6 +8,7 @@ This is a line beneath the headline.
+ - Points
+ - Are
+ - Necessary
++- Optional
+ 
+ ----
+ 

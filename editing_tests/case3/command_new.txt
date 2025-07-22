@@ -1,0 +1,10 @@
+--- a/editing_tests/thefile.md
++++ b/editing_tests/thefile.md
+@@ -8,6 +8,7 @@ This is a line beneath the headline.
+ - Points
+ - Are
+ - Necessary
++- Optional
+ 
+ ----
+ 

@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"strings"
 )
 
 func TestLoomEditProcessor_ParseLoomEdits(t *testing.T) {
@@ -144,33 +143,35 @@ func TestLoomEditWithFixtures(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Setup: copy baseline file to a temp location
-			baselineFile := filepath.Join(workspaceRoot, "editing_tests", "thefile.md")
-			testFile := filepath.Join(workspaceRoot, "editing_tests", "test_thefile.md")
-			
-			// Copy baseline to test file
-			baselineContent, err := os.ReadFile(baselineFile)
-			if err != nil {
-				t.Fatalf("Failed to read baseline file: %v", err)
-			}
-			
-			if err := os.WriteFile(testFile, baselineContent, 0644); err != nil {
-				t.Fatalf("Failed to create test file: %v", err)
-			}
-			
-			// Cleanup test file when done
-			defer os.Remove(testFile)
-
-			// Read the command (raw diff) - use the fixed version
-			commandFile := filepath.Join(workspaceRoot, "editing_tests", tc.caseDir, "command_fixed.txt")
+			// Read the command (raw diff) - use the clean version
+			commandFile := filepath.Join(workspaceRoot, "editing_tests", tc.caseDir, "command_clean.txt")
 			diffContent, err := os.ReadFile(commandFile)
 			if err != nil {
 				t.Fatalf("Failed to read command file: %v", err)
 			}
 
-			// Wrap the diff in LOOM_EDIT block and adjust path
-			adjustedDiff := strings.ReplaceAll(string(diffContent), "editing_tests/thefile.md", "editing_tests/test_thefile.md")
-			message := "Here's the edit:\n\n```LOOM_EDIT\n" + adjustedDiff + "```\n\nDone!"
+			// The patch operates on thefile.md directly - make a backup first
+			baselineFile := filepath.Join(workspaceRoot, "editing_tests", "thefile.md")
+			backupFile := filepath.Join(workspaceRoot, "editing_tests", "thefile_backup.md")
+			
+			// Backup original file
+			baselineContent, err := os.ReadFile(baselineFile)
+			if err != nil {
+				t.Fatalf("Failed to read baseline file: %v", err)
+			}
+			
+			if err := os.WriteFile(backupFile, baselineContent, 0644); err != nil {
+				t.Fatalf("Failed to create backup file: %v", err)
+			}
+			
+			// Restore original file when done
+			defer func() {
+				os.WriteFile(baselineFile, baselineContent, 0644)
+				os.Remove(backupFile)
+			}()
+
+			// Wrap the diff in LOOM_EDIT block - ensure proper newline before closing
+			message := "Here's the edit:\n\n```LOOM_EDIT\n" + string(diffContent) + "\n```\n\nDone!"
 
 			// Apply the edit
 			processor := NewLoomEditProcessor(workspaceRoot)
@@ -183,12 +184,12 @@ func TestLoomEditWithFixtures(t *testing.T) {
 				t.Errorf("Expected 1 block, got %d", result.BlocksFound)
 			}
 
-			if len(result.FilesEdited) != 1 || result.FilesEdited[0] != "editing_tests/test_thefile.md" {
-				t.Errorf("Expected to edit editing_tests/test_thefile.md, got %v", result.FilesEdited)
+			if len(result.FilesEdited) != 1 || result.FilesEdited[0] != "editing_tests/thefile.md" {
+				t.Errorf("Expected to edit editing_tests/thefile.md, got %v", result.FilesEdited)
 			}
 
 			// Read the result
-			actualContent, err := os.ReadFile(testFile)
+			actualContent, err := os.ReadFile(baselineFile)
 			if err != nil {
 				t.Fatalf("Failed to read result file: %v", err)
 			}

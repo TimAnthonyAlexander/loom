@@ -43,7 +43,7 @@ Tim Anthony Alexander
 	defer os.Remove(testFile)
 
 	// Read one of our properly generated patches
-	patchFile := filepath.Join(workspaceRoot, "editing_tests", "case1", "command_fixed.txt")
+	patchFile := filepath.Join(workspaceRoot, "editing_tests", "case1", "command_clean.txt")
 	patchBytes, err := os.ReadFile(patchFile)
 	if err != nil {
 		t.Fatalf("Failed to read patch file: %v", err)
@@ -55,8 +55,8 @@ Tim Anthony Alexander
 	// Test our processor
 	processor := NewLoomEditProcessor(workspaceRoot)
 	
-	// Wrap in LOOM_EDIT block
-	message := "```LOOM_EDIT\n" + patch + "```"
+	// Wrap in LOOM_EDIT block - ensure proper newline before closing
+	message := "```LOOM_EDIT\n" + patch + "\n```"
 	
 	// Debug: print the exact message being processed
 	t.Logf("Processing message:\n%s", message)
@@ -89,6 +89,7 @@ Tim Anthony Alexander
 	// Also debug the raw patch file content
 	rawContent, _ := os.ReadFile(tmpFile)
 	t.Logf("Raw patch file content (%d bytes): %q", len(rawContent), string(rawContent))
+	t.Logf("Raw content ends with newline: %v", strings.HasSuffix(string(rawContent), "\n"))
 	
 	// Test git apply command directly
 	cmd := exec.Command("git", "apply", "--check", tmpFile)

@@ -1,0 +1,12 @@
+diff --git a/before.md b/before.md
+index 1737f9d..baa4d17 100644
+--- a/before.md
++++ b/before.md
+@@ -1,5 +1,7 @@
+ # This is a file to be tested against with applying editing diffs
+ 
++This is an inserted line below the first headline.
++
+ This is a line beneath the headline.
+ 
+ ## Whats up bro

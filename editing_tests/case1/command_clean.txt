@@ -1,0 +1,10 @@
+--- a/editing_tests/thefile.md
++++ b/editing_tests/thefile.md
+@@ -1,5 +1,7 @@
+ # This is a file to be tested against with applying editing diffs
+ 
++This is an inserted line below the first headline.
++
+ This is a line beneath the headline.
+ 
+ ## Whats up bro
