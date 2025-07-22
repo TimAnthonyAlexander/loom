@@ -630,7 +630,7 @@ func (s *Session) isCompletionDetectorInteraction(content string) bool {
 
 	lowerContent := strings.ToLower(content)
 
-	// Completion detector question patterns
+	// Enhanced completion detector question patterns
 	completionQuestions := []string{
 		"is this task complete?",
 		"are you finished with this work?",
@@ -640,6 +640,9 @@ func (s *Session) isCompletionDetectorInteraction(content string) bool {
 		"are you done, or is there more work to do?",
 		"is the task fully complete?",
 		"do you need to do anything else?",
+		"has your stated objective been fully achieved?",
+		"is your current work complete?",
+		"please answer clearly:",
 	}
 
 	for _, question := range completionQuestions {
@@ -648,7 +651,7 @@ func (s *Session) isCompletionDetectorInteraction(content string) bool {
 		}
 	}
 
-	// Completion detector response patterns
+	// Enhanced completion detector response patterns
 	completionResponses := []string{
 		"yes, the task is complete",
 		"yes, i'm finished",
@@ -656,6 +659,15 @@ func (s *Session) isCompletionDetectorInteraction(content string) bool {
 		"no, i still need",
 		"not yet, i should",
 		"there's more work",
+		"objective_complete:",
+		"task_complete:",
+		"exploration_complete:",
+		"analysis_complete:",
+		"yes if the objective is complete",
+		"no if more work is required",
+		"additional work needed:",
+		"objective partially complete",
+		"ready for next phase",
 	}
 
 	for _, response := range completionResponses {

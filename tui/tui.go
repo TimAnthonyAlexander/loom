@@ -9,6 +9,7 @@ import (
 	"loom/indexer"
 	"loom/llm"
 	"loom/session"
+	"loom/task"
 	taskPkg "loom/task"
 	"sort"
 	"strings"
@@ -167,6 +168,13 @@ type model struct {
 
 	// UI preferences
 	showInfoPanel bool // Hide the top info panel after the first user message
+
+	// Enhanced completion detection
+	completionDetector   *taskPkg.CompletionDetector
+	currentObjective     string
+	objectiveExtracted   bool
+	completionCheckCount int
+	maxCompletionChecks  int
 }
 
 func (m model) Init() tea.Cmd {
@@ -593,6 +601,19 @@ Ask me anything about your code, architecture, or programming questions!`
 			// Refresh messages from chat session to include task results
 			m.messages = m.chatSession.GetDisplayMessages()
 			m.updateWrappedMessages()
+
+			// After tasks complete, check if we should trigger completion detection
+			// This ensures we always ask if the objective is complete after task execution
+			if m.lastLLMResponse != "" && !strings.HasPrefix(m.lastLLMResponse, "COMPLETION_CHECK:") {
+				// Trigger completion checking after task completion
+				return m, func() tea.Msg {
+					return AutoContinueMsg{
+						LastResponse: m.lastLLMResponse,
+						Depth:        m.recursiveDepth,
+					}
+				}
+			}
+
 			return m, m.continueLLMAfterTasks()
 		}
 		return m, nil
@@ -1002,6 +1023,14 @@ func (m *model) sendToLLMWithTasks(userInput string) tea.Cmd {
 			return StreamMsg{Error: fmt.Errorf("failed to save user message: %w", err)}
 		}
 
+		// Reset completion detection state for new user queries (not completion checks)
+		if !strings.HasPrefix(userInput, "COMPLETION_CHECK:") {
+			m.currentObjective = ""
+			m.objectiveExtracted = false
+			m.completionCheckCount = 0
+			m.recursiveDepth = 0
+		}
+
 		// Refresh display messages from chat session
 		m.messages = m.chatSession.GetDisplayMessages()
 		m.updateWrappedMessages()
@@ -1068,6 +1097,12 @@ func (m *model) handleLLMResponseForTasks(llmResponse string) tea.Cmd {
 		// Store the response for recursive tracking
 		m.lastLLMResponse = llmResponse
 
+		// Add to recent responses for loop detection
+		m.recentResponses = append(m.recentResponses, llmResponse)
+		if len(m.recentResponses) > 5 {
+			m.recentResponses = m.recentResponses[1:]
+		}
+
 		// Handle objective-driven exploration only for exploration queries
 		if m.sequentialManager != nil && m.sequentialManager.IsExploring() {
 			return m.handleObjectiveExploration(llmResponse)
@@ -1082,10 +1117,20 @@ func (m *model) handleLLMResponseForTasks(llmResponse string) tea.Cmd {
 
 			if execution != nil {
 				m.currentExecution = execution
+				// If tasks were executed, wait for completion before checking
+				return nil
 			}
 		}
 
 		// No tasks found - this is a regular Q&A response
+		// ALWAYS trigger completion checking for objective-based workflow
+		if !strings.HasPrefix(llmResponse, "COMPLETION_CHECK:") {
+			return AutoContinueMsg{
+				LastResponse: llmResponse,
+				Depth:        m.recursiveDepth,
+			}
+		}
+
 		m.recursiveDepth = 0
 		return nil
 	}
@@ -1453,35 +1498,51 @@ func (m model) handleTaskConfirmation(approved bool) (tea.Model, tea.Cmd) {
 
 // handleAutoContinuation handles simplified auto-continuation
 func (m model) handleAutoContinuation(msg AutoContinueMsg) (tea.Model, tea.Cmd) {
-	// Simple depth check - avoid excessive loops
-	if msg.Depth >= 3 {
+	// Enhanced completion detection with more nuanced logic
+
+	// Check for infinite loop patterns first
+	if m.completionDetector.HasInfiniteLoopPattern(m.recentResponses) {
+		fmt.Printf("DEBUG: Infinite loop pattern detected, stopping auto-continuation\n")
 		m.recursiveDepth = 0
+		m.completionCheckCount = 0
 		return m, nil
 	}
 
-	// Simple time check
-	if m.recursiveDepth > 0 && time.Since(m.recursiveStartTime) > 1*time.Minute {
+	// Check completion check count to prevent excessive checking
+	if m.completionCheckCount >= m.maxCompletionChecks {
+		fmt.Printf("DEBUG: Maximum completion checks reached (%d), stopping auto-continuation\n", m.maxCompletionChecks)
 		m.recursiveDepth = 0
+		m.completionCheckCount = 0
 		return m, nil
 	}
 
-	// Check if this looks like a completion signal
-	lowerResponse := strings.ToLower(msg.LastResponse)
-	if strings.Contains(lowerResponse, "complete") ||
-		strings.Contains(lowerResponse, "done") ||
-		strings.Contains(lowerResponse, "finished") {
+	// Extract objective from the response if not already extracted
+	if !m.objectiveExtracted {
+		if objective := m.completionDetector.ExtractObjective(msg.LastResponse); objective != "" {
+			m.currentObjective = objective
+			m.objectiveExtracted = true
+			fmt.Printf("DEBUG: Extracted objective: %s\n", objective)
+		}
+	}
+
+	// Use enhanced completion detection
+	if m.completionDetector.IsComplete(msg.LastResponse) {
+		fmt.Printf("DEBUG: Work appears complete based on advanced detection\n")
 		m.recursiveDepth = 0
+		m.completionCheckCount = 0
 		return m, nil
 	}
 
-	// Continue automatically
+	// Continue automatically with better completion check
 	m.recursiveDepth = msg.Depth + 1
+	m.completionCheckCount++
+
 	if m.recursiveDepth == 1 {
 		m.recursiveStartTime = time.Now()
 	}
 
-	// Simple completion check prompt
-	completionPrompt := "Is this task complete?"
+	// Generate comprehensive completion check prompt
+	completionPrompt := m.completionDetector.GenerateCompletionCheckPrompt(m.currentObjective)
 
 	autoMessage := llm.Message{
 		Role:      "user",
@@ -1495,6 +1556,7 @@ func (m model) handleAutoContinuation(msg AutoContinueMsg) (tea.Model, tea.Cmd) 
 		}
 	}
 
+	fmt.Printf("DEBUG: Sending completion check #%d: %s\n", m.completionCheckCount, completionPrompt)
 	return m, m.sendToLLMWithTasks(completionPrompt)
 }
 
@@ -1884,6 +1946,10 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 		maxRecursiveDepth: 15,
 		maxRecursiveTime:  30 * time.Minute,
 		showInfoPanel:     true,
+
+		// Initialize completion detection
+		completionDetector:  task.NewCompletionDetector(),
+		maxCompletionChecks: 5, // Allow more thorough completion checking
 	}
 
 	// Initialize wrapped messages
