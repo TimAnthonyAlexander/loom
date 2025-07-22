@@ -1,8 +1,8 @@
 --- a/editing_tests/thefile.md
 +++ b/editing_tests/thefile.md
 @@
- 
--## Whats up bro
-+## What's new?
- 
+ - Points
+ - Are
+ - Necessary
++- Optional
 @@
