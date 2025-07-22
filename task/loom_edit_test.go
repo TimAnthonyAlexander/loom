@@ -39,6 +39,12 @@ func TestLoomEditProcessor_ParseLoomEdits(t *testing.T) {
 			expectCount: 1,
 			expectPaths: []string{"main.go"},
 		},
+		{
+			name: "plain LOOM_EDIT format without markdown",
+			message: `LOOM_EDIT\n--- a/sample.json\n+++ b/sample.json\n@@ -3,7 +3,7 @@\n     "name": "Sample Item",\n-    "price": 19.99,\n+    "price": 18.99,\n     "inStock": true,\n     "tags": [\nOBJECTIVE_COMPLETE: Updated the price in sample.json from 19.99 to 18.99.`,
+			expectCount: 1,
+			expectPaths: []string{"sample.json"},
+		},
 	}
 
 	for _, tt := range tests {

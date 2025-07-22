@@ -2,6 +2,7 @@ package task
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -30,30 +31,67 @@ type EditBlock struct {
 // editRE matches LOOM_EDIT fenced code blocks  
 var editRE = regexp.MustCompile(`(?s)` + "`" + `{3}LOOM_EDIT\n(.*?)\n` + "`" + `{3}`)
 
+// editREPlain matches plain LOOM_EDIT blocks without markdown formatting
+// This handles the format: LOOM_EDIT\n<diff content>OBJECTIVE_COMPLETE:
+var editREPlain = regexp.MustCompile(`(?s)LOOM_EDIT\\n(.*?)(?:OBJECTIVE_COMPLETE:|$)`)
+
 // ParseLoomEdits extracts all LOOM_EDIT blocks from an LLM message
 func (p *LoomEditProcessor) ParseLoomEdits(message string) ([]EditBlock, error) {
+	var allMatches [][]string
+	
+	// First try markdown code block format
 	matches := editRE.FindAllStringSubmatch(message, -1)
-	if len(matches) == 0 {
+	if len(matches) > 0 {
+		log.Printf("LOOM_EDIT: Found %d blocks using markdown format", len(matches))
+		allMatches = append(allMatches, matches...)
+	} else {
+		log.Printf("LOOM_EDIT: No markdown format blocks found, trying plain format")
+		
+		// Try plain format (without markdown code blocks)
+		plainMatches := editREPlain.FindAllStringSubmatch(message, -1)
+		if len(plainMatches) > 0 {
+			log.Printf("LOOM_EDIT: Found %d blocks using plain format", len(plainMatches))
+			allMatches = append(allMatches, plainMatches...)
+		} else {
+			log.Printf("LOOM_EDIT: No blocks found in either format")
+			// Debug: Log part of the message to help diagnose
+			truncatedMsg := message
+			if len(message) > 200 {
+				truncatedMsg = message[:200] + "..."
+			}
+			log.Printf("LOOM_EDIT: Message content (first 200 chars): %q", truncatedMsg)
+		}
+	}
+
+	if len(allMatches) == 0 {
 		return nil, nil // no edit blocks found
 	}
 
 	var blocks []EditBlock
-	for _, match := range matches {
+	for i, match := range allMatches {
 		if len(match) < 2 {
+			log.Printf("LOOM_EDIT: Skipping match %d - insufficient capture groups", i)
 			continue
 		}
 
 		diffContent := match[1]
+		// For plain format, we need to decode the escaped newlines
+		diffContent = strings.ReplaceAll(diffContent, "\\n", "\n")
+		
 		if strings.TrimSpace(diffContent) == "" {
+			log.Printf("LOOM_EDIT: Skipping match %d - empty diff content", i)
 			continue
 		}
 
 		// Extract file path from diff header
 		filePath, err := p.extractFilePathFromDiff(diffContent)
 		if err != nil {
+			log.Printf("LOOM_EDIT: Failed to extract file path from diff block %d: %v", i, err)
+			log.Printf("LOOM_EDIT: Diff content was: %q", diffContent[:minInt(len(diffContent), 200)])
 			return nil, fmt.Errorf("failed to extract file path from diff: %v", err)
 		}
 
+		log.Printf("LOOM_EDIT: Successfully parsed block %d for file: %s", i, filePath)
 		blocks = append(blocks, EditBlock{
 			DiffContent: diffContent,
 			FilePath:    filePath,
@@ -90,6 +128,11 @@ func (p *LoomEditProcessor) ApplyEdits(blocks []EditBlock) error {
 
 // applyEditBlock applies a single edit block using git apply
 func (p *LoomEditProcessor) applyEditBlock(block EditBlock, blockIndex int) error {
+	// Validate the diff format first
+	if err := p.ValidateDiffFormat(block.DiffContent); err != nil {
+		return fmt.Errorf("invalid diff format: %v\n\nDiff content:\n%s", err, block.DiffContent)
+	}
+
 	// Create temporary patch file
 	tmpDir := os.TempDir()
 	patchFile := filepath.Join(tmpDir, fmt.Sprintf("loom_edit_%d.patch", blockIndex))
@@ -116,7 +159,7 @@ func (p *LoomEditProcessor) applyEditBlock(block EditBlock, blockIndex int) erro
 	
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("git apply failed: %v\nOutput: %s", err, string(output))
+		return fmt.Errorf("git apply failed: %v\nOutput: %s\n\nThis usually means the diff is malformed or incomplete. The diff content was:\n%s", err, string(output), block.DiffContent)
 	}
 
 	return nil
@@ -188,4 +231,12 @@ func (p *LoomEditProcessor) ValidateDiffFormat(diffContent string) error {
 	}
 	
 	return nil
+}
+
+// Helper function for minimum
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 } 
