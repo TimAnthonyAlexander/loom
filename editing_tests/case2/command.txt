@@ -1,0 +1,6 @@
+EDIT_LINES: 3
+This is the original content with an extra random sentence to showcase editing capabilities.  
+--- AFTER ---
+4:    
+
+OBJECTIVE_COMPLETE: The file edit_tests/thefile.md has been updated with a random edit.

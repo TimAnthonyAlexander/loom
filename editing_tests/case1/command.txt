@@ -1,0 +1,12 @@
+🔧 EDIT editing_tests/thefile.md:2 -\u003e insert a new line below the first headline
+
+--- BEFORE ---
+# This is a file to be tested against with applying editing diffs
+
+This is a line beneath the headline.
+--- CHANGE ---
+EDIT_LINES: 2
+This is an inserted line below the first headline.
+--- AFTER ---
+
+This is a line beneath the headline.
