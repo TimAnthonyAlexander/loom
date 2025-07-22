@@ -323,7 +323,8 @@ Be explicit about next steps:
 
 ### 7.2 LIST / READ
 - LIST: Directory contents (LIST . recursive)
-- READ: File contents with line numbers (READ file.go (lines 40-80))
+- READ: File contents with line numbers and SHA hash (READ file.go (lines 40-80))
+- File reading automatically provides SHA hash needed for LOOM_EDIT commands
 - Always request line numbers before editing
 
 ### 7.3 EDIT (LOOM_EDIT Specification)
@@ -344,7 +345,7 @@ Be explicit about next steps:
 - **DELETE**: Remove lines START-END (empty body)
 
 **Rules**:
-- Always READ file first to get current SHA and line numbers
+- Always READ file first to get current SHA and line numbers (SHA provided automatically)
 - File SHA (v=) prevents applying to changed files
 - Old slice SHA validates target lines haven't changed
 - Line numbers are 1-based inclusive

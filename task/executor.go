@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"loom/indexer"
 	"loom/loom_edit"
 	"loom/memory"
@@ -123,6 +124,20 @@ func (e *Executor) executeReadFile(task *Task) *TaskResponse {
 		response.Error = fmt.Sprintf("cannot read binary file: %s", task.Path)
 		return response
 	}
+
+	// Read entire file content for SHA calculation (needed for LOOM_EDIT)
+	fullContent, err := ioutil.ReadFile(fullPath)
+	if err != nil {
+		response.Error = fmt.Sprintf("failed to read file for SHA calculation: %v", err)
+		return response
+	}
+
+	// Normalize line endings for consistent SHA calculation (same as loom_edit module)
+	normalizedContent := strings.ReplaceAll(string(fullContent), "\r\n", "\n")
+	normalizedContent = strings.ReplaceAll(normalizedContent, "\r", "\n")
+
+	// Calculate SHA hash using loom_edit module function
+	fileSHA := loom_edit.HashContent(normalizedContent)
 
 	// Read file to get total line count first
 	totalLines, err := e.countFileLines(fullPath)
@@ -247,19 +262,22 @@ func (e *Executor) executeReadFile(task *Task) *TaskResponse {
 	// Redact secrets from the actual content for LLM
 	actualContent := e.redactSecrets(result.String())
 
+	// Add SHA hash for LOOM_EDIT compatibility
+	contentWithSHA := fmt.Sprintf("File: %s\nSHA: %s\nLines: %d\n\n%s", task.Path, fileSHA, totalLines, actualContent)
+
 	// Store actual content for LLM (will be used internally)
-	response.ActualContent = actualContent
+	response.ActualContent = contentWithSHA
 
 	response.Success = true
 
 	// Enhanced status message for user
 	var statusMsg string
 	if task.StartLine > 0 || task.EndLine > 0 {
-		statusMsg = fmt.Sprintf("Reading file: %s (lines %d-%d, %d lines read, %d total lines)",
-			task.Path, startLine, lastLineRead, linesRead, totalLines)
+		statusMsg = fmt.Sprintf("Reading file: %s (lines %d-%d, %d lines read, %d total lines, SHA: %s)",
+			task.Path, startLine, lastLineRead, linesRead, totalLines, fileSHA)
 	} else {
-		statusMsg = fmt.Sprintf("Reading file: %s (%d lines read, %d total lines)",
-			task.Path, linesRead, totalLines)
+		statusMsg = fmt.Sprintf("Reading file: %s (%d lines read, %d total lines, SHA: %s)",
+			task.Path, linesRead, totalLines, fileSHA)
 	}
 
 	if remainingLines > 0 {
