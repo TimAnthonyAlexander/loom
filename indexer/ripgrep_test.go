@@ -1,6 +1,7 @@
 package indexer
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -9,36 +10,50 @@ import (
 )
 
 func TestRgPath(t *testing.T) {
-	expectedPath := rgPath()
+	actualPath := rgPath()
 
 	// Verify the path is not empty
-	if expectedPath == "" {
+	if actualPath == "" {
 		t.Error("Expected rgPath() to return a non-empty path")
 	}
 
-	// Verify the path contains the expected binary name for current OS
-	var expectedBinary string
-	switch runtime.GOOS {
-	case "windows":
-		expectedBinary = "rg-windows.exe"
-	case "darwin":
-		expectedBinary = "rg-macos"
-	case "linux":
-		expectedBinary = "rg-linux"
-	default:
-		t.Skipf("Unsupported OS: %s", runtime.GOOS)
+	// Verify the binary exists at the returned path
+	if _, err := os.Stat(actualPath); os.IsNotExist(err) {
+		t.Errorf("Binary does not exist at returned path: %s", actualPath)
 	}
 
-	if !strings.Contains(expectedPath, expectedBinary) {
-		t.Errorf("Expected path to contain %s, got %s", expectedBinary, expectedPath)
+	// Verify the binary is executable (check permissions)
+	if info, err := os.Stat(actualPath); err == nil {
+		mode := info.Mode()
+		if mode&0111 == 0 { // Check if any execute bit is set
+			t.Errorf("Binary at %s is not executable (mode: %s)", actualPath, mode)
+		}
 	}
 
-	// Verify the path contains "bin" directory
-	if !strings.Contains(expectedPath, "bin") {
-		t.Errorf("Expected path to contain 'bin' directory, got %s", expectedPath)
+	// Verify it's actually ripgrep by checking if we can run --version
+	output, err := RunRipgrepWithArgs("--version")
+	if err != nil {
+		t.Errorf("Failed to run ripgrep --version: %v", err)
+	} else {
+		outputStr := string(output)
+		if !strings.Contains(strings.ToLower(outputStr), "ripgrep") {
+			t.Errorf("Binary doesn't appear to be ripgrep. Version output: %s", outputStr)
+		}
 	}
 
-	t.Logf("Ripgrep path for %s: %s", runtime.GOOS, expectedPath)
+	t.Logf("✅ Ripgrep found and working at: %s", actualPath)
+	t.Logf("   Platform: %s", runtime.GOOS)
+
+	// Log which type of ripgrep installation we found
+	if strings.Contains(actualPath, "/usr/bin") || strings.Contains(actualPath, "/opt/homebrew/bin") || strings.Contains(actualPath, "Program Files") {
+		t.Logf("   Type: System-wide installation")
+	} else if strings.Contains(actualPath, "tmp") || strings.Contains(actualPath, "temp") {
+		t.Logf("   Type: Embedded binary (extracted to temp)")
+	} else if strings.Contains(actualPath, "bin") {
+		t.Logf("   Type: Bundled binary")
+	} else {
+		t.Logf("   Type: Unknown")
+	}
 }
 
 func TestFindModuleRoot(t *testing.T) {
@@ -319,4 +334,43 @@ func TestRipgrepErrorHandling(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error when searching in non-existent directory")
 	}
+}
+
+func TestEmbeddedRipgrepFunctionality(t *testing.T) {
+	// Test that the embedded ripgrep getter mechanism works
+	// This tests the dependency injection pattern we use to avoid import cycles
+
+	// Mock embedded ripgrep getter for testing
+	mockEmbeddedPath := "/tmp/mock-rg"
+	mockError := fmt.Errorf("mock error")
+
+	// Test with successful embedded getter
+	SetEmbeddedRipgrepGetter(func() (string, error) {
+		return mockEmbeddedPath, nil
+	})
+
+	// Since we set a mock getter, rgPath should try the embedded path first
+	// However, since the mock path doesn't exist, it will fall back to system ripgrep
+	actualPath := rgPath()
+
+	// The actual path should still work (either system or bundled)
+	if actualPath == "" {
+		t.Error("rgPath() should still return a valid path even with mock embedded getter")
+	}
+
+	// Test with failing embedded getter
+	SetEmbeddedRipgrepGetter(func() (string, error) {
+		return "", mockError
+	})
+
+	// Should fall back to system/bundled ripgrep
+	actualPath = rgPath()
+	if actualPath == "" {
+		t.Error("rgPath() should fall back when embedded getter fails")
+	}
+
+	// Reset to nil for other tests
+	SetEmbeddedRipgrepGetter(nil)
+
+	t.Logf("✅ Embedded ripgrep functionality test passed")
 }
