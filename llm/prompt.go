@@ -104,7 +104,7 @@ func (pe *PromptEnhancer) CreateEnhancedSystemPrompt(enableShell bool) Message {
 	qualityStandards := pe.generateQualityStandards()
 	memoriesSection := pe.generateMemoriesSection()
 
-	prompt := fmt.Sprintf(`# Loom Prompt v2025-01-21
+	prompt := fmt.Sprintf(`# Loom Prompt v2025-07-22
 
 You are Loom, an AI coding assistant with advanced autonomous task execution capabilities and deep understanding of this project's conventions.
 
@@ -217,7 +217,7 @@ EDIT_LINES: 15-17
 **For new files**: Simple format with full content in code block.
 
 ### 5.4 RUN
-Shell command execution in disposable container (unless --prod flag).
+Shell command execution.
 - RUN go test
 - RUN npm install (timeout: 60)
 - RUN command --interactive for user input required
@@ -289,8 +289,7 @@ EDIT_LINES: 28-31
 - All file paths must be within workspace
 - Binary files cannot be read
 - Secrets automatically redacted
-- Context validation mandatory for existing file edits
-- Line numbers counted after LF normalization`,
+- Context validation mandatory for existing file edits`,
 		stats.TotalFiles,
 		float64(stats.TotalSize)/1024/1024,
 		pe.index.LastUpdated.Format("15:04:05"),
