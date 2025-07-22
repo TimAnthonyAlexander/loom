@@ -8,13 +8,31 @@ import (
 	"runtime"
 )
 
+// EmbeddedRipgrepGetter is a function type for getting the embedded ripgrep path
+// This avoids import cycles by allowing the main package to provide the embedded binary
+type EmbeddedRipgrepGetter func() (string, error)
+
+var embeddedRipgrepGetter EmbeddedRipgrepGetter
+
+// SetEmbeddedRipgrepGetter sets the function to get the embedded ripgrep binary
+func SetEmbeddedRipgrepGetter(getter EmbeddedRipgrepGetter) {
+	embeddedRipgrepGetter = getter
+}
+
 func rgPath() string {
-	// First try to find ripgrep in the system PATH
+	// First try embedded ripgrep if available
+	if embeddedRipgrepGetter != nil {
+		if embeddedPath, err := embeddedRipgrepGetter(); err == nil {
+			return embeddedPath
+		}
+	}
+
+	// Second, try to find ripgrep in the system PATH
 	if systemRg, err := exec.LookPath("rg"); err == nil {
 		return systemRg
 	}
 
-	// Try to find the module root and look for bundled binary
+	// Third, try to find the module root and look for bundled binary
 	moduleRoot, err := findModuleRoot()
 	if err != nil {
 		// Fallback to relative path if we can't find module root
@@ -76,7 +94,7 @@ func RunRipgrep(pattern, path string) ([]byte, error) {
 
 	// Check if the binary exists and provide helpful error
 	if _, err := os.Stat(rgBinary); os.IsNotExist(err) {
-		return nil, fmt.Errorf("ripgrep binary not found at %s. Please install ripgrep system-wide using 'brew install ripgrep' or ensure the bin/ directory contains the ripgrep binary", rgBinary)
+		return nil, fmt.Errorf("ripgrep binary not found at %s. Please install ripgrep system-wide using 'brew install ripgrep' (macOS), 'apt install ripgrep' (Ubuntu), or download from https://github.com/BurntSushi/ripgrep/releases", rgBinary)
 	}
 
 	return exec.Command(rgBinary, pattern, path).CombinedOutput()
@@ -88,7 +106,7 @@ func RunRipgrepWithArgs(args ...string) ([]byte, error) {
 
 	// Check if the binary exists and provide helpful error
 	if _, err := os.Stat(rgBinary); os.IsNotExist(err) {
-		return nil, fmt.Errorf("ripgrep binary not found at %s. Please install ripgrep system-wide using 'brew install ripgrep' or ensure the bin/ directory contains the ripgrep binary", rgBinary)
+		return nil, fmt.Errorf("ripgrep binary not found at %s. Please install ripgrep system-wide using 'brew install ripgrep' (macOS), 'apt install ripgrep' (Ubuntu), or download from https://github.com/BurntSushi/ripgrep/releases", rgBinary)
 	}
 
 	cmd := exec.Command(rgBinary, args...)

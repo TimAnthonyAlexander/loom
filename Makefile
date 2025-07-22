@@ -33,13 +33,17 @@ build: ## Build the binary
 	go build -o $(BINARY_PATH) .
 	@echo "$(GREEN)✅ Build complete: $(BINARY_PATH)$(NC)"
 
-build-all: ## Build for all platforms
-	@echo "$(BLUE)🔨 Building for all platforms...$(NC)"
+build-embedded: download-ripgrep build ## Build the binary with embedded ripgrep
+	@echo "$(GREEN)✅ Build complete with embedded ripgrep: $(BINARY_PATH)$(NC)"
+
+build-all: download-ripgrep ## Build for all platforms with embedded ripgrep
+	@echo "$(BLUE)🔨 Building for all platforms with embedded ripgrep...$(NC)"
+	mkdir -p build
 	GOOS=linux GOARCH=amd64 go build -o build/$(BINARY_NAME)-linux-amd64 .
 	GOOS=darwin GOARCH=amd64 go build -o build/$(BINARY_NAME)-darwin-amd64 .
 	GOOS=darwin GOARCH=arm64 go build -o build/$(BINARY_NAME)-darwin-arm64 .
 	GOOS=windows GOARCH=amd64 go build -o build/$(BINARY_NAME)-windows-amd64.exe .
-	@echo "$(GREEN)✅ Multi-platform build complete!$(NC)"
+	@echo "$(GREEN)✅ Multi-platform build complete with embedded ripgrep!$(NC)"
 
 RIPGREP_VERSION=14.1.0
 RIPGREP_DIR=bin
