@@ -9,7 +9,6 @@ import (
 	"loom/indexer"
 	"loom/llm"
 	"loom/session"
-	"loom/task"
 	taskPkg "loom/task"
 	"sort"
 	"strings"
@@ -175,6 +174,7 @@ type model struct {
 	objectiveExtracted   bool
 	completionCheckCount int
 	maxCompletionChecks  int
+	debugEnabled         bool // Unified debug flag for all debug systems
 }
 
 func (m model) Init() tea.Cmd {
@@ -359,24 +359,58 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Show test discovery and results
 					return m, m.showTestSummary()
 				} else if userInput == "/debug" {
-					// Toggle debug mode for task parsing
-					if taskPkg.IsTaskDebugEnabled() {
-						taskPkg.DisableTaskDebug()
-						response := llm.Message{
-							Role:      "assistant",
-							Content:   "🔧 Task debug mode disabled.\n\nDebug output for task parsing is now off.",
-							Timestamp: time.Now(),
-						}
-						m.chatSession.AddMessage(response)
-					} else {
+					// Toggle unified debug mode for both task parsing and completion detection
+					m.debugEnabled = !m.debugEnabled
+
+					// Also toggle task debug mode to match
+					if m.debugEnabled {
 						taskPkg.EnableTaskDebug()
-						response := llm.Message{
-							Role:      "assistant",
-							Content:   "🔧 Task debug mode enabled.\n\nYou'll now see detailed output when the LLM fails to output proper task JSON format. This helps identify when the AI suggests actions but doesn't provide executable tasks.\n\nTry asking the AI to read or edit files to see the debug output.",
-							Timestamp: time.Now(),
-						}
-						m.chatSession.AddMessage(response)
+					} else {
+						taskPkg.DisableTaskDebug()
 					}
+
+					var status string
+					if m.debugEnabled {
+						status = "enabled"
+					} else {
+						status = "disabled"
+					}
+
+					debugInfo := fmt.Sprintf(`🔍 **Unified Debug Mode %s**
+
+This mode shows debug information for:
+• Task parsing (JSON extraction from LLM responses)
+• Completion detection (objective tracking and analysis)
+• Auto-continuation decision logic
+• Loop detection and prevention
+
+Current Status:
+• Objective extracted: %t
+• Current objective: "%s"
+• Completion checks sent: %d/%d
+• Recent responses tracked: %d
+
+%s`,
+						status,
+						m.objectiveExtracted,
+						m.currentObjective,
+						m.completionCheckCount,
+						m.maxCompletionChecks,
+						len(m.recentResponses),
+						func() string {
+							if m.debugEnabled {
+								return "Debug messages will now appear in chat."
+							} else {
+								return "Debug messages are now hidden."
+							}
+						}())
+
+					response := llm.Message{
+						Role:      "assistant",
+						Content:   debugInfo,
+						Timestamp: time.Now(),
+					}
+					m.chatSession.AddMessage(response)
 
 					// Add user command to chat session
 					userMessage := llm.Message{
@@ -389,7 +423,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Refresh display
 					m.messages = m.chatSession.GetDisplayMessages()
 					m.updateWrappedMessages()
-
 				} else if userInput == "/help" {
 					// Show comprehensive help
 					userMessage := llm.Message{
@@ -415,7 +448,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 • /test - Test discovery results and execution options
 • /summary - AI-generated session summary
 • /rationale - Change summaries and explanations
-• /debug - Toggle task debugging mode (shows AI task parsing)
+• /debug - Toggle unified debug mode (task parsing and completion detection)
 • /help - Show this help message
 • /quit - Exit application
 
@@ -1502,7 +1535,9 @@ func (m model) handleAutoContinuation(msg AutoContinueMsg) (tea.Model, tea.Cmd) 
 
 	// Check for infinite loop patterns first
 	if m.completionDetector.HasInfiniteLoopPattern(m.recentResponses) {
-		fmt.Printf("DEBUG: Infinite loop pattern detected, stopping auto-continuation\n")
+		if m.debugEnabled {
+			m.addDebugMessage("🔄 Loop pattern detected, stopping auto-continuation")
+		}
 		m.recursiveDepth = 0
 		m.completionCheckCount = 0
 		return m, nil
@@ -1510,7 +1545,9 @@ func (m model) handleAutoContinuation(msg AutoContinueMsg) (tea.Model, tea.Cmd) 
 
 	// Check completion check count to prevent excessive checking
 	if m.completionCheckCount >= m.maxCompletionChecks {
-		fmt.Printf("DEBUG: Maximum completion checks reached (%d), stopping auto-continuation\n", m.maxCompletionChecks)
+		if m.debugEnabled {
+			m.addDebugMessage(fmt.Sprintf("🛑 Maximum completion checks reached (%d), stopping", m.maxCompletionChecks))
+		}
 		m.recursiveDepth = 0
 		m.completionCheckCount = 0
 		return m, nil
@@ -1521,13 +1558,17 @@ func (m model) handleAutoContinuation(msg AutoContinueMsg) (tea.Model, tea.Cmd) 
 		if objective := m.completionDetector.ExtractObjective(msg.LastResponse); objective != "" {
 			m.currentObjective = objective
 			m.objectiveExtracted = true
-			fmt.Printf("DEBUG: Extracted objective: %s\n", objective)
+			if m.debugEnabled {
+				m.addDebugMessage(fmt.Sprintf("🎯 Extracted objective: %s", objective))
+			}
 		}
 	}
 
 	// Use enhanced completion detection
 	if m.completionDetector.IsComplete(msg.LastResponse) {
-		fmt.Printf("DEBUG: Work appears complete based on advanced detection\n")
+		if m.debugEnabled {
+			m.addDebugMessage("✅ Work appears complete based on advanced detection")
+		}
 		m.recursiveDepth = 0
 		m.completionCheckCount = 0
 		return m, nil
@@ -1544,6 +1585,10 @@ func (m model) handleAutoContinuation(msg AutoContinueMsg) (tea.Model, tea.Cmd) 
 	// Generate comprehensive completion check prompt
 	completionPrompt := m.completionDetector.GenerateCompletionCheckPrompt(m.currentObjective)
 
+	if m.debugEnabled {
+		m.addDebugMessage(fmt.Sprintf("❓ Sending completion check #%d: %s", m.completionCheckCount, completionPrompt))
+	}
+
 	autoMessage := llm.Message{
 		Role:      "user",
 		Content:   completionPrompt,
@@ -1556,7 +1601,6 @@ func (m model) handleAutoContinuation(msg AutoContinueMsg) (tea.Model, tea.Cmd) 
 		}
 	}
 
-	fmt.Printf("DEBUG: Sending completion check #%d: %s\n", m.completionCheckCount, completionPrompt)
 	return m, m.sendToLLMWithTasks(completionPrompt)
 }
 
@@ -1569,6 +1613,19 @@ func (m *model) addSystemMessage(message string) {
 	}
 
 	m.chatSession.AddMessage(systemMsg)
+	m.messages = m.chatSession.GetDisplayMessages()
+	m.updateWrappedMessages()
+}
+
+// addDebugMessage helper method to add debug messages to chat when debug mode is enabled
+func (m *model) addDebugMessage(message string) {
+	debugMsg := llm.Message{
+		Role:      "assistant",
+		Content:   fmt.Sprintf("🔍 **DEBUG**: %s", message),
+		Timestamp: time.Now(),
+	}
+
+	m.chatSession.AddMessage(debugMsg)
 	m.messages = m.chatSession.GetDisplayMessages()
 	m.updateWrappedMessages()
 }
@@ -1948,9 +2005,23 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 		showInfoPanel:     true,
 
 		// Initialize completion detection
-		completionDetector:  task.NewCompletionDetector(),
+		completionDetector:  taskPkg.NewCompletionDetector(),
 		maxCompletionChecks: 5, // Allow more thorough completion checking
 	}
+
+	// Set up unified debug handler to send debug messages to chat instead of breaking TUI
+	taskPkg.SetDebugHandler(func(message string) {
+		if m.debugEnabled {
+			debugMsg := llm.Message{
+				Role:      "assistant",
+				Content:   fmt.Sprintf("🔍 **DEBUG**: %s", message),
+				Timestamp: time.Now(),
+			}
+			m.chatSession.AddMessage(debugMsg)
+			m.messages = m.chatSession.GetDisplayMessages()
+			m.updateWrappedMessages()
+		}
+	})
 
 	// Initialize wrapped messages
 	m.updateWrappedMessages()

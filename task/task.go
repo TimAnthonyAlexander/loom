@@ -18,6 +18,12 @@ const (
 // Global debug flag for task parsing - can be enabled with environment variable
 var debugTaskParsing = os.Getenv("LOOM_DEBUG_TASKS") == "1"
 
+// DebugHandler is a function type for handling debug messages
+type DebugHandler func(message string)
+
+// Global debug handler - if set, debug messages go here instead of fmt.Printf
+var debugHandler DebugHandler
+
 // EnableTaskDebug enables debug output for task parsing (for troubleshooting)
 func EnableTaskDebug() {
 	debugTaskParsing = true
@@ -31,6 +37,24 @@ func DisableTaskDebug() {
 // IsTaskDebugEnabled returns whether task debug mode is enabled
 func IsTaskDebugEnabled() bool {
 	return debugTaskParsing
+}
+
+// SetDebugHandler sets the global debug message handler
+func SetDebugHandler(handler DebugHandler) {
+	debugHandler = handler
+}
+
+// debugLog sends a debug message either to the handler or fmt.Printf as fallback
+func debugLog(message string) {
+	if !debugTaskParsing {
+		return
+	}
+
+	if debugHandler != nil {
+		debugHandler(message)
+	} else {
+		fmt.Printf("DEBUG: %s\n", message)
+	}
 }
 
 // TaskType represents the type of task to execute
@@ -162,9 +186,7 @@ type TaskResponse struct {
 
 // tryNaturalLanguageParsing attempts to parse natural language task commands
 func tryNaturalLanguageParsing(llmResponse string) *TaskList {
-	if debugTaskParsing {
-		fmt.Printf("DEBUG: Attempting natural language task parsing...\n")
-	}
+	debugLog("DEBUG: Attempting natural language task parsing...")
 
 	// Preprocess escaped content - handle cases where LLM sends escaped newlines and quotes
 	processedResponse := strings.ReplaceAll(llmResponse, "\\n", "\n")
@@ -192,19 +214,13 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 				if task.Type == TaskTypeEditFile && task.Content == "" {
 					// First try to parse SafeEdit format
 					if parseSafeEditFormat(task, lines, i+1) {
-						if debugTaskParsing {
-							fmt.Printf("DEBUG: Parsed SafeEdit format for edit task\n")
-						}
+						debugLog("DEBUG: Parsed SafeEdit format for edit task")
 					} else if content := extractContentFromCodeBlock(lines, i+1); content != "" {
 						task.Content = content
-						if debugTaskParsing {
-							fmt.Printf("DEBUG: Found content in code block for edit task\n")
-						}
+						debugLog("DEBUG: Found content in code block for edit task")
 					} else if content := extractDirectContent(lines, i+1); content != "" {
 						task.Content = content
-						if debugTaskParsing {
-							fmt.Printf("DEBUG: Found direct content for edit task\n")
-						}
+						debugLog("DEBUG: Found direct content for edit task")
 					}
 				}
 
@@ -212,9 +228,7 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 				if task.Type == TaskTypeMemory && task.MemoryContent == "" {
 					if content := extractMemoryContent(lines, i+1); content != "" {
 						task.MemoryContent = content
-						if debugTaskParsing {
-							fmt.Printf("DEBUG: Found memory content on subsequent lines\n")
-						}
+						debugLog("DEBUG: Found memory content on subsequent lines")
 					}
 				}
 
@@ -223,9 +237,7 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 				if !seenTasks[taskKey] {
 					seenTasks[taskKey] = true
 					tasks = append(tasks, *task)
-					if debugTaskParsing {
-						fmt.Printf("DEBUG: Parsed natural language task - Type: %s, Path: %s\n", task.Type, task.Path)
-					}
+					debugLog(fmt.Sprintf("DEBUG: Parsed natural language task - Type: %s, Path: %s\n", task.Type, task.Path))
 				}
 			}
 		}
@@ -256,14 +268,10 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 					if task.Type == TaskTypeEditFile && task.Content == "" {
 						if content := extractContentFromCodeBlock(lines, i+1); content != "" {
 							task.Content = content
-							if debugTaskParsing {
-								fmt.Printf("DEBUG: Found content in code block for simple edit task\n")
-							}
+							debugLog("DEBUG: Found content in code block for simple edit task")
 						} else if content := extractDirectContent(lines, i+1); content != "" {
 							task.Content = content
-							if debugTaskParsing {
-								fmt.Printf("DEBUG: Found direct content for simple edit task\n")
-							}
+							debugLog("DEBUG: Found direct content for simple edit task")
 						}
 					}
 
@@ -271,32 +279,24 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 					if task.Type == TaskTypeMemory && task.MemoryContent == "" {
 						if content := extractMemoryContent(lines, i+1); content != "" {
 							task.MemoryContent = content
-							if debugTaskParsing {
-								fmt.Printf("DEBUG: Found memory content on subsequent lines (simple pattern)\n")
-							}
+							debugLog("DEBUG: Found memory content on subsequent lines (simple pattern)")
 						}
 					}
 
 					seenTasks[taskKey] = true
 					tasks = append(tasks, *task)
-					if debugTaskParsing {
-						fmt.Printf("DEBUG: Parsed simple natural language task - Type: %s, Path: %s\n", task.Type, task.Path)
-					}
+					debugLog(fmt.Sprintf("DEBUG: Parsed simple natural language task - Type: %s, Path: %s\n", task.Type, task.Path))
 				}
 			}
 		}
 	}
 
 	if len(tasks) == 0 {
-		if debugTaskParsing {
-			fmt.Printf("DEBUG: No natural language tasks found\n")
-		}
+		debugLog("DEBUG: No natural language tasks found")
 		return nil
 	}
 
-	if debugTaskParsing {
-		fmt.Printf("DEBUG: Successfully parsed %d natural language tasks\n", len(tasks))
-	}
+	debugLog(fmt.Sprintf("DEBUG: Successfully parsed %d natural language tasks\n", len(tasks)))
 
 	return &TaskList{Tasks: tasks}
 }
@@ -1112,10 +1112,8 @@ func parseSafeEditFormat(task *Task, lines []string, startIdx int) bool {
 	task.Content = strings.Join(editContent, "\n")
 	task.AfterContext = strings.Join(afterContext, "\n")
 
-	if debugTaskParsing {
-		fmt.Printf("DEBUG: SafeEdit parsed - BeforeContext: %d lines, EditContent: %d lines, AfterContext: %d lines\n",
-			len(beforeContext), len(editContent), len(afterContext))
-	}
+	debugLog(fmt.Sprintf("DEBUG: SafeEdit parsed - BeforeContext: %d lines, EditContent: %d lines, AfterContext: %d lines\n",
+		len(beforeContext), len(editContent), len(afterContext)))
 
 	return true
 }
@@ -1508,9 +1506,7 @@ func tryFallbackJSONParsing(llmResponse string) *TaskList {
 	taskTypePattern := `\{"type":\s*"(?:ReadFile|EditFile|ListDir|RunShell)"`
 	re := regexp.MustCompile(taskTypePattern)
 
-	if debugTaskParsing {
-		fmt.Printf("DEBUG: Searching for raw JSON patterns in response...\n")
-	}
+	debugLog("DEBUG: Searching for raw JSON patterns in response...")
 
 	// Find potential JSON task objects
 	lines := strings.Split(llmResponse, "\n")
@@ -1526,40 +1522,30 @@ func tryFallbackJSONParsing(llmResponse string) *TaskList {
 
 		// Check if this line matches a task pattern
 		if re.MatchString(line) {
-			if debugTaskParsing {
-				fmt.Printf("DEBUG: Found potential raw JSON task: %s\n", line[:min(len(line), 100)])
-			}
+			debugLog(fmt.Sprintf("DEBUG: Found potential raw JSON task: %s\n", line[:min(len(line), 100)]))
 			jsonCandidates = append(jsonCandidates, line)
 		}
 	}
 
 	// Try to parse each candidate
 	for _, jsonStr := range jsonCandidates {
-		if debugTaskParsing {
-			fmt.Printf("DEBUG: Attempting to parse raw JSON: %s\n", jsonStr[:min(len(jsonStr), 100)])
-		}
+		debugLog(fmt.Sprintf("DEBUG: Attempting to parse raw JSON: %s\n", jsonStr[:min(len(jsonStr), 100)]))
 
 		// Try to parse as single Task object
 		var singleTask Task
 		if err := json.Unmarshal([]byte(jsonStr), &singleTask); err == nil {
 			// Validate the task
 			if err := validateTask(&singleTask); err == nil {
-				if debugTaskParsing {
-					fmt.Printf("DEBUG: Successfully parsed raw JSON task - Type: %s, Path: %s\n", singleTask.Type, singleTask.Path)
-				}
+				debugLog(fmt.Sprintf("DEBUG: Successfully parsed raw JSON task - Type: %s, Path: %s\n", singleTask.Type, singleTask.Path))
 
 				// Create TaskList with single task
 				taskList := TaskList{Tasks: []Task{singleTask}}
 				return &taskList
 			} else {
-				if debugTaskParsing {
-					fmt.Printf("DEBUG: Raw JSON task validation failed: %v\n", err)
-				}
+				debugLog(fmt.Sprintf("DEBUG: Raw JSON task validation failed: %v\n", err))
 			}
 		} else {
-			if debugTaskParsing {
-				fmt.Printf("DEBUG: Failed to parse raw JSON: %v\n", err)
-			}
+			debugLog(fmt.Sprintf("DEBUG: Failed to parse raw JSON: %v\n", err))
 		}
 
 		// Try to parse as TaskList
@@ -1567,22 +1553,16 @@ func tryFallbackJSONParsing(llmResponse string) *TaskList {
 		if err := json.Unmarshal([]byte(jsonStr), &taskList); err == nil {
 			if len(taskList.Tasks) > 0 {
 				if err := validateTasks(&taskList); err == nil {
-					if debugTaskParsing {
-						fmt.Printf("DEBUG: Successfully parsed raw JSON TaskList with %d tasks\n", len(taskList.Tasks))
-					}
+					debugLog(fmt.Sprintf("DEBUG: Successfully parsed raw JSON TaskList with %d tasks\n", len(taskList.Tasks)))
 					return &taskList
 				} else {
-					if debugTaskParsing {
-						fmt.Printf("DEBUG: Raw JSON TaskList validation failed: %v\n", err)
-					}
+					debugLog(fmt.Sprintf("DEBUG: Raw JSON TaskList validation failed: %v\n", err))
 				}
 			}
 		}
 	}
 
-	if debugTaskParsing {
-		fmt.Printf("DEBUG: No valid raw JSON tasks found\n")
-	}
+	debugLog("DEBUG: No valid raw JSON tasks found")
 	return nil
 }
 
@@ -1590,15 +1570,13 @@ func tryFallbackJSONParsing(llmResponse string) *TaskList {
 func ParseTasks(llmResponse string) (*TaskList, error) {
 	// First, try natural language parsing
 	if result := tryNaturalLanguageParsing(llmResponse); result != nil {
-		if debugTaskParsing {
-			fmt.Printf("DEBUG: Successfully parsed %d tasks using natural language parsing\n", len(result.Tasks))
-		}
+		debugLog(fmt.Sprintf("DEBUG: Successfully parsed %d tasks using natural language parsing\n", len(result.Tasks)))
 		return result, nil
 	}
 
 	// Fall back to JSON parsing
 	if debugTaskParsing {
-		fmt.Printf("DEBUG: Natural language parsing found no tasks, trying JSON parsing...\n")
+		debugLog("DEBUG: Natural language parsing found no tasks, trying JSON parsing...")
 	}
 
 	// Look for JSON code blocks
@@ -1608,14 +1586,12 @@ func ParseTasks(llmResponse string) (*TaskList, error) {
 	if len(matches) == 0 {
 		// FALLBACK: Try to parse raw JSON if no backtick-wrapped JSON found
 		if debugTaskParsing {
-			fmt.Printf("DEBUG: No backtick-wrapped JSON found, trying fallback raw JSON parsing...\n")
+			debugLog("DEBUG: No backtick-wrapped JSON found, trying fallback raw JSON parsing...")
 		}
 
 		// Try fallback parsing for raw JSON
 		if result := tryFallbackJSONParsing(llmResponse); result != nil {
-			if debugTaskParsing {
-				fmt.Printf("DEBUG: Successfully parsed %d tasks using fallback raw JSON parsing\n", len(result.Tasks))
-			}
+			debugLog(fmt.Sprintf("DEBUG: Successfully parsed %d tasks using fallback raw JSON parsing\n", len(result.Tasks)))
 			return result, nil
 		}
 
@@ -1636,24 +1612,24 @@ func ParseTasks(llmResponse string) (*TaskList, error) {
 			}
 
 			if len(foundActions) > 0 {
-				fmt.Printf("🚨 DEBUG: LLM response suggests action but no JSON tasks found!\n")
-				fmt.Printf("   Found action indicators: %v\n", foundActions)
-				fmt.Printf("   Response (first 200 chars): %s...\n", llmResponse[:min(len(llmResponse), 200)])
-				fmt.Printf("   ✅ Expected: JSON code block like:\n")
-				fmt.Printf("   " + "```" + "json\n")
-				fmt.Printf("   {\"type\": \"ReadFile\", \"path\": \"README.md\", \"max_lines\": 100}\n")
-				fmt.Printf("   " + "```" + "\n")
-				fmt.Printf("   📝 OR for multiple tasks:\n")
-				fmt.Printf("   " + "```" + "json\n")
-				fmt.Printf("   {\n")
-				fmt.Printf("     \"tasks\": [\n")
-				fmt.Printf("       {\"type\": \"ReadFile\", \"path\": \"README.md\", \"max_lines\": 100}\n")
-				fmt.Printf("     ]\n")
-				fmt.Printf("   }\n")
-				fmt.Printf("   " + "```" + "\n")
-				fmt.Printf("   💡 The LLM may need better prompting to output actual task JSON.\n\n")
+				debugLog("🚨 LLM response suggests action but no JSON tasks found!")
+				debugLog(fmt.Sprintf("Found action indicators: %v", foundActions))
+				debugLog(fmt.Sprintf("Response (first 200 chars): %s...", llmResponse[:min(len(llmResponse), 200)]))
+				debugLog("✅ Expected: JSON code block like:")
+				debugLog("```json")
+				debugLog(`{"type": "ReadFile", "path": "README.md", "max_lines": 100}`)
+				debugLog("```")
+				debugLog("📝 OR for multiple tasks:")
+				debugLog("```json")
+				debugLog("{")
+				debugLog(`  "tasks": [`)
+				debugLog(`    {"type": "ReadFile", "path": "README.md", "max_lines": 100}`)
+				debugLog("  ]")
+				debugLog("}")
+				debugLog("```")
+				debugLog("💡 The LLM may need better prompting to output actual task JSON.")
 			} else {
-				fmt.Printf("✅ DEBUG: No JSON tasks found - this appears to be a regular Q&A response.\n")
+				debugLog("✅ No JSON tasks found - this appears to be a regular Q&A response.")
 			}
 		}
 		// No JSON blocks found - this is normal for regular chat responses
@@ -1672,14 +1648,14 @@ func ParseTasks(llmResponse string) (*TaskList, error) {
 
 		// Debug: Print what we're trying to parse
 		if debugTaskParsing {
-			fmt.Printf("DEBUG: Attempting to parse JSON task block: %s\n", jsonStr[:min(len(jsonStr), 100)])
+			debugLog(fmt.Sprintf("DEBUG: Attempting to parse JSON task block: %s\n", jsonStr[:min(len(jsonStr), 100)]))
 		}
 
 		// Try to parse as TaskList first
 		var taskList TaskList
 		if err := json.Unmarshal([]byte(jsonStr), &taskList); err == nil {
 			if debugTaskParsing {
-				fmt.Printf("DEBUG: Parsed as TaskList with %d tasks\n", len(taskList.Tasks))
+				debugLog(fmt.Sprintf("DEBUG: Parsed as TaskList with %d tasks\n", len(taskList.Tasks)))
 			}
 
 			// Only proceed with TaskList if it actually has tasks
@@ -1690,13 +1666,13 @@ func ParseTasks(llmResponse string) (*TaskList, error) {
 				}
 
 				if debugTaskParsing {
-					fmt.Printf("DEBUG: Successfully parsed %d tasks (as TaskList)\n", len(taskList.Tasks))
+					debugLog(fmt.Sprintf("DEBUG: Successfully parsed %d tasks (as TaskList)\n", len(taskList.Tasks)))
 				}
 				return &taskList, nil
 			}
 
 			if debugTaskParsing {
-				fmt.Printf("DEBUG: TaskList was empty, trying single task parsing\n")
+				debugLog("DEBUG: TaskList was empty, trying single task parsing\n")
 			}
 		}
 
@@ -1704,32 +1680,32 @@ func ParseTasks(llmResponse string) (*TaskList, error) {
 		var singleTask Task
 		if err := json.Unmarshal([]byte(jsonStr), &singleTask); err != nil {
 			if debugTaskParsing {
-				fmt.Printf("DEBUG: Failed to parse JSON as either TaskList or single Task: %v\n", err)
+				debugLog(fmt.Sprintf("DEBUG: Failed to parse JSON as either TaskList or single Task: %v\n", err))
 			}
 			continue // Skip invalid JSON blocks
 		}
 
 		if debugTaskParsing {
-			fmt.Printf("DEBUG: Parsed single task - Type: %s, Path: %s\n", singleTask.Type, singleTask.Path)
+			debugLog(fmt.Sprintf("DEBUG: Parsed single task - Type: %s, Path: %s\n", singleTask.Type, singleTask.Path))
 		}
 
 		// Create TaskList with single task
 		taskList = TaskList{Tasks: []Task{singleTask}}
 
 		if debugTaskParsing {
-			fmt.Printf("DEBUG: Created TaskList with %d tasks\n", len(taskList.Tasks))
+			debugLog(fmt.Sprintf("DEBUG: Created TaskList with %d tasks\n", len(taskList.Tasks)))
 		}
 
 		// Validate tasks
 		if err := validateTasks(&taskList); err != nil {
 			if debugTaskParsing {
-				fmt.Printf("DEBUG: Task validation failed: %v\n", err)
+				debugLog(fmt.Sprintf("DEBUG: Task validation failed: %v\n", err))
 			}
 			return nil, fmt.Errorf("invalid tasks: %w", err)
 		}
 
 		if debugTaskParsing {
-			fmt.Printf("DEBUG: Successfully parsed 1 task (as single Task object)\n")
+			debugLog("DEBUG: Successfully parsed 1 task (as single Task object)\n")
 		}
 		return &taskList, nil
 	}

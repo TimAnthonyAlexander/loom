@@ -623,6 +623,11 @@ func formatNaturalLanguageTaskDescription(taskType, args string) string {
 
 // isCompletionDetectorInteraction checks if content is from completion detector
 func (s *Session) isCompletionDetectorInteraction(content string) bool {
+	// Don't hide debug messages - they should always be shown
+	if strings.Contains(content, "🔍 **DEBUG**:") {
+		return false
+	}
+
 	// Check for explicit completion check prefix
 	if strings.HasPrefix(content, "COMPLETION_CHECK:") {
 		return true

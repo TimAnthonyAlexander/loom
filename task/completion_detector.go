@@ -1,7 +1,6 @@
 package task
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 )
@@ -10,6 +9,29 @@ import (
 type CompletionDetector struct {
 	completionPatterns []*regexp.Regexp
 	incompletePatterns []*regexp.Regexp
+	// Objective tracking
+	originalObjective     string
+	objectiveSet          bool
+	objectiveChangeCount  int
+	allowObjectiveChanges bool
+}
+
+// ObjectiveValidationResult represents the result of objective validation
+type ObjectiveValidationResult struct {
+	IsValid           bool
+	OriginalObjective string
+	NewObjective      string
+	ChangeDetected    bool
+	ValidationError   string
+	SuggestedFix      string
+}
+
+// completionDebugLog sends completion detection debug messages using the unified debug system
+func completionDebugLog(message string) {
+	// Use the same debug system but prefix with completion detection
+	if debugHandler != nil {
+		debugHandler("🎯 COMPLETION: " + message)
+	}
 }
 
 // NewCompletionDetector creates a new completion detector with comprehensive patterns
@@ -20,33 +42,27 @@ func NewCompletionDetector() *CompletionDetector {
 		regexp.MustCompile(`(?i)\bTASK_COMPLETE\b`),
 		regexp.MustCompile(`(?i)\bEXPLORATION_COMPLETE\b`),
 		regexp.MustCompile(`(?i)\bANALYSIS_COMPLETE\b`),
-		regexp.MustCompile(`(?i)\bthe\s+(?:task|objective|work|implementation|analysis)\s+is\s+(?:now\s+)?complete`),
-		regexp.MustCompile(`(?i)\bobjective\s+achieved\s+successfully`),
-		regexp.MustCompile(`(?i)\ball\s+requested\s+work\s+has\s+been\s+(?:finished|completed)`),
-		regexp.MustCompile(`(?i)\bimplementation\s+is\s+complete\s+and\s+tested`),
-		regexp.MustCompile(`(?i)\bwork\s+is\s+(?:now\s+)?(?:finished|complete|done)`),
-		regexp.MustCompile(`(?i)\btask\s+(?:has\s+been\s+)?(?:finished|completed|accomplished)`),
-		regexp.MustCompile(`(?i)\bsuccessfully\s+(?:implemented|completed|finished)`),
-		regexp.MustCompile(`(?i)\bready\s+for\s+(?:user\s+)?(?:review|testing|deployment)`),
-		regexp.MustCompile(`(?i)\bno\s+(?:further|additional|more)\s+(?:work|changes|modifications)\s+(?:needed|required)`),
-		regexp.MustCompile(`(?i)\b(?:yes,?\s+)?(?:the\s+)?(?:task|objective|work)\s+is\s+complete`),
-		regexp.MustCompile(`(?i)\b(?:yes,?\s+)?(?:everything|all)\s+is\s+(?:done|finished|complete)`),
+		regexp.MustCompile(`(?i)\bthe\s+(?:task|objective|work|implementation|feature|analysis|exploration)\s+is\s+(?:now\s+)?complete`),
+		regexp.MustCompile(`(?i)\b(?:all\s+)?(?:tasks|objectives|work|steps)\s+(?:are\s+)?(?:now\s+)?complete`),
+		regexp.MustCompile(`(?i)\b(?:successfully|completely)\s+(?:implemented|finished|completed|done)`),
+		regexp.MustCompile(`(?i)\bevery(?:thing)?\s+(?:has\s+been\s+)?(?:implemented|completed|finished|done)`),
+		regexp.MustCompile(`(?i)\bno\s+(?:further|additional|more)\s+(?:action|work|tasks|steps)\s+(?:is\s+)?(?:required|needed)`),
+		regexp.MustCompile(`(?i)\b(?:ready\s+)?(?:for\s+)?(?:review|testing|deployment|use)`),
+		regexp.MustCompile(`(?i)\ball\s+(?:requirements|specifications|features)\s+(?:have\s+been\s+)?(?:met|implemented|satisfied)`),
 	}
 
-	// Patterns that indicate work is not complete
+	// Patterns that indicate work is still in progress
 	incompletePatterns := []*regexp.Regexp{
-		regexp.MustCompile(`(?i)\badditional\s+work\s+needed`),
-		regexp.MustCompile(`(?i)\bobjective\s+partially\s+complete`),
-		regexp.MustCompile(`(?i)\bstill\s+need\s+to`),
-		regexp.MustCompile(`(?i)\bnext\s+(?:step|phase)\s+(?:is|would\s+be)`),
-		regexp.MustCompile(`(?i)\bmore\s+work\s+(?:is\s+)?(?:needed|required)`),
-		regexp.MustCompile(`(?i)\bnot\s+yet\s+(?:complete|finished|done)`),
-		regexp.MustCompile(`(?i)\bno,?\s+(?:not\s+)?(?:yet|complete)`),
-		regexp.MustCompile(`(?i)\bneed\s+to\s+(?:continue|proceed|implement|add|fix)`),
-		regexp.MustCompile(`(?i)\b(?:there's|there\s+is)\s+(?:still\s+)?more\s+work`),
-		regexp.MustCompile(`(?i)\bremaining\s+(?:tasks|work|steps)`),
-		regexp.MustCompile(`(?i)\bwould\s+like\s+to\s+(?:continue|proceed|add)`),
-		regexp.MustCompile(`(?i)\bshould\s+(?:also|next|now)\s+(?:implement|add|create|fix)`),
+		regexp.MustCompile(`(?i)\bnext\s+(?:step|task|action)`),
+		regexp.MustCompile(`(?i)\bstill\s+need\s+to\b`),
+		regexp.MustCompile(`(?i)\bwill\s+(?:also\s+)?(?:need|require)\b`),
+		regexp.MustCompile(`(?i)\bshould\s+(?:also\s+)?(?:add|implement|create|modify)`),
+		regexp.MustCompile(`(?i)\bin\s+progress\b`),
+		regexp.MustCompile(`(?i)\bworking\s+on\b`),
+		regexp.MustCompile(`(?i)\bcontinuing\s+(?:with|to)\b`),
+		regexp.MustCompile(`(?i)\b(?:let\s+me|i'll|i\s+will)\s+(?:also\s+)?(?:add|implement|create|modify|continue)`),
+		regexp.MustCompile(`(?i)\b(?:additionally|furthermore|moreover)\b`),
+		regexp.MustCompile(`(?i)\b(?:remaining|pending)\s+(?:work|tasks|steps)`),
 	}
 
 	return &CompletionDetector{
@@ -58,6 +74,7 @@ func NewCompletionDetector() *CompletionDetector {
 // IsComplete checks if the LLM response indicates the work is finished
 func (cd *CompletionDetector) IsComplete(response string) bool {
 	if response == "" {
+		completionDebugLog("Empty response, not complete")
 		return false
 	}
 
@@ -66,6 +83,7 @@ func (cd *CompletionDetector) IsComplete(response string) bool {
 	// First check for explicit incomplete signals
 	for _, pattern := range cd.incompletePatterns {
 		if pattern.MatchString(cleanResponse) {
+			completionDebugLog("Found incompletion pattern, work not complete")
 			return false
 		}
 	}
@@ -73,12 +91,19 @@ func (cd *CompletionDetector) IsComplete(response string) bool {
 	// Then check for completion signals
 	for _, pattern := range cd.completionPatterns {
 		if pattern.MatchString(cleanResponse) {
+			completionDebugLog("Found completion pattern, work appears complete")
 			return true
 		}
 	}
 
 	// Additional heuristics for completion detection
-	return cd.hasCompletionHeuristics(cleanResponse)
+	result := cd.hasCompletionHeuristics(cleanResponse)
+	if result {
+		completionDebugLog("Heuristics indicate completion")
+	} else {
+		completionDebugLog("No completion signals detected")
+	}
+	return result
 }
 
 // hasCompletionHeuristics applies additional logic to detect completion
@@ -169,15 +194,15 @@ func (cd *CompletionDetector) hasFutureTense(response string) bool {
 // GenerateCompletionCheckPrompt creates a comprehensive prompt to check if work is complete
 func (cd *CompletionDetector) GenerateCompletionCheckPrompt(userObjective string) string {
 	if userObjective != "" {
-		return fmt.Sprintf(`COMPLETION_CHECK: Has your stated objective been fully achieved?
+		return `COMPLETION_CHECK: Has your stated objective been fully achieved?
 
-Original objective: %s
+Original objective: ` + userObjective + `
 
 Please answer clearly:
 - YES if the objective is complete and no further work is needed
 - NO if more work is required, and explain what specific steps remain
 
-Be specific about whether you've accomplished what was requested.`, userObjective)
+Be specific about whether you've accomplished what was requested.`
 	}
 
 	return `COMPLETION_CHECK: Is your current work complete?
@@ -198,10 +223,13 @@ func (cd *CompletionDetector) ExtractObjective(response string) string {
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if matches := objectivePattern.FindStringSubmatch(line); len(matches) > 1 {
-			return strings.TrimSpace(matches[1])
+			objective := strings.TrimSpace(matches[1])
+			completionDebugLog("Extracted objective: " + objective)
+			return objective
 		}
 	}
 
+	completionDebugLog("No objective pattern found in response")
 	return ""
 }
 
