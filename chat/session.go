@@ -297,12 +297,19 @@ func (s *Session) GetDisplayMessages() []string {
 				continue
 			}
 
-			// Filter task result messages to show only status, not actual content
-			content := s.filterTaskResultForDisplay(msg.Content)
-
-			// Skip empty content (like completion detector interactions)
-			if strings.TrimSpace(content) == "" {
-				continue
+			// Only filter assistant messages for task commands, leave user messages unchanged
+			var content string
+			if msg.Role == "assistant" {
+				// Filter task result messages to show only status, not actual content
+				content = s.filterTaskResultForDisplay(msg.Content)
+				
+				// Skip empty content (like completion detector interactions)
+				if strings.TrimSpace(content) == "" {
+					continue
+				}
+			} else {
+				// User messages should never be filtered - display as-is
+				content = msg.Content
 			}
 
 			display = append(display, fmt.Sprintf("%s: %s", role, content))
@@ -394,7 +401,7 @@ func (s *Session) filterJSONTaskBlocks(content string) string {
 	var taskDescriptions []string
 
 	taskPattern := regexp.MustCompile(`^🔧\s+(READ|EDIT|LIST|RUN)\s+(.+)`)
-	simplePattern := regexp.MustCompile(`(?i)^(read|edit|list|run)\s+(.+)`)
+	simplePattern := regexp.MustCompile(`^🔧\s+(?i)(read|edit|list|run)\s+(.+)`)
 
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)

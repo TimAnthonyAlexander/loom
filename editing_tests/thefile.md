@@ -2,7 +2,7 @@
 
 This is a line beneath the headline.
 
-## Whats up bro
+## What's up, bro?
 
 - Bullet
 - Points

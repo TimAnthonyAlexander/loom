@@ -92,7 +92,45 @@ func (m *Manager) HandleLLMResponse(llmResponse string, eventChan chan<- TaskExe
 		return nil, nil
 	}
 
-	// STEP 2: Parse tasks from LLM response (original logic)
+	// STEP 2A: Check for LOOM_EDIT blocks first (new unified diff system)
+	loomEditResponse, loomEditErr := m.executor.ProcessLoomEditMessage(llmResponse)
+	if loomEditErr != nil {
+		return nil, fmt.Errorf("failed to process LOOM_EDIT blocks: %w", loomEditErr)
+	}
+
+	// If LOOM_EDIT blocks were found and processed, return immediately
+	if loomEditResponse != nil && loomEditResponse.BlocksFound > 0 {
+		// Add LOOM_EDIT result to chat context
+		loomEditResultMessage := llm.Message{
+			Role:      "assistant", 
+			Content:   fmt.Sprintf("🔧 LOOM_EDIT Result: %s", loomEditResponse.Message),
+			Timestamp: time.Now(),
+		}
+
+		if err := m.chatSession.AddMessage(loomEditResultMessage); err != nil {
+			fmt.Printf("Warning: failed to add LOOM_EDIT result to chat: %v\n", err)
+		}
+
+		// Create a fake execution to maintain consistency with the return type
+		execution := &TaskExecution{
+			Tasks:     []Task{}, // No traditional tasks, but LOOM_EDIT was processed
+			Responses: []TaskResponse{},
+			StartTime: time.Now(),
+			EndTime:   time.Now(),
+			Status:    "completed",
+		}
+
+		// Send completion event
+		eventChan <- TaskExecutionEvent{
+			Type:      "execution_completed",
+			Execution: execution,
+			Message:   loomEditResponse.Message,
+		}
+
+		return execution, nil
+	}
+
+	// STEP 2B: Parse traditional tasks from LLM response (original logic)
 	taskList, err := ParseTasks(llmResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse tasks: %w", err)

@@ -27,7 +27,7 @@ type EditBlock struct {
 	FilePath    string // extracted from the diff header
 }
 
-// editRE matches LOOM_EDIT fenced code blocks
+// editRE matches LOOM_EDIT fenced code blocks  
 var editRE = regexp.MustCompile(`(?s)` + "`" + `{3}LOOM_EDIT\n(.*?)\n` + "`" + `{3}`)
 
 // ParseLoomEdits extracts all LOOM_EDIT blocks from an LLM message
@@ -43,8 +43,8 @@ func (p *LoomEditProcessor) ParseLoomEdits(message string) ([]EditBlock, error) 
 			continue
 		}
 
-		diffContent := strings.TrimSpace(match[1])
-		if diffContent == "" {
+		diffContent := match[1]
+		if strings.TrimSpace(diffContent) == "" {
 			continue
 		}
 
