@@ -80,6 +80,8 @@ A sophisticated terminal-based AI coding assistant written in Go that provides a
 
 ## Installation
 
+You can find binaries for all supported architectures in the most recent release assets.
+
 ## Documentation
 
 Full documentation and usage guide available at [https://github.com/TimAnthonyAlexander/loom/wiki](https://github.com/TimAnthonyAlexander/loom/wiki)
