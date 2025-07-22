@@ -1045,27 +1045,7 @@ func (m *model) sendToLLMWithTasks(userInput string) tea.Cmd {
 			return StreamMsg{Error: fmt.Errorf("failed to save user message: %w", err)}
 		}
 
-		// Check if user sent a LOOM_EDIT command directly (only check for this specific format)
-		if strings.Contains(userInput, ">>LOOM_EDIT") && strings.Contains(userInput, "<<LOOM_EDIT") {
-			// User sent a LOOM_EDIT command directly - execute it immediately instead of sending to LLM
-			m.addSystemMessage("🔧 Detected user LOOM_EDIT command - executing directly")
-			
-			// Refresh display messages from chat session
-			m.messages = m.chatSession.GetDisplayMessages()
-			m.updateWrappedMessages()
-			
-			// Start task execution using HandleLLMResponse (treating user input as LLM response)
-			execution, err := m.taskManager.HandleLLMResponse(userInput, m.taskEventChan)
-			if err != nil {
-				return StreamMsg{Error: fmt.Errorf("failed to execute user LOOM_EDIT command: %w", err)}
-			}
-			
-			m.currentExecution = execution
-			return TaskEventMsg{Event: taskPkg.TaskExecutionEvent{
-				Type:    "task_started",
-				Message: "Executing user LOOM_EDIT command",
-			}}
-		}
+
 
 		// Reset completion detection state for new user queries (not completion checks)
 		if !strings.HasPrefix(userInput, "COMPLETION_CHECK:") {

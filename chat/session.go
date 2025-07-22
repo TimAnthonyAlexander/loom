@@ -627,6 +627,11 @@ func (s *Session) isCompletionDetectorInteraction(content string) bool {
 		return false
 	}
 
+	// Don't hide LOOM_EDIT commands - they should always be shown even if they contain completion patterns
+	if strings.Contains(content, ">>LOOM_EDIT") && strings.Contains(content, "<<LOOM_EDIT") {
+		return false
+	}
+
 	// Check for explicit completion check prefix
 	if strings.HasPrefix(content, "COMPLETION_CHECK:") {
 		return true
