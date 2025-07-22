@@ -300,8 +300,4 @@ func extractContentFromLines(lines []string) string {
 	return strings.Join(contentLines, "\n")
 }
 
-// fileExistsHelper checks if a file exists (renamed to avoid conflict)
-func fileExistsHelper(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-} 
+ 
