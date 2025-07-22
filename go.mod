@@ -4,6 +4,8 @@ go 1.23.0
 
 toolchain go1.23.11
 
+replace loom/loom_edit => ./loom_edit
+
 require (
 	github.com/charmbracelet/bubbletea v1.3.6
 	github.com/charmbracelet/lipgloss v1.1.0
@@ -11,6 +13,7 @@ require (
 	github.com/sashabaranov/go-openai v1.40.5
 	github.com/sergi/go-diff v1.4.0
 	github.com/spf13/cobra v1.9.1
+	loom/loom_edit v0.0.0-00010101000000-000000000000
 )
 
 require (

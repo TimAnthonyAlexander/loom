@@ -45,7 +45,7 @@ func TestImmediateExecutionFlow(t *testing.T) {
 		"TASK_RESULT: Edit public/index.html",
 		"STATUS: Success",
 		"CONTENT:",
-		"Content replacement preview for public/index.html",
+		"File public/index.html has been created/replaced with new content",
 	}
 
 	for _, expected := range expectedLeakedContent {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"loom/indexer"
+	"loom/loom_edit"
 	"loom/memory"
 	"os"
 	"os/exec"
@@ -269,7 +270,7 @@ func (e *Executor) executeReadFile(task *Task) *TaskResponse {
 	return response
 }
 
-// executeEditFile applies a diff or replaces content
+// executeEditFile applies edits using LOOM_EDIT commands or simple content replacement
 func (e *Executor) executeEditFile(task *Task) *TaskResponse {
 	response := &TaskResponse{Task: *task}
 
@@ -286,546 +287,87 @@ func (e *Executor) executeEditFile(task *Task) *TaskResponse {
 		return response
 	}
 
-	// ULTRA-SAFE: Check for SafeEdit format first (highest priority - mandatory context validation)
-	if task.SafeEditMode {
-		return e.applySafeEdit(task, fullPath)
+	// PRIMARY: Check for LOOM_EDIT command
+	if task.LoomEditCommand && task.Content != "" {
+		return e.applyLoomEdit(task, fullPath)
 	}
 
-	// NEW: Check for line-based editing (most precise method)
-	if task.TargetLine > 0 || (task.TargetStartLine > 0 && task.TargetEndLine > 0) {
-		return e.applyLineBasedEdit(task, fullPath)
-	}
-
-	if task.Diff != "" {
-		return e.applyDiff(task, fullPath)
-	} else if task.Content != "" {
-		// CRITICAL FIX: Check if content looks like diff format instead of final content
-		if e.isDiffFormattedContent(task.Content) {
-			// Convert diff-formatted content to proper diff and apply it
-			return e.applyDiffFormattedContent(task, fullPath)
-		}
-
-		// Check if this is a targeted edit with context
-		if task.StartContext != "" || task.InsertMode != "" {
-			return e.applyTargetedEdit(task, fullPath)
-		}
-		// Otherwise use full content replacement
-		return e.replaceContent(task, fullPath)
-	} else if task.Intent != "" {
-		// Check if this is a replace_all operation that doesn't need additional content
-		if task.InsertMode == "replace_all" && task.StartContext != "" && task.EndContext != "" {
-			return e.applyTargetedEdit(task, fullPath)
-		}
-
-		// Handle natural language edit with description but no content
-		response.Error = fmt.Sprintf("Edit task has intent '%s' but no actual content provided. Please provide the file content in a code block or specify the exact changes.", task.Intent)
-		return response
-	}
-
-	response.Error = "EditFile requires either diff or content"
-	return response
-}
-
-// applyDiff applies a unified diff to a file
-func (e *Executor) applyDiff(task *Task, fullPath string) *TaskResponse {
-	response := &TaskResponse{Task: *task}
-
-	// Read existing content if file exists
-	var originalContent string
-	if _, err := os.Stat(fullPath); err == nil {
-		data, err := os.ReadFile(fullPath)
-		if err != nil {
-			response.Error = fmt.Sprintf("failed to read existing file: %v", err)
-			return response
-		}
-		originalContent = string(data)
-	}
-
-	// Apply diff using diffmatchpatch
-	dmp := diffmatchpatch.New()
-	patches, err := dmp.PatchFromText(task.Diff)
-	if err != nil {
-		response.Error = fmt.Sprintf("invalid diff format: %v", err)
-		return response
-	}
-
-	newContent, results := dmp.PatchApply(patches, originalContent)
-
-	// Check if all patches applied successfully
-	for i, result := range results {
-		if !result {
-			response.Error = fmt.Sprintf("failed to apply patch %d", i)
-			return response
-		}
-	}
-
-	// EARLY DETECTION: Check if diff resulted in identical content
-	if originalContent == newContent {
-		// Generate edit summary for identical content
-		editSummary := e.analyzeContentChanges(originalContent, newContent, task.Path, task)
-		response.EditSummary = editSummary
-
-		// Store clear message for LLM
-		llmSummary := response.GetLLMSummary()
-		response.ActualContent = fmt.Sprintf("Diff analysis for %s:\n\n%s\n\nNo file changes needed - diff results in identical content.",
-			task.Path, llmSummary)
-
-		response.Success = true
-		// Provide clear status message
-		response.Output = fmt.Sprintf("File unchanged: %s - %s",
-			task.Path, editSummary.GetCompactSummary())
-
-		// Store the content for reference (no changes made)
-		response.Task.Content = newContent
-		return response
-	}
-
-	// Create a preview of the changes
-	diff := dmp.DiffMain(originalContent, newContent, false)
-	preview := dmp.DiffPrettyText(diff)
-
-	// Generate edit summary
-	editSummary := e.analyzeContentChanges(originalContent, newContent, task.Path, task)
-	response.EditSummary = editSummary
-
-	// Store actual diff preview for LLM with edit summary
-	llmSummary := response.GetLLMSummary()
-	response.ActualContent = fmt.Sprintf("Diff preview for %s:\n\n%s\n\n%s\nReady to apply changes.",
-		task.Path, preview, llmSummary)
-
-	// CRITICAL FIX: Actually write the file immediately
-	task.Content = newContent
-	err = e.applyEditInternal(task)
-	if err != nil {
-		response.Error = fmt.Sprintf("failed to write file: %v", err)
-		return response
-	}
-
-	response.Success = true
-	// Show status message to user with edit summary
-	response.Output = fmt.Sprintf("File edited: %s (diff applied) - %s",
-		task.Path, editSummary.GetCompactSummary())
-
-	// Store the new content for reference
-	response.Task.Content = newContent
-	return response
-}
-
-// replaceContent replaces entire file content
-func (e *Executor) replaceContent(task *Task, fullPath string) *TaskResponse {
-	response := &TaskResponse{Task: *task}
-
-	// Read existing content for preview if file exists
-	var originalContent string
-	var err error
-	var data []byte
-	fileExists := false
-	if _, err = os.Stat(fullPath); err == nil {
-		data, err = os.ReadFile(fullPath)
-		if err != nil {
-			response.Error = fmt.Sprintf("failed to read existing file: %v", err)
-			return response
-		}
-		originalContent = string(data)
-		fileExists = true
-	}
-
-	// EARLY DETECTION: Check if content is identical to avoid unnecessary processing
-	if fileExists && originalContent == task.Content {
-		// Generate edit summary for identical content
-		editSummary := e.analyzeContentChanges(originalContent, task.Content, task.Path, task)
-		response.EditSummary = editSummary
-
-		// Store clear message for LLM
-		llmSummary := response.GetLLMSummary()
-		response.ActualContent = fmt.Sprintf("Content analysis for %s:\n\n%s\n\nNo file changes needed - content already matches.",
-			task.Path, llmSummary)
-
-		response.Success = true
-		// Provide clear status message
-		response.Output = fmt.Sprintf("File unchanged: %s - %s",
-			task.Path, editSummary.GetCompactSummary())
-
-		// Store the content for reference (no changes made)
-		response.Task.Content = task.Content
-		return response
-	}
-
-	// SAFETY CHECK: Prevent accidental file truncation (only for non-identical content)
-	if fileExists && len(originalContent) > 0 {
-		originalLines := strings.Split(originalContent, "\n")
-		newLines := strings.Split(task.Content, "\n")
-
-		// Check for significant content reduction (more than 50% reduction in lines)
-		if len(newLines) < len(originalLines)/2 && len(originalLines) > 10 {
-			response.Error = fmt.Sprintf("SAFETY CHECK FAILED: Provided content (%d lines) is significantly shorter than original file (%d lines). This might truncate the file. Please read the ENTIRE file first with 🔧 READ %s (with sufficient line limits), then provide the COMPLETE updated content.",
-				len(newLines), len(originalLines), task.Path)
-			return response
-		}
-
-		// Check if new content appears to be incomplete for certain file types
-		if e.looksIncomplete(task.Path, task.Content, originalContent) {
-			response.Error = fmt.Sprintf("SAFETY CHECK FAILED: The provided content appears incomplete for %s. Please read the ENTIRE file first to understand its complete structure, then provide the COMPLETE updated content.", task.Path)
-			return response
-		}
-
-		// Check if the new content is suspiciously small compared to original
-		if len(task.Content) < len(originalContent)/3 && len(originalContent) > 500 {
-			response.Error = fmt.Sprintf("SAFETY CHECK FAILED: New content (%d chars) is much smaller than original (%d chars). This suggests partial content that would truncate the file. Read the full file first, then provide complete updated content.",
-				len(task.Content), len(originalContent))
-			return response
-		}
-	}
-
-	// Create diff preview
-	dmp := diffmatchpatch.New()
-	diff := dmp.DiffMain(originalContent, task.Content, false)
-	preview := dmp.DiffPrettyText(diff)
-
-	// Generate edit summary
-	editSummary := e.analyzeContentChanges(originalContent, task.Content, task.Path, task)
-	response.EditSummary = editSummary
-
-	// Store actual preview for LLM with edit summary
-	llmSummary := response.GetLLMSummary()
-	response.ActualContent = fmt.Sprintf("Content replacement preview for %s:\n\n%s\n\n%s\nReady to apply changes.",
-		task.Path, preview, llmSummary)
-
-	// CRITICAL FIX: Actually write the file immediately instead of just preparing
-	err = e.applyEditInternal(task)
-	if err != nil {
-		response.Error = fmt.Sprintf("failed to write file: %v", err)
-		return response
-	}
-
-	response.Success = true
-	// Show status message to user with edit summary
-	response.Output = fmt.Sprintf("File edited: %s - %s",
-		task.Path, editSummary.GetCompactSummary())
-
-	// Store the new content for reference
-	response.Task.Content = task.Content
-	return response
-}
-
-// applySafeEdit applies the ultra-safe SafeEdit format with mandatory context validation
-func (e *Executor) applySafeEdit(task *Task, fullPath string) *TaskResponse {
-	response := &TaskResponse{Task: *task}
-
-	// Read existing content if file exists
-	var originalContent string
-	fileExists := false
-	if _, err := os.Stat(fullPath); err == nil {
-		data, err := os.ReadFile(fullPath)
-		if err != nil {
-			response.Error = fmt.Sprintf("failed to read existing file: %v", err)
-			return response
-		}
-		originalContent = string(data)
-		fileExists = true
-	}
-
-	if !fileExists {
-		response.Error = fmt.Sprintf("SafeEdit requires existing file for context validation: %s", task.Path)
-		return response
-	}
-
-	lines := strings.Split(originalContent, "\n")
-	totalLines := len(lines)
-
-	// Determine target line range
-	var targetStart, targetEnd int
-	if task.TargetLine > 0 {
-		// Single line edit
-		targetStart = task.TargetLine
-		targetEnd = task.TargetLine
-	} else if task.TargetStartLine > 0 && task.TargetEndLine > 0 {
-		// Range edit
-		targetStart = task.TargetStartLine
-		targetEnd = task.TargetEndLine
-	} else {
-		response.Error = "SafeEdit requires exact line numbers (TargetLine or TargetStartLine/TargetEndLine)"
-		return response
-	}
-
-	// Validate line numbers
-	if targetStart < 1 || targetStart > totalLines {
-		response.Error = fmt.Sprintf("target start line %d is out of range (file has %d lines)", targetStart, totalLines)
-		return response
-	}
-
-	if targetEnd < targetStart || targetEnd > totalLines {
-		response.Error = fmt.Sprintf("target end line %d is invalid (start: %d, file has %d lines)", targetEnd, targetStart, totalLines)
-		return response
-	}
-
-	// MANDATORY CONTEXT VALIDATION - this is what makes SafeEdit ultra-safe
-	if err := e.validateSafeEditContext(lines, task, targetStart, targetEnd); err != nil {
-		response.Error = fmt.Sprintf("CONTEXT VALIDATION FAILED: %v", err)
-		return response
-	}
-
-	// Apply the edit
-	newContent, err := e.performSafeEdit(originalContent, task, targetStart, targetEnd)
-	if err != nil {
-		response.Error = err.Error()
-		return response
-	}
-
-	// Create diff preview
-	dmp := diffmatchpatch.New()
-	diff := dmp.DiffMain(originalContent, newContent, false)
-	preview := dmp.DiffPrettyText(diff)
-
-	// Generate edit summary
-	editSummary := e.analyzeContentChanges(originalContent, newContent, task.Path, task)
-	response.EditSummary = editSummary
-
-	// Store actual preview for LLM with edit summary
-	llmSummary := response.GetLLMSummary()
-	response.ActualContent = fmt.Sprintf("SafeEdit preview for %s (lines %d-%d):\n\n%s\n\nContext validation: PASSED ✓\n%s\nReady to apply changes.",
-		task.Path, targetStart, targetEnd, preview, llmSummary)
-
-	// CRITICAL FIX: Actually write the file immediately
-	task.Content = newContent
-	err = e.applyEditInternal(task)
-	if err != nil {
-		response.Error = fmt.Sprintf("failed to write file: %v", err)
-		return response
-	}
-
-	response.Success = true
-	// Show status message to user with edit summary
-	if targetStart == targetEnd {
-		response.Output = fmt.Sprintf("File edited: %s (SafeEdit line %d) - %s",
-			task.Path, targetStart, editSummary.GetCompactSummary())
-	} else {
-		response.Output = fmt.Sprintf("File edited: %s (SafeEdit lines %d-%d) - %s",
-			task.Path, targetStart, targetEnd, editSummary.GetCompactSummary())
-	}
-
-	// Store the new content for reference
-	response.Task.Content = newContent
-	return response
-}
-
-// validateSafeEditContext performs mandatory context validation for SafeEdit
-func (e *Executor) validateSafeEditContext(lines []string, task *Task, targetStart, targetEnd int) error {
-	totalLines := len(lines)
-
-	// Validate BEFORE_CONTEXT
-	if task.BeforeContext == "" {
-		return fmt.Errorf("BeforeContext is required for SafeEdit")
-	}
-
-	beforeLines := strings.Split(task.BeforeContext, "\n")
-
-	// Try multiple interpretations of BeforeContext to be more flexible
-	var beforeStartIdx int
-	var validationPassed bool
-
-	// Declare variables here to avoid goto issues
-	searchRange := 5 // Search within 5 lines of expected position
-	bestMatchScore := 0
-	bestMatchIdx := -1
-
-	// Try interpretation 1: BeforeContext ends right before target (traditional)
-	beforeStartIdx = targetStart - len(beforeLines) - 1 // Convert to 0-indexed
-	if beforeStartIdx >= 0 {
-		validationPassed = e.tryContextValidation(lines, beforeLines, beforeStartIdx)
-		if validationPassed {
-			goto validateAfter // Success with interpretation 1
-		}
-	}
-
-	// Try interpretation 2: BeforeContext includes target line(s) - common with AI output
-	beforeStartIdx = targetStart - len(beforeLines) // Convert to 0-indexed
-	if beforeStartIdx >= 0 {
-		validationPassed = e.tryContextValidation(lines, beforeLines, beforeStartIdx)
-		if validationPassed {
-			goto validateAfter // Success with interpretation 2
-		}
-	}
-
-	// Try interpretation 3: BeforeContext is exactly the lines leading up to and including target
-	// This handles cases where AI provides "line 35, line 36, line 37" for target line 36
-	if len(beforeLines) >= 2 {
-		// Try matching the context ending exactly at the target line
-		beforeStartIdx = targetStart - len(beforeLines) + 1 // Convert to 0-indexed, ending at target
-		if beforeStartIdx >= 0 {
-			validationPassed = e.tryContextValidation(lines, beforeLines, beforeStartIdx)
-			if validationPassed {
-				goto validateAfter // Success with interpretation 3
-			}
-		}
-	}
-
-	// Try interpretation 4: Smart context matching - find the best match within a reasonable range
-	// This is for cases where line numbers don't align perfectly but content matches
-	for offset := -searchRange; offset <= searchRange; offset++ {
-		testIdx := (targetStart - len(beforeLines)) + offset
-		if testIdx >= 0 && testIdx+len(beforeLines) <= totalLines {
-			score := e.calculateContextMatchScore(lines, beforeLines, testIdx)
-			minRequiredScore := int(float64(len(beforeLines)) * 0.8) // At least 80% match
-			if score > bestMatchScore && score >= minRequiredScore {
-				bestMatchScore = score
-				bestMatchIdx = testIdx
-			}
-		}
-	}
-
-	if bestMatchIdx >= 0 {
-		validationPassed = true
-		goto validateAfter // Success with smart matching
-	}
-
-	return fmt.Errorf("before context validation failed: context does not match file content around target lines")
-
-validateAfter:
-	// Validate AFTER_CONTEXT
-	if task.AfterContext == "" {
-		return fmt.Errorf("AfterContext is required for SafeEdit")
-	}
-
-	afterLines := strings.Split(task.AfterContext, "\n")
-	afterStartIdx := targetEnd // Start right after target range (0-indexed)
-
-	if afterStartIdx >= totalLines {
-		return fmt.Errorf("not enough lines after target for context validation (need %d lines after line %d)", len(afterLines), targetEnd)
-	}
-
-	// Try flexible after context validation as well
-	for offset := 0; offset <= 2; offset++ { // Try exact position and a couple of lines after
-		testIdx := afterStartIdx + offset
-		if testIdx < totalLines && e.tryContextValidation(lines, afterLines, testIdx) {
-			return nil // Success!
-		}
-	}
-
-	return fmt.Errorf("after context validation failed: context does not match file content after target lines")
-}
-
-// calculateContextMatchScore calculates how well the expected context matches the actual lines
-func (e *Executor) calculateContextMatchScore(lines []string, expectedLines []string, startIdx int) int {
-	if startIdx < 0 || startIdx >= len(lines) {
-		return 0
-	}
-
-	score := 0
-	for i, expectedLine := range expectedLines {
-		actualIdx := startIdx + i
-		if actualIdx >= len(lines) {
-			break
-		}
-
-		actualLine := lines[actualIdx]
-		cleanActual := e.cleanLineForComparison(actualLine)
-		cleanExpected := e.cleanLineForComparison(expectedLine)
-
-		if cleanActual == cleanExpected {
-			score++
-		}
-	}
-
-	return score
-}
-
-// tryContextValidation attempts to validate context at a specific starting position
-func (e *Executor) tryContextValidation(lines []string, expectedLines []string, startIdx int) bool {
-	if startIdx < 0 || startIdx >= len(lines) {
-		return false
-	}
-
-	// Check each line of context
-	for i, expectedLine := range expectedLines {
-		actualIdx := startIdx + i
-		if actualIdx >= len(lines) {
-			return false
-		}
-
-		actualLine := lines[actualIdx]
-
-		// Clean both lines for comparison
-		cleanActual := e.cleanLineForComparison(actualLine)
-		cleanExpected := e.cleanLineForComparison(expectedLine)
-
-		if cleanActual != cleanExpected {
-			return false
-		}
-	}
-
-	return true
-}
-
-// cleanLineForComparison cleans a line for context validation comparison
-func (e *Executor) cleanLineForComparison(line string) string {
-	// Remove line number prefixes (e.g., "35      " or "  15: ")
-	cleaned := e.stripLineNumberPrefix(line)
-
-	// Simple approach: just trim whitespace and compare the core content
-	// This is more reliable than trying to normalize indentation perfectly
-	return strings.TrimSpace(cleaned)
-}
-
-// normalizeWhitespace normalizes whitespace in a line for comparison while preserving structure
-// NOTE: This function is now simplified - we use simple TrimSpace instead of complex normalization
-func (e *Executor) normalizeWhitespace(line string) string {
-	return strings.TrimSpace(line)
-}
-
-// stripLineNumberPrefix removes line number prefixes from context lines
-func (e *Executor) stripLineNumberPrefix(line string) string {
-	// Pattern 1: "35      content" (number followed by spaces)
-	pattern1 := regexp.MustCompile(`^\s*\d+\s+(.*)$`)
-	if matches := pattern1.FindStringSubmatch(line); len(matches) > 1 {
-		return matches[1]
-	}
-
-	// Pattern 2: "  15: content" (spaces, number, colon, space)
-	pattern2 := regexp.MustCompile(`^\s*\d+:\s+(.*)$`)
-	if matches := pattern2.FindStringSubmatch(line); len(matches) > 1 {
-		return matches[1]
-	}
-
-	// Pattern 3: "15|content" (number, pipe, content)
-	pattern3 := regexp.MustCompile(`^\s*\d+\|\s*(.*)$`)
-	if matches := pattern3.FindStringSubmatch(line); len(matches) > 1 {
-		return matches[1]
-	}
-
-	// If no line number prefix found, return original line
-	return line
-}
-
-// performSafeEdit performs the actual SafeEdit with validated context
-func (e *Executor) performSafeEdit(originalContent string, task *Task, targetStart, targetEnd int) (string, error) {
-	lines := strings.Split(originalContent, "\n")
-
-	// Replace the target lines with new content
-	newLines := make([]string, 0, len(lines))
-
-	// Add lines before the target range (convert 1-indexed to 0-indexed)
-	beforeLines := lines[:targetStart-1]
-	newLines = append(newLines, beforeLines...)
-
-	// Add new content (split by newlines if multi-line)
+	// FALLBACK: Simple content replacement for new files
 	if task.Content != "" {
-		contentLines := strings.Split(task.Content, "\n")
-		newLines = append(newLines, contentLines...)
+		return e.replaceEntireFile(task, fullPath)
 	}
 
-	// Add lines after target range
-	// Since targetEnd is 1-indexed and inclusive, we need lines starting from targetEnd (0-indexed)
-	afterIndex := targetEnd // This gives us the lines after the target range
-	if afterIndex < len(lines) {
-		afterLines := lines[afterIndex:]
-		newLines = append(newLines, afterLines...)
-	}
-
-	result := strings.Join(newLines, "\n")
-
-	return result, nil
+	// No valid edit content
+	response.Error = "EditFile requires either a LOOM_EDIT command or file content. Please use the LOOM_EDIT format for precise edits or provide complete file content for new files."
+	return response
 }
+
+// applyLoomEdit applies a LOOM_EDIT command using the loom_edit module
+func (e *Executor) applyLoomEdit(task *Task, fullPath string) *TaskResponse {
+	response := &TaskResponse{Task: *task}
+
+	// Parse the LOOM_EDIT command from the task content
+	editCmd, err := loom_edit.ParseEditCommand(task.Content)
+	if err != nil {
+		response.Error = fmt.Sprintf("Failed to parse LOOM_EDIT command: %v\n\nPlease ensure your LOOM_EDIT command follows the correct format:\n>>LOOM_EDIT file=path v=sha ACTION start-end\n#OLD_HASH:hash\nnew content\n<<LOOM_EDIT", err)
+		return response
+	}
+
+	// Apply the edit using the loom_edit module
+	err = loom_edit.ApplyEdit(fullPath, editCmd)
+	if err != nil {
+		response.Error = fmt.Sprintf("Failed to apply LOOM_EDIT: %v\n\nThis could be due to:\n- File SHA mismatch (file was modified since you read it)\n- Invalid line numbers\n- Old slice hash mismatch (target lines have changed)\n\nPlease READ the file again to get the current state and try again.", err)
+		return response
+	}
+
+	// Success! Generate edit summary
+	response.Success = true
+
+	// Read the updated file content for analysis
+	newContent, err := os.ReadFile(fullPath)
+	if err != nil {
+		// Edit succeeded but we can't read for summary - still report success
+		response.Output = fmt.Sprintf("File edited successfully: %s (%s operation)", task.Path, editCmd.Action)
+		response.ActualContent = fmt.Sprintf("LOOM_EDIT applied successfully to %s\nOperation: %s on lines %d-%d", task.Path, editCmd.Action, editCmd.Start, editCmd.End)
+		return response
+	}
+
+	// Store the new content in task for potential future reference
+	response.Task.Content = string(newContent)
+
+	// Create user-friendly output message
+	if editCmd.Start == editCmd.End {
+		response.Output = fmt.Sprintf("File edited successfully: %s (%s line %d)", task.Path, editCmd.Action, editCmd.Start)
+	} else {
+		response.Output = fmt.Sprintf("File edited successfully: %s (%s lines %d-%d)", task.Path, editCmd.Action, editCmd.Start, editCmd.End)
+	}
+
+	// Create detailed message for LLM
+	response.ActualContent = fmt.Sprintf("LOOM_EDIT applied successfully to %s\nOperation: %s on lines %d-%d\nFile updated with validated changes.",
+		task.Path, editCmd.Action, editCmd.Start, editCmd.End)
+
+	return response
+}
+
+// replaceEntireFile replaces the entire file content with new content
+func (e *Executor) replaceEntireFile(task *Task, fullPath string) *TaskResponse {
+	response := &TaskResponse{Task: *task}
+
+	// Write the content directly
+	err := e.applyEditInternal(task)
+	if err != nil {
+		response.Error = fmt.Sprintf("failed to write file: %v", err)
+		return response
+	}
+
+	response.Success = true
+	response.Output = fmt.Sprintf("File created/replaced: %s", task.Path)
+	response.ActualContent = fmt.Sprintf("File %s has been created/replaced with new content.", task.Path)
+
+	return response
+}
+
+// OLD FUNCTIONS REMOVED - All old editing functions have been replaced by LOOM_EDIT system
 
 // ApplyEditWithConfirmation applies file changes after user confirmation
 // This method should be used by Manager.ConfirmTask() to ensure proper edit summary
@@ -866,6 +408,8 @@ func (e *Executor) applyEditInternal(task *Task) error {
 
 	return nil
 }
+
+// LEGACY FUNCTIONS REMOVED - All old editing functions have been replaced by LOOM_EDIT system
 
 // applyLineBasedEdit applies precise line-based edits to a file
 func (e *Executor) applyLineBasedEdit(task *Task, fullPath string) *TaskResponse {
