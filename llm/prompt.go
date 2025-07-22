@@ -193,6 +193,31 @@ ACTION target [line-range] -> description
 ✅ **CORRECT**: 🔧 SEARCH "pattern" type:go
 ✅ **CORRECT**: 🔧 SEARCH "pattern" context:2 max:50
 
+### 🔍 CRITICAL: Search Result Interpretation
+
+**MANDATORY SEARCH RESULT HANDLING**:
+When you execute a SEARCH task, you MUST read and interpret the actual task result:
+
+✅ **CORRECT Response to "No matches found":**
+"I searched for 'BadgeGenerator' in the codebase and found no matches. This pattern does not exist in the current project."
+
+❌ **NEVER HALLUCINATE RESULTS:**
+- NEVER claim to find matches when the task result says "No matches found"
+- NEVER make up file paths like "applications/desktop/BMO/ExtendedStats.ui.php"
+- NEVER invent search results based on the pattern name
+- NEVER ignore the actual search task response
+
+**Search Result Response Pattern:**
+1. **Check the task result first** - read what the search actually returned
+2. **If "No matches found"** - clearly state that the pattern doesn't exist
+3. **If matches found** - analyze the actual file paths and contexts returned
+4. **Base your response entirely on the actual search results** - never guess or hallucinate
+
+**Example Correct Handling:**
+When task result shows "No matches found for search query: 'BadgeGenerator'":
+✅ **CORRECT**: "The search for 'BadgeGenerator' returned no results. This pattern does not exist in the codebase."
+❌ **WRONG**: "Found BadgeGenerator in several files including applications/desktop/BMO/ExtendedStats.ui.php"
+
 ### Sequential Exploration Flow:
 1. **Start with README** to understand project purpose and structure
    🔧 READ README.md (max: 300 lines)
