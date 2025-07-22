@@ -1045,8 +1045,6 @@ func (m *model) sendToLLMWithTasks(userInput string) tea.Cmd {
 			return StreamMsg{Error: fmt.Errorf("failed to save user message: %w", err)}
 		}
 
-
-
 		// Reset completion detection state for new user queries (not completion checks)
 		if !strings.HasPrefix(userInput, "COMPLETION_CHECK:") {
 			m.currentObjective = ""
