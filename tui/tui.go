@@ -635,18 +635,7 @@ Ask me anything about your code, architecture, or programming questions!`
 			m.messages = m.chatSession.GetDisplayMessages()
 			m.updateWrappedMessages()
 
-			// After tasks complete, check if we should trigger completion detection
-			// This ensures we always ask if the objective is complete after task execution
-			if m.lastLLMResponse != "" && !strings.HasPrefix(m.lastLLMResponse, "COMPLETION_CHECK:") {
-				// Trigger completion checking after task completion
-				return m, func() tea.Msg {
-					return AutoContinueMsg{
-						LastResponse: m.lastLLMResponse,
-						Depth:        m.recursiveDepth,
-					}
-				}
-			}
-
+			// Always continue with LLM conversation to allow completion message
 			return m, m.continueLLMAfterTasks()
 		}
 		return m, nil
