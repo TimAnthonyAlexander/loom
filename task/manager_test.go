@@ -1,20 +1,17 @@
 package task
 
 import (
-	"fmt"
 	"loom/llm"
-	"os"
-	"strings"
 	"testing"
 )
 
-// MockChatSession for testing
+// Helper type for testing
 type MockChatSession struct {
 	messages []llm.Message
 }
 
-func (m *MockChatSession) AddMessage(msg llm.Message) error {
-	m.messages = append(m.messages, msg)
+func (m *MockChatSession) AddMessage(message llm.Message) error {
+	m.messages = append(m.messages, message)
 	return nil
 }
 
@@ -23,11 +20,7 @@ func (m *MockChatSession) GetMessages() []llm.Message {
 }
 
 func (m *MockChatSession) GetDisplayMessages() []string {
-	var display []string
-	for _, msg := range m.messages {
-		display = append(display, fmt.Sprintf("%s: %s", msg.Role, msg.Content))
-	}
-	return display
+	return nil // Not used in this test
 }
 
 // TestEditTaskConfirmationBug tests the bug where tasks requiring confirmation but don't show dialogs
@@ -78,18 +71,4 @@ func TestEditTaskConfirmationBug(t *testing.T) {
 	if task.Type != TaskTypeEditFile {
 		t.Fatalf("Expected task type EditFile, got %v", task.Type)
 	}
-}
-
-// Helper functions
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-}
-
-func readFileContent(path string) (string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
 }

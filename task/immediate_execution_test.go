@@ -1,11 +1,16 @@
 package task
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+// fileExists is a helper function to check if a file exists
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
 
 // TestImmediateExecutionSingleFile tests that single file operations work immediately
 func TestImmediateExecutionSingleFile(t *testing.T) {
@@ -136,8 +141,14 @@ root.render(
 <<LOOM_EDIT`,
 	}
 
+	fileNames := []string{
+		"src/App.js",
+		"src/index.js",
+		"public/index.html",
+	}
+
 	for i, input := range inputs {
-		t.Logf("Processing file %d: %s", i+1, task.Task{Type: TaskTypeEditFile, Path: fmt.Sprintf("src/App.js")}) // simple file name reference
+		t.Logf("Processing file %d: %s", i+1, fileNames[i])
 
 		// Create event channel for each task
 		eventChan := make(chan TaskExecutionEvent, 10)
@@ -294,5 +305,3 @@ root.render(
 		}
 	}
 }
-
-// Helper function is already defined in other test files as fileExistsHelper

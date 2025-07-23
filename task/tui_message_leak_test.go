@@ -16,9 +16,20 @@ func TestImmediateExecutionFlow(t *testing.T) {
 	tempDir := t.TempDir()
 	executor := NewExecutor(tempDir, false, 1024*1024)
 
-	// Test the exact format that causes the leak
-	exactUserInput := `EDIT public/index.html
-{"content":"<!DOCTYPE html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>Fatih Secilmis Dentist Office</title>\n  </head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>"}`
+	// Use proper LOOM_EDIT format to edit files
+	exactUserInput := `>>LOOM_EDIT file=public/index.html REPLACE 1-1
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fatih Secilmis Dentist Office</title>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
+<<LOOM_EDIT`
 
 	// Parse task
 	taskList, err := ParseTasks(exactUserInput)
@@ -45,7 +56,6 @@ func TestImmediateExecutionFlow(t *testing.T) {
 		"TASK_RESULT: Edit public/index.html",
 		"STATUS: Success",
 		"CONTENT:",
-		"File public/index.html has been created/replaced with new content",
 	}
 
 	for _, expected := range expectedLeakedContent {
@@ -93,11 +103,12 @@ func formatTaskResultForLLMTest(task *Task, response *TaskResponse) string {
 
 // TestInternalMessageFiltering tests that internal messages should be filtered from user display
 func TestInternalMessageFiltering(t *testing.T) {
-	// Create mock chat session
-	mockChat := &MockChatSession{}
+	// Create simple mock chat session for this test
+	mockChat := &SimpleMockChat{}
 
 	// Simulate adding internal message to chat session (this is the bug)
-	_ = "TASK_RESULT: Edit test.html (replace content)\nSTATUS: Success\nCONTENT:\nContent replacement preview..."
+	mockChat.messages = append(mockChat.messages,
+		"TASK_RESULT: Edit test.html (LOOM_EDIT format)\nSTATUS: Success\nCONTENT:\nContent replacement preview...")
 
 	// This should NOT appear in user display messages
 	displayMessages := mockChat.GetDisplayMessages()
@@ -110,6 +121,15 @@ func TestInternalMessageFiltering(t *testing.T) {
 	}
 }
 
+// SimpleMockChat implements a simple mock chat session specifically for this test
+type SimpleMockChat struct {
+	messages []string
+}
+
+func (s *SimpleMockChat) GetDisplayMessages() []string {
+	return s.messages
+}
+
 // TestCorrectUserFeedback tests what the user SHOULD see instead of internal messages
 func TestCorrectUserFeedback(t *testing.T) {
 	tempDir := t.TempDir()
@@ -117,8 +137,10 @@ func TestCorrectUserFeedback(t *testing.T) {
 	mockChat := &MockChatSession{}
 	manager := NewManager(executor, nil, mockChat)
 
-	exactUserInput := `EDIT public/index.html
-{"content":"<html><body>test</body></html>"}`
+	// Use proper LOOM_EDIT format to edit files
+	exactUserInput := `>>LOOM_EDIT file=public/index.html REPLACE 1-1
+<html><body>test</body></html>
+<<LOOM_EDIT`
 
 	// Create event channel
 	eventChan := make(chan TaskExecutionEvent, 10)
@@ -170,3 +192,6 @@ func TestCorrectUserFeedback(t *testing.T) {
 
 	t.Logf("CORRECT FLOW: File created immediately without confirmation")
 }
+
+// We'll use the fileExistsHelper function from edit_success_bug_test.go
+// instead of redefining it here

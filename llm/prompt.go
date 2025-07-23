@@ -138,6 +138,9 @@ OBJECTIVE: [Clear, specific goal for what you plan to accomplish]
 ❌ **WRONG**: Starting with "OBJECTIVE: Read README" then changing to "OBJECTIVE: Analyze project architecture"
 ❌ **WRONG**: "OBJECTIVE: Fix bug" becomes "OBJECTIVE: Refactor entire codebase"
 ❌ **WRONG**: "OBJECTIVE: Explain feature X" becomes "OBJECTIVE: Document all features"
+❌ **WRONG**: "OBJECTIVE: Check out sample.json" becomes "OBJECTIVE: Edit anything"
+
+If the user initially asked to LOOK at something or CHECK SOMETHING OUT, do not start editing files.
 
 **✅ CORRECT Exploration Within Objective:**
 - OBJECTIVE: Read and understand the README file
