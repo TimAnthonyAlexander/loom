@@ -3,6 +3,8 @@ package task
 import (
 	"context"
 	"fmt"
+	contextMgr "loom/context"
+	"loom/indexer"
 	"loom/llm"
 	"strings"
 	"time"
@@ -41,6 +43,7 @@ type SequentialTaskManager struct {
 
 	// Objective-driven exploration
 	currentObjective *ObjectiveExploration
+	contextManager   *contextMgr.ContextManager // Added for context optimization
 }
 
 // ExplorationResult represents the final result of a sequential exploration
@@ -68,7 +71,13 @@ func NewSequentialTaskManager(executor *Executor, llmAdapter llm.LLMAdapter, cha
 			"exploration complete",
 			"analysis complete",
 		},
+		// We'll set the contextManager later with SetContextManager
 	}
+}
+
+// SetContextManager sets the context manager for optimized context management
+func (stm *SequentialTaskManager) SetContextManager(index *indexer.Index, maxContextTokens int) {
+	stm.contextManager = contextMgr.NewContextManager(index, maxContextTokens)
 }
 
 // HandleExplorationRequest starts a sequential exploration based on user query
@@ -175,10 +184,25 @@ func (stm *SequentialTaskManager) buildLLMContext() []llm.Message {
 	// Get system message with sequential exploration instructions
 	systemMsg := stm.CreateSequentialSystemMessage()
 
-	// Combine system message with exploration context
+	// Try to use a context manager for optimized context if available
+	if stm.contextManager != nil {
+		// Start with system message
+		messages := []llm.Message{systemMsg}
+
+		// Add exploration context
+		messages = append(messages, stm.explorationContext...)
+
+		// Optimize the messages
+		optimized, err := stm.contextManager.OptimizeMessages(messages)
+		if err == nil {
+			return optimized
+		}
+		// Fall back to full context if optimization fails
+	}
+
+	// Combine system message with exploration context without optimization
 	messages := []llm.Message{systemMsg}
 	messages = append(messages, stm.explorationContext...)
-
 	return messages
 }
 

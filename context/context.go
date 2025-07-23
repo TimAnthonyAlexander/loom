@@ -82,48 +82,124 @@ func (cm *ContextManager) OptimizeMessages(messages []llm.Message) ([]llm.Messag
 		return messages, nil
 	}
 
-	optimized := make([]llm.Message, 0, len(messages))
-	totalTokens := 0
-
-	// Always preserve system messages (first)
+	// Categorize messages by role
 	systemMessages := []llm.Message{}
-	otherMessages := []llm.Message{}
+	userMessages := []llm.Message{}
+	assistantMessages := []llm.Message{}
 
 	for _, msg := range messages {
-		if msg.Role == "system" {
+		switch msg.Role {
+		case "system":
 			systemMessages = append(systemMessages, msg)
-		} else {
-			otherMessages = append(otherMessages, msg)
+		case "user":
+			userMessages = append(userMessages, msg)
+		case "assistant":
+			assistantMessages = append(assistantMessages, msg)
 		}
 	}
 
-	// Add system messages first
+	// Initialize optimized messages array
+	optimized := make([]llm.Message, 0, len(messages))
+	totalTokens := 0
+
+	// ALWAYS include system messages (highest priority)
 	for _, msg := range systemMessages {
 		tokens := cm.tokenEstimator.EstimateTokens(msg.Content)
 		if totalTokens+tokens < cm.maxTokens {
 			optimized = append(optimized, msg)
 			totalTokens += tokens
+		} else {
+			// System messages are critical - if we can't include all of them,
+			// we're likely over capacity and need to trim somewhere else
 		}
 	}
 
-	// Add other messages from most recent backward
-	for i := len(otherMessages) - 1; i >= 0; i-- {
-		msg := otherMessages[i]
-		optimizedMsg, tokens := cm.optimizeMessage(msg)
-
+	// Add the initial user message if it exists (important for establishing context)
+	if len(userMessages) > 0 {
+		initialMsg := userMessages[0]
+		tokens := cm.tokenEstimator.EstimateTokens(initialMsg.Content)
 		if totalTokens+tokens < cm.maxTokens {
-			optimized = append([]llm.Message{optimizedMsg}, optimized[len(systemMessages):]...)
+			optimized = append(optimized, initialMsg)
 			totalTokens += tokens
-		} else {
-			// Try to summarize older messages if we're running out of space
-			if i < len(otherMessages)-5 { // Keep last 5 messages full
-				summary := cm.summarizeOlderMessages(otherMessages[:i+1])
-				summaryTokens := cm.tokenEstimator.EstimateTokens(summary.Content)
-				if totalTokens+summaryTokens < cm.maxTokens {
-					optimized = append([]llm.Message{summary}, optimized[len(systemMessages):]...)
-					totalTokens += summaryTokens
+		}
+	}
+
+	// Define the number of recent messages to always include
+	const recentMessagesToKeep = 10
+
+	// Calculate remaining messages that need optimization
+	var remainingMessages []llm.Message
+	if len(messages) > recentMessagesToKeep+len(systemMessages)+1 { // +1 for initial message
+		// We need to exclude the system messages, initial message, and N recent messages
+		startIdx := 0
+		for _, msg := range messages {
+			if msg.Role == "system" {
+				startIdx++
+			}
+		}
+		startIdx++ // Skip the initial user message too
+
+		// All messages except system, initial and recent
+		if startIdx+recentMessagesToKeep < len(messages) {
+			endIdx := len(messages) - recentMessagesToKeep
+			remainingMessages = messages[startIdx:endIdx]
+		}
+	}
+
+	// Create a summary of older messages if needed
+	if len(remainingMessages) > 0 {
+		summary := cm.summarizeOlderMessages(remainingMessages)
+		summaryTokens := cm.tokenEstimator.EstimateTokens(summary.Content)
+		if totalTokens+summaryTokens < cm.maxTokens {
+			optimized = append(optimized, summary)
+			totalTokens += summaryTokens
+		}
+	}
+
+	// Include the current objective/task if it can be identified
+	objective := cm.extractCurrentObjective(messages)
+	if objective != nil {
+		objectiveTokens := cm.tokenEstimator.EstimateTokens(objective.Content)
+		if totalTokens+objectiveTokens < cm.maxTokens {
+			optimized = append(optimized, *objective)
+			totalTokens += objectiveTokens
+		}
+	}
+
+	// Add recent messages (always keep these)
+	if len(messages) > recentMessagesToKeep {
+		recentMessages := messages[len(messages)-recentMessagesToKeep:]
+		for _, msg := range recentMessages {
+			tokens := cm.tokenEstimator.EstimateTokens(msg.Content)
+			if totalTokens+tokens < cm.maxTokens {
+				optimized = append(optimized, msg)
+				totalTokens += tokens
+			} else {
+				// If we can't include a recent message, try to condense it
+				condensed, condensedTokens := cm.condenseMessage(msg)
+				if totalTokens+condensedTokens < cm.maxTokens {
+					optimized = append(optimized, condensed)
+					totalTokens += condensedTokens
 				}
-				break
+			}
+		}
+	} else {
+		// If we have fewer messages than our target, just include them all
+		for i, msg := range messages {
+			// Skip messages we've already added (system messages and initial message)
+			if msg.Role == "system" || (msg.Role == "user" && i == 0) {
+				continue
+			}
+			tokens := cm.tokenEstimator.EstimateTokens(msg.Content)
+			if totalTokens+tokens < cm.maxTokens {
+				optimized = append(optimized, msg)
+				totalTokens += tokens
+			} else {
+				condensed, condensedTokens := cm.condenseMessage(msg)
+				if totalTokens+condensedTokens < cm.maxTokens {
+					optimized = append(optimized, condensed)
+					totalTokens += condensedTokens
+				}
 			}
 		}
 	}
@@ -131,12 +207,52 @@ func (cm *ContextManager) OptimizeMessages(messages []llm.Message) ([]llm.Messag
 	return optimized, nil
 }
 
-// optimizeMessage optimizes a single message for token efficiency
-func (cm *ContextManager) optimizeMessage(msg llm.Message) (llm.Message, int) {
-	// For now, return the message as-is
-	// Future: Could implement file content optimization here
-	tokens := cm.tokenEstimator.EstimateTokens(msg.Content)
-	return msg, tokens
+// extractCurrentObjective tries to find the current objective from recent assistant messages
+func (cm *ContextManager) extractCurrentObjective(messages []llm.Message) *llm.Message {
+	// Search for OBJECTIVE pattern in recent assistant messages
+	for i := len(messages) - 1; i >= 0; i-- {
+		msg := messages[i]
+		if msg.Role == "assistant" {
+			if strings.Contains(msg.Content, "OBJECTIVE:") {
+				// Extract objective line and create a system message
+				lines := strings.Split(msg.Content, "\n")
+				for _, line := range lines {
+					if strings.Contains(line, "OBJECTIVE:") {
+						return &llm.Message{
+							Role:      "system",
+							Content:   "Current " + strings.TrimSpace(line),
+							Timestamp: time.Now(),
+						}
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// condenseMessage tries to shorten a message while preserving key information
+func (cm *ContextManager) condenseMessage(msg llm.Message) (llm.Message, int) {
+	// Don't attempt to condense system messages
+	if msg.Role == "system" {
+		return msg, cm.tokenEstimator.EstimateTokens(msg.Content)
+	}
+
+	// For long messages, extract key parts
+	content := msg.Content
+	if len(content) > 1000 {
+		// Keep first and last parts
+		firstPart := content[:500]
+		lastPart := content[len(content)-500:]
+		condensed := firstPart + "\n\n...[content truncated]...\n\n" + lastPart
+		return llm.Message{
+			Role:      msg.Role,
+			Content:   condensed,
+			Timestamp: msg.Timestamp,
+		}, cm.tokenEstimator.EstimateTokens(condensed)
+	}
+
+	return msg, cm.tokenEstimator.EstimateTokens(content)
 }
 
 // summarizeOlderMessages creates a summary of older chat messages
@@ -144,35 +260,138 @@ func (cm *ContextManager) summarizeOlderMessages(messages []llm.Message) llm.Mes
 	var content strings.Builder
 	content.WriteString("## Previous Conversation Summary\n")
 
+	// Extract user questions
 	userQuestions := []string{}
-	assistantActions := []string{}
-
 	for _, msg := range messages {
 		if msg.Role == "user" {
-			userQuestions = append(userQuestions, strings.TrimSpace(msg.Content))
-		} else if msg.Role == "assistant" {
-			// Extract key actions/topics from assistant messages
-			if len(msg.Content) > 100 {
-				// Truncate long responses
-				summary := msg.Content[:100] + "..."
-				assistantActions = append(assistantActions, summary)
+			// Take just the first line or a portion for brevity
+			question := msg.Content
+			if idx := strings.Index(question, "\n"); idx > 0 {
+				question = question[:idx]
+			}
+			if len(question) > 100 {
+				question = question[:100] + "..."
+			}
+			userQuestions = append(userQuestions, strings.TrimSpace(question))
+		}
+	}
+
+	// Extract assistant actions (focus on tasks and objectives)
+	assistantActions := []string{}
+	objectives := []string{}
+	tasks := []string{}
+	taskResults := make(map[string]string) // Key: task description, Value: summarized result
+
+	for _, msg := range messages {
+		if msg.Role == "assistant" {
+			// Extract objectives
+			if strings.Contains(msg.Content, "OBJECTIVE:") {
+				lines := strings.Split(msg.Content, "\n")
+				for _, line := range lines {
+					if strings.Contains(line, "OBJECTIVE:") {
+						objectives = append(objectives, strings.TrimSpace(line))
+						break
+					}
+				}
+			}
+
+			// Extract tasks (look for the wrench emoji pattern or TASK_RESULT)
+			lines := strings.Split(msg.Content, "\n")
+			var currentTask string
+			var currentResult strings.Builder
+			inResult := false
+			for _, line := range lines {
+				trimmed := strings.TrimSpace(line)
+				if strings.HasPrefix(trimmed, "🔧") || strings.HasPrefix(trimmed, "TASK_RESULT:") {
+					if currentTask != "" && currentResult.Len() > 0 {
+						taskResults[currentTask] = strings.TrimSpace(currentResult.String())
+					}
+					currentTask = trimmed
+					currentResult.Reset()
+					inResult = true
+					tasks = append(tasks, trimmed)
+				} else if inResult {
+					if trimmed == "" {
+						inResult = false
+						if currentTask != "" && currentResult.Len() > 0 {
+							taskResults[currentTask] = strings.TrimSpace(currentResult.String())
+						}
+					} else {
+						currentResult.WriteString(line + "\n")
+					}
+				}
+			}
+			// Add any remaining result
+			if currentTask != "" && currentResult.Len() > 0 {
+				taskResults[currentTask] = strings.TrimSpace(currentResult.String())
+			}
+
+			// Extract general actions for context
+			if len(msg.Content) > 200 {
+				// Get a summarized action
+				action := msg.Content[:100] + "..."
+				assistantActions = append(assistantActions, action)
 			} else {
 				assistantActions = append(assistantActions, msg.Content)
 			}
 		}
 	}
 
+	// Add user questions (up to 5)
 	if len(userQuestions) > 0 {
-		content.WriteString("User asked about: ")
-		content.WriteString(strings.Join(userQuestions[:min(len(userQuestions), 3)], "; "))
+		content.WriteString("### User asked about:\n")
+		for i, q := range userQuestions {
+			if i >= 5 {
+				content.WriteString(fmt.Sprintf("- ...and %d more questions\n", len(userQuestions)-5))
+				break
+			}
+			content.WriteString("- " + q + "\n")
+		}
 		content.WriteString("\n")
 	}
 
-	if len(assistantActions) > 0 {
-		content.WriteString("Assistant discussed: ")
-		content.WriteString(strings.Join(assistantActions[:min(len(assistantActions), 3)], "; "))
+	// Add objectives (up to 3)
+	if len(objectives) > 0 {
+		content.WriteString("### Previous objectives:\n")
+		for i, obj := range objectives {
+			if i >= 3 {
+				content.WriteString(fmt.Sprintf("- ...and %d more objectives\n", len(objectives)-3))
+				break
+			}
+			content.WriteString("- " + obj + "\n")
+		}
 		content.WriteString("\n")
 	}
+
+	// Add tasks with results (up to 10 most recent, in reverse order to prioritize recent)
+	if len(tasks) > 0 {
+		content.WriteString("### Previously Executed Tasks (most recent first):\n")
+		// Reverse tasks to show most recent first
+		reversedTasks := make([]string, len(tasks))
+		copy(reversedTasks, tasks)
+		sort.Sort(sort.Reverse(sort.StringSlice(reversedTasks)))
+
+		for i, task := range reversedTasks {
+			if i >= 10 {
+				content.WriteString(fmt.Sprintf("- ...and %d more tasks\n", len(tasks)-10))
+				break
+			}
+			result := taskResults[task]
+			if result != "" {
+				// Summarize long results
+				if len(result) > 200 {
+					result = result[:200] + "... (truncated)"
+				}
+				content.WriteString(fmt.Sprintf("- %s\n  Result: %s\n", task, result))
+			} else {
+				content.WriteString(fmt.Sprintf("- %s\n", task))
+			}
+		}
+		content.WriteString("\n")
+	}
+
+	// Add high-level summary
+	content.WriteString(fmt.Sprintf("This summary replaces %d older messages to save context space.\n", len(messages)))
 
 	return llm.Message{
 		Role:      "system",

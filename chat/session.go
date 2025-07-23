@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"loom/context"
 	"loom/indexer"
 	"loom/llm"
 	"loom/paths"
@@ -275,6 +276,24 @@ func (s *Session) GetTaskAuditTrail() []TaskAuditEntry {
 // GetMessages returns all messages in the session
 func (s *Session) GetMessages() []llm.Message {
 	return s.messages
+}
+
+// GetOptimizedContextMessages returns an optimized set of messages for LLM context
+// that preserves the system prompt, initial message, objective, and recent messages
+// while summarizing older conversation history
+func (s *Session) GetOptimizedContextMessages(contextManager *context.ContextManager, maxContextTokens int) ([]llm.Message, error) {
+	if contextManager == nil {
+		// If no context manager provided, just return all messages
+		return s.messages, nil
+	}
+
+	// Use the context manager to optimize messages
+	optimized, err := contextManager.OptimizeMessages(s.messages)
+	if err != nil {
+		return nil, fmt.Errorf("failed to optimize context: %w", err)
+	}
+
+	return optimized, nil
 }
 
 // GetDisplayMessages returns messages formatted for display (excluding system messages)

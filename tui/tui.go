@@ -1077,8 +1077,27 @@ func (m *model) sendToLLMWithTasks(userInput string) tea.Cmd {
 		// Create context with timeout
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 
-		// Get all messages for the LLM
-		messages := m.chatSession.GetMessages()
+		// Get messages for the LLM with optimized context
+		var messages []llm.Message
+		var err error
+
+		// Get max context tokens from config or use default
+		maxContextTokens := 6000 // Default
+		if tokenValue, err := m.config.Get("max_context_tokens"); err == nil {
+			if tokenInt, ok := tokenValue.(int); ok && tokenInt > 0 {
+				maxContextTokens = tokenInt
+			}
+		}
+
+		// Create a context manager if needed
+		contextManager := contextMgr.NewContextManager(m.index, maxContextTokens)
+
+		// Use optimized context instead of full history
+		messages, err = m.chatSession.GetOptimizedContextMessages(contextManager, maxContextTokens)
+		if err != nil {
+			defer cancel()
+			return StreamMsg{Error: fmt.Errorf("context optimization error: %w", err)}
+		}
 
 		// Create a channel for streaming
 		chunks := make(chan llm.StreamChunk, 10)
@@ -1100,8 +1119,27 @@ func (m *model) continueLLMAfterTasks() tea.Cmd {
 		// Create context with timeout
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 
-		// Get all messages for the LLM (including task results)
-		messages := m.chatSession.GetMessages()
+		// Get messages for the LLM with optimized context
+		var messages []llm.Message
+		var err error
+
+		// Get max context tokens from config or use default
+		maxContextTokens := 6000 // Default
+		if tokenValue, err := m.config.Get("max_context_tokens"); err == nil {
+			if tokenInt, ok := tokenValue.(int); ok && tokenInt > 0 {
+				maxContextTokens = tokenInt
+			}
+		}
+
+		// Create a context manager if needed
+		contextManager := contextMgr.NewContextManager(m.index, maxContextTokens)
+
+		// Use optimized context instead of full history
+		messages, err = m.chatSession.GetOptimizedContextMessages(contextManager, maxContextTokens)
+		if err != nil {
+			defer cancel()
+			return StreamMsg{Error: fmt.Errorf("context optimization error: %w", err)}
+		}
 
 		// Create a channel for streaming
 		chunks := make(chan llm.StreamChunk, 10)
@@ -2007,6 +2045,18 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 		enhancedManager = taskPkg.NewEnhancedManager(taskExecutor, llmAdapter, chatSession, idx)
 		taskManager = enhancedManager.Manager // For compatibility
 		sequentialManager = taskPkg.NewSequentialTaskManager(taskExecutor, llmAdapter, chatSession)
+
+		// Get max context tokens from config or use default
+		maxContextTokens := 6000 // Default
+		if tokenValue, err := cfg.Get("max_context_tokens"); err == nil {
+			if tokenInt, ok := tokenValue.(int); ok && tokenInt > 0 {
+				maxContextTokens = tokenInt
+			}
+		}
+
+		// Set context manager for optimized context
+		sequentialManager.SetContextManager(idx, maxContextTokens)
+
 		taskEventChan = make(chan taskPkg.TaskExecutionEvent, 10)
 	}
 
