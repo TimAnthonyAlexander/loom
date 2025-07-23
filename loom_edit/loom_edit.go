@@ -31,7 +31,12 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 	// Parse header line
 	headerMatches := headerRegex.FindStringSubmatch(lines[0])
 	if headerMatches == nil {
-		return nil, fmt.Errorf("invalid LOOM_EDIT header format")
+		return nil, fmt.Errorf("invalid LOOM_EDIT header format: %s", lines[0])
+	}
+
+	// For debugging: Print the matched groups
+	if len(headerMatches) < 4 {
+		return nil, fmt.Errorf("invalid LOOM_EDIT header: insufficient match groups: %v", headerMatches)
 	}
 
 	cmd := &EditCommand{
@@ -66,12 +71,19 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 
 	// Extract new text (everything between header line and <<LOOM_EDIT)
 	var newTextLines []string
+	var foundClosingTag bool
+
 	for i := 1; i < len(lines); i++ {
 		line := lines[i]
 		if line == "<<LOOM_EDIT" {
+			foundClosingTag = true
 			break
 		}
 		newTextLines = append(newTextLines, line)
+	}
+
+	if !foundClosingTag {
+		return nil, fmt.Errorf("invalid LOOM_EDIT format: missing closing <<LOOM_EDIT tag")
 	}
 
 	cmd.NewText = strings.Join(newTextLines, "\n")
