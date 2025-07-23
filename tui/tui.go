@@ -995,7 +995,10 @@ func (m model) renderFileTree() string {
 		}
 
 		sort.Slice(langs, func(i, j int) bool {
-			return langs[i].percent > langs[j].percent
+			if langs[i].percent != langs[j].percent {
+				return langs[i].percent > langs[j].percent
+			}
+			return langs[i].name < langs[j].name
 		})
 
 		for _, lang := range langs {
@@ -1739,7 +1742,10 @@ func (m model) getLanguageSummary(stats indexer.IndexStats) string {
 	}
 
 	sort.Slice(langs, func(i, j int) bool {
-		return langs[i].percent > langs[j].percent
+		if langs[i].percent != langs[j].percent {
+			return langs[i].percent > langs[j].percent
+		}
+		return langs[i].name < langs[j].name
 	})
 
 	var summary []string
@@ -1921,7 +1927,10 @@ func (m model) getIndexStatsMessage() string {
 		}
 
 		sort.Slice(langs, func(i, j int) bool {
-			return langs[i].percent > langs[j].percent
+			if langs[i].percent != langs[j].percent {
+				return langs[i].percent > langs[j].percent
+			}
+			return langs[i].name < langs[j].name
 		})
 
 		for _, lang := range langs {
@@ -2289,7 +2298,10 @@ func createSystemPromptWithTasks(index *indexer.Index, enableShell bool) llm.Mes
 	}
 
 	sort.Slice(langs, func(i, j int) bool {
-		return langs[i].percent > langs[j].percent
+		if langs[i].percent != langs[j].percent {
+			return langs[i].percent > langs[j].percent
+		}
+		return langs[i].name < langs[j].name
 	})
 
 	for i, lang := range langs {

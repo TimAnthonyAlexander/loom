@@ -84,7 +84,10 @@ func (pe *PromptEnhancer) CreateEnhancedSystemPrompt(enableShell bool) Message {
 	}
 
 	sort.Slice(langs, func(i, j int) bool {
-		return langs[i].percent > langs[j].percent
+		if langs[i].percent != langs[j].percent {
+			return langs[i].percent > langs[j].percent
+		}
+		return langs[i].name < langs[j].name
 	})
 
 	for i, lang := range langs {

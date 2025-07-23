@@ -5,6 +5,7 @@ import (
 	"loom/config"
 	"loom/indexer"
 	"loom/workspace"
+	"sort"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -58,11 +59,28 @@ var indexCmd = &cobra.Command{
 		// Show language breakdown
 		if len(stats.LanguageBreakdown) > 0 {
 			fmt.Println("\nLanguage breakdown:")
+			type langPair struct {
+				name    string
+				count   int
+				percent float64
+			}
+
+			var langs []langPair
 			for lang, count := range stats.LanguageBreakdown {
 				if count > 0 {
-					fmt.Printf("  %s: %d files (%.1f%%)\n",
-						lang, count, stats.LanguagePercent[lang])
+					langs = append(langs, langPair{lang, count, stats.LanguagePercent[lang]})
 				}
+			}
+
+			sort.Slice(langs, func(i, j int) bool {
+				if langs[i].count != langs[j].count {
+					return langs[i].count > langs[j].count
+				}
+				return langs[i].name < langs[j].name
+			})
+
+			for _, lang := range langs {
+				fmt.Printf("  %s: %d files (%.1f%%)\n", lang.name, lang.count, lang.percent)
 			}
 		}
 	},
