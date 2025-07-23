@@ -47,7 +47,7 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 	cmd.Start = start
 
 	// Parse end line number (optional for some operations)
-	if headerMatches[5] != "" {
+	if len(headerMatches) > 4 && headerMatches[4] != "" {
 		end, err := strconv.Atoi(headerMatches[4])
 		if err != nil {
 			return nil, fmt.Errorf("invalid end line number: %v", err)
@@ -55,7 +55,13 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 		cmd.End = end
 	} else {
 		// For INSERT_AFTER and INSERT_BEFORE, end equals start
+		// For REPLACE and DELETE, end should be specified, but we'll default to start for safety
 		cmd.End = start
+		
+		// Warn if REPLACE or DELETE doesn't specify an end line
+		if cmd.Action == "REPLACE" || cmd.Action == "DELETE" {
+			fmt.Printf("Warning: %s action missing end line number, defaulting to %d\n", cmd.Action, start)
+		}
 	}
 
 	// Extract new text (everything between header line and <<LOOM_EDIT)

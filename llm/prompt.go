@@ -214,7 +214,7 @@ OBJECTIVE_COMPLETE: Here's how the task execution system works... [comprehensive
 | READ | READ file.go (lines 40-80) | Inspect code with line numbers |
 | SEARCH | SEARCH "pattern" type:go context:3 | Locate symbols/patterns |
 | LIST | LIST src/ recursive | View directory structure |
-| EDIT | >>LOOM_EDIT file=path ACTION lines | Modify files (see §7.3) |
+| EDIT | >>LOOM_EDIT file=path ACTION START-END | Modify files (see §7.3) |
 | RUN | RUN go test | Execute shell commands |
 | MEMORY | MEMORY create key content:"text" | Persist information (see §7.B) |
 
@@ -332,6 +332,8 @@ Be explicit about next steps:
 **Robust, deterministic file editing with SHA validation**
 
 **IMPORTANT**: LOOM_EDIT is the ONLY supported method for editing files. Natural language editing commands are not supported.
+
+Start and End line are required
 
 **Syntax**:
 `+"`"+`
