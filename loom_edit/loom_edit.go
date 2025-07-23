@@ -31,7 +31,7 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 	}
 
 	// Regex to match different variations of the LOOM_EDIT header line
-	// This handles both formats: >>LOOM_EDIT and 🔧 LOOM_EDIT
+	// This handles both formats: >>LOOM_EDIT
 	// And allows for more variations in the line range format
 	headerRegex := regexp.MustCompile(`(?:>>|🔧 )LOOM_EDIT file=([^\s]+) (REPLACE|INSERT_AFTER|INSERT_BEFORE|DELETE)(?:\s+(\d+)(?:-(\d+))?)?`)
 

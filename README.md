@@ -20,7 +20,7 @@ A sophisticated terminal-based AI coding assistant written in Go that provides a
 - **Streaming Responses** — Real-time response streaming for immediate feedback
 
 ### Sophisticated Task Execution
-- **Natural Language Tasks** — AI uses intuitive commands like "🔧 READ main.go" and "🔧 EDIT config.json -> add settings"
+- **Natural Language Tasks** — AI uses intuitive commands like "🔧 READ main.go"
 - **JSON Legacy Support** — Backward compatibility with JSON task format for existing workflows
 - **Sequential Task Manager** — Objective-driven exploration with suppressed intermediate output
 - **Task Confirmation** — Preview and approval for destructive operations
@@ -198,27 +198,11 @@ Loom's AI can autonomously perform coding tasks through intuitive natural langua
 
 #### EDIT — Safe File Modification
 ```
-🔧 EDIT main.go -> add error handling
-
-```go
-package main
-
-import (
-    "fmt"
-    "log"
-)
-
-func main() {
-    if err := run(); err != nil {
-        log.Fatal(err)
-    }
-}
+>>LOOM_EDIT file=docs/CHANGELOG.md REPLACE 4-5
+- First stable release
+- Integrated API layer
+<<LOOM_EDIT
 ```
-```
-- User confirmation required
-- Diff preview before application
-- Backup creation for recovery
-- Natural language descriptions with actual code content
 
 #### LIST — Directory Exploration
 ```
@@ -249,7 +233,7 @@ Loom now uses an intuitive natural language task format that's much more reliabl
 #### ✅ **New Natural Language Format (Recommended)**
 ```
 🔧 READ main.go (max: 100 lines)
-🔧 EDIT config.json -> add database settings
+🔧 LOOM_EDIT config.json
 
 ```json
 {
@@ -540,19 +524,6 @@ Loom: I'll enhance the main function with comprehensive error handling.
 📖 Reading file: main.go
 
 🔧 READ main.go
-
-✏️ Editing main.go -> add error handling and logging
-
-🔧 EDIT main.go -> add error handling and logging
-
-TASK CONFIRMATION REQUIRED
-
-[Diff preview shown]
-
-> y
-
-Applied Edit main.go
-Enhanced main function with logging and structured error handling.
 ```
 
 ### Testing Integration

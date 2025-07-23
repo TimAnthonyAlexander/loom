@@ -3,10 +3,10 @@ package task
 import (
 	"loom/chat"
 	"loom/llm"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
-	"path/filepath"
 )
 
 // TestMessageFilteringFix tests that internal TASK_RESULT messages are properly filtered out

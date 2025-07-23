@@ -401,7 +401,7 @@ func TestTrailingNewlinePreservation(t *testing.T) {
 func TestParseEditCommandMissingEndLine(t *testing.T) {
 	// Test for single line number (REPLACE without end line)
 	input := ">>LOOM_EDIT file=sample.json REPLACE 3\n    \"name\": \"Chair\",\n<<LOOM_EDIT"
-	
+
 	cmd, err := ParseEditCommand(input)
 	if err != nil {
 		t.Log("Error captured as expected:", err)

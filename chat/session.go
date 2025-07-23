@@ -399,7 +399,7 @@ func (s *Session) filterJSONTaskBlocks(content string) string {
 	var filteredLines []string
 	var taskDescriptions []string
 
-	taskPattern := regexp.MustCompile(`^🔧\s+(READ|EDIT|LIST|RUN)\s+(.+)`)
+	taskPattern := regexp.MustCompile(`^🔧\s+(READ|LIST|RUN)\s+(.+)`)
 	// Remove the overly broad simplePattern that incorrectly matches natural language
 	// Only match the explicit task format with 🔧 prefix
 

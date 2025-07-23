@@ -244,7 +244,7 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 	seenTasks := make(map[string]bool)
 
 	// Look for task indicators with emoji prefixes
-	taskPattern := regexp.MustCompile(`^🔧\s+(READ|EDIT|LIST|RUN|SEARCH|MEMORY)\s+(.+)`)
+	taskPattern := regexp.MustCompile(`^🔧\s+(READ|LIST|RUN|SEARCH|MEMORY)\s+(.+)`)
 
 	for i, line := range lines {
 		line = strings.TrimSpace(line)
@@ -1170,7 +1170,7 @@ func extractMemoryContent(lines []string, startIdx int) string {
 		trimmedLine := strings.TrimSpace(line)
 
 		// Stop if we encounter another task directive
-		taskPattern := regexp.MustCompile(`^🔧\s+(READ|EDIT|LIST|RUN|SEARCH|MEMORY)\s+`)
+		taskPattern := regexp.MustCompile(`^🔧\s+(READ|LIST|RUN|SEARCH|MEMORY)\s+`)
 		if taskPattern.MatchString(trimmedLine) {
 			break
 		}
@@ -1240,7 +1240,7 @@ func extractDirectContent(lines []string, startIdx int) string {
 		}
 
 		// Stop if we encounter another task directive
-		taskPattern := regexp.MustCompile(`^🔧\s+(READ|EDIT|LIST|RUN|SEARCH|MEMORY)\s+`)
+		taskPattern := regexp.MustCompile(`^🔧\s+(READ|LIST|RUN|SEARCH|MEMORY)\s+`)
 		if taskPattern.MatchString(trimmedLine) {
 			break
 		}
