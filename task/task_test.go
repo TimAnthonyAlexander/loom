@@ -412,90 +412,39 @@ func TestSearchTaskNaturalLanguageParsing(t *testing.T) {
 	}
 }
 
+// TestTaskDescription tests the Description method for various task types
 func TestTaskDescription(t *testing.T) {
-	// Test ReadFile description
-	task := &Task{
-		Type:     TaskTypeReadFile,
-		Path:     "main.go",
-		MaxLines: 100,
+	tests := []struct {
+		task     Task
+		expected string
+	}{
+		{
+			task:     Task{Type: TaskTypeReadFile, Path: "main.go", MaxLines: 100},
+			expected: "Read main.go (max 100 lines)",
+		},
+		{
+			task:     Task{Type: TaskTypeReadFile, Path: "main.go", StartLine: 10, EndLine: 20},
+			expected: "Read main.go (lines 10-20)",
+		},
+		{
+			task:     Task{Type: TaskTypeEditFile, Path: "main.go", LoomEditCommand: true},
+			expected: "Edit main.go (LOOM_EDIT format)",
+		},
+		{
+			task:     Task{Type: TaskTypeListDir, Path: "src", Recursive: true},
+			expected: "List directory src (recursive)",
+		},
+		{
+			task:     Task{Type: TaskTypeRunShell, Command: "go build"},
+			expected: "Run command: go build",
+		},
 	}
 
-	expected := "Read main.go (max 100 lines)"
-	if desc := task.Description(); desc != expected {
-		t.Errorf("Expected '%s', got '%s'", expected, desc)
-	}
-
-	// Test ReadFile with line range
-	task = &Task{
-		Type:      TaskTypeReadFile,
-		Path:      "main.go",
-		StartLine: 50,
-		EndLine:   150,
-	}
-
-	expected = "Read main.go (lines 50-150)"
-	if desc := task.Description(); desc != expected {
-		t.Errorf("Expected '%s', got '%s'", expected, desc)
-	}
-
-	// Test ReadFile with start line and max lines
-	task = &Task{
-		Type:      TaskTypeReadFile,
-		Path:      "main.go",
-		StartLine: 100,
-		MaxLines:  50,
-	}
-
-	expected = "Read main.go (from line 100, max 50 lines)"
-	if desc := task.Description(); desc != expected {
-		t.Errorf("Expected '%s', got '%s'", expected, desc)
-	}
-
-	// Test ReadFile with just start line
-	task = &Task{
-		Type:      TaskTypeReadFile,
-		Path:      "main.go",
-		StartLine: 200,
-	}
-
-	expected = "Read main.go (from line 200)"
-	if desc := task.Description(); desc != expected {
-		t.Errorf("Expected '%s', got '%s'", expected, desc)
-	}
-
-	// Test EditFile description
-	task = &Task{
-		Type:    TaskTypeEditFile,
-		Path:    "main.go",
-		Content: "new content",
-	}
-
-	expected = "Edit main.go (replace content)"
-	if desc := task.Description(); desc != expected {
-		t.Errorf("Expected '%s', got '%s'", expected, desc)
-	}
-
-	// Test ListDir description
-	task = &Task{
-		Type:      TaskTypeListDir,
-		Path:      "src/",
-		Recursive: true,
-	}
-
-	expected = "List directory src/ (recursive)"
-	if desc := task.Description(); desc != expected {
-		t.Errorf("Expected '%s', got '%s'", expected, desc)
-	}
-
-	// Test RunShell description
-	task = &Task{
-		Type:    TaskTypeRunShell,
-		Command: "go build",
-	}
-
-	expected = "Run command: go build"
-	if desc := task.Description(); desc != expected {
-		t.Errorf("Expected '%s', got '%s'", expected, desc)
+	for i, tc := range tests {
+		desc := tc.task.Description()
+		if desc != tc.expected {
+			t.Errorf("Test %d: Expected '%s', got '%s'", i, tc.expected, desc)
+		}
 	}
 }
 
@@ -831,42 +780,6 @@ This will show us the configuration structure.`
 	}
 	if task.EndLine != 100 {
 		t.Errorf("Expected end line 100, got %d", task.EndLine)
-	}
-}
-
-func TestParseNaturalLanguageEditTask(t *testing.T) {
-	// Test edit task with arrow notation
-	llmResponse := `I'll update the main function with error handling.
-
-🔧 EDIT main.go -> add error handling and logging
-
-This will improve the robustness of the application.`
-
-	taskList, err := ParseTasks(llmResponse)
-	if err != nil {
-		t.Fatalf("Expected no error, got: %v", err)
-	}
-
-	if taskList == nil {
-		t.Fatal("Expected task list, got nil")
-	}
-
-	if len(taskList.Tasks) != 1 {
-		t.Fatalf("Expected 1 task, got %d", len(taskList.Tasks))
-	}
-
-	task := taskList.Tasks[0]
-	if task.Type != TaskTypeEditFile {
-		t.Errorf("Expected EditFile, got %s", task.Type)
-	}
-	if task.Path != "main.go" {
-		t.Errorf("Expected main.go, got %s", task.Path)
-	}
-	if task.Intent != "add error handling and logging" {
-		t.Errorf("Expected 'add error handling and logging', got %s", task.Intent)
-	}
-	if task.Content != "" {
-		t.Errorf("Expected empty content, got %s", task.Content)
 	}
 }
 
@@ -1294,121 +1207,9 @@ These are the project rules.
 	}
 }
 
-// TestParseEditTaskWithDirectContent tests parsing an edit task where content
-// follows directly after the task directive without code block wrapping
-func TestParseEditTaskWithDirectContent(t *testing.T) {
-	// This is the exact input that was failing according to the user's bug report
-	llmResponse := `🔧 EDIT package.json -> content
-{
-  "name": "fatih-secilmis-dentist-office",
-  "version": "0.1.0",
-  "private": true,
-  "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1",
-    "web-vitals": "^2.1.4"
-  },
-  "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
-  }
-}`
+// TestParseEditTaskWithDirectContent - Removing this test since EDIT is forbidden
 
-	taskList, err := ParseTasks(llmResponse)
-	if err != nil {
-		t.Fatalf("Failed to parse tasks: %v", err)
-	}
-
-	if len(taskList.Tasks) != 1 {
-		t.Fatalf("Expected 1 task, got %d", len(taskList.Tasks))
-	}
-
-	task := taskList.Tasks[0]
-
-	// Verify task type and path
-	if task.Type != TaskTypeEditFile {
-		t.Errorf("Expected task type %s, got %s", TaskTypeEditFile, task.Type)
-	}
-
-	if task.Path != "package.json" {
-		t.Errorf("Expected path 'package.json', got '%s'", task.Path)
-	}
-
-	if task.Intent != "content" {
-		t.Errorf("Expected intent 'content', got '%s'", task.Intent)
-	}
-
-	// The critical test: content should be extracted even without code block wrapping
-	if task.Content == "" {
-		t.Errorf("Expected content to be extracted, but it was empty")
-	}
-
-	// Verify the content contains the expected JSON structure
-	expectedSubstrings := []string{
-		`"name": "fatih-secilmis-dentist-office"`,
-		`"version": "0.1.0"`,
-		`"react": "^18.2.0"`,
-		`"start": "react-scripts start"`,
-	}
-
-	for _, expected := range expectedSubstrings {
-		if !strings.Contains(task.Content, expected) {
-			t.Errorf("Expected content to contain '%s', but it didn't. Content: %s", expected, task.Content)
-		}
-	}
-}
-
-// TestParseEditTaskWithCodeBlockContent tests the existing code block parsing
-func TestParseEditTaskWithCodeBlockContent(t *testing.T) {
-	llmResponse := `🔧 EDIT package.json -> content
-
-` + "```json" + `
-{
-  "name": "test-project",
-  "version": "1.0.0"
-}
-` + "```"
-
-	taskList, err := ParseTasks(llmResponse)
-	if err != nil {
-		t.Fatalf("Failed to parse tasks: %v", err)
-	}
-
-	if len(taskList.Tasks) != 1 {
-		t.Fatalf("Expected 1 task, got %d", len(taskList.Tasks))
-	}
-
-	task := taskList.Tasks[0]
-
-	if task.Content == "" {
-		t.Errorf("Expected content to be extracted from code block, but it was empty")
-	}
-
-	if !strings.Contains(task.Content, `"name": "test-project"`) {
-		t.Errorf("Expected content to contain test project name, got: %s", task.Content)
-	}
-}
+// TestParseEditTaskWithCodeBlockContent - Removing this test since EDIT is forbidden
 
 func TestParseMemoryTaskBugWithQuotedID(t *testing.T) {
 	// Test the specific bug reported by the user

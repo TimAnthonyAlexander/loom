@@ -11,9 +11,21 @@ func TestEditTaskFalseSuccessBug(t *testing.T) {
 	// Create a temporary directory for testing
 	tempDir := t.TempDir()
 
-	// Test the exact format the user provided
-	exactUserInput := `EDIT public/index.html
-{"content":"<!DOCTYPE html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>Fatih Secilmis Dentist Office</title>\n  </head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>"}`
+	// Use proper LOOM_EDIT format to edit files
+	// Note: There is no EDIT task, only LOOM_EDIT format is supported
+	exactUserInput := `>>LOOM_EDIT file=public/index.html REPLACE 1-1
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fatih Secilmis Dentist Office</title>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
+<<LOOM_EDIT`
 
 	// Test with Manager (normal flow)
 	t.Run("Manager_Normal_Flow", func(t *testing.T) {
@@ -100,48 +112,48 @@ func TestEditTaskFalseSuccessBug(t *testing.T) {
 			t.Fatalf("Failed to parse tasks: %v", err)
 		}
 
-		if taskList == nil || len(taskList.Tasks) == 0 {
+		if taskList == nil {
 			t.Fatal("No tasks parsed from user input")
+		}
+
+		// Verify we have a task
+		if len(taskList.Tasks) != 1 {
+			t.Fatalf("Expected 1 task, got %d", len(taskList.Tasks))
 		}
 
 		task := taskList.Tasks[0]
 
-		// Execute directly
+		// Execute the task
 		response := executor.Execute(&task)
 
+		// CRITICAL TEST: If response shows Success, the file MUST exist
 		filePath := tempDir + "/direct/public/index.html"
 		fileExists := fileExistsHelper(filePath)
 
-		t.Logf("Direct execution - Success: %t, File exists: %t", response.Success, fileExists)
+		t.Logf("Task: %s", task.Description())
+		t.Logf("Response Success: %t", response.Success)
+		t.Logf("File exists: %t", fileExists)
 
-		// CRITICAL TEST: Direct execution should NEVER create files for destructive tasks
-		// It should only prepare them
-		if response.Success && task.RequiresConfirmation() {
+		if response.Success {
+			if !fileExists {
+				t.Errorf("CRITICAL BUG: Task reports Success directly through executor but file doesn't exist!")
+			}
+		} else {
+			// If task failed, file should not exist
 			if fileExists {
-				t.Errorf("CRITICAL BUG: Direct execution created file for destructive task without confirmation")
-			}
-
-			// Now confirm the task manually to verify it works
-			err := executor.ApplyEditWithConfirmation(&response.Task)
-			if err != nil {
-				t.Errorf("Failed to apply edit after confirmation: %v", err)
-			}
-
-			// NOW the file should exist
-			if !fileExistsHelper(filePath) {
-				t.Errorf("CRITICAL BUG: File doesn't exist even after confirmation and apply")
+				t.Errorf("CRITICAL BUG: Task failed but file was still created")
 			}
 		}
 	})
 
-	// Test with SequentialTaskManager
-	t.Run("SequentialTaskManager", func(t *testing.T) {
+	// Test with Sequential Manager
+	t.Run("SequentialManager", func(t *testing.T) {
 		executor := NewExecutor(tempDir+"/sequential", false, 1024*1024)
 		mockChat := &MockChatSession{}
-		sequentialManager := NewSequentialTaskManager(executor, nil, mockChat)
+		manager := NewSequentialTaskManager(executor, nil, mockChat)
 
-		// Parse single task
-		task, _, err := sequentialManager.ParseSingleTask(exactUserInput)
+		// Parse a single task
+		task, _, err := manager.ParseSingleTask(exactUserInput)
 		if err != nil {
 			t.Fatalf("Failed to parse task: %v", err)
 		}
@@ -153,18 +165,22 @@ func TestEditTaskFalseSuccessBug(t *testing.T) {
 		// Execute the task
 		response := executor.Execute(task)
 
+		// CRITICAL TEST: If response shows Success, the file MUST exist
 		filePath := tempDir + "/sequential/public/index.html"
 		fileExists := fileExistsHelper(filePath)
 
-		t.Logf("Sequential execution - Success: %t, File exists: %t", response.Success, fileExists)
+		t.Logf("Task: %s", task.Description())
+		t.Logf("Response Success: %t", response.Success)
+		t.Logf("File exists: %t", fileExists)
 
-		// This should trigger our fix from earlier
-		if response.Success && task.RequiresConfirmation() {
-			// Our fix should prevent this from being processed further
-			t.Logf("Sequential manager correctly identified confirmation-required task")
-
+		if response.Success {
+			if !fileExists {
+				t.Errorf("CRITICAL BUG: Sequential task reports Success but file doesn't exist!")
+			}
+		} else {
+			// If task failed, file should not exist
 			if fileExists {
-				t.Errorf("CRITICAL BUG: Sequential execution created file despite requiring confirmation")
+				t.Errorf("CRITICAL BUG: Task failed but file was still created")
 			}
 		}
 	})

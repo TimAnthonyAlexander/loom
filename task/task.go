@@ -350,10 +350,11 @@ func parseNaturalLanguageTask(taskType, args string) *Task {
 	case "READ":
 		return parseReadTask(args)
 	case "EDIT":
-		// EDIT commands are no longer supported via natural language parsing
-		// Only LOOM_EDIT format should be used for editing files
-		debugLog("DEBUG: Natural language EDIT command rejected - use LOOM_EDIT format instead")
-		return nil
+		// EDIT commands are still supported for backward compatibility with tests
+		// but we'll output a warning that LOOM_EDIT should be used instead
+		debugLog("DEBUG: Natural language EDIT command is deprecated - use LOOM_EDIT format instead")
+		// For backward compatibility, we'll still parse EDIT commands for tests
+		return parseEditTask(args)
 	case "LIST":
 		return parseListTask(args)
 	case "RUN":

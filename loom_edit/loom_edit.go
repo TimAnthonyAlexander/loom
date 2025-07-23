@@ -4,6 +4,8 @@ import (
 	"crypto/sha1"
 	"fmt"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -20,8 +22,18 @@ type EditCommand struct {
 
 // ParseEditCommand parses a LOOM_EDIT command block into an EditCommand struct
 func ParseEditCommand(input string) (*EditCommand, error) {
-	// Regex to match the LOOM_EDIT header line - support both >>LOOM_EDIT and 🔧 LOOM_EDIT formats
-	headerRegex := regexp.MustCompile(`(?:>>|🔧 )LOOM_EDIT file=([^\s]+) (REPLACE|INSERT_AFTER|INSERT_BEFORE|DELETE) (\d+)(?:-(\d+))?`)
+	// Normalize line endings and ensure input is not empty
+	input = strings.ReplaceAll(input, "\r\n", "\n")
+	input = strings.ReplaceAll(input, "\r", "\n")
+	
+	if strings.TrimSpace(input) == "" {
+		return nil, fmt.Errorf("empty LOOM_EDIT command")
+	}
+	
+	// Regex to match different variations of the LOOM_EDIT header line
+	// This handles both formats: >>LOOM_EDIT and 🔧 LOOM_EDIT
+	// And allows for more variations in the line range format
+	headerRegex := regexp.MustCompile(`(?:>>|🔧 )LOOM_EDIT file=([^\s]+) (REPLACE|INSERT_AFTER|INSERT_BEFORE|DELETE)(?:\s+(\d+)(?:-(\d+))?)?`)
 
 	lines := strings.Split(input, "\n")
 	if len(lines) < 2 {
@@ -29,14 +41,10 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 	}
 
 	// Parse header line
-	headerMatches := headerRegex.FindStringSubmatch(lines[0])
+	headerLine := lines[0]
+	headerMatches := headerRegex.FindStringSubmatch(headerLine)
 	if headerMatches == nil {
-		return nil, fmt.Errorf("invalid LOOM_EDIT header format: %s", lines[0])
-	}
-
-	// For debugging: Print the matched groups
-	if len(headerMatches) < 4 {
-		return nil, fmt.Errorf("invalid LOOM_EDIT header: insufficient match groups: %v", headerMatches)
+		return nil, fmt.Errorf("invalid LOOM_EDIT header format: %s", headerLine)
 	}
 
 	cmd := &EditCommand{
@@ -44,10 +52,26 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 		Action: headerMatches[2],
 	}
 
+	// Validate required action
+	switch cmd.Action {
+	case "REPLACE", "INSERT_AFTER", "INSERT_BEFORE", "DELETE":
+		// Valid actions
+	default:
+		return nil, fmt.Errorf("invalid action: %s (must be REPLACE, INSERT_AFTER, INSERT_BEFORE, or DELETE)", cmd.Action)
+	}
+	
+	// Check if we have line numbers at all
+	if len(headerMatches) <= 3 || headerMatches[3] == "" {
+		return nil, fmt.Errorf("missing line number in %s action", cmd.Action)
+	}
+
 	// Parse start line number
 	start, err := strconv.Atoi(headerMatches[3])
 	if err != nil {
 		return nil, fmt.Errorf("invalid start line number: %v", err)
+	}
+	if start < 1 {
+		return nil, fmt.Errorf("line numbers must be >= 1, got start=%d", start)
 	}
 	cmd.Start = start
 
@@ -57,13 +81,15 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid end line number: %v", err)
 		}
+		if end < start {
+			return nil, fmt.Errorf("end line (%d) must be >= start line (%d)", end, start)
+		}
 		cmd.End = end
 	} else {
-		// For INSERT_AFTER and INSERT_BEFORE, end equals start
-		// For REPLACE and DELETE, end should be specified, but we'll default to start for safety
+		// For all operations, if no end line is specified, default to start line
 		cmd.End = start
 		
-		// Warn if REPLACE or DELETE doesn't specify an end line
+		// Warn if REPLACE or DELETE should have specified an end line
 		if cmd.Action == "REPLACE" || cmd.Action == "DELETE" {
 			fmt.Printf("Warning: %s action missing end line number, defaulting to %d\n", cmd.Action, start)
 		}
@@ -86,6 +112,12 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 		return nil, fmt.Errorf("invalid LOOM_EDIT format: missing closing <<LOOM_EDIT tag")
 	}
 
+	// For DELETE action, newText should be empty
+	if cmd.Action == "DELETE" && strings.TrimSpace(strings.Join(newTextLines, "")) != "" {
+		fmt.Printf("Warning: DELETE action should have empty content block, ignoring provided content\n")
+		newTextLines = nil
+	}
+
 	cmd.NewText = strings.Join(newTextLines, "\n")
 
 	return cmd, nil
@@ -97,9 +129,48 @@ func HashContent(content string) string {
 
 // ApplyEdit applies an EditCommand to a file
 func ApplyEdit(filePath string, cmd *EditCommand) error {
+	// Validate the command
+	if cmd == nil {
+		return fmt.Errorf("cannot apply nil command")
+	}
+	
+	if cmd.File == "" {
+		return fmt.Errorf("file path cannot be empty")
+	}
+	
+	if cmd.Action == "" {
+		return fmt.Errorf("action cannot be empty")
+	}
+	
+	if cmd.Start < 1 {
+		return fmt.Errorf("invalid start line: %d (must be >= 1)", cmd.Start)
+	}
+	
+	if cmd.End < cmd.Start {
+		return fmt.Errorf("invalid line range: end (%d) cannot be less than start (%d)", cmd.End, cmd.Start)
+	}
+
 	// Read the current file content
 	content, err := ioutil.ReadFile(filePath)
 	if err != nil {
+		// Special handling for file not found when using REPLACE
+		if os.IsNotExist(err) && cmd.Action == "REPLACE" {
+			// We'll create a new file with the content
+			fmt.Printf("File %s not found, will create new file\n", filePath)
+			
+			// For new files, ensure directory exists
+			dir := filepath.Dir(filePath)
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				return fmt.Errorf("failed to create directory for new file: %v", err)
+			}
+			
+			// Write the new content directly
+			if err := ioutil.WriteFile(filePath, []byte(cmd.NewText), 0644); err != nil {
+				return fmt.Errorf("failed to create new file: %v", err)
+			}
+			
+			return nil
+		}
 		return fmt.Errorf("failed to read file: %v", err)
 	}
 
@@ -110,6 +181,10 @@ func ApplyEdit(filePath string, cmd *EditCommand) error {
 
 	// Split content into lines (using normalized content)
 	lines := strings.Split(contentStr, "\n")
+	if hasFinalNewline && len(lines) > 0 && lines[len(lines)-1] == "" {
+		// Remove trailing empty line (artifact of splitting on newline)
+		lines = lines[:len(lines)-1]
+	}
 
 	// Normalize newlines in the new text
 	normalizedNewText := strings.ReplaceAll(cmd.NewText, "\r\n", "\n")
@@ -168,6 +243,12 @@ func ApplyEdit(filePath string, cmd *EditCommand) error {
 		newContent += "\n"
 	} else if !hasFinalNewline && strings.HasSuffix(newContent, "\n") {
 		newContent = strings.TrimSuffix(newContent, "\n")
+	}
+
+	// Create a backup of the original file
+	backupFile := filePath + ".backup"
+	if err := ioutil.WriteFile(backupFile, content, 0644); err != nil {
+		fmt.Printf("Warning: Failed to create backup of %s: %v\n", filePath, err)
 	}
 
 	err = ioutil.WriteFile(filePath, []byte(newContent), 0644)
