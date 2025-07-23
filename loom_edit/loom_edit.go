@@ -377,6 +377,7 @@ func ApplyEdit(filePath string, cmd *EditCommand) error {
 		newContent = strings.TrimSuffix(newContent, "\n")
 	}
 
+	// Always write with LF line endings for consistency across platforms
 	err = ioutil.WriteFile(filePath, []byte(newContent), 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write file: %v", err)

@@ -89,7 +89,5 @@ func init() {
 	rootCmd.Flags().StringVarP(&sessionID, "session", "s", "", "Continue from a specific session ID")
 
 	// Add subcommands
-	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(configCmd)
-	rootCmd.AddCommand(indexCmd)
 }

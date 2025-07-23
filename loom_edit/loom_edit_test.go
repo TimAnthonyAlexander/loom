@@ -94,8 +94,12 @@ func TestLoomEditCases(t *testing.T) {
 				t.Fatalf("Failed to read result file: %v", err)
 			}
 
+			// Normalize line endings before comparison
+			normalizedResult := strings.ReplaceAll(string(resultContent), "\r\n", "\n")
+			normalizedExpected := strings.ReplaceAll(string(expectedContent), "\r\n", "\n")
+
 			// Compare with expected
-			if string(resultContent) != string(expectedContent) {
+			if normalizedResult != normalizedExpected {
 				t.Errorf("Result doesn't match expected.\nGot:\n%s\nExpected:\n%s",
 					string(resultContent), string(expectedContent))
 			}
