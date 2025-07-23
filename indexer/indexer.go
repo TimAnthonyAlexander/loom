@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -476,6 +477,108 @@ func (idx *Index) GetFileList() []string {
 		files = append(files, path)
 	}
 	return files
+}
+
+// SearchFiles searches for files by name with fuzzy matching
+func (idx *Index) SearchFiles(query string, limit int) []string {
+	idx.watcherMutex.RLock()
+	defer idx.watcherMutex.RUnlock()
+	
+	// If query is empty, return some recent files
+	if query == "" {
+		// Get all files and sort by modification time (most recent first)
+		files := make([]string, 0, len(idx.Files))
+		for path, meta := range idx.Files {
+			if meta != nil {
+				files = append(files, path)
+			}
+		}
+		
+		// Sort by modification time, most recent first
+		sort.Slice(files, func(i, j int) bool {
+			iMeta := idx.Files[files[i]]
+			jMeta := idx.Files[files[j]]
+			if iMeta != nil && jMeta != nil {
+				return iMeta.ModTime.After(jMeta.ModTime)
+			}
+			return false
+		})
+		
+		// Return limited number of recent files
+		if len(files) > limit {
+			files = files[:limit]
+		}
+		return files
+	}
+	
+	query = strings.ToLower(query)
+	var results []string
+	
+	// First collect exact matches
+	for path := range idx.Files {
+		if strings.Contains(strings.ToLower(path), query) {
+			results = append(results, path)
+			if len(results) >= limit {
+				return results
+			}
+		}
+	}
+	
+	// If we need more results, add fuzzy matches
+	if len(results) < limit {
+		seen := make(map[string]bool)
+		for _, match := range results {
+			seen[match] = true
+		}
+		
+		// Simple fuzzy matching - files containing all characters in sequence
+		for path := range idx.Files {
+			if seen[path] {
+				continue
+			}
+			
+			lowerPath := strings.ToLower(path)
+			if fuzzyMatch(lowerPath, query) {
+				results = append(results, path)
+				if len(results) >= limit {
+					break
+				}
+			}
+		}
+	}
+	
+	// Sort results by relevance (exact matches first, then by path length)
+	sort.Slice(results, func(i, j int) bool {
+		iExact := strings.Contains(strings.ToLower(filepath.Base(results[i])), query)
+		jExact := strings.Contains(strings.ToLower(filepath.Base(results[j])), query)
+		
+		if iExact && !jExact {
+			return true
+		}
+		if !iExact && jExact {
+			return false
+		}
+		
+		// Both or neither are exact matches, sort by path length
+		return len(results[i]) < len(results[j])
+	})
+	
+	return results
+}
+
+// fuzzyMatch checks if target contains all characters in query in sequence
+func fuzzyMatch(target, query string) bool {
+	targetIdx := 0
+	queryIdx := 0
+	
+	for queryIdx < len(query) && targetIdx < len(target) {
+		if target[targetIdx] == query[queryIdx] {
+			queryIdx++
+		}
+		targetIdx++
+	}
+	
+	return queryIdx == len(query)
 }
 
 // isBinaryFile checks if a file is likely binary based on extension

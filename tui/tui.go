@@ -10,6 +10,9 @@ import (
 	"loom/llm"
 	"loom/session"
 	taskPkg "loom/task"
+	"os"
+	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -55,6 +58,18 @@ var (
 			Padding(1, 2).
 			Bold(true)
 
+	// File autocomplete style
+	fileAutocompleteStyle = lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#5D9CF1")). // Blue border
+		Padding(0, 1).
+		Margin(0, 0, 0, 2) // Add left margin to indent it slightly
+
+	fileAutocompleteSelectedStyle = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FFAF00")). // Highlight color for selected item
+		Background(lipgloss.Color("#333333"))  // Subtle background for selected item
+
 	// New styles to clearly distinguish user and assistant prefixes
 	userPrefixStyle = lipgloss.NewStyle().
 			Bold(true).
@@ -97,11 +112,17 @@ type TaskConfirmationMsg struct {
 	Preview  string
 }
 
+// TestPromptMsg represents a pending test prompt
 type TestPromptMsg struct {
 	TestCount    int
 	Language     string
 	EditedFiles  []string
 	ShouldPrompt bool
+}
+
+// FileAutocompleteMsg represents an update to file autocomplete suggestions
+type FileAutocompleteMsg struct {
+	Candidates []string
 }
 
 // ContinueLLMMsg indicates that LLM should continue the conversation after task completion
@@ -133,6 +154,13 @@ type model struct {
 	// Chat scrolling and display
 	messageScroll int      // New field for message scrolling
 	messageLines  []string // Wrapped message lines for proper scrolling
+
+	// File mention autocomplete
+	fileAutocompleteActive     bool     // Whether file autocomplete is active
+	fileAutocompleteQuery      string   // The current query for file autocomplete
+	fileAutocompleteCandidates []string // List of matching files
+	fileAutocompleteSelectedIndex int   // Currently selected file index
+	fileAutocompleteStartPos   int      // Position in input where @ was typed
 
 	// LLM integration
 	llmAdapter       llm.LLMAdapter
@@ -175,6 +203,9 @@ type model struct {
 	completionCheckCount int
 	maxCompletionChecks  int
 	debugEnabled         bool // Unified debug flag for all debug systems
+
+	// User visible input
+	userVisibleInput string
 }
 
 func (m model) Init() tea.Cmd {
@@ -205,6 +236,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
 				return m, m.generateSummary("session")
 			}
+		case "ctrl+d":
+			// Toggle debug mode with Ctrl+D for easier debugging
+			m.debugEnabled = !m.debugEnabled
+			if m.debugEnabled {
+				taskPkg.EnableTaskDebug()
+				m.addDebugMessage("Debug mode enabled")
+			} else {
+				taskPkg.DisableTaskDebug()
+			}
+			return m, nil
 		case "tab":
 			// Switch between views
 			switch m.currentView {
@@ -219,20 +260,38 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.updateWrappedMessages()
 			}
 		case "up":
-			// Scroll up in chat view
-			if m.currentView == viewChat && m.messageScroll > 0 {
+			// File autocomplete navigation
+			if m.fileAutocompleteActive && m.fileAutocompleteSelectedIndex > 0 {
+				m.fileAutocompleteSelectedIndex--
+				return m, nil
+			} else if m.currentView == viewChat && m.messageScroll > 0 {
 				m.messageScroll--
 			}
 		case "down":
-			// Scroll down in chat view
-			if m.currentView == viewChat {
+			// File autocomplete navigation
+			if m.fileAutocompleteActive {
+				if m.fileAutocompleteSelectedIndex < len(m.fileAutocompleteCandidates)-1 {
+					m.fileAutocompleteSelectedIndex++
+					return m, nil
+				}
+			} else if m.currentView == viewChat {
 				maxScroll := len(m.messageLines) - m.getAvailableMessageHeight()
 				if maxScroll > 0 && m.messageScroll < maxScroll {
 					m.messageScroll++
 				}
 			}
+		case "esc":
+			// Cancel file autocomplete
+			if m.fileAutocompleteActive {
+				m.fileAutocompleteActive = false
+				return m, nil
+			}
 		case "enter":
-			if m.currentView == viewChat && strings.TrimSpace(m.input) != "" && !m.isStreaming {
+			// Handle file autocomplete selection
+			if m.fileAutocompleteActive {
+				m.selectFileAutocomplete()
+				return m, nil
+			} else if m.currentView == viewChat && strings.TrimSpace(m.input) != "" && !m.isStreaming {
 				userInput := strings.TrimSpace(m.input)
 				m.input = ""
 
@@ -452,6 +511,13 @@ Current Status:
 • /help - Show this help message
 • /quit - Exit application
 
+**File Mentions:**
+• Type @ to activate file autocomplete
+• Navigate suggestions with arrow keys
+• Press Enter to select a file
+• Press Esc to cancel
+• Selected files are automatically included in your messages
+
 **Views:**
 • Chat - Main conversation with AI assistant
 • File Tree - Project file overview and language statistics
@@ -561,11 +627,56 @@ Ask me anything about your code, architecture, or programming questions!`
 			}
 		case "backspace":
 			if m.currentView == viewChat && len(m.input) > 0 && !m.isStreaming {
+				// If in autocomplete mode, update the query
+				if m.fileAutocompleteActive {
+					// If we're right after the @ symbol, cancel autocomplete
+					if m.fileAutocompleteStartPos == len(m.input)-1 {
+						m.fileAutocompleteActive = false
+					} else {
+						// Otherwise update the query
+						m.input = m.input[:len(m.input)-1]
+						m.fileAutocompleteQuery = m.input[m.fileAutocompleteStartPos+1:]
+						return m, m.updateFileAutocompleteCandidates()
+					}
+				}
 				m.input = m.input[:len(m.input)-1]
+			}
+		case "@":
+			if m.currentView == viewChat && !m.isStreaming {
+				m.input += "@"
+				m.fileAutocompleteActive = true
+				m.fileAutocompleteQuery = ""
+				m.fileAutocompleteCandidates = []string{}
+				m.fileAutocompleteSelectedIndex = 0
+				m.fileAutocompleteStartPos = len(m.input) - 1
+				
+				// Debug logging
+				if m.debugEnabled {
+					m.addDebugMessage("File autocomplete activated")
+				}
+				
+				return m, m.updateFileAutocompleteCandidates()
 			}
 		default:
 			if m.currentView == viewChat && !m.isStreaming {
-				m.input += msg.String()
+				if m.fileAutocompleteActive {
+					// Handle characters typed during autocomplete
+					char := msg.String()
+					
+					// Space ends autocomplete
+					if char == " " {
+						m.fileAutocompleteActive = false
+						m.input += char
+						return m, nil
+					}
+					
+					// Update autocomplete query
+					m.input += char
+					m.fileAutocompleteQuery = m.input[m.fileAutocompleteStartPos+1:]
+					return m, m.updateFileAutocompleteCandidates()
+				} else {
+					m.input += msg.String()
+				}
 			}
 		}
 
@@ -626,6 +737,13 @@ Ask me anything about your code, architecture, or programming questions!`
 	case TaskConfirmationMsg:
 		m.pendingConfirmation = &msg
 		m.showingConfirmation = true
+		return m, nil
+
+	case FileAutocompleteMsg:
+		// Update file autocomplete candidates
+		m.fileAutocompleteCandidates = msg.Candidates
+		m.fileAutocompleteSelectedIndex = 0
+		// Force re-render
 		return m, nil
 
 	case ContinueLLMMsg:
@@ -802,7 +920,19 @@ func (m model) View() string {
 			Width(m.width - 2).
 			Render(inputContent)
 
-		mainContent = lipgloss.JoinVertical(lipgloss.Left, messages, input)
+		// Add file autocomplete dropdown if active
+		if m.fileAutocompleteActive {
+			autocompleteView := m.renderFileAutocomplete()
+			// Style the autocomplete view to ensure it's clearly visible
+			styledAutocomplete := lipgloss.NewStyle().
+				Margin(1, 0, 0, 2).  // Add margin for visibility (top, right, bottom, left)
+				MaxWidth(m.width - 10).
+				Render(autocompleteView)
+			
+			mainContent = lipgloss.JoinVertical(lipgloss.Left, messages, input, styledAutocomplete)
+		} else {
+			mainContent = lipgloss.JoinVertical(lipgloss.Left, messages, input)
+		}
 
 	case viewFileTree:
 		// File tree view with proper height
@@ -1016,15 +1146,32 @@ func (m model) renderFileTree() string {
 // sendToLLMWithTasks sends a message to the LLM and sets up task execution
 func (m *model) sendToLLMWithTasks(userInput string) tea.Cmd {
 	return func() tea.Msg {
-		// Add user message to chat session first
-		userMessage := llm.Message{
+		// Process @file mentions to include file content
+		processedInput := m.processFileMentions(userInput)
+		
+		// Determine what to display in chat (user visible version if available)
+		displayInput := userInput
+		if m.userVisibleInput != "" {
+			displayInput = m.userVisibleInput
+			m.userVisibleInput = "" // Reset for next message
+		}
+		
+		// Add user message to chat session first with user-friendly version for display
+		userDisplayMessage := llm.Message{
 			Role:      "user",
-			Content:   userInput,
+			Content:   displayInput,
 			Timestamp: time.Now(),
 		}
 
-		if err := m.chatSession.AddMessage(userMessage); err != nil {
+		if err := m.chatSession.AddMessage(userDisplayMessage); err != nil {
 			return StreamMsg{Error: fmt.Errorf("failed to save user message: %w", err)}
+		}
+
+		// Also save the processed version for LLM (with file contents) internally
+		userLLMMessage := llm.Message{
+			Role:      "user",
+			Content:   processedInput,
+			Timestamp: time.Now(),
 		}
 
 		// Reset completion detection state for new user queries (not completion checks)
@@ -1079,6 +1226,14 @@ func (m *model) sendToLLMWithTasks(userInput string) tea.Cmd {
 		if err != nil {
 			defer cancel()
 			return StreamMsg{Error: fmt.Errorf("context optimization error: %w", err)}
+		}
+
+		// Replace the last user message with the processed version containing file contents
+		for i := len(messages) - 1; i >= 0; i-- {
+			if messages[i].Role == "user" {
+				messages[i] = userLLMMessage
+				break
+			}
 		}
 
 		// Create a channel for streaming
@@ -1279,6 +1434,151 @@ func (m *model) createMinimalTaskStatus(task *taskPkg.Task) string {
 	default:
 		return "⚡ task"
 	}
+}
+
+// updateFileAutocompleteCandidates updates the file autocomplete candidates based on current query
+func (m *model) updateFileAutocompleteCandidates() tea.Cmd {
+	return func() tea.Msg {
+		query := m.fileAutocompleteQuery
+		candidates := m.index.SearchFiles(query, 10) // Limit to 10 results
+		
+		// Debug logging
+		debugMsg := fmt.Sprintf("File autocomplete query: '%s', found %d candidates", query, len(candidates))
+		if m.debugEnabled {
+			m.addDebugMessage(debugMsg)
+		}
+		
+		m.fileAutocompleteCandidates = candidates
+		m.fileAutocompleteSelectedIndex = 0
+		
+		return FileAutocompleteMsg{Candidates: candidates}
+	}
+}
+
+// selectFileAutocomplete selects the currently highlighted file in autocomplete
+func (m *model) selectFileAutocomplete() {
+	if len(m.fileAutocompleteCandidates) == 0 {
+		m.fileAutocompleteActive = false
+		return
+	}
+
+	// Replace @query with @filename
+	selectedFile := m.fileAutocompleteCandidates[m.fileAutocompleteSelectedIndex]
+	beforeAt := m.input[:m.fileAutocompleteStartPos+1]
+	afterQuery := m.input[m.fileAutocompleteStartPos+1+len(m.fileAutocompleteQuery):]
+	
+	m.input = beforeAt + selectedFile + afterQuery
+	m.fileAutocompleteActive = false
+}
+
+// readFileSnippet reads the first N lines of a file
+func (m *model) readFileSnippet(filename string, lineCount int) (string, error) {
+	filePath := filepath.Join(m.workspacePath, filename)
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", err
+	}
+	
+	lines := strings.Split(string(content), "\n")
+	if len(lines) > lineCount {
+		lines = lines[:lineCount]
+	}
+	
+	return strings.Join(lines, "\n"), nil
+}
+
+// processFileMentions processes @file mentions in user input to include file content
+func (m *model) processFileMentions(input string) string {
+	re := regexp.MustCompile(`@([^\s]+)`)
+	matches := re.FindAllStringSubmatch(input, -1)
+	
+	result := input
+	
+	// If no matches, just return the input
+	if len(matches) == 0 {
+		return input
+	}
+	
+	// Create user visible version with shortened content
+	userVisibleVersion := input
+	
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		
+		filename := match[1]
+		content, err := m.readFileSnippet(filename, 50)
+		if err != nil {
+			continue
+		}
+		
+		// Create full version for LLM (with full content)
+		fullReplacement := fmt.Sprintf("@%s\n```%s (first 50 lines):\n%s\n```", 
+			filename, filename, content)
+		result = strings.Replace(result, match[0], fullReplacement, 1)
+		
+		// Create shortened version for user display (with truncated content)
+		shortContent := content
+		if len(shortContent) > 100 {
+			shortContent = shortContent[:100] + "..."
+		}
+		userReplacement := fmt.Sprintf("@%s [file attached, %d lines]", 
+			filename, strings.Count(content, "\n")+1)
+		userVisibleVersion = strings.Replace(userVisibleVersion, match[0], userReplacement, 1)
+	}
+	
+	// Save the user visible version for display
+	m.userVisibleInput = userVisibleVersion
+	
+	return result
+}
+
+// renderFileAutocomplete renders the file autocomplete dropdown
+func (m model) renderFileAutocomplete() string {
+	if !m.fileAutocompleteActive {
+		return ""
+	}
+	
+	// If no candidates but autocomplete is active, show a message
+	if len(m.fileAutocompleteCandidates) == 0 {
+		return fileAutocompleteStyle.
+			Width(40).
+			Render("📁 No matching files found\n\nType to search or press Esc to cancel")
+	}
+	
+	var sb strings.Builder
+	maxWidth := 0
+	
+	// Calculate max width needed
+	for _, file := range m.fileAutocompleteCandidates {
+		if len(file) > maxWidth {
+			maxWidth = len(file)
+		}
+	}
+	maxWidth += 6 // Add padding and for the selection marker
+	
+	// Title row
+	sb.WriteString("📁 Files matching: " + m.fileAutocompleteQuery + "\n\n")
+	
+	// Build list with styled items
+	for i, file := range m.fileAutocompleteCandidates {
+		if i == m.fileAutocompleteSelectedIndex {
+			// Selected item gets special styling
+			highlightedFile := fileAutocompleteSelectedStyle.Render(fmt.Sprintf(" %s ", file))
+			sb.WriteString("▶ " + highlightedFile + "\n")
+		} else {
+			sb.WriteString("  " + file + "\n")
+		}
+	}
+	
+	// Footer with help
+	sb.WriteString("\n↑↓: Select • Enter: Choose • Esc: Cancel")
+	
+	// Apply the main container style
+	return fileAutocompleteStyle.
+		Width(maxWidth).
+		Render(sb.String())
 }
 
 // detectsActionWithoutTasks checks if the LLM indicated an action but didn't provide tasks (simplified)
