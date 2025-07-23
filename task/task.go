@@ -229,9 +229,139 @@ func tryLoomEditParsing(llmResponse string) *TaskList {
 	}
 }
 
-// NOTE: Natural language parsing removed - only LOOM_EDIT and JSON formats are supported
+// tryNaturalLanguageParsing attempts to parse natural language task commands
+func tryNaturalLanguageParsing(llmResponse string) *TaskList {
+	debugLog("DEBUG: Attempting natural language task parsing...")
 
-// NOTE: Natural language task parsing functions removed - only LOOM_EDIT and JSON formats are supported
+	// Preprocess escaped content - handle cases where LLM sends escaped newlines and quotes
+	processedResponse := strings.ReplaceAll(llmResponse, "\\n", "\n")
+	processedResponse = strings.ReplaceAll(processedResponse, "\\\"", "\"")
+
+	lines := strings.Split(processedResponse, "\n")
+	var tasks []Task
+	// Use map for O(1) duplicate detection instead of O(n) linear search
+	seenTasks := make(map[string]bool)
+
+	// Look for task indicators with emoji prefixes
+	taskPattern := regexp.MustCompile(`^🔧\s+(READ|EDIT|LIST|RUN|SEARCH|MEMORY)\s+(.+)`)
+
+	for i, line := range lines {
+		line = strings.TrimSpace(line)
+		matches := taskPattern.FindStringSubmatch(line)
+
+		if len(matches) == 3 {
+			taskType := strings.ToUpper(matches[1])
+			taskArgs := strings.TrimSpace(matches[2])
+
+			task := parseNaturalLanguageTask(taskType, taskArgs)
+			if task != nil {
+				// For EDIT tasks, look for content in subsequent code blocks or direct content
+				if task.Type == TaskTypeEditFile && task.Content == "" {
+					if content := extractContentFromCodeBlock(lines, i+1); content != "" {
+						task.Content = content
+						debugLog("DEBUG: Found content in code block for edit task")
+					} else if content := extractDirectContent(lines, i+1); content != "" {
+						task.Content = content
+						debugLog("DEBUG: Found direct content for edit task")
+					}
+				}
+
+				// For MEMORY tasks, look for content on subsequent lines if not already set
+				if task.Type == TaskTypeMemory && task.MemoryContent == "" {
+					if content := extractMemoryContent(lines, i+1); content != "" {
+						task.MemoryContent = content
+						debugLog("DEBUG: Found memory content on subsequent lines")
+					}
+				}
+
+				// Create unique key for duplicate detection
+				taskKey := fmt.Sprintf("%s:%s", task.Type, task.Path)
+				if !seenTasks[taskKey] {
+					seenTasks[taskKey] = true
+					tasks = append(tasks, *task)
+					debugLog(fmt.Sprintf("DEBUG: Parsed natural language task - Type: %s, Path: %s\n", task.Type, task.Path))
+				}
+			}
+		}
+	}
+
+	// Also look for simpler patterns without emoji, but be more restrictive to avoid conversational text
+	simplePattern := regexp.MustCompile(`(?i)^(read|edit|list|run|search|memory)\s+(.+)`)
+
+	for i, line := range lines {
+		line = strings.TrimSpace(line)
+		matches := simplePattern.FindStringSubmatch(line)
+
+		if len(matches) == 3 {
+			taskType := strings.ToUpper(matches[1])
+			taskArgs := strings.TrimSpace(matches[2])
+
+			// Skip lines that look like conversational text rather than commands
+			if isConversationalText(line, taskType, taskArgs) {
+				continue
+			}
+
+			task := parseNaturalLanguageTask(taskType, taskArgs)
+			if task != nil {
+				// Create unique key for duplicate detection
+				taskKey := fmt.Sprintf("%s:%s", task.Type, task.Path)
+				if !seenTasks[taskKey] {
+					// For EDIT tasks, look for content in subsequent code blocks or direct content
+					if task.Type == TaskTypeEditFile && task.Content == "" {
+						if content := extractContentFromCodeBlock(lines, i+1); content != "" {
+							task.Content = content
+							debugLog("DEBUG: Found content in code block for simple edit task")
+						} else if content := extractDirectContent(lines, i+1); content != "" {
+							task.Content = content
+							debugLog("DEBUG: Found direct content for simple edit task")
+						}
+					}
+
+					// For MEMORY tasks, look for content on subsequent lines if not already set
+					if task.Type == TaskTypeMemory && task.MemoryContent == "" {
+						if content := extractMemoryContent(lines, i+1); content != "" {
+							task.MemoryContent = content
+							debugLog("DEBUG: Found memory content on subsequent lines (simple pattern)")
+						}
+					}
+
+					seenTasks[taskKey] = true
+					tasks = append(tasks, *task)
+					debugLog(fmt.Sprintf("DEBUG: Parsed simple natural language task - Type: %s, Path: %s\n", task.Type, task.Path))
+				}
+			}
+		}
+	}
+
+	if len(tasks) == 0 {
+		debugLog("DEBUG: No natural language tasks found")
+		return nil
+	}
+
+	debugLog(fmt.Sprintf("DEBUG: Successfully parsed %d natural language tasks\n", len(tasks)))
+
+	return &TaskList{Tasks: tasks}
+}
+
+// parseNaturalLanguageTask parses a single natural language task
+func parseNaturalLanguageTask(taskType, args string) *Task {
+	switch taskType {
+	case "READ":
+		return parseReadTask(args)
+	case "EDIT":
+		return parseEditTask(args)
+	case "LIST":
+		return parseListTask(args)
+	case "RUN":
+		return parseRunTask(args)
+	case "SEARCH":
+		return parseSearchTask(args)
+	case "MEMORY":
+		return parseMemoryTask(args)
+	default:
+		return nil
+	}
+}
 
 // parseReadTask parses natural language READ commands
 func parseReadTask(args string) *Task {
@@ -314,19 +444,601 @@ func parseReadTask(args string) *Task {
 	return task
 }
 
-// NOTE: Natural language parsing functions removed - only LOOM_EDIT and JSON formats are supported
+// parseEditTask parses natural language EDIT commands with optional line number support
+func parseEditTask(args string) *Task {
+	task := &Task{Type: TaskTypeEditFile}
 
-// NOTE: Natural language parsing functions removed - only LOOM_EDIT and JSON formats are supported
+	// Look for arrow notation: "file.go:15 → description" or "file.go:15 -> description"
+	arrowPattern := regexp.MustCompile(`^(.+?)\s*(?:→|->)\s*(.+)$`)
+	matches := arrowPattern.FindStringSubmatch(args)
 
-// NOTE: Natural language parsing functions removed - only LOOM_EDIT and JSON formats are supported
+	if len(matches) == 3 {
+		pathWithLines := strings.TrimSpace(matches[1])
+		description := strings.TrimSpace(matches[2])
 
-// NOTE: Natural language parsing functions removed - only LOOM_EDIT and JSON formats are supported
+		// Parse line numbers from path (e.g., "file.go:15" or "file.go:10-20")
+		parsePathWithLines(task, pathWithLines)
 
-// NOTE: Natural language parsing functions removed - only LOOM_EDIT and JSON formats are supported
+		// Store the description of what to do, not the actual content
+		// The actual content should come from a code block or be generated by the LLM
+		task.Intent = description
 
-// NOTE: Natural language parsing functions removed - only LOOM_EDIT and JSON formats are supported
+		// Extract context information from description for targeted editing (legacy support)
+		parseEditContext(task, description)
+	} else {
+		// Simple path, content will be provided separately
+		// Also check for line numbers in simple format
+		parsePathWithLines(task, strings.TrimSpace(args))
+	}
 
-// NOTE: Natural language parsing functions removed - only LOOM_EDIT and JSON formats are supported
+	return task
+}
+
+// parsePathWithLines extracts file path and line numbers from various formats
+func parsePathWithLines(task *Task, pathWithLines string) {
+	// Pattern 1: "file.go:15" (single line)
+	singleLinePattern := regexp.MustCompile(`^(.+):(\d+)$`)
+	if matches := singleLinePattern.FindStringSubmatch(pathWithLines); len(matches) == 3 {
+		task.Path = strings.TrimSpace(matches[1])
+		if lineNum, err := strconv.Atoi(matches[2]); err == nil {
+			task.TargetLine = lineNum
+		}
+		return
+	}
+
+	// Pattern 2: "file.go:10-20" (line range)
+	rangePattern := regexp.MustCompile(`^(.+):(\d+)-(\d+)$`)
+	if matches := rangePattern.FindStringSubmatch(pathWithLines); len(matches) == 4 {
+		task.Path = strings.TrimSpace(matches[1])
+		if startLine, err := strconv.Atoi(matches[2]); err == nil {
+			if endLine, err := strconv.Atoi(matches[3]); err == nil {
+				task.TargetStartLine = startLine
+				task.TargetEndLine = endLine
+			}
+		}
+		return
+	}
+
+	// Pattern 3: Plain file path (no line numbers)
+	task.Path = strings.TrimSpace(pathWithLines)
+}
+
+// parseEditContext extracts context information from edit descriptions
+func parseEditContext(task *Task, description string) {
+	desc := strings.ToLower(description)
+
+	// Pattern: "replace all occurrences of X with Y" or "replace all X with Y"
+	replaceAllPattern := regexp.MustCompile(`(?i)replace\s+all\s+(?:occurrences\s+of\s+)?["']?([^"']+?)["']?\s+with\s+["']?([^"']+?)["']?$`)
+	if matches := replaceAllPattern.FindStringSubmatch(description); len(matches) > 2 {
+		task.StartContext = strings.TrimSpace(matches[1]) // What to find
+		task.EndContext = strings.TrimSpace(matches[2])   // What to replace with
+		task.InsertMode = "replace_all"
+		return
+	}
+
+	// Pattern: "find and replace X with Y" or "find X and replace with Y"
+	findReplacePattern := regexp.MustCompile(`(?i)(?:find\s+(?:and\s+)?replace|find)\s+["']?([^"']+?)["']?\s+(?:and\s+replace\s+)?with\s+["']?([^"']+?)["']?$`)
+	if matches := findReplacePattern.FindStringSubmatch(description); len(matches) > 2 {
+		task.StartContext = strings.TrimSpace(matches[1]) // What to find
+		task.EndContext = strings.TrimSpace(matches[2])   // What to replace with
+		task.InsertMode = "replace_all"
+		return
+	}
+
+	// Pattern: "add X after Y" or "insert X after Y"
+	afterPattern := regexp.MustCompile(`(?i)(?:add|insert)\s+.+?\s+after\s+["']?([^"']+)["']?`)
+	if matches := afterPattern.FindStringSubmatch(description); len(matches) > 1 {
+		task.StartContext = strings.TrimSpace(matches[1])
+		task.InsertMode = "insert_after"
+		return
+	}
+
+	// Pattern: "add X before Y" or "insert X before Y"
+	beforePattern := regexp.MustCompile(`(?i)(?:add|insert)\s+.+?\s+before\s+["']?([^"']+)["']?`)
+	if matches := beforePattern.FindStringSubmatch(description); len(matches) > 1 {
+		task.StartContext = strings.TrimSpace(matches[1])
+		task.InsertMode = "insert_before"
+		return
+	}
+
+	// Pattern: "replace X with Y" or "replace X"
+	replacePattern := regexp.MustCompile(`(?i)replace\s+["']?([^"']+)["']?`)
+	if matches := replacePattern.FindStringSubmatch(description); len(matches) > 1 {
+		task.StartContext = strings.TrimSpace(matches[1])
+		task.InsertMode = "replace"
+		return
+	}
+
+	// Pattern: "add X at the end" or "append X"
+	if strings.Contains(desc, "at the end") || strings.Contains(desc, "append") {
+		task.InsertMode = "append"
+		return
+	}
+
+	// Pattern: "add X at the beginning" or "prepend X"
+	if strings.Contains(desc, "at the beginning") || strings.Contains(desc, "prepend") || strings.Contains(desc, "at the top") {
+		task.InsertMode = "insert_before"
+		task.StartContext = "BEGINNING_OF_FILE"
+		return
+	}
+
+	// Pattern: "add X between Y and Z"
+	betweenPattern := regexp.MustCompile(`(?i)(?:add|insert)\s+.+?\s+between\s+["']?([^"']+)["']?\s+and\s+["']?([^"']+)["']?`)
+	if matches := betweenPattern.FindStringSubmatch(description); len(matches) > 2 {
+		task.StartContext = strings.TrimSpace(matches[1])
+		task.EndContext = strings.TrimSpace(matches[2])
+		task.InsertMode = "insert_between"
+		return
+	}
+}
+
+// parseListTask parses natural language LIST commands
+func parseListTask(args string) *Task {
+	task := &Task{Type: TaskTypeListDir}
+
+	// Check for recursive indication
+	if strings.Contains(strings.ToLower(args), "recursive") {
+		task.Recursive = true
+		// Remove "recursively" or "recursive" from path
+		args = regexp.MustCompile(`\s+recursively?\s*$`).ReplaceAllString(args, "")
+		args = regexp.MustCompile(`\s+recursive\s*$`).ReplaceAllString(args, "")
+	}
+
+	task.Path = strings.TrimSpace(args)
+	if task.Path == "" {
+		task.Path = "."
+	}
+
+	return task
+}
+
+// parseRunTask parses natural language RUN commands
+func parseRunTask(args string) *Task {
+	task := &Task{Type: TaskTypeRunShell}
+
+	// Look for interactive flags
+	interactivePattern := regexp.MustCompile(`--interactive(?:\s+(\w+))?`)
+	if matches := interactivePattern.FindStringSubmatch(args); len(matches) > 0 {
+		task.Interactive = true
+		if len(matches) > 1 && matches[1] != "" {
+			task.InputMode = matches[1] // auto, prompt, predefined
+		} else {
+			task.InputMode = "prompt" // default
+		}
+		// Remove interactive flag from command
+		args = interactivePattern.ReplaceAllString(args, "")
+	}
+
+	// Look for timeout specification
+	timeoutPattern := regexp.MustCompile(`^(.+?)\s*\(timeout:\s*(\d+)s?\)$`)
+	matches := timeoutPattern.FindStringSubmatch(args)
+
+	if len(matches) == 3 {
+		task.Command = strings.TrimSpace(matches[1])
+		if timeout, err := strconv.Atoi(matches[2]); err == nil {
+			task.Timeout = timeout
+		}
+	} else {
+		task.Command = strings.TrimSpace(args)
+	}
+
+	// Set default timeout
+	if task.Timeout == 0 {
+		task.Timeout = DefaultTimeout
+	}
+
+	// Auto-detect interactive commands if not explicitly specified
+	if !task.Interactive && isLikelyInteractiveCommand(task.Command) {
+		task.Interactive = true
+		task.InputMode = "auto" // Use automatic response handling
+	}
+
+	return task
+}
+
+// parseSearchTask parses natural language SEARCH commands
+func parseSearchTask(args string) *Task {
+	task := &Task{Type: TaskTypeSearch}
+
+	// Parse search query and options
+	parts := strings.Fields(args)
+	if len(parts) == 0 {
+		return nil
+	}
+
+	// First part is always the search query
+	task.Query = parts[0]
+
+	// Remove quotes if present
+	if len(task.Query) >= 2 {
+		if (strings.HasPrefix(task.Query, "\"") && strings.HasSuffix(task.Query, "\"")) ||
+			(strings.HasPrefix(task.Query, "'") && strings.HasSuffix(task.Query, "'")) {
+			task.Query = task.Query[1 : len(task.Query)-1]
+		}
+	}
+
+	// Parse additional options
+	for i := 1; i < len(parts); i++ {
+		part := strings.ToLower(parts[i])
+
+		switch {
+		case strings.HasPrefix(part, "type:"):
+			// File type filter: type:go,js
+			types := strings.TrimPrefix(part, "type:")
+			task.FileTypes = strings.Split(types, ",")
+
+		case strings.HasPrefix(part, "-type:"):
+			// Exclude file type: -type:md
+			types := strings.TrimPrefix(part, "-type:")
+			task.ExcludeTypes = strings.Split(types, ",")
+
+		case strings.HasPrefix(part, "glob:"):
+			// Glob pattern: glob:*.tf
+			glob := strings.TrimPrefix(part, "glob:")
+			task.GlobPatterns = append(task.GlobPatterns, glob)
+
+		case strings.HasPrefix(part, "-glob:"):
+			// Exclude glob: -glob:*.md
+			glob := strings.TrimPrefix(part, "-glob:")
+			task.ExcludeGlobs = append(task.ExcludeGlobs, glob)
+
+		case strings.HasPrefix(part, "context:"):
+			// Context lines: context:3
+			if contextStr := strings.TrimPrefix(part, "context:"); contextStr != "" {
+				if context, err := strconv.Atoi(contextStr); err == nil {
+					task.ContextBefore = context
+					task.ContextAfter = context
+				}
+			}
+
+		case strings.HasPrefix(part, "max:"):
+			// Max results: max:50
+			if maxStr := strings.TrimPrefix(part, "max:"); maxStr != "" {
+				if max, err := strconv.Atoi(maxStr); err == nil {
+					task.MaxResults = max
+				}
+			}
+
+		case part == "case-insensitive" || part == "ignore-case" || part == "-i":
+			task.IgnoreCase = true
+
+		case part == "whole-word" || part == "-w":
+			task.WholeWord = true
+
+		case part == "fixed-string" || part == "-f":
+			task.FixedString = true
+
+		case part == "filenames-only" || part == "-l":
+			task.FilenamesOnly = true
+
+		case part == "count" || part == "-c":
+			task.CountMatches = true
+
+		case part == "hidden" || part == "all":
+			task.SearchHidden = true
+
+		case part == "pcre2" || part == "-p":
+			task.UsePCRE2 = true
+
+		case strings.HasPrefix(part, "in:"):
+			// Search in specific directory: in:src/
+			if path := strings.TrimPrefix(part, "in:"); path != "" {
+				task.Path = path
+			}
+		}
+	}
+
+	// Set defaults
+	if task.MaxResults == 0 {
+		task.MaxResults = 100 // Default limit to prevent overwhelming output
+	}
+
+	if task.Path == "" {
+		task.Path = "." // Default to current directory
+	}
+
+	return task
+}
+
+// parseMemoryTask parses natural language MEMORY commands
+func parseMemoryTask(args string) *Task {
+	task := &Task{Type: TaskTypeMemory}
+
+	// Parse memory operation and options with quote-aware parsing
+	// Examples:
+	// - "create user-preferences content:\"Remember user prefers dark mode\""
+	// - "update user-preferences content:\"User prefers dark mode and large fonts\""
+	// - "delete user-preferences"
+	// - "get user-preferences"
+	// - "list"
+	// - "list active:true"
+	// - "\"memory-id\": content" (defaults to create)
+	// - "\"memory-id\" content:\"some content\"" (defaults to create)
+
+	// Handle literal \n sequences in the input
+	args = strings.ReplaceAll(args, "\\n", "\n")
+
+	// Check for colon-separated format: "memory-id": content
+	// This should only match when the format is like '"id": content' or 'id: content'
+	// and NOT match 'content:"value"' patterns
+	colonIndex := strings.Index(args, ":")
+	if colonIndex > 0 {
+		// Extract the memory ID part (before colon)
+		idPart := strings.TrimSpace(args[:colonIndex])
+
+		// Only use colon format if:
+		// 1. The part before colon doesn't contain spaces (except within quotes), OR
+		// 2. The part before colon is fully quoted
+		isQuotedID := len(idPart) >= 2 && ((idPart[0] == '"' && idPart[len(idPart)-1] == '"') ||
+			(idPart[0] == '\'' && idPart[len(idPart)-1] == '\''))
+
+		// Check if this looks like a simple ID followed by colon (not a content: prefix)
+		containsSpaceOutsideQuotes := false
+		if !isQuotedID {
+			// For unquoted strings, check if there are spaces (which would indicate multiple args)
+			containsSpaceOutsideQuotes = strings.Contains(idPart, " ")
+		}
+
+		// Only treat as colon format if it's a simple quoted ID or unquoted ID without spaces
+		if isQuotedID || !containsSpaceOutsideQuotes {
+			contentPart := strings.TrimSpace(args[colonIndex+1:])
+
+			// Remove quotes from ID if present
+			if isQuotedID {
+				idPart = idPart[1 : len(idPart)-1]
+			}
+
+			// Clean up content - remove leading/trailing whitespace and normalize newlines
+			contentPart = strings.TrimSpace(contentPart)
+			// Handle cases where content starts with a newline or dash
+			contentPart = strings.TrimLeft(contentPart, "\n\r")
+			contentPart = strings.TrimSpace(contentPart)
+
+			// Default to create operation for colon format
+			task.MemoryOperation = "create"
+			task.MemoryID = idPart
+			task.MemoryContent = contentPart
+			return task
+		}
+	}
+
+	parts := parseQuotedArgs(args)
+	if len(parts) == 0 {
+		return nil
+	}
+
+	// Check if first part is a valid operation
+	firstPart := strings.ToLower(parts[0])
+	validOperations := []string{"create", "update", "delete", "get", "list"}
+	isValidOperation := false
+	for _, op := range validOperations {
+		if firstPart == op {
+			isValidOperation = true
+			break
+		}
+	}
+
+	var operation string
+	var memoryIDIndex int
+
+	if isValidOperation {
+		// First part is the operation
+		operation = firstPart
+		memoryIDIndex = 1
+	} else {
+		// First part is the memory ID, default to create operation
+		operation = "create"
+		memoryIDIndex = 0
+	}
+
+	task.MemoryOperation = operation
+
+	// For operations other than list, extract the memory ID
+	if operation != "list" && len(parts) > memoryIDIndex {
+		memoryID := parts[memoryIDIndex]
+		// Remove quotes if present
+		if len(memoryID) >= 2 {
+			if (strings.HasPrefix(memoryID, "\"") && strings.HasSuffix(memoryID, "\"")) ||
+				(strings.HasPrefix(memoryID, "'") && strings.HasSuffix(memoryID, "'")) {
+				memoryID = memoryID[1 : len(memoryID)-1]
+			}
+		}
+		task.MemoryID = memoryID
+	}
+
+	// Parse additional options
+	optionsStartIndex := memoryIDIndex + 1
+	if operation == "list" {
+		optionsStartIndex = memoryIDIndex
+	}
+	for i := optionsStartIndex; i < len(parts); i++ {
+		part := parts[i]
+
+		switch {
+		case strings.HasPrefix(part, "content:"):
+			// Memory content: content:"Remember user preferences"
+			content := strings.TrimPrefix(part, "content:")
+			// Remove quotes if present
+			if len(content) >= 2 {
+				if (strings.HasPrefix(content, "\"") && strings.HasSuffix(content, "\"")) ||
+					(strings.HasPrefix(content, "'") && strings.HasSuffix(content, "'")) {
+					content = content[1 : len(content)-1]
+				}
+			}
+			task.MemoryContent = content
+
+		case strings.HasPrefix(part, "description:"):
+			// Memory description: description:"User interface preferences"
+			desc := strings.TrimPrefix(part, "description:")
+			// Remove quotes if present
+			if len(desc) >= 2 {
+				if (strings.HasPrefix(desc, "\"") && strings.HasSuffix(desc, "\"")) ||
+					(strings.HasPrefix(desc, "'") && strings.HasSuffix(desc, "'")) {
+					desc = desc[1 : len(desc)-1]
+				}
+			}
+			task.MemoryDescription = desc
+
+		case strings.HasPrefix(part, "tags:"):
+			// Memory tags: tags:ui,preferences,user
+			tags := strings.TrimPrefix(part, "tags:")
+			task.MemoryTags = strings.Split(tags, ",")
+
+		case strings.HasPrefix(part, "active:"):
+			// Memory active status: active:true or active:false
+			activeStr := strings.ToLower(strings.TrimPrefix(part, "active:"))
+			if activeStr == "true" {
+				active := true
+				task.MemoryActive = &active
+			} else if activeStr == "false" {
+				active := false
+				task.MemoryActive = &active
+			}
+		}
+	}
+
+	// For operations that require content, try to extract it from the remaining arguments
+	// if not already specified with content: prefix
+	if task.MemoryContent == "" && (operation == "create" || operation == "update") {
+		// Look for content in the remaining arguments
+		if len(parts) > optionsStartIndex {
+			contentParts := parts[optionsStartIndex:]
+			// Skip parts that are options (contain colons)
+			var contentWords []string
+			for _, part := range contentParts {
+				if !strings.Contains(part, ":") {
+					contentWords = append(contentWords, part)
+				}
+			}
+			if len(contentWords) > 0 {
+				task.MemoryContent = strings.Join(contentWords, " ")
+			}
+		}
+	}
+
+	return task
+}
+
+// parseQuotedArgs parses a string into arguments while respecting quoted strings
+func parseQuotedArgs(input string) []string {
+	var args []string
+	var current strings.Builder
+	var inQuotes bool
+	var quoteChar rune
+
+	input = strings.TrimSpace(input)
+
+	for _, char := range input {
+		switch {
+		case !inQuotes && (char == '"' || char == '\''):
+			// Start of quoted string
+			inQuotes = true
+			quoteChar = char
+			current.WriteRune(char)
+
+		case inQuotes && char == quoteChar:
+			// End of quoted string
+			current.WriteRune(char)
+			inQuotes = false
+
+		case !inQuotes && char == ' ':
+			// Space outside quotes - end current argument
+			if current.Len() > 0 {
+				args = append(args, current.String())
+				current.Reset()
+			}
+			// Note: consecutive spaces will just result in empty current.Len()
+			// and will be skipped naturally
+
+		default:
+			// Regular character or space inside quotes
+			current.WriteRune(char)
+		}
+	}
+
+	// Add the last argument if there's one
+	if current.Len() > 0 {
+		args = append(args, current.String())
+	}
+
+	return args
+}
+
+// isConversationalText checks if a line that matches a command pattern is actually conversational text
+func isConversationalText(line, taskType, taskArgs string) bool {
+	// Convert to lowercase for pattern matching
+	lowerLine := strings.ToLower(line)
+	lowerArgs := strings.ToLower(taskArgs)
+
+	// Exclude lines that end with exclamation marks (conversational tone)
+	if strings.HasSuffix(strings.TrimSpace(line), "!") {
+		return true
+	}
+
+	// Exclude lines containing typical completion/status words
+	conversationalWords := []string{
+		"saved!", "created!", "completed!", "successfully!", "finished!",
+		"saved", "created successfully", "completed successfully", "finished successfully",
+		"usage of", "performance of", "behavior of", "implementation of",
+		"i'll remember", "has been", "will be", "let me", "i can",
+	}
+
+	for _, word := range conversationalWords {
+		if strings.Contains(lowerLine, word) {
+			return true
+		}
+	}
+
+	// For MEMORY specifically, exclude typical conversational patterns
+	if taskType == "MEMORY" {
+		memoryConversationalPatterns := []string{
+			"saved!", "created", "stored", "remembered", "updated successfully",
+			"usage", "allocation", "leak", "consumption", "performance",
+		}
+
+		for _, pattern := range memoryConversationalPatterns {
+			if strings.Contains(lowerArgs, pattern) {
+				return true
+			}
+		}
+
+		// If the args start with typical conversational words, it's probably not a command
+		if strings.HasPrefix(lowerArgs, "saved") ||
+			strings.HasPrefix(lowerArgs, "created") ||
+			strings.HasPrefix(lowerArgs, "updated") ||
+			strings.HasPrefix(lowerArgs, "stored") {
+			return true
+		}
+	}
+
+	// For EDIT specifically, exclude completion messages
+	if taskType == "EDIT" {
+		editConversationalPatterns := []string{
+			"completed", "finished", "successful", "done", "applied",
+			"has been updated", "has been modified", "has been changed",
+		}
+
+		for _, pattern := range editConversationalPatterns {
+			if strings.Contains(lowerArgs, pattern) {
+				return true
+			}
+		}
+	}
+
+	// Additional heuristic: if the args contain common sentence patterns, it's conversational
+	sentencePatterns := []string{
+		"i'll", "i will", "this is", "this has", "the file", "the memory",
+		"has been", "will be", "it is", "it has", "we should", "you can",
+	}
+
+	for _, pattern := range sentencePatterns {
+		if strings.Contains(lowerArgs, pattern) {
+			return true
+		}
+	}
+
+	return false
+}
 
 // isLikelyInteractiveCommand checks if a command typically requires user interaction
 func isLikelyInteractiveCommand(command string) bool {
@@ -813,37 +1525,149 @@ func ParseTasks(llmResponse string) (*TaskList, error) {
 		return result, nil
 	}
 
-	// Skip natural language parsing - only use LOOM_EDIT format for edits
-	// Fall back to JSON parsing only
+	// Second, try natural language parsing
+	if result := tryNaturalLanguageParsing(llmResponse); result != nil {
+		debugLog(fmt.Sprintf("DEBUG: Successfully parsed %d tasks using natural language parsing\n", len(result.Tasks)))
+		return result, nil
+	}
+
+	// Fall back to JSON parsing
 	if debugTaskParsing {
-		debugLog("DEBUG: LOOM_EDIT parsing found no tasks, trying JSON parsing...")
+		debugLog("DEBUG: Natural language parsing found no tasks, trying JSON parsing...")
 	}
 
 	// Look for JSON code blocks
 	re := regexp.MustCompile("(?s)```(?:json)?\n?(.*?)\n?```")
 	matches := re.FindAllStringSubmatch(llmResponse, -1)
 
-	if len(matches) > 0 {
-		debugLog("DEBUG: Found JSON code blocks, attempting to parse...")
-		for _, match := range matches {
-			if len(match) > 1 {
-				jsonContent := strings.TrimSpace(match[1])
-				if result := tryFallbackJSONParsing(jsonContent); result != nil {
-					debugLog(fmt.Sprintf("DEBUG: Successfully parsed %d tasks from JSON\n", len(result.Tasks)))
-					return result, nil
+	if len(matches) == 0 {
+		// FALLBACK: Try to parse raw JSON if no backtick-wrapped JSON found
+		if debugTaskParsing {
+			debugLog("DEBUG: No backtick-wrapped JSON found, trying fallback raw JSON parsing...")
+		}
+
+		// Try fallback parsing for raw JSON
+		if result := tryFallbackJSONParsing(llmResponse); result != nil {
+			debugLog(fmt.Sprintf("DEBUG: Successfully parsed %d tasks using fallback raw JSON parsing\n", len(result.Tasks)))
+			return result, nil
+		}
+
+		// Enhanced debug: Check if the response mentions tasks or actions that should trigger task execution
+		if debugTaskParsing {
+			lowerResponse := strings.ToLower(llmResponse)
+			actionWords := []string{
+				"reading file", "📖", "🔧", "creating", "editing", "modifying",
+				"create", "edit", "file", "license", "i'll", "i will", "let me",
+				"executing", "running", "applying", "writing to", "updating",
+			}
+
+			foundActions := []string{}
+			for _, word := range actionWords {
+				if strings.Contains(lowerResponse, word) {
+					foundActions = append(foundActions, word)
 				}
 			}
+
+			if len(foundActions) > 0 {
+				debugLog("🚨 LLM response suggests action but no JSON tasks found!")
+				debugLog(fmt.Sprintf("Found action indicators: %v", foundActions))
+				debugLog(fmt.Sprintf("Response (first 200 chars): %s...", llmResponse[:min(len(llmResponse), 200)]))
+				debugLog("✅ Expected: JSON code block like:")
+				debugLog("```json")
+				debugLog(`{"type": "ReadFile", "path": "README.md", "max_lines": 100}`)
+				debugLog("```")
+				debugLog("📝 OR for multiple tasks:")
+				debugLog("```json")
+				debugLog("{")
+				debugLog(`  "tasks": [`)
+				debugLog(`    {"type": "ReadFile", "path": "README.md", "max_lines": 100}`)
+				debugLog("  ]")
+				debugLog("}")
+				debugLog("```")
+				debugLog("💡 The LLM may need better prompting to output actual task JSON.")
+			} else {
+				debugLog("✅ No JSON tasks found - this appears to be a regular Q&A response.")
+			}
 		}
+		// No JSON blocks found - this is normal for regular chat responses
+		return nil, nil
 	}
 
-	// Try parsing the entire response as JSON
-	if result := tryFallbackJSONParsing(llmResponse); result != nil {
-		debugLog(fmt.Sprintf("DEBUG: Successfully parsed %d tasks from direct JSON\n", len(result.Tasks)))
-		return result, nil
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+
+		jsonStr := strings.TrimSpace(match[1])
+		if jsonStr == "" {
+			continue
+		}
+
+		// Debug: Print what we're trying to parse
+		if debugTaskParsing {
+			debugLog(fmt.Sprintf("DEBUG: Attempting to parse JSON task block: %s\n", jsonStr[:min(len(jsonStr), 100)]))
+		}
+
+		// Try to parse as TaskList first
+		var taskList TaskList
+		if err := json.Unmarshal([]byte(jsonStr), &taskList); err == nil {
+			if debugTaskParsing {
+				debugLog(fmt.Sprintf("DEBUG: Parsed as TaskList with %d tasks\n", len(taskList.Tasks)))
+			}
+
+			// Only proceed with TaskList if it actually has tasks
+			if len(taskList.Tasks) > 0 {
+				// Successfully parsed as TaskList
+				if err := validateTasks(&taskList); err != nil {
+					return nil, fmt.Errorf("invalid tasks: %w", err)
+				}
+
+				if debugTaskParsing {
+					debugLog(fmt.Sprintf("DEBUG: Successfully parsed %d tasks (as TaskList)\n", len(taskList.Tasks)))
+				}
+				return &taskList, nil
+			}
+
+			if debugTaskParsing {
+				debugLog("DEBUG: TaskList was empty, trying single task parsing\n")
+			}
+		}
+
+		// Try to parse as single Task object
+		var singleTask Task
+		if err := json.Unmarshal([]byte(jsonStr), &singleTask); err != nil {
+			if debugTaskParsing {
+				debugLog(fmt.Sprintf("DEBUG: Failed to parse JSON as either TaskList or single Task: %v\n", err))
+			}
+			continue // Skip invalid JSON blocks
+		}
+
+		if debugTaskParsing {
+			debugLog(fmt.Sprintf("DEBUG: Parsed single task - Type: %s, Path: %s\n", singleTask.Type, singleTask.Path))
+		}
+
+		// Create TaskList with single task
+		taskList = TaskList{Tasks: []Task{singleTask}}
+
+		if debugTaskParsing {
+			debugLog(fmt.Sprintf("DEBUG: Created TaskList with %d tasks\n", len(taskList.Tasks)))
+		}
+
+		// Validate tasks
+		if err := validateTasks(&taskList); err != nil {
+			if debugTaskParsing {
+				debugLog(fmt.Sprintf("DEBUG: Task validation failed: %v\n", err))
+			}
+			return nil, fmt.Errorf("invalid tasks: %w", err)
+		}
+
+		if debugTaskParsing {
+			debugLog("DEBUG: Successfully parsed 1 task (as single Task object)\n")
+		}
+		return &taskList, nil
 	}
 
-	debugLog("DEBUG: No valid tasks found in LLM response")
-	return &TaskList{Tasks: []Task{}}, nil
+	return nil, nil
 }
 
 // Helper function for debug output
