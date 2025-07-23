@@ -1462,12 +1462,13 @@ func (m *model) selectFileAutocomplete() {
 		return
 	}
 
-	// Replace @query with @filename
+	// Replace @query with @filename and add a space after it
 	selectedFile := m.fileAutocompleteCandidates[m.fileAutocompleteSelectedIndex]
 	beforeAt := m.input[:m.fileAutocompleteStartPos+1]
 	afterQuery := m.input[m.fileAutocompleteStartPos+1+len(m.fileAutocompleteQuery):]
 	
-	m.input = beforeAt + selectedFile + afterQuery
+	// Add a space after the selected filename to allow continuing with the next word
+	m.input = beforeAt + selectedFile + " " + afterQuery
 	m.fileAutocompleteActive = false
 }
 
