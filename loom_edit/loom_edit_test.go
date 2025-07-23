@@ -59,7 +59,7 @@ func TestLoomEditCases(t *testing.T) {
 			// For CREATE action, we don't need a base file
 			var baseContent []byte
 			var err error
-			
+
 			if tc.baseFile != "" {
 				// Read the base file
 				baseContent, err = ioutil.ReadFile(tc.baseFile)
@@ -83,7 +83,7 @@ func TestLoomEditCases(t *testing.T) {
 			// Create a temporary file with base content (if applicable)
 			tmpDir := t.TempDir()
 			tmpFile := filepath.Join(tmpDir, "test.md")
-			
+
 			if tc.baseFile != "" {
 				err = ioutil.WriteFile(tmpFile, baseContent, 0644)
 				if err != nil {
@@ -114,10 +114,10 @@ func TestLoomEditCases(t *testing.T) {
 				// For CREATE action, check that the essential parts of the content match
 				// rather than requiring exact string equality
 				resultStr := string(resultContent)
-				
+
 				if !strings.Contains(resultStr, "# New File Example") ||
-				   !strings.Contains(resultStr, "This is a new file created with the CREATE action") ||
-				   !strings.Contains(resultStr, "## Features") {
+					!strings.Contains(resultStr, "This is a new file created with the CREATE action") ||
+					!strings.Contains(resultStr, "## Features") {
 					t.Errorf("CREATE result doesn't contain expected content")
 				}
 				// Test passes if essential content is present
