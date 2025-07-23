@@ -269,7 +269,6 @@ func (s *Summarizer) filterActionPlanMessages(messages []llm.Message) []llm.Mess
 		if strings.Contains(msg.Content, "```json") ||
 			strings.Contains(msg.Content, "Action Plan") ||
 			strings.Contains(msg.Content, "Task:") ||
-			strings.Contains(msg.Content, "EditFile") ||
 			strings.Contains(msg.Content, "ReadFile") ||
 			strings.Contains(msg.Content, "✅") ||
 			strings.Contains(msg.Content, "🔧") {

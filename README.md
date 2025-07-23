@@ -248,7 +248,6 @@ Loom now uses an intuitive natural language task format that's much more reliabl
 #### 📜 **Legacy JSON Format (Still Supported)**
 ```json
 {"type": "ReadFile", "path": "main.go", "max_lines": 100}
-{"type": "EditFile", "path": "config.json", "content": "..."}
 ```
 
 #### **Benefits of Natural Language Format:**
