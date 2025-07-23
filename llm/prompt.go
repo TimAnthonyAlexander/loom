@@ -373,8 +373,7 @@ Basic operations: create, update, get, delete, list
 
 ## 8. Prohibited Actions
 - ❌ **Responding without setting an OBJECTIVE first**
-- ❌ Edit without LOOM_EDIT format for existing files
-- ❌ Using deprecated syntax for file edits (e.g., "🔧 EDIT", "EDIT file.txt", etc.)
+- ❌ Edit without LOOM_EDIT format for existing files (LOOM_EDIT IS NOT A TASK)
 - ❌ Edit without reading file first to get current SHA and line numbers
 - ❌ Use invalid file SHA or old slice SHA in LOOM_EDIT commands
 - ❌ Use RUN+grep when SEARCH is available
