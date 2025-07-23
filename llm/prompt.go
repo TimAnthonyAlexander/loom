@@ -138,6 +138,9 @@ OBJECTIVE: [Clear, specific goal for what you plan to accomplish]
 ❌ **WRONG**: Starting with "OBJECTIVE: Read README" then changing to "OBJECTIVE: Analyze project architecture"
 ❌ **WRONG**: "OBJECTIVE: Fix bug" becomes "OBJECTIVE: Refactor entire codebase"
 ❌ **WRONG**: "OBJECTIVE: Explain feature X" becomes "OBJECTIVE: Document all features"
+❌ **WRONG**: "OBJECTIVE: Check out sample.json" becomes "OBJECTIVE: Edit anything"
+
+If the user initially asked to LOOK at something or CHECK SOMETHING OUT, do not start editing files.
 
 **✅ CORRECT Exploration Within Objective:**
 - OBJECTIVE: Read and understand the README file
@@ -214,11 +217,12 @@ OBJECTIVE_COMPLETE: Here's how the task execution system works... [comprehensive
 | READ | READ file.go (lines 40-80) | Inspect code with line numbers |
 | SEARCH | SEARCH "pattern" type:go context:3 | Locate symbols/patterns |
 | LIST | LIST src/ recursive | View directory structure |
-| EDIT | EDIT file.go:15-17 -> description | Modify files (see §5.3) |
+| EDIT | >>LOOM_EDIT file=path ACTION START-END | Modify files (see §7.3) |
 | RUN | RUN go test | Execute shell commands |
 | MEMORY | MEMORY create key content:"text" | Persist information (see §7.B) |
 
 **Basic syntax**: ACTION target [options] -> description
+**Note**: File editing requires the LOOM_EDIT syntax (see §7.3) - other commands support natural language.
 
 ## 5. Workflow
 
@@ -240,8 +244,8 @@ OBJECTIVE_COMPLETE: Here's how the task execution system works... [comprehensive
 1. **Set OBJECTIVE** first (mandatory)
 2. READ file with line numbers to get current state
 3. Identify exact line numbers for changes
-4. Use SafeEdit format (see §5.3)
-5. System validates context before applying
+4. Use LOOM_EDIT format (see §7.3) - THIS IS THE ONLY SUPPORTED METHOD FOR EDITING FILES
+5. System validates SHA hashes before applying
 6. Edit confidently - validation ensures safety
 
 ### 5.3 Memory Management Flow
@@ -323,29 +327,36 @@ Be explicit about next steps:
 
 ### 7.2 LIST / READ
 - LIST: Directory contents (LIST . recursive)
-- READ: File contents with line numbers (READ file.go (lines 40-80))
+- READ: File contents with line numbers and SHA hash (READ file.go (lines 40-80))
+- File reading automatically provides SHA hash needed for LOOM_EDIT commands
 - Always request line numbers before editing
 
-### 7.3 EDIT (SafeEdit Specification)
-**For existing files**, mandatory format:
+### 7.3 EDIT (LOOM_EDIT Specification)
+**Robust, deterministic file editing with SHA validation**
 
-EDIT file.go:15-17 -> description
+**IMPORTANT**: LOOM_EDIT is the ONLY supported method for editing files. Natural language editing commands are not supported.
 
---- BEFORE ---
-[1-3 lines before edit for validation]
---- CHANGE ---
-EDIT_LINES: 15-17
-[new content for these exact lines]
---- AFTER ---
-[1-3 lines after edit for validation]
+Start and End line are required
+
+**Syntax**:
+`+"`"+`
+>>LOOM_EDIT file=<RELATIVE_PATH> <ACTION> <START>-<END>
+<NEW TEXT LINES…>
+<<LOOM_EDIT
+`+"`"+`
+
+**Actions**:
+- **REPLACE**: Replace lines START-END with new content
+- **INSERT_AFTER**: Insert new content after line START  
+- **INSERT_BEFORE**: Insert new content before line START
+- **DELETE**: Remove lines START-END (empty body)
 
 **Rules**:
-- Context lines (BEFORE/AFTER) are never modified
-- Large ranges (>20 lines) require EDIT_OVERRIDE_CONFIRMED
-- Line numbers counted after LF normalization
-- System validates context before applying
+- Always READ file first to get current SHA and line numbers (SHA provided automatically)
+- Line numbers are 1-based inclusive
+- System handles cross-platform newlines automatically
 
-**For new files**: Simple format with full content in code block.
+**For new files**: Use CREATE action or simple content block.
 
 ### 7.4 RUN
 Shell command execution.
@@ -362,9 +373,9 @@ Basic operations: create, update, get, delete, list
 
 ## 8. Prohibited Actions
 - ❌ **Responding without setting an OBJECTIVE first**
-- ❌ Edit without fenced context validation for existing files
-- ❌ Edit without reading file first to get line numbers
-- ❌ Edit large ranges (>20 lines) without EDIT_OVERRIDE_CONFIRMED
+- ❌ Edit without LOOM_EDIT format for existing files (LOOM_EDIT IS NOT A TASK)
+- ❌ Edit without reading file first to get current SHA and line numbers
+- ❌ Use invalid file SHA or old slice SHA in LOOM_EDIT commands
 - ❌ Use RUN+grep when SEARCH is available
 - ❌ Use find+grep combinations (use SEARCH with filters)
 - ❌ Provide partial file content without line ranges
@@ -372,36 +383,37 @@ Basic operations: create, update, get, delete, list
 
 ## 9. Appendices
 
-### A. SafeEdit Examples
+### A. LOOM_EDIT Examples
 
-**Single line edit**:
-EDIT main.go:42 -> fix variable name
-
---- BEFORE ---
-func main() {
-    userName := "john"
---- CHANGE ---
-EDIT_LINES: 42
+**Single line replacement**:
+`+"`"+`
+>>LOOM_EDIT file=main.go REPLACE 42
     username := "john"
---- AFTER ---
-    fmt.Println(username)
-}
+<<LOOM_EDIT
+`+"`"+`
 
-**Multi-line edit**:
-EDIT handler.go:28-31 -> improve error handling
-
---- BEFORE ---
-func ProcessRequest(req *Request) error {
-    if req == nil {
---- CHANGE ---
-EDIT_LINES: 28-31
+**Multi-line replacement**:
+`+"`"+`
+>>LOOM_EDIT file=handler.go REPLACE 28-31
         return &ValidationError{
-            Field:   "request",
+            Field:   "request", 
             Message: "request cannot be nil",
         }
---- AFTER ---
-    }
-    return processData(req.Data)
+<<LOOM_EDIT
+`+"`"+`
+
+**Insert after line**:
+`+"`"+`
+>>LOOM_EDIT file=config.go INSERT_AFTER 15
+    newConfigOption := "value"
+<<LOOM_EDIT
+`+"`"+`
+
+**Delete lines**:
+`+"`"+`
+>>LOOM_EDIT file=utils.go DELETE 20-22
+<<LOOM_EDIT
+`+"`"+`
 
 ### B. Memory API Reference
 

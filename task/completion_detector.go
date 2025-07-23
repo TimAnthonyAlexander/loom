@@ -91,6 +91,15 @@ func (cd *CompletionDetector) IsComplete(response string) bool {
 
 	cleanResponse := strings.TrimSpace(response)
 
+	// Extract objective if present - if this is a response that's setting an objective
+	// then we know it's not complete yet
+	objective := cd.ExtractObjective(cleanResponse)
+	if objective != "" && !cd.objectiveSet {
+		// This is an initial objective-setting message, so it's definitely not complete
+		completionDebugLog("Found initial objective setting, not complete")
+		return false
+	}
+
 	// Check if this is a response to a completion check
 	if cd.lastPromptWasCheck {
 		completionDebugLog("Evaluating response to completion check")
@@ -359,17 +368,6 @@ func (cd *CompletionDetector) ValidateObjectiveConsistency(response string) *Obj
 		return result
 	}
 
-	// Check if the objective has changed
-	if !cd.isObjectiveEquivalent(cd.originalObjective, newObjective) {
-		cd.objectiveChangeCount++
-		result.IsValid = false
-		result.ChangeDetected = true
-		result.ValidationError = fmt.Sprintf("Objective changed from '%s' to '%s'", cd.originalObjective, newObjective)
-		result.SuggestedFix = fmt.Sprintf("Keep original objective: '%s' and complete it fully before setting new objectives", cd.originalObjective)
-
-		completionDebugLog("🚨 OBJECTIVE CHANGE DETECTED: " + result.ValidationError)
-	}
-
 	return result
 }
 
@@ -547,7 +545,7 @@ func (cd *CompletionDetector) hasSemanticRepetition(responses []string) bool {
 	}
 
 	// Look for repeated task patterns
-	taskPattern := regexp.MustCompile(`(?i)(?:READ|SEARCH|LIST|EDIT|RUN)\s+(\S+)`)
+	taskPattern := regexp.MustCompile(`(?i)(?:READ|SEARCH|LIST|RUN)\s+(\S+)`)
 
 	recentTasks := make(map[string]int)
 	for i := len(responses) - 4; i < len(responses); i++ {
@@ -592,4 +590,46 @@ func (cd *CompletionDetector) hasCompletionOscillation(responses []string) bool 
 
 	// If alternations >= 2 in 4 responses, it's oscillating
 	return alternations >= 2
+}
+
+// ShouldUseContinuationPrompt determines if a continuation prompt should be used
+// instead of a completion check. This helps prevent immediate completion checks
+// right after an objective is set.
+func (cd *CompletionDetector) ShouldUseContinuationPrompt(response string) bool {
+	// Check if this response sets an objective for the first time
+	objective := cd.ExtractObjective(response)
+	isSettingObjective := objective != "" && !cd.objectiveSet
+
+	// If this is setting an initial objective, use continuation prompt
+	if isSettingObjective {
+		return true
+	}
+
+	// If the response contains task commands or mentions next steps, use continuation prompt
+	for _, pattern := range cd.incompletePatterns {
+		if pattern.MatchString(response) {
+			return true
+		}
+	}
+
+	// Check for patterns indicating LLM is planning work but hasn't started
+	planningPatterns := []string{
+		"i'll start", "let me", "first", "begin by", "to accomplish this", "i will",
+		"let's start", "we need to", "we'll", "step 1", "first step", "initially",
+	}
+
+	lowerResponse := strings.ToLower(response)
+	for _, pattern := range planningPatterns {
+		if strings.Contains(lowerResponse, pattern) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// GetContinuationPrompt returns a simple prompt to continue work
+// rather than asking if the task is complete
+func (cd *CompletionDetector) GetContinuationPrompt() string {
+	return "Please continue working on this task."
 }

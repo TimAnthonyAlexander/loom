@@ -3,6 +3,7 @@ package task
 import (
 	"loom/chat"
 	"loom/llm"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -78,76 +79,107 @@ func TestMessageFilteringFix(t *testing.T) {
 	}
 }
 
-// TestRealWorldScenario tests the exact scenario the user experienced
+// TestRealWorldScenario tests a real-world scenario with a multi-part LLM response
 func TestRealWorldScenario(t *testing.T) {
+	// Create a temporary directory for testing
 	tempDir := t.TempDir()
-
-	// Create chat session like TUI would
-	session := chat.NewSession("test_workspace", 100)
 
 	// Create executor and manager
 	executor := NewExecutor(tempDir, false, 1024*1024)
-	manager := NewManager(executor, nil, session)
+	mockChat := &MockChatSession{}
+	manager := NewManager(executor, nil, mockChat)
 
-	// User's exact input
-	userInput := `EDIT public/index.html
-{"content":"<!DOCTYPE html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>Fatih Secilmis Dentist Office</title>\n  </head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>"}`
+	// Real-world LLM response with explanation and task - now using LOOM_EDIT format
+	llmResponse := `I'll create a simple React app for a dentist office. Let's start with setting up the basic HTML structure.
 
-	// Add user message to session
-	userMsg := llm.Message{
-		Role:      "user",
-		Content:   userInput,
-		Timestamp: time.Now(),
-	}
-	session.AddMessage(userMsg)
+>>LOOM_EDIT file=public/index.html REPLACE 1-1
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fatih Secilmis Dentist Office</title>
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
+<<LOOM_EDIT
 
-	// Execute the task through manager
+Next, I'll create the main App.js component that will serve as the entry point for our application.
+
+>>LOOM_EDIT file=src/App.js REPLACE 1-1
+import React from 'react';
+import './App.css';
+
+function App() {
+  return (
+    <div className="App">
+      <header>
+        <h1>Fatih Secilmis Dentist Office</h1>
+        <nav>
+          <ul>
+            <li><a href="#services">Services</a></li>
+            <li><a href="#about">About</a></li>
+            <li><a href="#contact">Contact</a></li>
+          </ul>
+        </nav>
+      </header>
+      <main>
+        <section id="hero">
+          <h2>Your Smile, Our Passion</h2>
+          <p>Professional dental care with a personal touch</p>
+          <button className="cta">Book Appointment</button>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+export default App;
+<<LOOM_EDIT`
+
+	// Execute through manager
 	eventChan := make(chan TaskExecutionEvent, 10)
-	execution, err := manager.HandleLLMResponse(userInput, eventChan)
+	execution, err := manager.HandleLLMResponse(llmResponse, eventChan)
 	if err != nil {
-		t.Fatalf("Failed to handle LLM response: %v", err)
+		t.Fatalf("Manager failed to handle LLM response: %v", err)
 	}
 
-	if execution == nil || len(execution.Tasks) == 0 {
+	if execution == nil {
 		t.Fatal("No execution or tasks created")
 	}
 
-	task := execution.Tasks[0]
-	response := execution.Responses[0]
-
-	// Simulate what TUI would do - add internal message to session
-	internalTaskMsg := llm.Message{
-		Role:      "system",
-		Content:   formatTaskResultForLLMTest(&task, &response),
-		Timestamp: time.Now(),
+	// Should have found both tasks
+	if len(execution.Tasks) != 2 {
+		t.Fatalf("Expected 2 tasks, got %d", len(execution.Tasks))
 	}
-	session.AddMessage(internalTaskMsg)
 
-	// Get display messages (this is what user sees)
-	displayMessages := session.GetDisplayMessages()
-
-	// Verify no internal messages leak through
-	for _, msg := range displayMessages {
-		if strings.Contains(msg, "TASK_RESULT:") || strings.Contains(msg, "STATUS: Success") {
-			t.Errorf("CRITICAL: Internal message leaked to user display: %s", msg)
+	// Verify all tasks are LOOM_EDIT commands
+	for i, task := range execution.Tasks {
+		if !task.LoomEditCommand {
+			t.Errorf("Task %d not recognized as LOOM_EDIT command", i+1)
 		}
 	}
 
-	t.Logf("Display messages user sees:")
-	for i, msg := range displayMessages {
-		t.Logf("  %d: %s", i+1, msg)
+	// Verify all tasks succeeded
+	for i, response := range execution.Responses {
+		if !response.Success {
+			t.Errorf("Task %d failed: %s", i+1, response.Error)
+		}
 	}
 
-	// UPDATED: File SHOULD exist immediately (no confirmation needed)
-	filePath := tempDir + "/public/index.html"
-	if !fileExistsHelper(filePath) {
-		t.Errorf("File should exist immediately after execution")
+	// Verify files were created
+	files := []string{
+		"public/index.html",
+		"src/App.js",
 	}
 
-	// UPDATED: Confirmation is no longer required
-	if task.RequiresConfirmation() {
-		t.Errorf("Task should NOT require confirmation after removing confirmation system")
+	for i, file := range files {
+		fullPath := filepath.Join(tempDir, file)
+		if !fileExists(fullPath) {
+			t.Errorf("File %d missing: %s", i+1, fullPath)
+		}
 	}
-
-	t.Logf("SUCCESS: User sees proper messages, no internal leak, confirmation required")
 }

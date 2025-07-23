@@ -297,8 +297,14 @@ func (s *Session) GetDisplayMessages() []string {
 				continue
 			}
 
-			// Filter task result messages to show only status, not actual content
-			content := s.filterTaskResultForDisplay(msg.Content)
+			var content string
+			if msg.Role == "assistant" {
+				// Only filter assistant messages, not user messages
+				content = s.filterTaskResultForDisplay(msg.Content)
+			} else {
+				// User messages should be displayed as-is without any task filtering
+				content = msg.Content
+			}
 
 			// Skip empty content (like completion detector interactions)
 			if strings.TrimSpace(content) == "" {
@@ -393,22 +399,21 @@ func (s *Session) filterJSONTaskBlocks(content string) string {
 	var filteredLines []string
 	var taskDescriptions []string
 
-	taskPattern := regexp.MustCompile(`^🔧\s+(READ|EDIT|LIST|RUN)\s+(.+)`)
-	simplePattern := regexp.MustCompile(`(?i)^(read|edit|list|run)\s+(.+)`)
+	taskPattern := regexp.MustCompile(`^🔧\s+(READ|LIST|RUN)\s+(.+)`)
+	// Remove the overly broad simplePattern that incorrectly matches natural language
+	// Only match the explicit task format with 🔧 prefix
 
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 
-		// Check for natural language tasks
-		if matches := taskPattern.FindStringSubmatch(trimmed); len(matches) == 3 {
-			taskType := strings.ToUpper(matches[1])
-			taskArgs := strings.TrimSpace(matches[2])
-			desc := formatNaturalLanguageTaskDescription(taskType, taskArgs)
-			taskDescriptions = append(taskDescriptions, desc)
-			continue // Skip this line in output
+		// Skip LOOM_EDIT commands - they should be shown as-is, not filtered
+		if strings.Contains(trimmed, "LOOM_EDIT") {
+			filteredLines = append(filteredLines, line)
+			continue
 		}
 
-		if matches := simplePattern.FindStringSubmatch(trimmed); len(matches) == 3 {
+		// Check for natural language tasks (only the explicit 🔧 format)
+		if matches := taskPattern.FindStringSubmatch(trimmed); len(matches) == 3 {
 			taskType := strings.ToUpper(matches[1])
 			taskArgs := strings.TrimSpace(matches[2])
 			desc := formatNaturalLanguageTaskDescription(taskType, taskArgs)
@@ -625,6 +630,11 @@ func formatNaturalLanguageTaskDescription(taskType, args string) string {
 func (s *Session) isCompletionDetectorInteraction(content string) bool {
 	// Don't hide debug messages - they should always be shown
 	if strings.Contains(content, "🔍 **DEBUG**:") {
+		return false
+	}
+
+	// Don't hide LOOM_EDIT commands - they should always be shown even if they contain completion patterns
+	if (strings.Contains(content, ">>LOOM_EDIT") || strings.Contains(content, "🔧 LOOM_EDIT")) && strings.Contains(content, "<<LOOM_EDIT") {
 		return false
 	}
 

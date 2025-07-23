@@ -230,8 +230,36 @@ READ README.md
 - **READ**: Read file contents (🔧 READ filename.go)
 - **SEARCH**: Find code patterns (🔧 SEARCH "IndexStats" - USE THIS INSTEAD OF GREP!)
 - **LIST**: List directory contents (🔧 LIST . recursive)
-- **EDIT**: Create/modify files (🔧 EDIT filename.go -> changes)
 - **RUN**: Execute commands (🔧 RUN command)
+
+
+### 7.3 EDIT (LOOM_EDIT Specification)
+To edit, you do not create a task but you use the LOOM_EDIT syntax somewhere in the response.
+This is the only way to edit a file.
+
+**Robust, deterministic file editing with SHA validation**
+
+**IMPORTANT**: LOOM_EDIT is the ONLY supported method for editing files. Natural language editing commands are not supported.
+
+**Syntax**:
+` + "`" + `
+>>LOOM_EDIT file=<RELATIVE_PATH> <ACTION> <START>-<END>
+<NEW TEXT LINES…>
+<<LOOM_EDIT
+` + "`" + `
+
+**Actions**:
+- **REPLACE**: Replace lines START-END with new content
+- **INSERT_AFTER**: Insert new content after line START  
+- **INSERT_BEFORE**: Insert new content before line START
+- **DELETE**: Remove lines START-END (empty body)
+
+**Rules**:
+- Always READ file first to get current SHA and line numbers (SHA provided automatically)
+- Line numbers are 1-based inclusive
+- System handles cross-platform newlines automatically
+
+**For new files**: Use CREATE action or simple content block.
 
 ### Example Response:
 OBJECTIVE: Understand this Go project's architecture and key components

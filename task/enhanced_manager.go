@@ -35,10 +35,19 @@ func NewEnhancedManager(executor *Executor, llmAdapter llm.LLMAdapter, chatSessi
 
 // HandleLLMResponseEnhanced processes LLM responses with enhanced features
 func (em *EnhancedManager) HandleLLMResponseEnhanced(llmResponse string, eventChan chan<- TaskExecutionEvent) (*TaskExecution, error) {
+	// Check if this sets a new objective
+	newObjective := em.completionDetector.ExtractObjective(llmResponse)
+	isNewObjectiveSetting := newObjective != "" && !em.completionDetector.objectiveSet
+
 	// Extract change summary and rationale from LLM response
 	changeSummary := em.rationaleExtractor.ExtractChangeSummary(llmResponse, nil)
 	if changeSummary.Summary != "" {
 		em.changeSummaryMgr.AddSummary(llmResponse, nil)
+	}
+
+	// If this is a new objective being set, update the flag to prevent immediate completion check
+	if isNewObjectiveSetting {
+		em.completionDetector.lastCompletionCheckSent = false
 	}
 
 	// Handle task execution with the base manager (includes objective validation)

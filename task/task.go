@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv" // Used for parsing integers in natural language task commands
 	"strings"
@@ -83,21 +84,16 @@ type Task struct {
 	ShowLineNumbers bool `json:"show_line_numbers,omitempty"` // Show line numbers for precise editing
 
 	// EditFile specific
-	Diff    string `json:"diff,omitempty"`
-	Content string `json:"content,omitempty"`
-	Intent  string `json:"intent,omitempty"` // Natural language description of what to do
+	Diff            string `json:"diff,omitempty"` // DEPRECATED: Only LOOM_EDIT is supported now
+	Content         string `json:"content,omitempty"`
+	Intent          string `json:"intent,omitempty"`            // Natural language description of what to do
+	LoomEditCommand bool   `json:"loom_edit_command,omitempty"` // Flag indicating this contains a LOOM_EDIT command
 
 	// Line-based editing (NEW - more precise than context-based)
 	TargetLine        int    `json:"target_line,omitempty"`        // Single line to edit (1-indexed)
 	TargetStartLine   int    `json:"target_start_line,omitempty"`  // Start of line range to edit (1-indexed)
 	TargetEndLine     int    `json:"target_end_line,omitempty"`    // End of line range to edit (1-indexed)
 	ContextValidation string `json:"context_validation,omitempty"` // Optional: expected content for safety validation
-
-	// SafeEdit format (ULTRA-SAFE - mandatory context validation)
-	SafeEditMode  bool   `json:"safe_edit_mode,omitempty"` // Flag indicating this uses SafeEdit format
-	BeforeContext string `json:"before_context,omitempty"` // Lines immediately before edit range (mandatory for validation)
-	AfterContext  string `json:"after_context,omitempty"`  // Lines immediately after edit range (mandatory for validation)
-	EditReason    string `json:"edit_reason,omitempty"`    // Clear explanation of what's being changed and why
 
 	// Targeted editing fields (LEGACY - kept for backward compatibility)
 	StartContext string `json:"start_context,omitempty"` // Line or pattern marking start of edit section
@@ -184,6 +180,56 @@ type TaskResponse struct {
 	Approved      bool         `json:"approved,omitempty"` // For tasks requiring confirmation
 }
 
+// tryLoomEditParsing attempts to parse LOOM_EDIT commands from LLM response
+func tryLoomEditParsing(llmResponse string) *TaskList {
+	debugLog("DEBUG: Attempting LOOM_EDIT parsing...")
+
+	// Look for LOOM_EDIT command blocks - support both >>LOOM_EDIT and 🔧 LOOM_EDIT formats
+	re := regexp.MustCompile(`(?s)(?:>>|🔧 )LOOM_EDIT.*?<<LOOM_EDIT`)
+	matches := re.FindAllString(llmResponse, -1)
+
+	if len(matches) == 0 {
+		return nil
+	}
+
+	var tasks []Task
+
+	for _, match := range matches {
+		// Parse the LOOM_EDIT command - we'll need to create a basic task
+		// that contains the raw LOOM_EDIT command for the executor to handle
+
+		// Extract the file path from the command for the task - handle both formats
+		filePathRe := regexp.MustCompile(`file=([^\s]+)`)
+		fileMatches := filePathRe.FindStringSubmatch(match)
+
+		if len(fileMatches) < 2 {
+			debugLog("DEBUG: Could not extract file path from LOOM_EDIT command")
+			continue
+		}
+
+		filePath := fileMatches[1]
+
+		// Create a task with the LOOM_EDIT command in the content
+		task := &Task{
+			Type:            TaskTypeEditFile,
+			Path:            filePath,
+			Content:         match, // Store the entire LOOM_EDIT command
+			LoomEditCommand: true,  // Flag to indicate this is a LOOM_EDIT command
+		}
+
+		tasks = append(tasks, *task)
+		debugLog(fmt.Sprintf("DEBUG: Parsed LOOM_EDIT task for file: %s\n", filePath))
+	}
+
+	if len(tasks) == 0 {
+		return nil
+	}
+
+	return &TaskList{
+		Tasks: tasks,
+	}
+}
+
 // tryNaturalLanguageParsing attempts to parse natural language task commands
 func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 	debugLog("DEBUG: Attempting natural language task parsing...")
@@ -198,7 +244,7 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 	seenTasks := make(map[string]bool)
 
 	// Look for task indicators with emoji prefixes
-	taskPattern := regexp.MustCompile(`^🔧\s+(READ|EDIT|LIST|RUN|SEARCH|MEMORY)\s+(.+)`)
+	taskPattern := regexp.MustCompile(`^🔧\s+(READ|LIST|RUN|SEARCH|MEMORY)\s+(.+)`)
 
 	for i, line := range lines {
 		line = strings.TrimSpace(line)
@@ -210,12 +256,9 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 
 			task := parseNaturalLanguageTask(taskType, taskArgs)
 			if task != nil {
-				// For EDIT tasks, look for SafeEdit format or content in subsequent code blocks or direct content
+				// For EDIT tasks, look for content in subsequent code blocks or direct content
 				if task.Type == TaskTypeEditFile && task.Content == "" {
-					// First try to parse SafeEdit format
-					if parseSafeEditFormat(task, lines, i+1) {
-						debugLog("DEBUG: Parsed SafeEdit format for edit task")
-					} else if content := extractContentFromCodeBlock(lines, i+1); content != "" {
+					if content := extractContentFromCodeBlock(lines, i+1); content != "" {
 						task.Content = content
 						debugLog("DEBUG: Found content in code block for edit task")
 					} else if content := extractDirectContent(lines, i+1); content != "" {
@@ -307,6 +350,10 @@ func parseNaturalLanguageTask(taskType, args string) *Task {
 	case "READ":
 		return parseReadTask(args)
 	case "EDIT":
+		// EDIT commands are still supported for backward compatibility with tests
+		// but we'll output a warning that LOOM_EDIT should be used instead
+		debugLog("DEBUG: Natural language EDIT command is deprecated - use LOOM_EDIT format instead")
+		// For backward compatibility, we'll still parse EDIT commands for tests
 		return parseEditTask(args)
 	case "LIST":
 		return parseListTask(args)
@@ -1027,97 +1074,6 @@ func isLikelyInteractiveCommand(command string) bool {
 	return false
 }
 
-// parseSafeEditFormat attempts to parse SafeEdit format (both old and new fenced formats)
-func parseSafeEditFormat(task *Task, lines []string, startIdx int) bool {
-	if startIdx >= len(lines) {
-		return false
-	}
-
-	var beforeContext []string
-	var editContent []string
-	var afterContext []string
-	var currentSection string
-
-	// Look for SafeEdit format markers in the following lines
-	for i := startIdx; i < len(lines) && i < startIdx+50; i++ { // Look within reasonable distance
-		line := strings.TrimSpace(lines[i])
-
-		// Detect section markers - support both old and new formats
-		if line == "BEFORE_CONTEXT:" || line == "--- BEFORE ---" {
-			currentSection = "before"
-			continue
-		} else if strings.HasPrefix(line, "EDIT_LINES:") {
-			currentSection = "edit"
-
-			// Extract line range from EDIT_LINES marker
-			parts := strings.Split(line, ":")
-			if len(parts) > 1 {
-				lineRange := strings.TrimSpace(parts[1])
-				parseEditLineRange(task, lineRange)
-			}
-			continue
-		} else if line == "--- CHANGE ---" {
-			currentSection = "change"
-			continue
-		} else if line == "AFTER_CONTEXT:" || line == "--- AFTER ---" {
-			currentSection = "after"
-			continue
-		}
-
-		// Handle EDIT_LINES within CHANGE section (new fenced format)
-		if currentSection == "change" && strings.HasPrefix(line, "EDIT_LINES:") {
-			// Extract line range from EDIT_LINES marker
-			parts := strings.Split(line, ":")
-			if len(parts) > 1 {
-				lineRange := strings.TrimSpace(parts[1])
-				parseEditLineRange(task, lineRange)
-			}
-			continue
-		}
-
-		// Skip empty lines only at section boundaries (before any section is set)
-		if line == "" && currentSection == "" {
-			continue
-		}
-
-		// If we hit another task or end of meaningful content, stop
-		if strings.HasPrefix(line, "🔧") || strings.HasPrefix(line, "```") {
-			break
-		}
-
-		// Collect content based on current section (preserve all lines including empty ones)
-		switch currentSection {
-		case "before":
-			beforeContext = append(beforeContext, lines[i]) // Preserve original formatting including empty lines
-		case "edit":
-			editContent = append(editContent, lines[i]) // Preserve original formatting including empty lines
-		case "change":
-			// In the new fenced format, content comes after EDIT_LINES
-			if !strings.HasPrefix(line, "EDIT_LINES:") {
-				editContent = append(editContent, lines[i]) // Preserve original formatting including empty lines
-			}
-		case "after":
-			afterContext = append(afterContext, lines[i]) // Preserve original formatting including empty lines
-		}
-	}
-
-	// Validate we found all required sections
-	if len(beforeContext) == 0 || len(editContent) == 0 || len(afterContext) == 0 {
-		return false // Not a valid SafeEdit format
-	}
-
-	// Populate task fields
-	task.SafeEditMode = true
-	task.BeforeContext = strings.Join(beforeContext, "\n")
-	task.Content = strings.Join(editContent, "\n")
-	task.AfterContext = strings.Join(afterContext, "\n")
-
-	debugLog(fmt.Sprintf("DEBUG: SafeEdit parsed - BeforeContext: %d lines, EditContent: %d lines, AfterContext: %d lines\n",
-		len(beforeContext), len(editContent), len(afterContext)))
-
-	return true
-}
-
 // parseEditLineRange extracts line range information from EDIT_LINES marker
 func parseEditLineRange(task *Task, lineRange string) {
 	// Handle single line: "15"
@@ -1214,7 +1170,7 @@ func extractMemoryContent(lines []string, startIdx int) string {
 		trimmedLine := strings.TrimSpace(line)
 
 		// Stop if we encounter another task directive
-		taskPattern := regexp.MustCompile(`^🔧\s+(READ|EDIT|LIST|RUN|SEARCH|MEMORY)\s+`)
+		taskPattern := regexp.MustCompile(`^🔧\s+(READ|LIST|RUN|SEARCH|MEMORY)\s+`)
 		if taskPattern.MatchString(trimmedLine) {
 			break
 		}
@@ -1284,7 +1240,7 @@ func extractDirectContent(lines []string, startIdx int) string {
 		}
 
 		// Stop if we encounter another task directive
-		taskPattern := regexp.MustCompile(`^🔧\s+(READ|EDIT|LIST|RUN|SEARCH|MEMORY)\s+`)
+		taskPattern := regexp.MustCompile(`^🔧\s+(READ|LIST|RUN|SEARCH|MEMORY)\s+`)
 		if taskPattern.MatchString(trimmedLine) {
 			break
 		}
@@ -1566,9 +1522,15 @@ func tryFallbackJSONParsing(llmResponse string) *TaskList {
 	return nil
 }
 
-// ParseTasks extracts and parses tasks from LLM response (tries natural language first, then JSON)
+// ParseTasks extracts and parses tasks from LLM response (tries LOOM_EDIT first, then natural language, then JSON)
 func ParseTasks(llmResponse string) (*TaskList, error) {
-	// First, try natural language parsing
+	// First, try LOOM_EDIT parsing
+	if result := tryLoomEditParsing(llmResponse); result != nil {
+		debugLog(fmt.Sprintf("DEBUG: Successfully parsed %d LOOM_EDIT tasks\n", len(result.Tasks)))
+		return result, nil
+	}
+
+	// Second, try natural language parsing
 	if result := tryNaturalLanguageParsing(llmResponse); result != nil {
 		debugLog(fmt.Sprintf("DEBUG: Successfully parsed %d tasks using natural language parsing\n", len(result.Tasks)))
 		return result, nil
@@ -1757,8 +1719,19 @@ func validateTask(task *Task) error {
 		if task.Path == "" {
 			return fmt.Errorf("EditFile requires path")
 		}
-		if task.Diff == "" && task.Content == "" {
-			return fmt.Errorf("EditFile requires either diff or content")
+		if task.Content == "" {
+			return fmt.Errorf("EditFile requires content")
+		}
+
+		// For existing files, enforce LOOM_EDIT format
+		// Only allow non-LOOM_EDIT format for new file creation
+		if !task.LoomEditCommand {
+			// Check if this is a new file (if the path doesn't exist)
+			fullPath := filepath.Join(os.Getenv("LOOM_WORKSPACE"), task.Path)
+			if _, err := os.Stat(fullPath); err == nil {
+				// File exists, require LOOM_EDIT
+				return fmt.Errorf("EditFile tasks for existing files must use the LOOM_EDIT format. Natural language edit commands are no longer supported")
+			}
 		}
 
 	case TaskTypeListDir:
@@ -1853,29 +1826,14 @@ func (t *Task) Description() string {
 		return fmt.Sprintf("Read %s", t.Path)
 
 	case TaskTypeEditFile:
-		if t.Diff != "" {
-			return fmt.Sprintf("Edit %s (apply diff)", t.Path)
+		if t.LoomEditCommand {
+			return fmt.Sprintf("Edit %s (LOOM_EDIT format)", t.Path)
 		}
-		// Check if this is a targeted edit
-		if t.InsertMode != "" {
-			switch t.InsertMode {
-			case "append":
-				return fmt.Sprintf("Edit %s (append content)", t.Path)
-			case "insert_after":
-				return fmt.Sprintf("Edit %s (insert after)", t.Path)
-			case "insert_before":
-				return fmt.Sprintf("Edit %s (insert before)", t.Path)
-			case "replace":
-				return fmt.Sprintf("Edit %s (replace section)", t.Path)
-			case "replace_all":
-				return fmt.Sprintf("Edit %s (replace all occurrences)", t.Path)
-			case "insert_between":
-				return fmt.Sprintf("Edit %s (insert between)", t.Path)
-			default:
-				return fmt.Sprintf("Edit %s (targeted edit)", t.Path)
-			}
+		// For backward compatibility with existing file creation
+		if t.Content != "" && !t.LoomEditCommand {
+			return fmt.Sprintf("Edit %s (create/replace content)", t.Path)
 		}
-		return fmt.Sprintf("Edit %s (replace content)", t.Path)
+		return fmt.Sprintf("Edit %s", t.Path)
 
 	case TaskTypeListDir:
 		if t.Recursive {
