@@ -92,9 +92,20 @@ func (cd *CompletionDetector) IsComplete(response string) bool {
 	cleanResponse := strings.TrimSpace(response)
 
 	// Extract objective if present - if this is a response that's setting an objective
-	// then we know it's not complete yet
+	// then we know it's not complete yet – UNLESS the response also explicitly marks the
+	// objective as finished. In that special case, it should be considered complete.
 	objective := cd.ExtractObjective(cleanResponse)
 	if objective != "" && !cd.objectiveSet {
+		// If the same response also contains an explicit completion marker (e.g. OBJECTIVE_COMPLETE)
+		// or any of the registered completion patterns, treat the work as complete instead of
+		// forcing a continuation.
+		for _, pattern := range cd.completionPatterns {
+			if pattern.MatchString(cleanResponse) {
+				completionDebugLog("Initial objective set and completion pattern found, marking complete")
+				return true
+			}
+		}
+
 		// This is an initial objective-setting message, so it's definitely not complete
 		completionDebugLog("Found initial objective setting, not complete")
 		return false
@@ -596,6 +607,12 @@ func (cd *CompletionDetector) hasCompletionOscillation(responses []string) bool 
 // instead of a completion check. This helps prevent immediate completion checks
 // right after an objective is set.
 func (cd *CompletionDetector) ShouldUseContinuationPrompt(response string) bool {
+	// If the response already signals that the objective (or task) is complete,
+	// we should NOT ask it to continue.
+	if cd.IsComplete(response) {
+		return false
+	}
+
 	// Check if this response sets an objective for the first time
 	objective := cd.ExtractObjective(response)
 	isSettingObjective := objective != "" && !cd.objectiveSet

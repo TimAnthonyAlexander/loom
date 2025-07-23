@@ -685,7 +685,12 @@ func (s *Session) isCompletionDetectorInteraction(content string) bool {
 		}
 	}
 
-	// Enhanced completion detector response patterns
+	// Enhanced completion detector response patterns.  We intentionally **exclude**
+	// markers like "objective_complete:" so that full assistant messages which both
+	// declare completion _and_ contain useful content (e.g. a summary or greeting)
+	// are **not** hidden from the user.  Only short YES/NO-style acknowledgements
+	// should be filtered out.
+
 	completionResponses := []string{
 		"yes, the task is complete",
 		"yes, i'm finished",
@@ -693,10 +698,8 @@ func (s *Session) isCompletionDetectorInteraction(content string) bool {
 		"no, i still need",
 		"not yet, i should",
 		"there's more work",
-		"objective_complete:",
-		"task_complete:",
-		"exploration_complete:",
-		"analysis_complete:",
+		// Note: objective/task/exploration/analysis_complete removed to prevent hiding
+		// rich assistant responses that legitimately announce completion.
 		"yes if the objective is complete",
 		"no if more work is required",
 		"additional work needed:",
