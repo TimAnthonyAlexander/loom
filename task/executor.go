@@ -369,6 +369,12 @@ func (e *Executor) applyLoomEdit(task *Task, fullPath string) *TaskResponse {
 func (e *Executor) replaceEntireFile(task *Task, fullPath string) *TaskResponse {
 	response := &TaskResponse{Task: *task}
 
+	// Check if this looks like the old diff format and reject it
+	if e.isDiffFormattedContent(task.Content) {
+		response.Error = "Detected content that appears to be in diff format. Please use LOOM_EDIT format for file edits."
+		return response
+	}
+
 	// Write the content directly
 	err := e.applyEditInternal(task)
 	if err != nil {

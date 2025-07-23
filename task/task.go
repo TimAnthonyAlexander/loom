@@ -83,7 +83,7 @@ type Task struct {
 	ShowLineNumbers bool `json:"show_line_numbers,omitempty"` // Show line numbers for precise editing
 
 	// EditFile specific
-	Diff            string `json:"diff,omitempty"`
+	Diff            string `json:"diff,omitempty"` // DEPRECATED: Only LOOM_EDIT is supported now
 	Content         string `json:"content,omitempty"`
 	Intent          string `json:"intent,omitempty"`            // Natural language description of what to do
 	LoomEditCommand bool   `json:"loom_edit_command,omitempty"` // Flag indicating this contains a LOOM_EDIT command
@@ -349,7 +349,10 @@ func parseNaturalLanguageTask(taskType, args string) *Task {
 	case "READ":
 		return parseReadTask(args)
 	case "EDIT":
-		return parseEditTask(args)
+		// EDIT commands are no longer supported via natural language parsing
+		// Only LOOM_EDIT format should be used for editing files
+		debugLog("DEBUG: Natural language EDIT command rejected - use LOOM_EDIT format instead")
+		return nil
 	case "LIST":
 		return parseListTask(args)
 	case "RUN":
@@ -1716,6 +1719,10 @@ func validateTask(task *Task) error {
 		}
 		if task.Diff == "" && task.Content == "" {
 			return fmt.Errorf("EditFile requires either diff or content")
+		}
+		// Enforce LOOM_EDIT format for all file edits
+		if !task.LoomEditCommand {
+			return fmt.Errorf("EditFile tasks must use the LOOM_EDIT format. Natural language edit commands are no longer supported")
 		}
 
 	case TaskTypeListDir:

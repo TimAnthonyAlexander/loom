@@ -219,6 +219,7 @@ OBJECTIVE_COMPLETE: Here's how the task execution system works... [comprehensive
 | MEMORY | MEMORY create key content:"text" | Persist information (see §7.B) |
 
 **Basic syntax**: ACTION target [options] -> description
+**Note**: File editing requires the LOOM_EDIT syntax (see §7.3) - other commands support natural language.
 
 ## 5. Workflow
 
@@ -240,7 +241,7 @@ OBJECTIVE_COMPLETE: Here's how the task execution system works... [comprehensive
 1. **Set OBJECTIVE** first (mandatory)
 2. READ file with line numbers to get current state
 3. Identify exact line numbers for changes
-4. Use LOOM_EDIT format (see §7.3)
+4. Use LOOM_EDIT format (see §7.3) - THIS IS THE ONLY SUPPORTED METHOD FOR EDITING FILES
 5. System validates SHA hashes before applying
 6. Edit confidently - validation ensures safety
 
@@ -330,6 +331,8 @@ Be explicit about next steps:
 ### 7.3 EDIT (LOOM_EDIT Specification)
 **Robust, deterministic file editing with SHA validation**
 
+**IMPORTANT**: LOOM_EDIT is the ONLY supported method for editing files. Natural language editing commands are not supported.
+
 **Syntax**:
 `+"`"+`
 >>LOOM_EDIT file=<RELATIVE_PATH> <ACTION> <START>-<END>
@@ -366,6 +369,7 @@ Basic operations: create, update, get, delete, list
 ## 8. Prohibited Actions
 - ❌ **Responding without setting an OBJECTIVE first**
 - ❌ Edit without LOOM_EDIT format for existing files
+- ❌ Using deprecated syntax for file edits (e.g., "🔧 EDIT", "EDIT file.txt", etc.)
 - ❌ Edit without reading file first to get current SHA and line numbers
 - ❌ Use invalid file SHA or old slice SHA in LOOM_EDIT commands
 - ❌ Use RUN+grep when SEARCH is available
