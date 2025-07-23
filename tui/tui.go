@@ -1869,12 +1869,12 @@ func (m *model) updateWrappedMessagesWithOptions(forceAutoScroll bool) {
 	if len(allMessages) == 0 && !m.isStreaming {
 		debugStatus := ""
 		if taskPkg.IsTaskDebugEnabled() {
-			debugStatus = "\n🔧 Task debug mode is ON"
+			debugStatus = "\nDEBUGGING ENABLED"
 		} else {
-			debugStatus = "\n🔧 Task debug mode is OFF (use /debug to enable)"
+			debugStatus = ""
 		}
 
-		welcomeMsg := "Welcome to Loom!\nYou can now chat with an AI assistant about your project.\nTry asking about your code, architecture, or programming questions.\n\nQuick start:\n• Type /help for all available commands\n• Press Tab to explore views (Chat, File Tree, Tasks)\n• Press Ctrl+S for quick summary\n• Use /test to discover and run tests" + debugStatus + "\n\nThe AI can read, edit, and list files using natural language.\nAll changes require your confirmation before being applied.\n\nPress Ctrl+C to exit."
+		welcomeMsg := "Welcome to Loom!\nYour AI assistant is here to help you code, understand, and improve your project." + debugStatus
 		allMessages = append(allMessages, welcomeMsg)
 	}
 
