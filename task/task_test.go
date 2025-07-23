@@ -646,47 +646,7 @@ Then emit: {"tasks": [{"type": "EditFile", "path": "LICENSE", "content": "MIT Li
 
 // NOTE: Natural language parsing tests removed - only LOOM_EDIT and JSON formats are supported
 
-func TestParseNaturalLanguageEditWithCodeBlock(t *testing.T) {
-	// Test edit task with code block
-	llmResponse := `I'll update the configuration file.
-
-🔧 EDIT config.json -> add new database settings
-
-` + "```json\n" + `{
-  "database": {
-    "host": "localhost",
-    "port": 5432
-  }
-}
-` + "```"
-
-	taskList, err := ParseTasks(llmResponse)
-	if err != nil {
-		t.Fatalf("Expected no error, got: %v", err)
-	}
-
-	if taskList == nil {
-		t.Fatal("Expected task list, got nil")
-	}
-
-	if len(taskList.Tasks) != 1 {
-		t.Fatalf("Expected 1 task, got %d", len(taskList.Tasks))
-	}
-
-	task := taskList.Tasks[0]
-	if task.Type != TaskTypeEditFile {
-		t.Errorf("Expected EditFile, got %s", task.Type)
-	}
-	if task.Path != "config.json" {
-		t.Errorf("Expected config.json, got %s", task.Path)
-	}
-	if task.Intent != "add new database settings" {
-		t.Errorf("Expected 'add new database settings', got %s", task.Intent)
-	}
-	if !strings.Contains(task.Content, "database") {
-		t.Errorf("Expected content to contain 'database', got %s", task.Content)
-	}
-}
+// NOTE: Natural language parsing tests removed - only LOOM_EDIT and JSON formats are supported
 
 func TestParseNaturalLanguageReplaceAll(t *testing.T) {
 	// Test replace all occurrences patterns
