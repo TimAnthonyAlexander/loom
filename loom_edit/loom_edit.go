@@ -14,7 +14,7 @@ import (
 // EditCommand represents a parsed LOOM_EDIT command
 type EditCommand struct {
 	File      string // The target file path
-	Action    string // REPLACE, INSERT_AFTER, INSERT_BEFORE, DELETE, or SEARCH_REPLACE
+	Action    string // REPLACE, INSERT_AFTER, INSERT_BEFORE, DELETE, SEARCH_REPLACE, or CREATE
 	Start     int    // 1-based inclusive start line number
 	End       int    // 1-based inclusive end line number
 	NewText   string // The replacement/insertion text
@@ -41,7 +41,7 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 	headerLine := lines[0]
 
 	// Base pattern for all commands
-	basePattern := regexp.MustCompile(`^(?:>>|🔧 )LOOM_EDIT file=([^\s]+) (REPLACE|INSERT_AFTER|INSERT_BEFORE|DELETE|SEARCH_REPLACE)`)
+	basePattern := regexp.MustCompile(`^(?:>>|🔧 )LOOM_EDIT file=([^\s]+) (REPLACE|INSERT_AFTER|INSERT_BEFORE|DELETE|SEARCH_REPLACE|CREATE)`)
 	baseMatches := basePattern.FindStringSubmatch(headerLine)
 
 	if baseMatches == nil {
@@ -154,6 +154,19 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 		// Default values for line numbers (not used for SEARCH_REPLACE)
 		cmd.Start = 1
 		cmd.End = 1
+	} else if action == "CREATE" {
+		// For CREATE action, we don't need line numbers
+		// Extract new text (everything between header line and <<LOOM_EDIT)
+		var newTextLines []string
+
+		for i := 1; i < closeIndex; i++ {
+			newTextLines = append(newTextLines, lines[i])
+		}
+
+		cmd.NewText = strings.Join(newTextLines, "\n")
+		// Set start and end to 1 for consistency
+		cmd.Start = 1
+		cmd.End = 1
 	} else {
 		// For other actions, look for line numbers
 		linePattern := regexp.MustCompile(`\s+(\d+)(?:-(\d+))?`)
@@ -235,6 +248,28 @@ func ApplyEdit(filePath string, cmd *EditCommand) error {
 
 	if cmd.End < cmd.Start {
 		return fmt.Errorf("invalid line range: end (%d) cannot be less than start (%d)", cmd.End, cmd.Start)
+	}
+
+	// Special handling for CREATE action
+	if cmd.Action == "CREATE" {
+		// Check if file already exists
+		if _, err := os.Stat(filePath); err == nil {
+			return fmt.Errorf("cannot CREATE file that already exists: %s", filePath)
+		}
+
+		// Create directory if it doesn't exist
+		dir := filepath.Dir(filePath)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("failed to create directory for new file: %v", err)
+		}
+
+		// Write the new content directly
+		if err := ioutil.WriteFile(filePath, []byte(cmd.NewText), 0644); err != nil {
+			return fmt.Errorf("failed to create new file: %v", err)
+		}
+
+		fmt.Printf("Created new file: %s\n", filePath)
+		return nil
 	}
 
 	// Special handling for SEARCH_REPLACE
