@@ -25,11 +25,11 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 	// Normalize line endings and ensure input is not empty
 	input = strings.ReplaceAll(input, "\r\n", "\n")
 	input = strings.ReplaceAll(input, "\r", "\n")
-	
+
 	if strings.TrimSpace(input) == "" {
 		return nil, fmt.Errorf("empty LOOM_EDIT command")
 	}
-	
+
 	// Regex to match different variations of the LOOM_EDIT header line
 	// This handles both formats: >>LOOM_EDIT and 🔧 LOOM_EDIT
 	// And allows for more variations in the line range format
@@ -59,7 +59,7 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 	default:
 		return nil, fmt.Errorf("invalid action: %s (must be REPLACE, INSERT_AFTER, INSERT_BEFORE, or DELETE)", cmd.Action)
 	}
-	
+
 	// Check if we have line numbers at all
 	if len(headerMatches) <= 3 || headerMatches[3] == "" {
 		return nil, fmt.Errorf("missing line number in %s action", cmd.Action)
@@ -88,7 +88,7 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 	} else {
 		// For all operations, if no end line is specified, default to start line
 		cmd.End = start
-		
+
 		// Warn if REPLACE or DELETE should have specified an end line
 		if cmd.Action == "REPLACE" || cmd.Action == "DELETE" {
 			fmt.Printf("Warning: %s action missing end line number, defaulting to %d\n", cmd.Action, start)
@@ -133,19 +133,19 @@ func ApplyEdit(filePath string, cmd *EditCommand) error {
 	if cmd == nil {
 		return fmt.Errorf("cannot apply nil command")
 	}
-	
+
 	if cmd.File == "" {
 		return fmt.Errorf("file path cannot be empty")
 	}
-	
+
 	if cmd.Action == "" {
 		return fmt.Errorf("action cannot be empty")
 	}
-	
+
 	if cmd.Start < 1 {
 		return fmt.Errorf("invalid start line: %d (must be >= 1)", cmd.Start)
 	}
-	
+
 	if cmd.End < cmd.Start {
 		return fmt.Errorf("invalid line range: end (%d) cannot be less than start (%d)", cmd.End, cmd.Start)
 	}
@@ -157,18 +157,18 @@ func ApplyEdit(filePath string, cmd *EditCommand) error {
 		if os.IsNotExist(err) && cmd.Action == "REPLACE" {
 			// We'll create a new file with the content
 			fmt.Printf("File %s not found, will create new file\n", filePath)
-			
+
 			// For new files, ensure directory exists
 			dir := filepath.Dir(filePath)
 			if err := os.MkdirAll(dir, 0755); err != nil {
 				return fmt.Errorf("failed to create directory for new file: %v", err)
 			}
-			
+
 			// Write the new content directly
 			if err := ioutil.WriteFile(filePath, []byte(cmd.NewText), 0644); err != nil {
 				return fmt.Errorf("failed to create new file: %v", err)
 			}
-			
+
 			return nil
 		}
 		return fmt.Errorf("failed to read file: %v", err)
@@ -243,12 +243,6 @@ func ApplyEdit(filePath string, cmd *EditCommand) error {
 		newContent += "\n"
 	} else if !hasFinalNewline && strings.HasSuffix(newContent, "\n") {
 		newContent = strings.TrimSuffix(newContent, "\n")
-	}
-
-	// Create a backup of the original file
-	backupFile := filePath + ".backup"
-	if err := ioutil.WriteFile(backupFile, content, 0644); err != nil {
-		fmt.Printf("Warning: Failed to create backup of %s: %v\n", filePath, err)
 	}
 
 	err = ioutil.WriteFile(filePath, []byte(newContent), 0644)
