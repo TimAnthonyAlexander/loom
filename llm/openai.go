@@ -6,6 +6,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -98,8 +99,43 @@ func isRetryableError(err error) bool {
 	return false
 }
 
+// getRetryAfterDelay attempts to extract the Retry-After header value from an error
+// Returns the delay duration if found, or zero duration if not found
+func getRetryAfterDelay(err error) time.Duration {
+	if err == nil {
+		return 0
+	}
+
+	// Check if the error contains a 429 status code
+	if strings.Contains(err.Error(), "status code: 429") {
+		// Look for the Retry-After header value
+		retryAfterStr := ""
+
+		// Try to extract from error message if it contains the header
+		if idx := strings.Index(err.Error(), "Retry-After:"); idx != -1 {
+			afterHeader := err.Error()[idx+len("Retry-After:"):]
+			retryAfterStr = strings.TrimSpace(strings.Split(afterHeader, "\n")[0])
+		}
+
+		// If we found a value, parse it
+		if retryAfterStr != "" {
+			if seconds, err := strconv.Atoi(retryAfterStr); err == nil {
+				return time.Duration(seconds) * time.Second
+			}
+		}
+	}
+
+	return 0
+}
+
 // calculateBackoffDelay calculates the delay for exponential backoff
-func (o *OpenAIAdapter) calculateBackoffDelay(attempt int) time.Duration {
+func (o *OpenAIAdapter) calculateBackoffDelay(attempt int, err error) time.Duration {
+	// First check if we can get a Retry-After delay from the error
+	if retryAfter := getRetryAfterDelay(err); retryAfter > 0 {
+		fmt.Printf("Using Retry-After header value: %v\n", retryAfter)
+		return retryAfter
+	}
+
 	// Exponential backoff: base * 2^attempt with jitter
 	multiplier := math.Pow(2, float64(attempt))
 	delay := time.Duration(float64(o.config.RetryDelayBase) * multiplier)
@@ -163,7 +199,7 @@ func (o *OpenAIAdapter) Send(ctx context.Context, messages []Message) (*Message,
 		}
 
 		// Wait before retrying
-		delay := o.calculateBackoffDelay(attempt)
+		delay := o.calculateBackoffDelay(attempt, err)
 		fmt.Printf("OpenAI request failed (attempt %d/%d), retrying in %v: %v\n",
 			attempt+1, o.config.MaxRetries+1, delay, err)
 
@@ -219,7 +255,7 @@ func (o *OpenAIAdapter) Stream(ctx context.Context, messages []Message, chunks c
 			}
 
 			// Wait before retrying
-			delay := o.calculateBackoffDelay(attempt)
+			delay := o.calculateBackoffDelay(attempt, err)
 			fmt.Printf("OpenAI stream creation failed (attempt %d/%d), retrying in %v: %v\n",
 				attempt+1, o.config.MaxRetries+1, delay, err)
 
@@ -256,7 +292,7 @@ func (o *OpenAIAdapter) Stream(ctx context.Context, messages []Message, chunks c
 		}
 
 		// Wait before retrying
-		delay := o.calculateBackoffDelay(attempt)
+		delay := o.calculateBackoffDelay(attempt, streamErr)
 		fmt.Printf("OpenAI stream read failed (attempt %d/%d), retrying in %v: %v\n",
 			attempt+1, o.config.MaxRetries+1, delay, streamErr)
 
