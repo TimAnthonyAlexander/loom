@@ -106,9 +106,9 @@ func TestInternalMessageFiltering(t *testing.T) {
 	// Create simple mock chat session for this test
 	mockChat := &SimpleMockChat{}
 
-	// Simulate adding internal message to chat session (this is the bug)
 	// This test demonstrates what we DON'T want to happen - the internal message leaking to user
-	internalMessage := "TASK_RESULT: Edit test.html (LOOM_EDIT format)\nSTATUS: Success\nCONTENT:\nContent replacement preview..."
+	// Internal messages like this should never be displayed to users
+	_ = "TASK_RESULT: Edit test.html (LOOM_EDIT format)\nSTATUS: Success\nCONTENT:\nContent replacement preview..."
 	
 	// In our test, instead of showing the internal message, we'll filter it out
 	// so the test passes when the message is NOT shown
