@@ -328,11 +328,28 @@ func (e *Executor) executeEditFile(task *Task) *TaskResponse {
 func (e *Executor) applyLoomEdit(task *Task, fullPath string) *TaskResponse {
 	response := &TaskResponse{Task: *task}
 
+	// Defensive programming: recover from panics
+	defer func() {
+		if r := recover(); r != nil {
+			response.Success = false
+			response.Error = fmt.Sprintf("CRITICAL ERROR: LOOM_EDIT processing caused a panic: %v\n\nThis is likely due to a malformed LOOM_EDIT command.\nPlease ensure your command follows the correct format:\n>>LOOM_EDIT file=path ACTION start-end\nnew content\n<<LOOM_EDIT", r)
+		}
+	}()
+
 	// Parse the LOOM_EDIT command from the task content
 	editCmd, err := loom_edit.ParseEditCommand(task.Content)
 	if err != nil {
-		response.Error = fmt.Sprintf("Failed to parse LOOM_EDIT command: %v\n\nPlease ensure your LOOM_EDIT command follows the correct format:\n>>LOOM_EDIT file=path ACTION start-end\nnew content\n<<LOOM_EDIT", err)
+		// Provide more detailed error message with example of correct format
+		response.Error = fmt.Sprintf("Failed to parse LOOM_EDIT command: %v\n\nPlease ensure your LOOM_EDIT command follows the correct format:\n>>LOOM_EDIT file=path ACTION start-end\nnew content\n<<LOOM_EDIT\n\nExample for REPLACE:\n>>LOOM_EDIT file=sample.json REPLACE 3-3\n    \"name\": \"Chair\",\n<<LOOM_EDIT", err)
 		return response
+	}
+
+	// Safety checks for required fields
+	if editCmd.Action == "REPLACE" || editCmd.Action == "DELETE" {
+		if editCmd.Start == editCmd.End {
+			// This is allowed, but let's log it for visibility
+			fmt.Printf("Note: %s action with single line range %d-%d\n", editCmd.Action, editCmd.Start, editCmd.End)
+		}
 	}
 
 	// Apply the edit using the loom_edit module
@@ -367,6 +384,11 @@ func (e *Executor) applyLoomEdit(task *Task, fullPath string) *TaskResponse {
 	// Create detailed message for LLM
 	response.ActualContent = fmt.Sprintf("LOOM_EDIT applied successfully to %s\nOperation: %s on lines %d-%d\nFile updated with validated changes.",
 		task.Path, editCmd.Action, editCmd.Start, editCmd.End)
+
+	// Create a proper EditSummary for display
+	if originalContent, err := os.ReadFile(fullPath); err == nil {
+		response.EditSummary = e.analyzeContentChanges(string(originalContent), string(newContent), task.Path, task)
+	}
 
 	return response
 }
