@@ -262,6 +262,8 @@ func (idx *Index) shouldSkipFile(relPath string, info os.FileInfo) bool {
 
 // GetStats returns statistics about the indexed files
 func (idx *Index) GetStats() IndexStats {
+	idx.watcherMutex.RLock()
+	defer idx.watcherMutex.RUnlock()
 	langBreakdown := make(map[string]int)
 	var totalSize int64
 
@@ -467,6 +469,8 @@ func (idx *Index) updateFile(relPath string) {
 
 // GetFileList returns a sorted list of file paths
 func (idx *Index) GetFileList() []string {
+	idx.watcherMutex.RLock()
+	defer idx.watcherMutex.RUnlock()
 	files := make([]string, 0, len(idx.Files))
 	for path := range idx.Files {
 		files = append(files, path)

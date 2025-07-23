@@ -693,34 +693,13 @@ func (m model) View() string {
 			modelStatus = "🔴 " + m.config.Model
 		}
 
-		var taskStatus, changeStatus string
-		if m.currentExecution != nil {
-			taskStatus = fmt.Sprintf("⚡ %s", m.currentExecution.Status)
-		} else {
-			taskStatus = "✅ Ready"
-		}
-
-		if m.enhancedManager != nil {
-			changeSummaryMgr := m.enhancedManager.GetChangeSummaryManager()
-			recentChanges := changeSummaryMgr.GetRecentSummaries(1)
-			if len(recentChanges) > 0 {
-				changeStatus = fmt.Sprintf("📝 %d changes", len(changeSummaryMgr.GetSummaries()))
-			} else {
-				changeStatus = "📝 No changes"
-			}
-		} else {
-			changeStatus = "📝 N/A"
-		}
-
 		infoContent := fmt.Sprintf(
-			"📁 %s\n🤖 %s  |  🛡️ Shell: %t\n📊 %d files %s\n%s  |  %s",
+			" %s\n %s  |  Shell Access: %t\n %d files %s",
 			m.workspacePath,
 			modelStatus,
 			m.config.EnableShell,
 			stats.TotalFiles,
 			langSummary,
-			taskStatus,
-			changeStatus,
 		)
 
 		infoPanel := lipgloss.NewStyle().
