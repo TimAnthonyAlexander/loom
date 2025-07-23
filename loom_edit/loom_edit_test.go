@@ -14,30 +14,46 @@ func TestLoomEditCases(t *testing.T) {
 		name         string
 		editFile     string
 		expectedFile string
+		baseFile     string
 	}{
 		{
 			name:         "case1_replace",
 			editFile:     "example/case1/edit.txt",
 			expectedFile: "example/case1/final.md",
+			baseFile:     "example/base.md",
 		},
 		{
 			name:         "case2_insert_after",
 			editFile:     "example/case2/edit.txt",
 			expectedFile: "example/case2/final.md",
+			baseFile:     "example/base.md",
 		},
 		{
 			name:         "case3_delete",
 			editFile:     "example/case3/edit.txt",
 			expectedFile: "example/case3/final.txt",
+			baseFile:     "example/base.md",
+		},
+		{
+			name:         "case4_search_replace",
+			editFile:     "example/case4/edit.txt",
+			expectedFile: "example/case4/final.md",
+			baseFile:     "example/case4/base.md", // Use case-specific base file
+		},
+		{
+			name:         "case5_multiline_search_replace",
+			editFile:     "example/case5/edit.txt",
+			expectedFile: "example/case5/final.md",
+			baseFile:     "example/case5/base.md", // Use case-specific base file
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Read the base file
-			baseContent, err := ioutil.ReadFile("example/base.md")
+			baseContent, err := ioutil.ReadFile(tc.baseFile)
 			if err != nil {
-				t.Fatalf("Failed to read base.md: %v", err)
+				t.Fatalf("Failed to read base file %s: %v", tc.baseFile, err)
 			}
 
 			// Read the edit command
@@ -420,5 +436,101 @@ func TestParseEditCommandMissingEndLine(t *testing.T) {
 		if cmd.NewText != "    \"name\": \"Chair\"," {
 			t.Errorf("Expected newText='    \"name\": \"Chair\",', got newText='%s'", cmd.NewText)
 		}
+	}
+}
+
+// TestParseSearchReplaceCommand tests parsing of the SEARCH_REPLACE command
+func TestParseSearchReplaceCommand(t *testing.T) {
+	input := `>>LOOM_EDIT file=config.js SEARCH_REPLACE "localhost:8080" "localhost:9090"
+<<LOOM_EDIT`
+
+	cmd, err := ParseEditCommand(input)
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+
+	if cmd.File != "config.js" {
+		t.Errorf("Expected file 'config.js', got '%s'", cmd.File)
+	}
+	if cmd.Action != "SEARCH_REPLACE" {
+		t.Errorf("Expected action 'SEARCH_REPLACE', got '%s'", cmd.Action)
+	}
+	if cmd.OldString != "localhost:8080" {
+		t.Errorf("Expected OldString 'localhost:8080', got '%s'", cmd.OldString)
+	}
+	if cmd.NewString != "localhost:9090" {
+		t.Errorf("Expected NewString 'localhost:9090', got '%s'", cmd.NewString)
+	}
+
+	// Test with multiline strings
+	multilineInput := `>>LOOM_EDIT file=config.js SEARCH_REPLACE "const config = {
+  port: 8080
+}" "const config = {
+  port: 9090
+}"
+<<LOOM_EDIT`
+
+	multilineCmd, err := ParseEditCommand(multilineInput)
+	if err != nil {
+		t.Fatalf("Failed to parse multiline command: %v", err)
+	}
+
+	if !strings.Contains(multilineCmd.OldString, "8080") {
+		t.Errorf("Old string doesn't contain expected content '8080', got: '%s'", multilineCmd.OldString)
+	}
+
+	if !strings.Contains(multilineCmd.NewString, "9090") {
+		t.Errorf("New string doesn't contain expected content '9090', got: '%s'", multilineCmd.NewString)
+	}
+}
+
+// TestSearchReplaceOperation tests the SEARCH_REPLACE operation
+func TestSearchReplaceOperation(t *testing.T) {
+	// Test SEARCH_REPLACE operation
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.txt")
+	content := "The server is at localhost:8080 and the backup is at localhost:8080/backup"
+	err := ioutil.WriteFile(tmpFile, []byte(content), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	cmd := &EditCommand{
+		File:      tmpFile,
+		Action:    "SEARCH_REPLACE",
+		OldString: "localhost:8080",
+		NewString: "example.com:9090",
+		Start:     1, // Make sure to set valid start/end values
+		End:       1, // even though they're not used for SEARCH_REPLACE
+	}
+
+	err = ApplyEdit(tmpFile, cmd)
+	if err != nil {
+		t.Fatalf("Failed to apply SEARCH_REPLACE: %v", err)
+	}
+
+	result, err := ioutil.ReadFile(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to read result: %v", err)
+	}
+
+	expected := "The server is at example.com:9090 and the backup is at example.com:9090/backup"
+	if string(result) != expected {
+		t.Errorf("SEARCH_REPLACE failed.\nGot:\n%s\nExpected:\n%s", string(result), expected)
+	}
+
+	// Test with string not found in file
+	notFoundCmd := &EditCommand{
+		File:      tmpFile,
+		Action:    "SEARCH_REPLACE",
+		OldString: "string-not-in-file",
+		NewString: "replacement",
+		Start:     1, // Valid values required
+		End:       1,
+	}
+
+	err = ApplyEdit(tmpFile, notFoundCmd)
+	if err == nil {
+		t.Errorf("Expected error when string not found, but got none")
 	}
 }

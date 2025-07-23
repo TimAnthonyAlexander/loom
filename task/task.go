@@ -512,6 +512,15 @@ func parsePathWithLines(task *Task, pathWithLines string) {
 func parseEditContext(task *Task, description string) {
 	desc := strings.ToLower(description)
 
+	// Enhanced pattern: "search and replace X with Y" or "search_replace X with Y"
+	searchReplacePattern := regexp.MustCompile(`(?i)(?:search(?:[\s_-]*)replace|search\s+and\s+replace)\s+["']?([^"']+?)["']?\s+with\s+["']?([^"']+?)["']?$`)
+	if matches := searchReplacePattern.FindStringSubmatch(description); len(matches) > 2 {
+		task.StartContext = strings.TrimSpace(matches[1]) // What to find
+		task.EndContext = strings.TrimSpace(matches[2])   // What to replace with
+		task.InsertMode = "search_replace"
+		return
+	}
+
 	// Pattern: "replace all occurrences of X with Y" or "replace all X with Y"
 	replaceAllPattern := regexp.MustCompile(`(?i)replace\s+all\s+(?:occurrences\s+of\s+)?["']?([^"']+?)["']?\s+with\s+["']?([^"']+?)["']?$`)
 	if matches := replaceAllPattern.FindStringSubmatch(description); len(matches) > 2 {

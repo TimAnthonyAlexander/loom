@@ -13,11 +13,13 @@ import (
 
 // EditCommand represents a parsed LOOM_EDIT command
 type EditCommand struct {
-	File    string // The target file path
-	Action  string // REPLACE, INSERT_AFTER, INSERT_BEFORE, or DELETE
-	Start   int    // 1-based inclusive start line number
-	End     int    // 1-based inclusive end line number
-	NewText string // The replacement/insertion text
+	File      string // The target file path
+	Action    string // REPLACE, INSERT_AFTER, INSERT_BEFORE, DELETE, or SEARCH_REPLACE
+	Start     int    // 1-based inclusive start line number
+	End       int    // 1-based inclusive end line number
+	NewText   string // The replacement/insertion text
+	OldString string // For SEARCH_REPLACE: the string to search for
+	NewString string // For SEARCH_REPLACE: the string to replace with
 }
 
 // ParseEditCommand parses a LOOM_EDIT command block into an EditCommand struct
@@ -30,11 +32,6 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 		return nil, fmt.Errorf("empty LOOM_EDIT command")
 	}
 
-	// Regex to match different variations of the LOOM_EDIT header line
-	// This handles both formats: >>LOOM_EDIT
-	// And allows for more variations in the line range format
-	headerRegex := regexp.MustCompile(`(?:>>|🔧 )LOOM_EDIT file=([^\s]+) (REPLACE|INSERT_AFTER|INSERT_BEFORE|DELETE)(?:\s+(\d+)(?:-(\d+))?)?`)
-
 	lines := strings.Split(input, "\n")
 	if len(lines) < 2 {
 		return nil, fmt.Errorf("invalid LOOM_EDIT format: too few lines")
@@ -42,83 +39,173 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 
 	// Parse header line
 	headerLine := lines[0]
-	headerMatches := headerRegex.FindStringSubmatch(headerLine)
-	if headerMatches == nil {
+
+	// Base pattern for all commands
+	basePattern := regexp.MustCompile(`^(?:>>|🔧 )LOOM_EDIT file=([^\s]+) (REPLACE|INSERT_AFTER|INSERT_BEFORE|DELETE|SEARCH_REPLACE)`)
+	baseMatches := basePattern.FindStringSubmatch(headerLine)
+
+	if baseMatches == nil {
 		return nil, fmt.Errorf("invalid LOOM_EDIT header format: %s", headerLine)
 	}
 
+	filePath := baseMatches[1]
+	action := baseMatches[2]
+
 	cmd := &EditCommand{
-		File:   headerMatches[1],
-		Action: headerMatches[2],
+		File:   filePath,
+		Action: action,
 	}
 
-	// Validate required action
-	switch cmd.Action {
-	case "REPLACE", "INSERT_AFTER", "INSERT_BEFORE", "DELETE":
-		// Valid actions
-	default:
-		return nil, fmt.Errorf("invalid action: %s (must be REPLACE, INSERT_AFTER, INSERT_BEFORE, or DELETE)", cmd.Action)
-	}
-
-	// Check if we have line numbers at all
-	if len(headerMatches) <= 3 || headerMatches[3] == "" {
-		return nil, fmt.Errorf("missing line number in %s action", cmd.Action)
-	}
-
-	// Parse start line number
-	start, err := strconv.Atoi(headerMatches[3])
-	if err != nil {
-		return nil, fmt.Errorf("invalid start line number: %v", err)
-	}
-	if start < 1 {
-		return nil, fmt.Errorf("line numbers must be >= 1, got start=%d", start)
-	}
-	cmd.Start = start
-
-	// Parse end line number (optional for some operations)
-	if len(headerMatches) > 4 && headerMatches[4] != "" {
-		end, err := strconv.Atoi(headerMatches[4])
-		if err != nil {
-			return nil, fmt.Errorf("invalid end line number: %v", err)
-		}
-		if end < start {
-			return nil, fmt.Errorf("end line (%d) must be >= start line (%d)", end, start)
-		}
-		cmd.End = end
-	} else {
-		// For all operations, if no end line is specified, default to start line
-		cmd.End = start
-
-		// Warn if REPLACE or DELETE should have specified an end line
-		if cmd.Action == "REPLACE" || cmd.Action == "DELETE" {
-			fmt.Printf("Warning: %s action missing end line number, defaulting to %d\n", cmd.Action, start)
-		}
-	}
-
-	// Extract new text (everything between header line and <<LOOM_EDIT)
-	var newTextLines []string
+	// Check for closing tag
 	var foundClosingTag bool
+	var closeIndex int
 
 	for i := 1; i < len(lines); i++ {
-		line := lines[i]
-		if line == "<<LOOM_EDIT" {
+		if strings.TrimSpace(lines[i]) == "<<LOOM_EDIT" {
 			foundClosingTag = true
+			closeIndex = i
 			break
 		}
-		newTextLines = append(newTextLines, line)
 	}
 
 	if !foundClosingTag {
 		return nil, fmt.Errorf("invalid LOOM_EDIT format: missing closing <<LOOM_EDIT tag")
 	}
 
-	// For DELETE action, newText should be empty
-	if cmd.Action == "DELETE" && strings.TrimSpace(strings.Join(newTextLines, "")) != "" {
-		fmt.Printf("Warning: DELETE action should have empty content block, ignoring provided content\n")
-		newTextLines = nil
-	}
+	// Handle SEARCH_REPLACE specially
+	if action == "SEARCH_REPLACE" {
+		// Try to handle simple case first (single line quotes)
+		searchReplacePattern := regexp.MustCompile(`SEARCH_REPLACE\s+"([^"]+)"\s+"([^"]+)"`)
+		srMatches := searchReplacePattern.FindStringSubmatch(headerLine)
 
-	cmd.NewText = strings.Join(newTextLines, "\n")
+		if srMatches != nil && len(srMatches) >= 3 {
+			cmd.OldString = srMatches[1]
+			cmd.NewString = srMatches[2]
+		} else {
+			// More complex case: try to find quotes in the content
+			fullText := strings.Join(lines[:closeIndex+1], "\n")
+
+			// Try to extract the quoted strings
+			var oldString, newString string
+			var oldStart, oldEnd, newStart, newEnd = -1, -1, -1, -1
+
+			// Find position of "SEARCH_REPLACE"
+			srPos := strings.Index(fullText, "SEARCH_REPLACE")
+			if srPos == -1 {
+				return nil, fmt.Errorf("SEARCH_REPLACE keyword not found in command")
+			}
+
+			// Find first quote after SEARCH_REPLACE
+			firstQuote := strings.Index(fullText[srPos:], "\"")
+			if firstQuote == -1 {
+				return nil, fmt.Errorf("missing first quote for SEARCH_REPLACE old string")
+			}
+
+			oldStart = srPos + firstQuote + 1
+
+			// Find matching closing quote
+			for i := oldStart; i < len(fullText); i++ {
+				if fullText[i] == '"' && (i == 0 || fullText[i-1] != '\\') {
+					oldEnd = i
+					break
+				}
+			}
+
+			if oldEnd == -1 {
+				return nil, fmt.Errorf("missing closing quote for SEARCH_REPLACE old string")
+			}
+
+			// Find second opening quote
+			newStart = -1
+			for i := oldEnd + 1; i < len(fullText); i++ {
+				if fullText[i] == '"' && (i == 0 || fullText[i-1] != '\\') {
+					newStart = i + 1
+					break
+				}
+			}
+
+			if newStart == -1 {
+				return nil, fmt.Errorf("missing opening quote for SEARCH_REPLACE new string")
+			}
+
+			// Find second closing quote
+			for i := newStart; i < len(fullText); i++ {
+				if fullText[i] == '"' && (i == 0 || fullText[i-1] != '\\') {
+					newEnd = i
+					break
+				}
+			}
+
+			if newEnd == -1 {
+				return nil, fmt.Errorf("missing closing quote for SEARCH_REPLACE new string")
+			}
+
+			oldString = fullText[oldStart:oldEnd]
+			newString = fullText[newStart:newEnd]
+
+			// Unescape any escaped quotes
+			oldString = strings.ReplaceAll(oldString, "\\\"", "\"")
+			newString = strings.ReplaceAll(newString, "\\\"", "\"")
+
+			cmd.OldString = oldString
+			cmd.NewString = newString
+		}
+
+		// Default values for line numbers (not used for SEARCH_REPLACE)
+		cmd.Start = 1
+		cmd.End = 1
+	} else {
+		// For other actions, look for line numbers
+		linePattern := regexp.MustCompile(`\s+(\d+)(?:-(\d+))?`)
+		lineMatches := linePattern.FindStringSubmatch(headerLine)
+
+		if lineMatches == nil {
+			return nil, fmt.Errorf("missing line number in %s action", action)
+		}
+
+		// Parse start line
+		start, err := strconv.Atoi(lineMatches[1])
+		if err != nil {
+			return nil, fmt.Errorf("invalid start line number: %v", err)
+		}
+		if start < 1 {
+			return nil, fmt.Errorf("line numbers must be >= 1, got start=%d", start)
+		}
+		cmd.Start = start
+
+		// Parse end line if present, otherwise default to start line
+		if len(lineMatches) > 2 && lineMatches[2] != "" {
+			end, err := strconv.Atoi(lineMatches[2])
+			if err != nil {
+				return nil, fmt.Errorf("invalid end line number: %v", err)
+			}
+			if end < start {
+				return nil, fmt.Errorf("end line (%d) must be >= start line (%d)", end, start)
+			}
+			cmd.End = end
+		} else {
+			cmd.End = start
+			// Warn for actions that typically have a range
+			if action == "REPLACE" || action == "DELETE" {
+				fmt.Printf("Warning: %s action missing end line number, defaulting to %d\n", action, start)
+			}
+		}
+
+		// Extract new text (everything between header line and <<LOOM_EDIT)
+		var newTextLines []string
+
+		for i := 1; i < closeIndex; i++ {
+			newTextLines = append(newTextLines, lines[i])
+		}
+
+		// For DELETE action, newText should be empty
+		if action == "DELETE" && strings.TrimSpace(strings.Join(newTextLines, "")) != "" {
+			fmt.Printf("Warning: DELETE action should have empty content block, ignoring provided content\n")
+			newTextLines = nil
+		}
+
+		cmd.NewText = strings.Join(newTextLines, "\n")
+	}
 
 	return cmd, nil
 }
@@ -148,6 +235,51 @@ func ApplyEdit(filePath string, cmd *EditCommand) error {
 
 	if cmd.End < cmd.Start {
 		return fmt.Errorf("invalid line range: end (%d) cannot be less than start (%d)", cmd.End, cmd.Start)
+	}
+
+	// Special handling for SEARCH_REPLACE
+	if cmd.Action == "SEARCH_REPLACE" {
+		if cmd.OldString == "" {
+			return fmt.Errorf("SEARCH_REPLACE requires non-empty old string")
+		}
+
+		// Read the current file content
+		content, err := ioutil.ReadFile(filePath)
+		if err != nil {
+			return fmt.Errorf("failed to read file: %v", err)
+		}
+
+		contentStr := string(content)
+
+		// Normalize line endings for better matching
+		normalizedContent := strings.ReplaceAll(contentStr, "\r\n", "\n")
+		normalizedOldString := strings.ReplaceAll(cmd.OldString, "\r\n", "\n")
+		normalizedOldString = strings.ReplaceAll(normalizedOldString, "\r", "\n")
+
+		// Check if the old string exists in the file
+		if !strings.Contains(normalizedContent, normalizedOldString) {
+			return fmt.Errorf("SEARCH_REPLACE failed: old string not found in file")
+		}
+
+		// Perform the replacement
+		newContent := strings.Replace(normalizedContent, normalizedOldString, cmd.NewString, -1)
+
+		// Check if any replacements were made
+		if newContent == normalizedContent {
+			fmt.Printf("Warning: SEARCH_REPLACE didn't change anything (old and new strings may be identical)\n")
+		}
+
+		// Write the modified content back to file
+		err = ioutil.WriteFile(filePath, []byte(newContent), 0644)
+		if err != nil {
+			return fmt.Errorf("failed to write file: %v", err)
+		}
+
+		// Count occurrences for reporting
+		occurrences := strings.Count(normalizedContent, normalizedOldString)
+		fmt.Printf("Replaced %d occurrence(s) of the specified string\n", occurrences)
+
+		return nil
 	}
 
 	// Read the current file content

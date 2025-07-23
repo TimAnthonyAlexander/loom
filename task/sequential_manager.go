@@ -253,6 +253,7 @@ This is the only way to edit a file.
 - **INSERT_AFTER**: Insert new content after line START  
 - **INSERT_BEFORE**: Insert new content before line START
 - **DELETE**: Remove lines START-END (empty body)
+- **SEARCH_REPLACE**: Replace all occurrences of a string with another string
 
 **Rules**:
 - Always READ file first to get current SHA and line numbers (SHA provided automatically)
@@ -260,6 +261,12 @@ This is the only way to edit a file.
 - System handles cross-platform newlines automatically
 
 **For new files**: Use CREATE action or simple content block.
+
+**For search and replace**:
+` + "`" + `
+>>LOOM_EDIT file=config.go SEARCH_REPLACE "localhost:8080" "localhost:9090"
+<<LOOM_EDIT
+` + "`" + `
 
 ### Example Response:
 OBJECTIVE: Understand this Go project's architecture and key components

@@ -350,6 +350,7 @@ Start and End line are required
 - **INSERT_AFTER**: Insert new content after line START  
 - **INSERT_BEFORE**: Insert new content before line START
 - **DELETE**: Remove lines START-END (empty body)
+- **SEARCH_REPLACE**: Replace all occurrences of a string with another string
 
 **Rules**:
 - Always READ file first to get current SHA and line numbers (SHA provided automatically)
@@ -412,6 +413,20 @@ Basic operations: create, update, get, delete, list
 **Delete lines**:
 `+"`"+`
 >>LOOM_EDIT file=utils.go DELETE 20-22
+<<LOOM_EDIT
+`+"`"+`
+
+**Search and replace**:
+`+"`"+`
+>>LOOM_EDIT file=config.go SEARCH_REPLACE "localhost:8080" "localhost:9090"
+<<LOOM_EDIT
+`+"`"+`
+
+**Multiline search and replace**:
+`+"`"+`
+>>LOOM_EDIT file=settings.json SEARCH_REPLACE "\"port\": 8080,
+  \"host\": \"localhost\"" "\"port\": 9090,
+  \"host\": \"api.example.com\""
 <<LOOM_EDIT
 `+"`"+`
 
