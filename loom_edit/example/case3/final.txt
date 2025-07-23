@@ -8,6 +8,6 @@
 1. Clone repository
 2. Run `make install`
 
-## Usage
-To start the server run:
-`./bin/start`
+
+## License
+MIT
