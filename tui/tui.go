@@ -1593,7 +1593,32 @@ func (m model) handleAutoContinuation(msg AutoContinueMsg) (tea.Model, tea.Cmd) 
 		return m, nil
 	}
 
-	// Continue automatically with better completion check
+	// Check if we should use a simple continuation prompt instead of a completion check
+	// This prevents immediate completion checks after an objective is set
+	if m.completionDetector.ShouldUseContinuationPrompt(msg.LastResponse) {
+		if m.debugEnabled {
+			m.addDebugMessage("🔄 Using simple continuation prompt instead of completion check")
+		}
+
+		// Use a gentle continuation prompt
+		continuationPrompt := m.completionDetector.GetContinuationPrompt()
+
+		autoMessage := llm.Message{
+			Role:      "user",
+			Content:   continuationPrompt,
+			Timestamp: time.Now(),
+		}
+
+		if err := m.chatSession.AddMessage(autoMessage); err != nil {
+			return m, func() tea.Msg {
+				return StreamMsg{Error: fmt.Errorf("failed to add continuation prompt: %w", err)}
+			}
+		}
+
+		return m, m.sendToLLMWithTasks(continuationPrompt)
+	}
+
+	// Continue automatically with completion check
 	m.recursiveDepth = msg.Depth + 1
 	m.completionCheckCount++
 
@@ -2276,19 +2301,42 @@ Then: >>LOOM_EDIT file=main.go REPLACE 42
    - 🔧 READ filename.go (max: 200 lines)
    - 🔧 READ filename.go (lines 50-100)
 
-2. **EDIT**: Apply file changes using LOOM_EDIT syntax (requires user confirmation)
-   - Read file first: 🔧 READ filename.go
-   - Then use: >>LOOM_EDIT file=filename.go ACTION lines
-   - For new files: provide complete content in code block
-
-3. **LIST**: List directory contents
+2. **LIST**: List directory contents
    - 🔧 LIST .
    - 🔧 LIST src/
    - 🔧 LIST . recursive
 
-4. **RUN**: Execute shell commands (requires user confirmation, %s)
+3. **RUN**: Execute shell commands (requires user confirmation, %s)
    - 🔧 RUN go build
    - 🔧 RUN go test (timeout: 30)
+
+## EDITING
+
+### LOOM_EDIT Specification
+**Robust, deterministic file editing with SHA validation**
+
+**IMPORTANT**: LOOM_EDIT is the ONLY supported method for editing files. Natural language editing commands are not supported.
+This is not a task but rather needs to be mentioned in the response. 
+
+**Syntax**:
+`+"`"+`
+>>LOOM_EDIT file=<RELATIVE_PATH> <ACTION> <START>-<END>
+<NEW TEXT LINES…>
+<<LOOM_EDIT
+`+"`"+`
+
+**Actions**:
+- **REPLACE**: Replace lines START-END with new content
+- **INSERT_AFTER**: Insert new content after line START  
+- **INSERT_BEFORE**: Insert new content before line START
+- **DELETE**: Remove lines START-END (empty body)
+
+**Rules**:
+- Always READ file first to get current SHA and line numbers (SHA provided automatically)
+- Line numbers are 1-based inclusive
+- System handles cross-platform newlines automatically
+
+**For new files**: Use CREATE action or simple content block.
 
 ## Security & Constraints:
 - All file paths must be within the workspace

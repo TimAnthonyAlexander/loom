@@ -53,6 +53,10 @@ func NewManager(executor *Executor, llmAdapter llm.LLMAdapter, chatSession ChatS
 
 // HandleLLMResponse processes an LLM response and executes any tasks found
 func (m *Manager) HandleLLMResponse(llmResponse string, eventChan chan<- TaskExecutionEvent) (*TaskExecution, error) {
+	// Check if this sets a new objective
+	newObjective := m.completionDetector.ExtractObjective(llmResponse)
+	isNewObjectiveSetting := newObjective != "" && !m.completionDetector.objectiveSet
+
 	// STEP 1: Validate objective consistency
 	objectiveValidation := m.completionDetector.ValidateObjectiveConsistency(llmResponse)
 
@@ -90,6 +94,12 @@ func (m *Manager) HandleLLMResponse(llmResponse string, eventChan chan<- TaskExe
 
 		// Return nil instead of error to allow conversation to continue
 		return nil, nil
+	}
+
+	// Flag to track if this response is setting an objective for the first time
+	if isNewObjectiveSetting {
+		// Update the lastCompletionCheckSent flag to prevent immediate completion check
+		m.completionDetector.lastCompletionCheckSent = false
 	}
 
 	// STEP 2: Parse tasks from LLM response (original logic)
