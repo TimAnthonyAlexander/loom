@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv" // Used for parsing integers in natural language task commands
 	"strings"
@@ -1717,12 +1718,19 @@ func validateTask(task *Task) error {
 		if task.Path == "" {
 			return fmt.Errorf("EditFile requires path")
 		}
-		if task.Diff == "" && task.Content == "" {
-			return fmt.Errorf("EditFile requires either diff or content")
+		if task.Content == "" {
+			return fmt.Errorf("EditFile requires content")
 		}
-		// Enforce LOOM_EDIT format for all file edits
+
+		// For existing files, enforce LOOM_EDIT format
+		// Only allow non-LOOM_EDIT format for new file creation
 		if !task.LoomEditCommand {
-			return fmt.Errorf("EditFile tasks must use the LOOM_EDIT format. Natural language edit commands are no longer supported")
+			// Check if this is a new file (if the path doesn't exist)
+			fullPath := filepath.Join(os.Getenv("LOOM_WORKSPACE"), task.Path)
+			if _, err := os.Stat(fullPath); err == nil {
+				// File exists, require LOOM_EDIT
+				return fmt.Errorf("EditFile tasks for existing files must use the LOOM_EDIT format. Natural language edit commands are no longer supported")
+			}
 		}
 
 	case TaskTypeListDir:
@@ -1817,29 +1825,14 @@ func (t *Task) Description() string {
 		return fmt.Sprintf("Read %s", t.Path)
 
 	case TaskTypeEditFile:
-		if t.Diff != "" {
-			return fmt.Sprintf("Edit %s (apply diff)", t.Path)
+		if t.LoomEditCommand {
+			return fmt.Sprintf("Edit %s (LOOM_EDIT format)", t.Path)
 		}
-		// Check if this is a targeted edit
-		if t.InsertMode != "" {
-			switch t.InsertMode {
-			case "append":
-				return fmt.Sprintf("Edit %s (append content)", t.Path)
-			case "insert_after":
-				return fmt.Sprintf("Edit %s (insert after)", t.Path)
-			case "insert_before":
-				return fmt.Sprintf("Edit %s (insert before)", t.Path)
-			case "replace":
-				return fmt.Sprintf("Edit %s (replace section)", t.Path)
-			case "replace_all":
-				return fmt.Sprintf("Edit %s (replace all occurrences)", t.Path)
-			case "insert_between":
-				return fmt.Sprintf("Edit %s (insert between)", t.Path)
-			default:
-				return fmt.Sprintf("Edit %s (targeted edit)", t.Path)
-			}
+		// For backward compatibility with existing file creation
+		if t.Content != "" && !t.LoomEditCommand {
+			return fmt.Sprintf("Edit %s (create/replace content)", t.Path)
 		}
-		return fmt.Sprintf("Edit %s (replace content)", t.Path)
+		return fmt.Sprintf("Edit %s", t.Path)
 
 	case TaskTypeListDir:
 		if t.Recursive {
