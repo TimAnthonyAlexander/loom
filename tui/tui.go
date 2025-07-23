@@ -60,15 +60,15 @@ var (
 
 	// File autocomplete style
 	fileAutocompleteStyle = lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#5D9CF1")). // Blue border
-		Padding(0, 1).
-		Margin(0, 0, 0, 2) // Add left margin to indent it slightly
+				BorderStyle(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("#5D9CF1")). // Blue border
+				Padding(0, 1).
+				Margin(0, 0, 0, 2) // Add left margin to indent it slightly
 
 	fileAutocompleteSelectedStyle = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#FFAF00")). // Highlight color for selected item
-		Background(lipgloss.Color("#333333"))  // Subtle background for selected item
+					Bold(true).
+					Foreground(lipgloss.Color("#FFAF00")). // Highlight color for selected item
+					Background(lipgloss.Color("#333333"))  // Subtle background for selected item
 
 	// New styles to clearly distinguish user and assistant prefixes
 	userPrefixStyle = lipgloss.NewStyle().
@@ -156,11 +156,11 @@ type model struct {
 	messageLines  []string // Wrapped message lines for proper scrolling
 
 	// File mention autocomplete
-	fileAutocompleteActive     bool     // Whether file autocomplete is active
-	fileAutocompleteQuery      string   // The current query for file autocomplete
-	fileAutocompleteCandidates []string // List of matching files
-	fileAutocompleteSelectedIndex int   // Currently selected file index
-	fileAutocompleteStartPos   int      // Position in input where @ was typed
+	fileAutocompleteActive        bool     // Whether file autocomplete is active
+	fileAutocompleteQuery         string   // The current query for file autocomplete
+	fileAutocompleteCandidates    []string // List of matching files
+	fileAutocompleteSelectedIndex int      // Currently selected file index
+	fileAutocompleteStartPos      int      // Position in input where @ was typed
 
 	// LLM integration
 	llmAdapter       llm.LLMAdapter
@@ -649,12 +649,12 @@ Ask me anything about your code, architecture, or programming questions!`
 				m.fileAutocompleteCandidates = []string{}
 				m.fileAutocompleteSelectedIndex = 0
 				m.fileAutocompleteStartPos = len(m.input) - 1
-				
+
 				// Debug logging
 				if m.debugEnabled {
 					m.addDebugMessage("File autocomplete activated")
 				}
-				
+
 				return m, m.updateFileAutocompleteCandidates()
 			}
 		default:
@@ -662,14 +662,14 @@ Ask me anything about your code, architecture, or programming questions!`
 				if m.fileAutocompleteActive {
 					// Handle characters typed during autocomplete
 					char := msg.String()
-					
+
 					// Space ends autocomplete
 					if char == " " {
 						m.fileAutocompleteActive = false
 						m.input += char
 						return m, nil
 					}
-					
+
 					// Update autocomplete query
 					m.input += char
 					m.fileAutocompleteQuery = m.input[m.fileAutocompleteStartPos+1:]
@@ -925,10 +925,10 @@ func (m model) View() string {
 			autocompleteView := m.renderFileAutocomplete()
 			// Style the autocomplete view to ensure it's clearly visible
 			styledAutocomplete := lipgloss.NewStyle().
-				Margin(1, 0, 0, 2).  // Add margin for visibility (top, right, bottom, left)
+				Margin(1, 0, 0, 2). // Add margin for visibility (top, right, bottom, left)
 				MaxWidth(m.width - 10).
 				Render(autocompleteView)
-			
+
 			mainContent = lipgloss.JoinVertical(lipgloss.Left, messages, input, styledAutocomplete)
 		} else {
 			mainContent = lipgloss.JoinVertical(lipgloss.Left, messages, input)
@@ -1148,14 +1148,14 @@ func (m *model) sendToLLMWithTasks(userInput string) tea.Cmd {
 	return func() tea.Msg {
 		// Process @file mentions to include file content
 		processedInput := m.processFileMentions(userInput)
-		
+
 		// Determine what to display in chat (user visible version if available)
 		displayInput := userInput
 		if m.userVisibleInput != "" {
 			displayInput = m.userVisibleInput
 			m.userVisibleInput = "" // Reset for next message
 		}
-		
+
 		// Add user message to chat session first with user-friendly version for display
 		userDisplayMessage := llm.Message{
 			Role:      "user",
@@ -1441,16 +1441,16 @@ func (m *model) updateFileAutocompleteCandidates() tea.Cmd {
 	return func() tea.Msg {
 		query := m.fileAutocompleteQuery
 		candidates := m.index.SearchFiles(query, 10) // Limit to 10 results
-		
+
 		// Debug logging
 		debugMsg := fmt.Sprintf("File autocomplete query: '%s', found %d candidates", query, len(candidates))
 		if m.debugEnabled {
 			m.addDebugMessage(debugMsg)
 		}
-		
+
 		m.fileAutocompleteCandidates = candidates
 		m.fileAutocompleteSelectedIndex = 0
-		
+
 		return FileAutocompleteMsg{Candidates: candidates}
 	}
 }
@@ -1466,7 +1466,7 @@ func (m *model) selectFileAutocomplete() {
 	selectedFile := m.fileAutocompleteCandidates[m.fileAutocompleteSelectedIndex]
 	beforeAt := m.input[:m.fileAutocompleteStartPos+1]
 	afterQuery := m.input[m.fileAutocompleteStartPos+1+len(m.fileAutocompleteQuery):]
-	
+
 	// Add a space after the selected filename to allow continuing with the next word
 	m.input = beforeAt + selectedFile + " " + afterQuery
 	m.fileAutocompleteActive = false
@@ -1479,12 +1479,12 @@ func (m *model) readFileSnippet(filename string, lineCount int) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	
+
 	lines := strings.Split(string(content), "\n")
 	if len(lines) > lineCount {
 		lines = lines[:lineCount]
 	}
-	
+
 	return strings.Join(lines, "\n"), nil
 }
 
@@ -1492,46 +1492,46 @@ func (m *model) readFileSnippet(filename string, lineCount int) (string, error) 
 func (m *model) processFileMentions(input string) string {
 	re := regexp.MustCompile(`@([^\s]+)`)
 	matches := re.FindAllStringSubmatch(input, -1)
-	
+
 	result := input
-	
+
 	// If no matches, just return the input
 	if len(matches) == 0 {
 		return input
 	}
-	
+
 	// Create user visible version with shortened content
 	userVisibleVersion := input
-	
+
 	for _, match := range matches {
 		if len(match) < 2 {
 			continue
 		}
-		
+
 		filename := match[1]
 		content, err := m.readFileSnippet(filename, 50)
 		if err != nil {
 			continue
 		}
-		
+
 		// Create full version for LLM (with full content)
-		fullReplacement := fmt.Sprintf("@%s\n```%s (first 50 lines):\n%s\n```", 
+		fullReplacement := fmt.Sprintf("@%s\n```%s (first 50 lines):\n%s\n```",
 			filename, filename, content)
 		result = strings.Replace(result, match[0], fullReplacement, 1)
-		
+
 		// Create shortened version for user display (with truncated content)
 		shortContent := content
 		if len(shortContent) > 100 {
 			shortContent = shortContent[:100] + "..."
 		}
-		userReplacement := fmt.Sprintf("@%s [file attached, %d lines]", 
+		userReplacement := fmt.Sprintf("@%s [file attached, %d lines]",
 			filename, strings.Count(content, "\n")+1)
 		userVisibleVersion = strings.Replace(userVisibleVersion, match[0], userReplacement, 1)
 	}
-	
+
 	// Save the user visible version for display
 	m.userVisibleInput = userVisibleVersion
-	
+
 	return result
 }
 
@@ -1540,17 +1540,17 @@ func (m model) renderFileAutocomplete() string {
 	if !m.fileAutocompleteActive {
 		return ""
 	}
-	
+
 	// If no candidates but autocomplete is active, show a message
 	if len(m.fileAutocompleteCandidates) == 0 {
 		return fileAutocompleteStyle.
 			Width(40).
 			Render("📁 No matching files found\n\nType to search or press Esc to cancel")
 	}
-	
+
 	var sb strings.Builder
 	maxWidth := 0
-	
+
 	// Calculate max width needed
 	for _, file := range m.fileAutocompleteCandidates {
 		if len(file) > maxWidth {
@@ -1558,10 +1558,10 @@ func (m model) renderFileAutocomplete() string {
 		}
 	}
 	maxWidth += 6 // Add padding and for the selection marker
-	
+
 	// Title row
 	sb.WriteString("📁 Files matching: " + m.fileAutocompleteQuery + "\n\n")
-	
+
 	// Build list with styled items
 	for i, file := range m.fileAutocompleteCandidates {
 		if i == m.fileAutocompleteSelectedIndex {
@@ -1572,10 +1572,10 @@ func (m model) renderFileAutocomplete() string {
 			sb.WriteString("  " + file + "\n")
 		}
 	}
-	
+
 	// Footer with help
 	sb.WriteString("\n↑↓: Select • Enter: Choose • Esc: Cancel")
-	
+
 	// Apply the main container style
 	return fileAutocompleteStyle.
 		Width(maxWidth).
