@@ -115,21 +115,25 @@ type Task struct {
 	Recursive bool `json:"recursive,omitempty"`
 
 	// Search specific (NEW)
-	Query         string   `json:"query,omitempty"`          // The search pattern/regex
-	FileTypes     []string `json:"file_types,omitempty"`     // File type filters (e.g., ["go", "js"])
-	ExcludeTypes  []string `json:"exclude_types,omitempty"`  // Exclude file types
-	GlobPatterns  []string `json:"glob_patterns,omitempty"`  // Include glob patterns (e.g., ["*.tf"])
-	ExcludeGlobs  []string `json:"exclude_globs,omitempty"`  // Exclude glob patterns
-	IgnoreCase    bool     `json:"ignore_case,omitempty"`    // Case-insensitive search
-	WholeWord     bool     `json:"whole_word,omitempty"`     // Match whole words only
-	FixedString   bool     `json:"fixed_string,omitempty"`   // Treat query as literal string, not regex
-	ContextBefore int      `json:"context_before,omitempty"` // Lines of context before matches
-	ContextAfter  int      `json:"context_after,omitempty"`  // Lines of context after matches
-	MaxResults    int      `json:"max_results,omitempty"`    // Limit number of results
-	FilenamesOnly bool     `json:"filenames_only,omitempty"` // Show only filenames with matches
-	CountMatches  bool     `json:"count_matches,omitempty"`  // Count matches per file
-	SearchHidden  bool     `json:"search_hidden,omitempty"`  // Search hidden files and directories
-	UsePCRE2      bool     `json:"use_pcre2,omitempty"`      // Use PCRE2 regex engine for advanced features
+	Query          string   `json:"query,omitempty"`            // The search pattern/regex
+	FileTypes      []string `json:"file_types,omitempty"`       // File type filters (e.g., ["go", "js"])
+	ExcludeTypes   []string `json:"exclude_types,omitempty"`    // Exclude file types
+	GlobPatterns   []string `json:"glob_patterns,omitempty"`    // Include glob patterns (e.g., ["*.tf"])
+	ExcludeGlobs   []string `json:"exclude_globs,omitempty"`    // Exclude glob patterns
+	IgnoreCase     bool     `json:"ignore_case,omitempty"`      // Case-insensitive search
+	WholeWord      bool     `json:"whole_word,omitempty"`       // Match whole words only
+	FixedString    bool     `json:"fixed_string,omitempty"`     // Treat query as literal string, not regex
+	ContextBefore  int      `json:"context_before,omitempty"`   // Lines of context before matches
+	ContextAfter   int      `json:"context_after,omitempty"`    // Lines of context after matches
+	MaxResults     int      `json:"max_results,omitempty"`      // Limit number of results
+	FilenamesOnly  bool     `json:"filenames_only,omitempty"`   // Show only filenames with matches
+	CountMatches   bool     `json:"count_matches,omitempty"`    // Count matches per file
+	SearchHidden   bool     `json:"search_hidden,omitempty"`    // Search hidden files and directories
+	UsePCRE2       bool     `json:"use_pcre2,omitempty"`        // Use PCRE2 regex engine for advanced features
+	SearchNames    bool     `json:"search_names,omitempty"`     // Also search in filenames (not just content)
+	FuzzyMatch     bool     `json:"fuzzy_match,omitempty"`      // Use fuzzy matching for filenames
+	CombineResults bool     `json:"combine_results,omitempty"`  // Combine results from content and filename searches
+	MaxNameResults int      `json:"max_name_results,omitempty"` // Limit number of filename match results
 
 	// Memory specific (NEW)
 	MemoryOperation   string   `json:"memory_operation,omitempty"`   // "create", "update", "delete", "get", "list"
@@ -739,12 +743,37 @@ func parseSearchTask(args string) *Task {
 			if path := strings.TrimPrefix(part, "in:"); path != "" {
 				task.Path = path
 			}
+
+		// New options
+		case part == "names" || part == "filenames" || part == "-n":
+			task.SearchNames = true
+
+		case part == "fuzzy" || part == "fuzzy-match":
+			task.FuzzyMatch = true
+			task.SearchNames = true // Fuzzy matching implies searching filenames
+
+		case part == "combine" || part == "combined":
+			task.CombineResults = true
+			task.SearchNames = true // Combining results implies searching both
+
+		case strings.HasPrefix(part, "max-names:"):
+			// Max filename results: max-names:30
+			if maxStr := strings.TrimPrefix(part, "max-names:"); maxStr != "" {
+				if max, err := strconv.Atoi(maxStr); err == nil {
+					task.MaxNameResults = max
+				}
+			}
 		}
 	}
 
 	// Set defaults
 	if task.MaxResults == 0 {
 		task.MaxResults = 100 // Default limit to prevent overwhelming output
+	}
+
+	// Set default max name results if searching filenames
+	if task.SearchNames && task.MaxNameResults == 0 {
+		task.MaxNameResults = 50 // Default limit for filename results
 	}
 
 	if task.Path == "" {
@@ -1766,6 +1795,13 @@ func validateTask(task *Task) error {
 		if task.MaxResults <= 0 {
 			task.MaxResults = 100 // Default limit
 		}
+		// Validate new options
+		if task.FuzzyMatch && !task.SearchNames {
+			task.SearchNames = true // Fuzzy matching implies filename search
+		}
+		if task.MaxNameResults <= 0 && task.SearchNames {
+			task.MaxNameResults = 50 // Default limit for filename results
+		}
 
 	case TaskTypeMemory:
 		if task.MemoryOperation == "" {
@@ -1866,6 +1902,13 @@ func (t *Task) Description() string {
 		}
 		if t.WholeWord {
 			description += " (whole words)"
+		}
+		if t.SearchNames {
+			if t.FuzzyMatch {
+				description += " (including fuzzy filename matches)"
+			} else {
+				description += " (including filename matches)"
+			}
 		}
 		return description
 
