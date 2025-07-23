@@ -215,8 +215,8 @@ OBJECTIVE_COMPLETE: Here's how the task execution system works... [comprehensive
 | Task | Syntax | Purpose |
 |------|--------|---------|
 | READ | READ file.go (lines 40-80) | Inspect code with line numbers |
-| SEARCH | SEARCH "pattern" type:go context:3 | Locate symbols/patterns |
-| LIST | LIST src/ recursive | View directory structure |
+| SEARCH | SEARCH "pattern" type:go context:3 | Locate symbols/patterns/files |
+| LIST | LIST src/ | View directory structure |
 | EDIT | >>LOOM_EDIT file=path ACTION START-END | Modify files (see §7.3) |
 | RUN | RUN go test | Execute shell commands |
 | MEMORY | MEMORY create key content:"text" | Persist information (see §7.B) |
