@@ -318,6 +318,10 @@ Be explicit about next steps:
 - whole-word - exact word matches
 - in:src/ - search specific directory
 - max:50 - limit results
+- names/filenames - also search in filenames
+- fuzzy - use fuzzy matching for filenames
+- combine - combine content and filename results
+- max-names:30 - limit filename results
 
 **Result handling**:
 1. Read actual task result first
