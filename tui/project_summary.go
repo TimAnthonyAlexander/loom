@@ -48,7 +48,7 @@ func loadOrGenerateProjectSummary(workspacePath string, idx *indexer.Index, adap
 		return basicSummary(), nil
 	}
 
-	fmt.Println("Generating project summary...")
+	fmt.Println("Indexing project... This may take up to a minute.")
 
 	// Collect context for the LLM – README, package meta files, simple file tree…
 	readmeSnippet := readFirstFile(workspacePath, []string{"README.md", "README.MD", "Readme.md", "readme.md", "README.txt"}, 200)

@@ -2485,7 +2485,7 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 		messages: func() []string {
 			msgs := chatSession.GetDisplayMessages()
 			if projectSummary != "" {
-				summaryDisplay := fmt.Sprintf("Loom: 📄 **Project Summary**\n\n%s", projectSummary)
+				summaryDisplay := fmt.Sprintf("%s", projectSummary)
 				msgs = append([]string{summaryDisplay, ""}, msgs...)
 			}
 			return msgs
