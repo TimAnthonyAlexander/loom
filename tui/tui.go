@@ -690,6 +690,9 @@ Ask me anything about your code, architecture, or programming questions!`
 						m.commandAutocompleteCandidates = m.getCommandCandidates(m.commandAutocompleteQuery)
 						if m.commandAutocompleteSelectedIndex >= len(m.commandAutocompleteCandidates) {
 							m.commandAutocompleteSelectedIndex = len(m.commandAutocompleteCandidates) - 1
+						} else if m.commandAutocompleteSelectedIndex < 0 {
+							// Clamp negative index to zero to avoid out-of-range panics
+							m.commandAutocompleteSelectedIndex = 0
 						}
 						return m, nil
 					}
@@ -754,6 +757,9 @@ Ask me anything about your code, architecture, or programming questions!`
 					m.commandAutocompleteCandidates = m.getCommandCandidates(m.commandAutocompleteQuery)
 					if m.commandAutocompleteSelectedIndex >= len(m.commandAutocompleteCandidates) {
 						m.commandAutocompleteSelectedIndex = len(m.commandAutocompleteCandidates) - 1
+					} else if m.commandAutocompleteSelectedIndex < 0 {
+						// Clamp negative index to zero to avoid out-of-range panics
+						m.commandAutocompleteSelectedIndex = 0
 					}
 					return m, nil
 				} else if m.fileAutocompleteActive {
