@@ -5,6 +5,8 @@
 </p>
 
 > **Loom** brings an AI pair-programmer to your terminal. It combines lightning-fast code indexing, a powerful task engine, and streaming LLM integration to read, edit, and even run your code – always under your control.
+>
+> Created by Tim Anthony Alexander
 
 ---
 
@@ -36,7 +38,7 @@
 
 • **AI Project Summary** – On first launch Loom asks the LLM for a concise overview of the repository (based on README, config files & structure) and shows this summary at the top of every Chat session.
 
-• **Multi-Provider LLMs** – Works with OpenAI, Ollama (local), Claude and more (configure in `loom.yaml`).
+• **Multi-Provider LLMs** – Works with OpenAI, Ollama (local), Claude and more (configure in `~/.loom/projects/PROJECTHASH/config.json`).
 
 • **Context Optimisation** – Automatic summarisation keeps prompts inside model limits without losing history.
 
@@ -104,13 +106,21 @@ loom stats
 
 ## Configuration
 
-A YAML file named `loom.yaml` in your project (auto-created on first run):
+Configuration is stored in a JSON file located in the workspace directory:
 
-```yaml
-model: "openai:gpt-4o"       # or "ollama:codellama"
-max_context_tokens: 6000       # prompt window
-max_file_size: 200_000         # bytes, truncate large files
-enable_shell: true             # allow RUN tasks (always confirmed)
+```
+~/.loom/projects/PROJECTHASH/config.json
+```
+
+This file is auto-created on first run with default settings:
+
+```json
+{
+  "model": "openai:gpt-4o",       // or "ollama:codellama"
+  "max_context_tokens": 6000,      // prompt window
+  "max_file_size": 200000,         // bytes, truncate large files
+  "enable_shell": true             // allow RUN tasks (always confirmed)
+}
 ```
 
 Set provider credentials via environment variables:
