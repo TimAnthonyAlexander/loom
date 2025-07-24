@@ -382,25 +382,6 @@ func (s *Session) filterTaskResultForDisplay(content string) string {
 					// This contains actual content, replace with generic message
 					filteredLines = append(filteredLines, line)
 
-					// Determine what type of task this was based on the task description
-					taskDescription := ""
-					for _, prevLine := range filteredLines {
-						if strings.HasPrefix(prevLine, "🔧 Task Result:") {
-							taskDescription = prevLine
-							break
-						}
-					}
-
-					if strings.Contains(taskDescription, "Read ") {
-						filteredLines = append(filteredLines, "File content read successfully")
-					} else if strings.Contains(taskDescription, "List directory") {
-						filteredLines = append(filteredLines, "Directory structure read successfully")
-					} else if strings.Contains(taskDescription, "Edit ") {
-						filteredLines = append(filteredLines, "File changes prepared successfully")
-					} else {
-						filteredLines = append(filteredLines, "Task completed successfully")
-					}
-					// Skip all remaining lines as they contain actual content
 					break
 				}
 			}

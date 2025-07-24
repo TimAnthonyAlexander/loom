@@ -311,27 +311,9 @@ func (m *Manager) ContinueRecursiveChat(ctx context.Context, execution *TaskExec
 func (m *Manager) formatTaskResult(task *Task, response *TaskResponse) string {
 	var result strings.Builder
 
-	result.WriteString(fmt.Sprintf("🔧 Task Result: %s\n", task.Description()))
+	result.WriteString(fmt.Sprintf("Task: %s\n", task.Description()))
 
 	if response.Success {
-		result.WriteString("✅ Status: Success\n")
-
-		// Include EditSummary if available (for file edits)
-		if response.EditSummary != nil {
-			result.WriteString(fmt.Sprintf("📊 Edit Summary: %s\n", response.EditSummary.GetCompactSummary()))
-			llmSummary := response.GetLLMSummary()
-			if llmSummary != "" {
-				result.WriteString(fmt.Sprintf("📈 Change Details:\n%s\n", llmSummary))
-			}
-		}
-
-		// Use ActualContent for LLM if available, otherwise fall back to Output
-		if response.ActualContent != "" {
-			result.WriteString(fmt.Sprintf("📄 Output:\n%s\n", response.ActualContent))
-		} else if response.Output != "" {
-			result.WriteString(fmt.Sprintf("📄 Output:\n%s\n", response.Output))
-		}
-
 		if response.Approved {
 			result.WriteString("👍 User approved changes\n")
 		}

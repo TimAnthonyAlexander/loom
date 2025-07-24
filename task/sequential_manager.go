@@ -424,23 +424,25 @@ func (stm *SequentialTaskManager) extractNonTaskContent(response string) string 
 	return strings.Join(content, "\n")
 }
 
-// checkCompletionSignal checks if the LLM has signaled exploration completion
+// checkCompletionSignal checks if the response indicates objective completion
 func (stm *SequentialTaskManager) checkCompletionSignal(response string) (bool, string) {
 	// Check if the response is a text-only message with no commands
 	// This would signal completion in our new model
-	for _, pattern := range []string{
-		"🔧 READ",
-		"🔧 LIST",
-		"🔧 SEARCH",
+	taskPatterns := []string{
+		"🔧 READ", "📖 READ",
+		"🔧 LIST", "📂 LIST",
+		"🔧 SEARCH", "🔍 SEARCH",
 		"🔧 RUN",
-		"🔧 MEMORY",
-		">>LOOM_EDIT",
+		"🔧 MEMORY", "💾 MEMORY",
+		">>LOOM_EDIT", "✏️ Edit",
 		"\nREAD ",
 		"\nLIST ",
 		"\nSEARCH ",
 		"\nRUN ",
 		"\nMEMORY ",
-	} {
+	}
+
+	for _, pattern := range taskPatterns {
 		if strings.Contains(response, pattern) {
 			return false, ""
 		}
@@ -593,14 +595,16 @@ func (stm *SequentialTaskManager) SetObjective(objective string) {
 // IsObjectiveComplete checks if the response indicates objective completion
 func (stm *SequentialTaskManager) IsObjectiveComplete(response string) bool {
 	// In our new model, text-only responses with no commands signal completion
-	for _, pattern := range []string{
-		"🔧 READ",
-		"🔧 LIST",
-		"🔧 SEARCH",
+	taskPatterns := []string{
+		"🔧 READ", "📖 READ",
+		"🔧 LIST", "📂 LIST",
+		"🔧 SEARCH", "🔍 SEARCH",
 		"🔧 RUN",
-		"🔧 MEMORY",
-		">>LOOM_EDIT",
-	} {
+		"🔧 MEMORY", "💾 MEMORY",
+		">>LOOM_EDIT", "✏️ Edit",
+	}
+
+	for _, pattern := range taskPatterns {
 		if strings.Contains(response, pattern) {
 			return false
 		}

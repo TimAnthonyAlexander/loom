@@ -2047,14 +2047,14 @@ func (m model) handleAutoContinuation(msg AutoContinueMsg) (tea.Model, tea.Cmd) 
 
 // isTextOnlyResponse checks if a response contains no tasks or commands
 func isTextOnlyResponse(response string) bool {
-	// Check for common task patterns
+	// Check for common task patterns with emojis
 	taskPatterns := []string{
-		"🔧 READ",
-		"🔧 LIST",
-		"🔧 SEARCH",
+		"🔧 READ", "📖 READ",
+		"🔧 LIST", "📂 LIST",
+		"🔧 SEARCH", "🔍 SEARCH",
 		"🔧 RUN",
-		"🔧 MEMORY",
-		">>LOOM_EDIT",
+		"🔧 MEMORY", "💾 MEMORY",
+		">>LOOM_EDIT", "✏️ Edit",
 	}
 
 	for _, pattern := range taskPatterns {

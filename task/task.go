@@ -248,7 +248,8 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 	seenTasks := make(map[string]bool)
 
 	// Look for task indicators with emoji prefixes
-	taskPattern := regexp.MustCompile(`^🔧\s+(READ|LIST|RUN|SEARCH|MEMORY)\s+(.+)`)
+	// Updated to match both "🔧 READ" and "📖 READ" patterns
+	taskPattern := regexp.MustCompile(`^(?:🔧|📖|📂|✏️|🔍|💾)\s+(READ|LIST|RUN|SEARCH|MEMORY)\s+(.+)`)
 
 	for i, line := range lines {
 		line = strings.TrimSpace(line)
@@ -382,6 +383,7 @@ func parseReadTask(args string) *Task {
 	// - "main.go (max: 100 lines)"
 	// - "main.go (lines 50-100)"
 	// - "config.go (first 200 lines)"
+	// - "main.go (lines: 1-200)"
 
 	// Look for parenthetical options
 	optionsPattern := regexp.MustCompile(`^(.+?)\s*\((.+)\)$`)
@@ -392,8 +394,8 @@ func parseReadTask(args string) *Task {
 		options := strings.TrimSpace(matches[2])
 
 		// Parse options
-		if strings.Contains(options, "max:") {
-			maxPattern := regexp.MustCompile(`max:\s*(\d+)`)
+		if strings.Contains(options, "max:") || strings.Contains(options, "max ") {
+			maxPattern := regexp.MustCompile(`max[:]*\s*(\d+)`)
 			maxMatches := maxPattern.FindStringSubmatch(options)
 			if len(maxMatches) == 2 {
 				if maxLines, err := strconv.Atoi(maxMatches[1]); err == nil {
@@ -412,8 +414,8 @@ func parseReadTask(args string) *Task {
 			}
 		}
 
-		// Parse line ranges like "lines 50-100"
-		rangePattern := regexp.MustCompile(`lines?\s+(\d+)-(\d+)`)
+		// Parse line ranges like "lines 50-100" or "lines: 50-100"
+		rangePattern := regexp.MustCompile(`lines[:\s]*\s*(\d+)-(\d+)`)
 		rangeMatches := rangePattern.FindStringSubmatch(options)
 		if len(rangeMatches) == 3 {
 			if startLine, err := strconv.Atoi(rangeMatches[1]); err == nil {
@@ -1859,38 +1861,38 @@ func (t *Task) Description() string {
 	switch t.Type {
 	case TaskTypeReadFile:
 		if t.StartLine > 0 && t.EndLine > 0 {
-			return fmt.Sprintf("Read %s (lines %d-%d)", t.Path, t.StartLine, t.EndLine)
+			return fmt.Sprintf("📖 Read %s (lines %d-%d)", t.Path, t.StartLine, t.EndLine)
 		} else if t.StartLine > 0 {
 			if t.MaxLines > 0 {
-				return fmt.Sprintf("Read %s (from line %d, max %d lines)", t.Path, t.StartLine, t.MaxLines)
+				return fmt.Sprintf("📖 Read %s (from line %d, max %d lines)", t.Path, t.StartLine, t.MaxLines)
 			}
-			return fmt.Sprintf("Read %s (from line %d)", t.Path, t.StartLine)
+			return fmt.Sprintf("📖 Read %s (from line %d)", t.Path, t.StartLine)
 		} else if t.MaxLines > 0 {
-			return fmt.Sprintf("Read %s (max %d lines)", t.Path, t.MaxLines)
+			return fmt.Sprintf("📖 Read %s (max %d lines)", t.Path, t.MaxLines)
 		}
-		return fmt.Sprintf("Read %s", t.Path)
+		return fmt.Sprintf("📖 Read %s", t.Path)
 
 	case TaskTypeEditFile:
 		if t.LoomEditCommand {
-			return fmt.Sprintf("Edit %s (LOOM_EDIT format)", t.Path)
+			return fmt.Sprintf("✏️ Edit %s (LOOM_EDIT format)", t.Path)
 		}
 		// For backward compatibility with existing file creation
 		if t.Content != "" && !t.LoomEditCommand {
-			return fmt.Sprintf("Edit %s (create/replace content)", t.Path)
+			return fmt.Sprintf("✏️ Edit %s (create/replace content)", t.Path)
 		}
-		return fmt.Sprintf("Edit %s", t.Path)
+		return fmt.Sprintf("✏️ Edit %s", t.Path)
 
 	case TaskTypeListDir:
 		if t.Recursive {
-			return fmt.Sprintf("List directory %s (recursive)", t.Path)
+			return fmt.Sprintf("📂 List directory %s (recursive)", t.Path)
 		}
-		return fmt.Sprintf("List directory %s", t.Path)
+		return fmt.Sprintf("📂 List directory %s", t.Path)
 
 	case TaskTypeRunShell:
-		return fmt.Sprintf("Run command: %s", t.Command)
+		return fmt.Sprintf("🔧 Run command: %s", t.Command)
 
 	case TaskTypeSearch:
-		description := fmt.Sprintf("Search for '%s'", t.Query)
+		description := fmt.Sprintf("🔍 Search for '%s'", t.Query)
 		if t.Path != "." {
 			description += fmt.Sprintf(" in %s", t.Path)
 		}
@@ -1915,24 +1917,24 @@ func (t *Task) Description() string {
 	case TaskTypeMemory:
 		switch strings.ToLower(t.MemoryOperation) {
 		case "create":
-			return fmt.Sprintf("Create memory '%s'", t.MemoryID)
+			return fmt.Sprintf("💾 Create memory '%s'", t.MemoryID)
 		case "update":
-			return fmt.Sprintf("Update memory '%s'", t.MemoryID)
+			return fmt.Sprintf("💾 Update memory '%s'", t.MemoryID)
 		case "delete":
-			return fmt.Sprintf("Delete memory '%s'", t.MemoryID)
+			return fmt.Sprintf("💾 Delete memory '%s'", t.MemoryID)
 		case "get":
-			return fmt.Sprintf("Get memory '%s'", t.MemoryID)
+			return fmt.Sprintf("💾 Get memory '%s'", t.MemoryID)
 		case "list":
 			if t.MemoryActive != nil {
 				if *t.MemoryActive {
-					return "List active memories"
+					return "💾 List active memories"
 				} else {
-					return "List inactive memories"
+					return "💾 List inactive memories"
 				}
 			}
-			return "List all memories"
+			return "💾 List all memories"
 		default:
-			return fmt.Sprintf("Memory operation '%s' on '%s'", t.MemoryOperation, t.MemoryID)
+			return fmt.Sprintf("💾 Memory operation '%s' on '%s'", t.MemoryOperation, t.MemoryID)
 		}
 
 	default:
