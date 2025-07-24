@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -422,7 +423,20 @@ func (us *UndoStack) load() error {
 	return nil
 }
 
-// generateActionID generates a unique ID for an undo action
+// actionCounter is a monotonically increasing counter used to guarantee
+// unique undo action IDs even when multiple actions are created within the
+// same nanosecond on platforms with coarse time resolution (e.g. Windows).
+// It must be accessed atomically since undo actions can potentially be
+// created from concurrent goroutines.
+var actionCounter uint64
+
+// generateActionID returns a unique identifier for an undo action.
+// Using only time.Now().UnixNano() proved insufficient on Windows where
+// the time resolution may not change between very rapid successive calls,
+// leading to duplicate IDs and failing tests. We therefore combine the
+// timestamp with an atomic counter to guarantee uniqueness across the
+// lifetime of the process.
 func generateActionID() string {
-	return fmt.Sprintf("undo_%d", time.Now().UnixNano())
+	counter := atomic.AddUint64(&actionCounter, 1)
+	return fmt.Sprintf("undo_%d_%d", time.Now().UnixNano(), counter)
 }
