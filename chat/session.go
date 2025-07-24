@@ -662,6 +662,11 @@ func (s *Session) isCompletionDetectorInteraction(content string) bool {
 		return true
 	}
 
+	// New simple continuation messages
+	if content == "Continue." || content == "Continue with the next step or task." {
+		return true
+	}
+
 	lowerContent := strings.ToLower(content)
 
 	// Enhanced completion detector question patterns

@@ -1985,8 +1985,6 @@ func (m model) handleTaskConfirmation(approved bool) (tea.Model, tea.Cmd) {
 
 // handleAutoContinuation handles simplified auto-continuation
 func (m model) handleAutoContinuation(msg AutoContinueMsg) (tea.Model, tea.Cmd) {
-	// Enhanced completion detection with more nuanced logic
-
 	// Check for infinite loop patterns first
 	if m.completionDetector.HasInfiniteLoopPattern(m.recentResponses) {
 		if m.debugEnabled {
@@ -2007,53 +2005,17 @@ func (m model) handleAutoContinuation(msg AutoContinueMsg) (tea.Model, tea.Cmd) 
 		return m, nil
 	}
 
-	// Extract objective from the response if not already extracted
-	if !m.objectiveExtracted {
-		if objective := m.completionDetector.ExtractObjective(msg.LastResponse); objective != "" {
-			m.currentObjective = objective
-			m.objectiveExtracted = true
-			if m.debugEnabled {
-				m.addDebugMessage(fmt.Sprintf("🎯 Extracted objective: %s", objective))
-			}
-		}
-	}
-
-	// Use enhanced completion detection
-	if m.completionDetector.IsComplete(msg.LastResponse) {
+	// Check if the response is a text-only message with no commands
+	if isTextOnlyResponse(msg.LastResponse) {
 		if m.debugEnabled {
-			m.addDebugMessage("✅ Work appears complete based on advanced detection")
+			m.addDebugMessage("✅ Work appears complete - received text-only response")
 		}
 		m.recursiveDepth = 0
 		m.completionCheckCount = 0
 		return m, nil
 	}
 
-	// Check if we should use a simple continuation prompt instead of a completion check
-	// This prevents immediate completion checks after an objective is set
-	if m.completionDetector.ShouldUseContinuationPrompt(msg.LastResponse) {
-		if m.debugEnabled {
-			m.addDebugMessage("🔄 Using simple continuation prompt instead of completion check")
-		}
-
-		// Use a gentle continuation prompt
-		continuationPrompt := m.completionDetector.GetContinuationPrompt()
-
-		autoMessage := llm.Message{
-			Role:      "user",
-			Content:   continuationPrompt,
-			Timestamp: time.Now(),
-		}
-
-		if err := m.chatSession.AddMessage(autoMessage); err != nil {
-			return m, func() tea.Msg {
-				return StreamMsg{Error: fmt.Errorf("failed to add continuation prompt: %w", err)}
-			}
-		}
-
-		return m, m.sendToLLMWithTasks(continuationPrompt)
-	}
-
-	// Continue automatically with completion check
+	// Continue with next iteration
 	m.recursiveDepth = msg.Depth + 1
 	m.completionCheckCount++
 
@@ -2061,26 +2023,72 @@ func (m model) handleAutoContinuation(msg AutoContinueMsg) (tea.Model, tea.Cmd) 
 		m.recursiveStartTime = time.Now()
 	}
 
-	// Generate comprehensive completion check prompt
-	completionPrompt := m.completionDetector.GenerateCompletionCheckPrompt(m.currentObjective)
+	// Simple continuation prompt
+	continuationPrompt := "Continue."
 
 	if m.debugEnabled {
-		m.addDebugMessage(fmt.Sprintf("❓ Sending completion check #%d: %s", m.completionCheckCount, completionPrompt))
+		m.addDebugMessage(fmt.Sprintf("🔄 Sending continuation prompt #%d", m.completionCheckCount))
 	}
 
 	autoMessage := llm.Message{
 		Role:      "user",
-		Content:   completionPrompt,
+		Content:   continuationPrompt,
 		Timestamp: time.Now(),
 	}
 
 	if err := m.chatSession.AddMessage(autoMessage); err != nil {
 		return m, func() tea.Msg {
-			return StreamMsg{Error: fmt.Errorf("failed to add completion check: %w", err)}
+			return StreamMsg{Error: fmt.Errorf("failed to add continuation prompt: %w", err)}
 		}
 	}
 
-	return m, m.sendToLLMWithTasks(completionPrompt)
+	return m, m.sendToLLMWithTasks(continuationPrompt)
+}
+
+// isTextOnlyResponse checks if a response contains no tasks or commands
+func isTextOnlyResponse(response string) bool {
+	// Check for common task patterns
+	taskPatterns := []string{
+		"🔧 READ",
+		"🔧 LIST",
+		"🔧 SEARCH",
+		"🔧 RUN",
+		"🔧 MEMORY",
+		">>LOOM_EDIT",
+	}
+
+	for _, pattern := range taskPatterns {
+		if strings.Contains(response, pattern) {
+			return false
+		}
+	}
+
+	// Check for natural language task patterns at the beginning of lines
+	naturalLangPatterns := []string{
+		"READ ",
+		"LIST ",
+		"SEARCH ",
+		"RUN ",
+		"MEMORY ",
+	}
+
+	for _, pattern := range naturalLangPatterns {
+		if regexp.MustCompile(`(?m)^` + pattern).MatchString(response) {
+			return false
+		}
+	}
+
+	// Look for LOOM_EDIT blocks
+	if regexp.MustCompile(`(?s)>>LOOM_EDIT.*?<<LOOM_EDIT`).MatchString(response) {
+		return false
+	}
+
+	// If no commands are found and there's substantial content, it's a text-only response
+	if len(response) > 80 || strings.Contains(response, "\n") {
+		return true
+	}
+
+	return false
 }
 
 // addSystemMessage helper method to add system messages to chat

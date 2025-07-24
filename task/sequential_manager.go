@@ -6,6 +6,7 @@ import (
 	contextMgr "loom/context"
 	"loom/indexer"
 	"loom/llm"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -208,22 +209,23 @@ func (stm *SequentialTaskManager) buildLLMContext() []llm.Message {
 
 // CreateSequentialSystemMessage creates a system message optimized for sequential exploration
 func (stm *SequentialTaskManager) CreateSequentialSystemMessage() llm.Message {
-	var content string
-
-	switch stm.GetCurrentPhase() {
-	case PhaseObjectiveSetting:
-		content = stm.createObjectiveSettingPrompt()
-	case PhaseSuppressedExploration:
-		content = stm.createSuppressedExplorationPrompt()
-	case PhaseSynthesis:
-		content = stm.createSynthesisPrompt()
-	default:
-		content = stm.createObjectiveSettingPrompt()
-	}
-
 	return llm.Message{
-		Role:      "system",
-		Content:   content,
+		Role: "system",
+		Content: `You are an AI coding assistant that executes tasks sequentially.
+
+EXECUTION MODEL:
+- Execute commands (tasks, edits) ONE at a time
+- Wait for each command to complete before proceeding
+- After ALL commands are complete, provide a text-only final response
+- Never mix commands with explanatory text in the same response
+
+Each response should contain EITHER:
+1. A SINGLE command (READ, SEARCH, LIST, etc.)
+2. A final text-only explanation with no commands
+
+DO NOT respond with multiple commands at once.
+DO NOT include explanations with your commands.
+After all necessary commands are executed, end with a text-only summary.`,
 		Timestamp: time.Now(),
 	}
 }
@@ -302,31 +304,19 @@ Set your objective and begin exploration immediately.`
 
 // createSuppressedExplorationPrompt creates the suppressed exploration prompt
 func (stm *SequentialTaskManager) createSuppressedExplorationPrompt() string {
-	return `You are Loom in SUPPRESSED EXPLORATION MODE.
+	return `Continue with the next step. 
 
-## PHASE 2: SUPPRESSED EXPLORATION
+Analyze the results you've received and determine the next command to execute. 
+Execute only ONE command at a time, then wait for the system to provide a result.
 
-Continue pursuing your objective with ABSOLUTELY MINIMAL output:
+If you have all the information needed to provide a final answer:
+1. Do NOT execute any more commands
+2. Provide a clear, text-only explanation of your findings
+3. Make sure your response contains NO commands
 
-**CRITICAL: OUTPUT ONLY TASKS**
-- Provide ONLY the next JSON task in code blocks
-- NO text, explanations, or analysis
-- NO status messages or commentary
-- Think internally about what you learned
-- Continue systematically until objective complete
-
-### 🔧 CRITICAL: Task-Only Response Format:
-
-✅ **CORRECT** - Natural language format:
-🔧 READ main.go (max: 200 lines)
-
-✅ **Also supported** - Simple format:
-READ main.go
-
-### When Objective Complete:
-Signal with: **OBJECTIVE_COMPLETE:** followed by comprehensive analysis
-
-**Remember: TASK COMMANDS ONLY - No other text during suppressed phase.**`
+If you need more information:
+1. Execute ONE more command (READ, SEARCH, LIST, etc.)
+2. Make sure your response contains ONLY the command, no explanation`
 }
 
 // createSynthesisPrompt creates the final synthesis prompt
@@ -436,13 +426,35 @@ func (stm *SequentialTaskManager) extractNonTaskContent(response string) string 
 
 // checkCompletionSignal checks if the LLM has signaled exploration completion
 func (stm *SequentialTaskManager) checkCompletionSignal(response string) (bool, string) {
-	lowerResponse := strings.ToLower(response)
-
-	for _, signal := range stm.completionSignals {
-		if strings.Contains(lowerResponse, strings.ToLower(signal)) {
-			// Found completion signal - extract the synthesis
-			return true, response
+	// Check if the response is a text-only message with no commands
+	// This would signal completion in our new model
+	for _, pattern := range []string{
+		"🔧 READ",
+		"🔧 LIST",
+		"🔧 SEARCH",
+		"🔧 RUN",
+		"🔧 MEMORY",
+		">>LOOM_EDIT",
+		"\nREAD ",
+		"\nLIST ",
+		"\nSEARCH ",
+		"\nRUN ",
+		"\nMEMORY ",
+	} {
+		if strings.Contains(response, pattern) {
+			return false, ""
 		}
+	}
+
+	// Look for LOOM_EDIT blocks
+	if regexp.MustCompile(`(?s)>>LOOM_EDIT.*?<<LOOM_EDIT`).MatchString(response) {
+		return false, ""
+	}
+
+	// If no commands are found and there's substantial content,
+	// consider it a completion signal
+	if len(response) > 80 || strings.Contains(response, "\n") {
+		return true, response
 	}
 
 	return false, ""
@@ -560,13 +572,12 @@ func (stm *SequentialTaskManager) StartObjectiveExploration(userQuery string) {
 
 // ExtractObjective extracts objective from LLM response
 func (stm *SequentialTaskManager) ExtractObjective(response string) string {
-	lines := strings.Split(response, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(strings.ToUpper(line), "OBJECTIVE:") {
-			objective := strings.TrimSpace(line[10:]) // Remove "OBJECTIVE:"
-			return objective
-		}
+	// For backwards compatibility, still extract objectives from responses
+	// But we won't be relying on them for the new execution model
+	pattern := regexp.MustCompile(`(?i)OBJECTIVE:\s*(.*?)(?:\n|$)`)
+	matches := pattern.FindStringSubmatch(response)
+	if len(matches) > 1 {
+		return strings.TrimSpace(matches[1])
 	}
 	return ""
 }
@@ -579,11 +590,48 @@ func (stm *SequentialTaskManager) SetObjective(objective string) {
 	}
 }
 
-// IsObjectiveComplete checks if the exploration objective is complete
+// IsObjectiveComplete checks if the response indicates objective completion
 func (stm *SequentialTaskManager) IsObjectiveComplete(response string) bool {
-	upperResponse := strings.ToUpper(response)
-	return strings.Contains(upperResponse, "OBJECTIVE_COMPLETE:") ||
-		strings.Contains(upperResponse, "EXPLORATION_COMPLETE:")
+	// In our new model, text-only responses with no commands signal completion
+	for _, pattern := range []string{
+		"🔧 READ",
+		"🔧 LIST",
+		"🔧 SEARCH",
+		"🔧 RUN",
+		"🔧 MEMORY",
+		">>LOOM_EDIT",
+	} {
+		if strings.Contains(response, pattern) {
+			return false
+		}
+	}
+
+	// Look for LOOM_EDIT blocks
+	if regexp.MustCompile(`(?s)>>LOOM_EDIT.*?<<LOOM_EDIT`).MatchString(response) {
+		return false
+	}
+
+	// Check for natural language task patterns at the beginning of lines
+	naturalLangPatterns := []string{
+		"READ ",
+		"LIST ",
+		"SEARCH ",
+		"RUN ",
+		"MEMORY ",
+	}
+
+	for _, pattern := range naturalLangPatterns {
+		if regexp.MustCompile(`(?m)^` + pattern).MatchString(response) {
+			return false
+		}
+	}
+
+	// If no commands are found and there's substantial content, consider it complete
+	if len(response) > 80 || strings.Contains(response, "\n") {
+		return true
+	}
+
+	return false
 }
 
 // AddTaskResult adds a task result to the accumulated data

@@ -84,75 +84,58 @@ func NewCompletionDetector() *CompletionDetector {
 
 // IsComplete checks if the LLM response indicates the work is finished
 func (cd *CompletionDetector) IsComplete(response string) bool {
-	if response == "" {
-		completionDebugLog("Empty response, not complete")
-		return false
+	// First check for obvious completion indicators
+	if cd.isCompletionCheckResponse(response) {
+		completionDebugLog("Completion detected from explicit check response")
+		return true
 	}
 
-	cleanResponse := strings.TrimSpace(response)
-
-	// Extract objective if present - if this is a response that's setting an objective
-	// then we know it's not complete yet – UNLESS the response also explicitly marks the
-	// objective as finished. In that special case, it should be considered complete.
-	objective := cd.ExtractObjective(cleanResponse)
-	if objective != "" && !cd.objectiveSet {
-		// If the same response also contains an explicit completion marker (e.g. OBJECTIVE_COMPLETE)
-		// or any of the registered completion patterns, treat the work as complete instead of
-		// forcing a continuation.
-		for _, pattern := range cd.completionPatterns {
-			if pattern.MatchString(cleanResponse) {
-				completionDebugLog("Initial objective set and completion pattern found, marking complete")
-				return true
-			}
-		}
-
-		// This is an initial objective-setting message, so it's definitely not complete
-		completionDebugLog("Found initial objective setting, not complete")
-		return false
+	// Now check if this is a text-only response with no commands
+	if cd.isTextOnlyResponse(response) {
+		completionDebugLog("Completion detected: text-only response with no commands")
+		return true
 	}
 
-	// Check if this is a response to a completion check
-	if cd.lastPromptWasCheck {
-		completionDebugLog("Evaluating response to completion check")
-		// Reset the flag after use
-		cd.lastPromptWasCheck = false
-
-		// For completion check responses, prioritize YES/NO detection
-		if cd.isCompletionCheckResponse(cleanResponse) {
-			completionDebugLog("Found completion check response indicating completion")
-			return true
-		}
-
-		if cd.isIncompleteCheckResponse(cleanResponse) {
-			completionDebugLog("Found completion check response indicating more work needed")
-			return false
-		}
+	// Check for explicit completion phrases
+	lowerResponse := strings.ToLower(response)
+	completionSignals := []string{
+		"all tasks completed",
+		"task is now complete",
+		"all requested work has been finished",
+		"implementation is complete",
+		"changes have been applied successfully",
+		"the code has been updated",
+		"the feature has been implemented",
+		"your request has been completed",
 	}
 
-	// First check for explicit incomplete signals
-	for _, pattern := range cd.incompletePatterns {
-		if pattern.MatchString(cleanResponse) {
-			completionDebugLog("Found incompletion pattern, work not complete")
-			return false
-		}
-	}
-
-	// Then check for completion signals
-	for _, pattern := range cd.completionPatterns {
-		if pattern.MatchString(cleanResponse) {
-			completionDebugLog("Found completion pattern, work appears complete")
+	for _, signal := range completionSignals {
+		if strings.Contains(lowerResponse, signal) {
+			completionDebugLog(fmt.Sprintf("Completion detected from signal: '%s'", signal))
 			return true
 		}
 	}
 
-	// Additional heuristics for completion detection
-	result := cd.hasCompletionHeuristics(cleanResponse)
-	if result {
-		completionDebugLog("Heuristics indicate completion")
-	} else {
-		completionDebugLog("No completion signals detected")
+	// If incomplete indicators are present, definitely not complete
+	if cd.isIncompleteCheckResponse(response) {
+		completionDebugLog("Incompletion detected from check response")
+		return false
 	}
-	return result
+
+	// Check heuristics for likely completion
+	if cd.hasCompletionHeuristics(response) {
+		completionDebugLog("Completion detected from heuristics")
+		return true
+	}
+
+	// Check if there are any future tense phrases indicating more work
+	if cd.hasFutureTense(response) {
+		completionDebugLog("Incompletion detected due to future tense")
+		return false
+	}
+
+	// Default to incomplete if none of the above conditions are met
+	return false
 }
 
 // hasCompletionHeuristics applies additional logic to detect completion
@@ -303,29 +286,7 @@ func (cd *CompletionDetector) isIncompleteCheckResponse(response string) bool {
 
 // GenerateCompletionCheckPrompt creates a comprehensive prompt to check if work is complete
 func (cd *CompletionDetector) GenerateCompletionCheckPrompt(userObjective string) string {
-	// Set flag to indicate we just sent a completion check
-	cd.lastPromptWasCheck = true
-	cd.lastCompletionCheckSent = true
-
-	if userObjective != "" {
-		return `COMPLETION_CHECK: Has your stated objective been fully achieved?
-
-Original objective: ` + userObjective + `
-
-Please answer clearly:
-- YES if the objective is complete and no further work is needed
-- NO if more work is required, and explain what specific steps remain
-
-Be specific about whether you've accomplished what was requested.`
-	}
-
-	return `COMPLETION_CHECK: Is your current work complete?
-
-Please answer clearly:
-- YES if you've finished all the work you intended to do
-- NO if there are still tasks or steps remaining
-
-If NO, please specify what additional work needs to be done.`
+	return "Continue. If you have completed all necessary tasks, please provide a final text-only summary of what you've done and what you've found. Otherwise, please continue with the next task."
 }
 
 // ExtractObjective attempts to extract the objective from a response
@@ -648,5 +609,53 @@ func (cd *CompletionDetector) ShouldUseContinuationPrompt(response string) bool 
 // GetContinuationPrompt returns a simple prompt to continue work
 // rather than asking if the task is complete
 func (cd *CompletionDetector) GetContinuationPrompt() string {
-	return "Please continue working on this task."
+	return "Continue with the next step or task. If you've completed all tasks, please provide a final text-only summary."
+}
+
+// isTextOnlyResponse checks if the response contains no commands/tasks
+// and appears to be a final explanatory message
+func (cd *CompletionDetector) isTextOnlyResponse(response string) bool {
+	// Check for common task patterns
+	taskPatterns := []string{
+		"🔧 READ",
+		"🔧 LIST",
+		"🔧 SEARCH",
+		"🔧 RUN",
+		"🔧 MEMORY",
+		">>LOOM_EDIT",
+	}
+
+	for _, pattern := range taskPatterns {
+		if strings.Contains(response, pattern) {
+			return false
+		}
+	}
+
+	// Check for natural language task patterns
+	naturalLangPatterns := []string{
+		"READ ",
+		"LIST ",
+		"SEARCH ",
+		"RUN ",
+		"MEMORY ",
+	}
+
+	for _, pattern := range naturalLangPatterns {
+		if regexp.MustCompile(`(?m)^` + pattern).MatchString(response) {
+			return false
+		}
+	}
+
+	// Look for LOOM_EDIT blocks
+	if regexp.MustCompile(`(?s)>>LOOM_EDIT.*?<<LOOM_EDIT`).MatchString(response) {
+		return false
+	}
+
+	// Also check if it looks like a proper explanation (has some substance)
+	// to avoid false positives on empty or transition responses
+	if len(response) > 80 || strings.Contains(response, "\n") {
+		return true
+	}
+
+	return false
 }
