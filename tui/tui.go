@@ -326,9 +326,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		case "enter":
-			// Handle command autocomplete selection
+			// Handle command autocomplete selection (immediate execution)
 			if m.commandAutocompleteActive {
-				m.selectCommandAutocomplete()
+				if len(m.commandAutocompleteCandidates) > 0 {
+					selectedCmd := m.commandAutocompleteCandidates[m.commandAutocompleteSelectedIndex]
+					// Reset autocomplete state
+					m.commandAutocompleteActive = false
+					m.input = ""
+					// Immediately execute the command
+					return m, m.executeSlashCommand(selectedCmd)
+				}
 				return m, nil
 			} else if m.fileAutocompleteActive {
 				m.selectFileAutocomplete()
@@ -3045,4 +3052,111 @@ func (m model) renderCommandAutocomplete() string {
 	sb.WriteString("\n↑↓: Select • Enter: Choose • Esc: Cancel")
 
 	return fileAutocompleteStyle.Width(maxWidth).Render(sb.String())
+}
+
+// executeSlashCommand processes built-in slash commands immediately
+func (m *model) executeSlashCommand(cmdStr string) tea.Cmd {
+	switch cmdStr {
+	case "/quit":
+		return tea.Quit
+
+	case "/files":
+		stats := m.index.GetStats()
+		// Log to chat
+		userMsg := llm.Message{Role: "user", Content: cmdStr, Timestamp: time.Now()}
+		m.chatSession.AddMessage(userMsg)
+		resp := llm.Message{Role: "assistant", Content: fmt.Sprintf("Indexed %d files", stats.TotalFiles), Timestamp: time.Now()}
+		m.chatSession.AddMessage(resp)
+		m.messages = m.chatSession.GetDisplayMessages()
+		m.updateWrappedMessages()
+		return nil
+
+	case "/stats":
+		userMsg := llm.Message{Role: "user", Content: cmdStr, Timestamp: time.Now()}
+		m.chatSession.AddMessage(userMsg)
+		resp := llm.Message{Role: "assistant", Content: m.getIndexStatsMessage(), Timestamp: time.Now()}
+		m.chatSession.AddMessage(resp)
+		m.messages = m.chatSession.GetDisplayMessages()
+		m.updateWrappedMessages()
+		return nil
+
+	case "/tasks":
+		userMsg := llm.Message{Role: "user", Content: cmdStr, Timestamp: time.Now()}
+		m.chatSession.AddMessage(userMsg)
+
+		var respContent string
+		if m.currentExecution != nil {
+			history := m.taskManager.GetTaskHistory(m.currentExecution)
+			respContent = fmt.Sprintf("Task history:\n%s", strings.Join(history, "\n"))
+		} else {
+			respContent = "No task execution in progress"
+		}
+		resp := llm.Message{Role: "assistant", Content: respContent, Timestamp: time.Now()}
+		m.chatSession.AddMessage(resp)
+		m.messages = m.chatSession.GetDisplayMessages()
+		m.updateWrappedMessages()
+		return nil
+
+	case "/summary":
+		// summary requires LLM
+		userMsg := llm.Message{Role: "user", Content: cmdStr, Timestamp: time.Now()}
+		m.chatSession.AddMessage(userMsg)
+		if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
+			m.messages = m.chatSession.GetDisplayMessages()
+			m.updateWrappedMessages()
+			return m.generateSummary("session")
+		}
+		errResp := llm.Message{Role: "assistant", Content: "Summary feature requires LLM to be available. Please configure your model and API key.", Timestamp: time.Now()}
+		m.chatSession.AddMessage(errResp)
+		m.messages = m.chatSession.GetDisplayMessages()
+		m.updateWrappedMessages()
+		return nil
+
+	case "/rationale":
+		userMsg := llm.Message{Role: "user", Content: cmdStr, Timestamp: time.Now()}
+		m.chatSession.AddMessage(userMsg)
+		m.messages = m.chatSession.GetDisplayMessages()
+		m.updateWrappedMessages()
+		return m.showRationale()
+
+	case "/test":
+		userMsg := llm.Message{Role: "user", Content: cmdStr, Timestamp: time.Now()}
+		m.chatSession.AddMessage(userMsg)
+		m.messages = m.chatSession.GetDisplayMessages()
+		m.updateWrappedMessages()
+		return m.showTestSummary()
+
+	case "/debug":
+		// toggle debug
+		m.debugEnabled = !m.debugEnabled
+		if m.debugEnabled {
+			taskPkg.EnableTaskDebug()
+		} else {
+			taskPkg.DisableTaskDebug()
+		}
+		status := "disabled"
+		if m.debugEnabled {
+			status = "enabled"
+		}
+		debugInfo := fmt.Sprintf("🔍 **Unified Debug Mode %s**", status)
+		userMsg := llm.Message{Role: "user", Content: cmdStr, Timestamp: time.Now()}
+		m.chatSession.AddMessage(userMsg)
+		resp := llm.Message{Role: "assistant", Content: debugInfo, Timestamp: time.Now()}
+		m.chatSession.AddMessage(resp)
+		m.messages = m.chatSession.GetDisplayMessages()
+		m.updateWrappedMessages()
+		return nil
+
+	case "/help":
+		userMsg := llm.Message{Role: "user", Content: cmdStr, Timestamp: time.Now()}
+		m.chatSession.AddMessage(userMsg)
+		// Reuse helpContent string from earlier path (simplified call)
+		helpContent := `🤖 **Loom Help**\n\nUse /files, /stats, /tasks, /test, /summary, /rationale, /debug, /help, /quit` // shorter help here
+		resp := llm.Message{Role: "assistant", Content: helpContent, Timestamp: time.Now()}
+		m.chatSession.AddMessage(resp)
+		m.messages = m.chatSession.GetDisplayMessages()
+		m.updateWrappedMessages()
+		return nil
+	}
+	return nil
 }
