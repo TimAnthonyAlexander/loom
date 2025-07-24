@@ -34,6 +34,8 @@
 
 • **Fast Code Indexing** – An embedded ripgrep binary indexes >50k files in seconds with lightweight language statistics.
 
+• **AI Project Summary** – On first launch Loom asks the LLM for a concise overview of the repository (based on README, config files & structure) and shows this summary at the top of every Chat session.
+
 • **Multi-Provider LLMs** – Works with OpenAI, Ollama (local), Claude and more (configure in `loom.yaml`).
 
 • **Context Optimisation** – Automatic summarisation keeps prompts inside model limits without losing history.
@@ -85,6 +87,7 @@ loom
 ```
 
 * Loom detects the workspace, indexes your files, launches the TUI and greets you with the **system prompt** describing the project.
+* On first run, Loom also generates an **AI-written project summary** which is cached (per repo) and shown at the top of every Chat view.
 * Ask questions (`"Explain task execution flow"`), request edits, or type `/help` for commands.
 
 ### Minimal CLI usage
@@ -266,4 +269,4 @@ graph TD;
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE). 
+This project is licensed under the [MIT License](LICENSE).
