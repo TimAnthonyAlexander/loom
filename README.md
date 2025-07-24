@@ -1,612 +1,269 @@
-# Loom
-**Advanced AI-Driven Coding Assistant**
+# Loom – Minimalist AI Coding Assistant
 
-A sophisticated terminal-based AI coding assistant written in Go that provides a conversational interface for understanding, modifying, and extending codebases. Features autonomous task execution, intelligent context management, comprehensive security, and seamless project integration.
+<p align="center">
+  <img src="screenshot.png" alt="Loom TUI screenshot" width="720">
+</p>
 
-*Written by Tim Anthony Alexander. I am not a professional Go developer, so bear with me.*
-
-[![CI/CD Pipeline](https://github.com/TimAnthonyAlexander/loom/actions/workflows/ci.yml/badge.svg)](https://github.com/TimAnthonyAlexander/loom/actions/workflows/ci.yml)
-
-![Loom Screenshot](./screenshot.png)
+> **Loom** brings an AI pair-programmer to your terminal. It combines lightning-fast code indexing, a powerful task engine, and streaming LLM integration to read, edit, and even run your code – always under your control.
 
 ---
 
-## Core Capabilities
+## Table of Contents
 
-### Advanced AI Integration
-- **Multi-LLM Support** — OpenAI (GPT-4o, GPT-4.1), Claude (Sonnet 3.5, Opus 4), and Ollama (local models)
-- **Project-Aware Intelligence** — Automatically analyzes project conventions and coding standards  
-- **Autonomous Exploration** — Comprehensive project analysis without requiring explicit prompts
-- **Streaming Responses** — Real-time response streaming for immediate feedback
-
-### Sophisticated Task Execution
-- **Natural Language Tasks** — AI uses intuitive commands like "🔧 READ main.go"
-- **JSON Legacy Support** — Backward compatibility with JSON task format for existing workflows
-- **Sequential Task Manager** — Objective-driven exploration with suppressed intermediate output
-- **Task Confirmation** — Preview and approval for destructive operations
-- **Task Debug Mode** — Troubleshooting for AI task generation issues
-- **User Confirmation** — Safe execution with preview and approval for destructive operations
-
-### Intelligent Context Management
-- **Token-Aware Optimization** — Smart context window management with file references and snippets
-- **Language-Aware Extraction** — Understands code structures (functions, classes, methods)
-- **Auto-Summarization** — AI-powered session, progress, and action plan summaries
-- **File Reference System** — Efficient file summaries without full content inclusion
-
-### Comprehensive Security
-- **Secret Detection** — 25+ patterns for API keys, passwords, tokens, certificates, and PII
-- **Workspace Isolation** — All operations restricted to project workspace
-- **Binary File Protection** — Automatic detection and exclusion of binary files
-- **Gitignore Integration** — Respects .gitignore patterns for file operations
-
-### Enhanced Terminal Interface
-- **Multiple Views** — Chat, File Tree, Tasks with interactive navigation
-- **Interactive Navigation** — Tab switching, scrolling, keyboard shortcuts
-- **Task Confirmation** — Review and approve individual file changes with previews
-- **Task Confirmation** — Clear previews with diff display for all modifications
-- **Progress Tracking** — Real-time task execution status and history
-
-### Testing Integration
-- **Test Discovery** — Automatically finds tests in multiple languages (Go, JavaScript, Python)
-- **Test Execution** — Runs tests and provides AI analysis of failures
-- **Test-First Development** — Optional requirement for tests before implementation
-- **Framework Support** — Go testing, Jest, pytest, and more
-
-### Advanced Workspace Management
-- **Fast Indexing** — Multi-threaded file indexing with real-time watching
-- **Language Detection** — Automatic programming language identification
-- **Cache System** — Compressed index cache for instant startup
-- **File Watching** — Real-time updates with batched processing
-- **Performance Optimized** — Handles large projects efficiently
-
-### Workspace Management
-- **File Operations** — Read, edit, create, and delete files with validation
-- **Pre-condition Validation** — Check file state before destructive operations
-- **Change Tracking** — Monitor file modifications and provide rationales
-
-### Safety Features
-- **Backup Creation** — Automatic backups before file modifications
-- **User Confirmation** — Required approval for all destructive operations
-- **File Validation** — Pre-checks before applying changes
-
-### Session Management
-- **Persistent Sessions** — Chat history preserved across sessions
-- **Crash Recovery** — Automatic detection and recovery from incomplete sessions
-- **Task Audit Trail** — Complete record of all task executions
-- **Auto-save** — Configurable periodic session saving
-- **Session Loading** — Continue from latest or load specific sessions by ID
+1. [Features](#features)
+2. [Quick Install](#quick-install)
+3. [Getting Started](#getting-started)
+4. [Configuration](#configuration)
+5. [Core Concepts](#core-concepts)
+6. [Task Reference](#task-reference)
+7. [Editing with LOOM_EDIT](#editing-with-loom_edit)
+8. [TUI Key-bindings](#tui-key-bindings)
+9. [CLI Commands](#cli-commands)
+10. [Security & Safeguards](#security--safeguards)
+11. [Architecture Overview](#architecture-overview)
+12. [Contributing](#contributing)
+13. [License](#license)
 
 ---
 
-## Installation
+## Features
 
-You can find binaries for all supported architectures in the most recent release assets.
+• **Interactive TUI** – Chat with the AI, browse tasks, view file stats, all in a calm Bubble Tea interface.
 
-## Documentation
+• **Structured Task Engine** – The AI never touches your files directly. It proposes explicit tasks (READ / LIST / RUN / LOOM_EDIT) that **you confirm**.
 
-Full documentation and usage guide available at [https://github.com/TimAnthonyAlexander/loom/wiki](https://github.com/TimAnthonyAlexander/loom/wiki)
+• **Fast Code Indexing** – An embedded ripgrep binary indexes >50k files in seconds with lightweight language statistics.
+
+• **Multi-Provider LLMs** – Works with OpenAI, Ollama (local), Claude and more (configure in `loom.yaml`).
+
+• **Context Optimisation** – Automatic summarisation keeps prompts inside model limits without losing history.
+
+• **Session Recovery & Memory** – Automatic crash recovery and a persistent memory store for long-running projects.
+
+• **Cross-Platform** – Tested on macOS, Linux and Windows (native console & WSL).
+
+---
+
+## Quick Install (binary)
+
+Download the pre-built binary for your operating system from the [latest release](https://github.com/timanthonyalexander/loom/releases/latest):
+
+| Platform | File |
+| -------- | ---- |
+| macOS (Apple Silicon) | `loom-darwin-arm64` |
+| macOS (Intel) | `loom-darwin-amd64` |
+| Linux x86_64 | `loom-linux-amd64` |
+| Windows x86_64 | `loom-windows-amd64.exe` |
+
+### Script to download and install
 
 ```bash
-# Clone and build
-git clone https://github.com/timanthonyalexander/loom
+# macOS arm64 example
+curl -L https://github.com/timanthonyalexander/loom/releases/latest/download/loom-darwin-arm64 \
+  -o /usr/local/bin/loom
+chmod +x /usr/local/bin/loom
+loom --help
+```
+
+### Manual Build (Go ≥ 1.23)
+
+```bash
+git clone https://github.com/timanthonyalexander/loom.git
 cd loom
-go build -o loom .
+make build   # outputs ./bin/loom
 ```
 
-## LLM Setup
+> For local models (Ollama) install [Ollama](https://ollama.ai) separately and pull a model, e.g. `ollama pull codellama`.
 
-### OpenAI Configuration
-```bash
-# Set API key
-export OPENAI_API_KEY="your-api-key-here"
-# OR configure via loom
-./loom config set api_key "your-api-key-here"
+---
 
-# Configure model
-./loom config set model "openai:gpt-4o"
-```
-
-**Available OpenAI Models:**
-- `openai:o3` (recommended)
-- `openai:gpt-4.1` (cheaper)
-
-### Claude Configuration
-```bash
-# Set API key
-export ANTHROPIC_API_KEY="your-api-key-here"
-# OR configure via loom
-./loom config set api_key "your-api-key-here"
-
-# Configure model
-./loom config set model "claude:claude-3-5-sonnet-20241022"
-```
-
-**Available Claude Models:**
-- `claude:claude-3-5-sonnet-20241022` (balanced)
-- `claude:claude-3-5-haiku-20241022` (fast)
-- `claude:claude-opus-4-20250514` (most capable)
-
-### Ollama Setup (Local Models)
-```bash
-# Install and start Ollama
-ollama serve
-
-# Pull a model
-ollama pull codellama
-# OR: ollama pull llama2, phi, deepseek-coder, etc.
-
-# Configure Loom
-./loom config set model "ollama:codellama"
-```
-
-## Quick Start
+## Getting Started
 
 ```bash
-# Initialize loom in your project
-./loom init
-
-# Start interactive AI assistant
-./loom
-
-# Continue from latest session
-./loom --continue
-
-# Load specific session
-./loom --session "session-id"
-
-# Force rebuild workspace index
-./loom index
+# Inside any project directory
+loom
 ```
 
-## Interactive Interface
+* Loom detects the workspace, indexes your files, launches the TUI and greets you with the **system prompt** describing the project.
+* Ask questions (`"Explain task execution flow"`), request edits, or type `/help` for commands.
 
-### Navigation
-- **`Tab`** — Switch between chat, file tree, and tasks views
-- **`↑↓`** — Scroll in chat view
-- **`Enter`** — Send message, approve changes, execute tasks
-- **`y/n`** — Approve/cancel individual tasks
-- **`Ctrl+S`** — Quick summary generation
-- **`Ctrl+C`** — Exit safely
+### Minimal CLI usage
 
-### Special Commands
-- **`/help`** — Show comprehensive command help
-- **`/files`** — Show file count and language breakdown
-- **`/stats`** — Detailed project statistics and index information
-- **`/tasks`** — Task execution history and current status
-- **`/test`** — Test discovery results and execution
-- **`/summary`** — AI-generated session summary (also `Ctrl+S`)
-- **`/rationale`** — Change summaries and explanations
-- **`/debug`** — Toggle task debugging mode
-- **`/quit`** — Exit application
+```bash
+# Re-index workspace (runs automatically when files change)
+loom index
 
-## Task System
-
-Loom's AI can autonomously perform coding tasks through intuitive natural language commands:
-
-### Task Types
-
-#### READ — Intelligent File Reading
-```
-🔧 READ main.go (max: 200 lines)
-🔧 READ config.go (lines 10-50)
-🔧 READ large_file.go (first 300 lines)
-```
-- Smart continuation for large files
-- Contextual snippet extraction
-- Language-aware structure detection
-- Flexible line range and limit options
-
-#### EDIT — Safe File Modification
-```
->>LOOM_EDIT file=docs/CHANGELOG.md REPLACE 4-5
-- First stable release
-- Integrated API layer
-<<LOOM_EDIT
+# Print project stats without TUI
+loom stats
 ```
 
-#### LIST — Directory Exploration
-```
-🔧 LIST .
-🔧 LIST src/ recursive
-🔧 LIST components/
-```
-- Respects .gitignore patterns
-- Language and file type detection
-- Intelligent directory traversal
-- Optional recursive exploration
-
-#### RUN — Command Execution
-```
-🔧 RUN go test
-🔧 RUN npm run build (timeout: 60)
-🔧 RUN go mod tidy
-```
-- User confirmation required
-- Timeout protection
-- Output capture and formatting
-- Configurable timeout settings
-
-### Natural Language vs JSON Format
-
-Loom now uses an intuitive natural language task format that's much more reliable and user-friendly than the previous JSON approach:
-
-#### ✅ **New Natural Language Format (Recommended)**
-```
-🔧 READ main.go (max: 100 lines)
-🔧 LOOM_EDIT config.json
-
-```json
-{
-  "database": {
-    "host": "localhost",
-    "port": 5432
-  }
-}
-```
-```
-
-#### 📜 **Legacy JSON Format (Still Supported)**
-```json
-{"type": "ReadFile", "path": "main.go", "max_lines": 100}
-```
-
-#### **Benefits of Natural Language Format:**
-- **More Reliable** — LLMs generate natural language more consistently than JSON
-- **Human Readable** — Task commands are easy to understand and debug
-- **Less Error-Prone** — No syntax requirements, quotes, or bracket matching
-- **Better UX** — Clear separation between task intent and actual content
-- **Future-Proof** — Works with any LLM model without JSON formatting constraints
-
-### Task Execution Modes
-
-#### Autonomous Mode (Default)
-AI executes tasks automatically with user confirmation for destructive operations.
-
-#### Sequential Exploration
-For comprehensive project analysis:
-1. **Objective Setting** — AI establishes exploration goals
-2. **Suppressed Exploration** — Quiet systematic analysis
-3. **Comprehensive Synthesis** — Detailed architectural summary
-
-#### Task Confirmation
-For file modifications:
-1. **Planning** — AI suggests necessary changes
-2. **Preview** — Show diff of proposed changes
-3. **User Approval** — Review and approve each change individually
-4. **Execution** — Apply approved changes safely
+---
 
 ## Configuration
 
-### Enhanced Configuration Options
+A YAML file named `loom.yaml` in your project (auto-created on first run):
+
+```yaml
+model: "openai:gpt-4o"       # or "ollama:codellama"
+max_context_tokens: 6000       # prompt window
+max_file_size: 200_000         # bytes, truncate large files
+enable_shell: true             # allow RUN tasks (always confirmed)
+```
+
+Set provider credentials via environment variables:
+
+* **OpenAI:** `OPENAI_API_KEY`
+* **Claude:** `CLAUDE_API_KEY`
+
+### LLM Providers
+
+| Provider | Model string | Auth | Notes |
+|----------|--------------|------|-------|
+| **OpenAI** | `openai:gpt-4o`, `openai:gpt-3.5-turbo` | `OPENAI_API_KEY` | Official OpenAI REST with streaming & retries |
+| **Ollama (local)** | `ollama:codellama` (or any pulled model) | – | Requires [Ollama](https://ollama.ai) daemon running locally |
+| **Claude** | `claude:claude-3-opus` | `CLAUDE_API_KEY` | Anthropic Claude v3, full streaming support |
+
+_Implement your own provider by conforming to the simple `llm.LLMAdapter` interface in `llm/`._
+
+---
+
+## Core Concepts
+
+| Concept | Folder | Summary |
+|---------|--------|---------|
+| **Indexer** | `indexer/` | Recursively scans the workspace using an embedded ripgrep, producing language stats & caches. |
+| **LLM Adapters** | `llm/` | Pluggable interfaces for OpenAI, Ollama, Claude. |
+| **Task Engine** | `task/` | Parses LLM replies into JSON tasks, executes them with safety hooks and confirmation dialogs. |
+| **Memory Store** | `memory/` | Lightweight JSON memory with CRUD API exposed to the agent. |
+| **TUI** | `tui/` | Bubble Tea interface: chat, file tree (abstract), task viewer. |
+| **CLI** | `cmd/` | Cobra commands (`index`, `config`, `sessions`, etc.). |
+
+---
+
+## Task Reference
+
+The AI can request:
+
+| Task | Syntax | Purpose |
+|------|--------|---------|
+| **READ** | `READ file.go (lines 40-80)` | Inspect code with SHA + line numbers. |
+| **LIST** | `LIST src/` | Directory listing. |
+| **SEARCH** | `SEARCH "pattern" type:go` | Ripgrep-style code search (no shell). |
+| **RUN** | `RUN go test` | Execute shell commands (needs confirmation & `enable_shell:true`). |
+| **LOOM_EDIT** | see below | Deterministic file edits. |
+
+### Confirmation Flow
+
+1. AI proposes tasks in JSON.
+2. Loom shows a **preview** (for edits it includes a unified diff).
+3. You approve (`y`) or reject (`n`).
+4. Results are streamed back to the AI for further reasoning.
+
+#### Example Interaction
+
 ```json
 {
-  "model": "openai:gpt-4o",
-  "api_key": "your-api-key-here",
-  "base_url": "https://api.openai.com/v1",
-  "enable_shell": false,
-  "max_file_size": 512000,
-  "max_context_tokens": 6000,
-  "enable_test_first": false,
-  "auto_save_interval": "30s",
-  "llm_timeout": 120,
-  "llm_stream_timeout": 300,
-  "llm_max_retries": 3
+  "tasks": [
+    {"type": "READ", "path": "main.go", "max_lines": 120},
+    {"type": "SEARCH", "query": "NewPromptEnhancer", "file_types": ["go"]},
+    {"type": "RUN", "command": "go test ./...", "timeout": 60}
+  ]
 }
 ```
 
-#### Configuration Commands
-```bash
-# View current configuration
-./loom config get model
-./loom config get api_key
+Loom displays file snippets, the diff or command, and waits for your confirmation before executing.
 
-# Set configuration values
-./loom config set model "openai:gpt-4o"
-# OR: ./loom config set model "claude:claude-3-5-sonnet-20241022"
-# OR: ./loom config set model "ollama:codellama"
-./loom config set enable_shell true
-./loom config set max_context_tokens 8000
+---
 
-# Reset to defaults
-rm .loom/config.json
-./loom init
+## Editing with LOOM_EDIT
+
+LOOM_EDIT is a mini-DSL that guarantees safe, line-based edits with SHA verification.
+
+```text
+>>LOOM_EDIT file=path/to/file.go REPLACE 42-45
+// new content here
+<<LOOM_EDIT
 ```
 
-#### Key Settings
-- **`max_context_tokens`** — Context window size (default: 6000)
-- **`enable_test_first`** — Require tests before implementation (default: false)
-- **`auto_save_interval`** — Session persistence frequency (default: "30s")
-- **`enable_shell`** — Allow shell command execution (default: false)
-- **`max_file_size`** — Maximum file size for indexing (default: 512KB)
-- **`llm_timeout`** — LLM request timeout in seconds (default: 120)
-- **`llm_stream_timeout`** — LLM streaming timeout in seconds (default: 300)
-- **`llm_max_retries`** — Maximum retry attempts for failed requests (default: 3)
+Actions: `REPLACE`, `INSERT_AFTER`, `INSERT_BEFORE`, `DELETE`, `SEARCH_REPLACE`, `CREATE`.
 
-### LLM Timeout Configuration
+Rules:
 
-Loom includes robust timeout handling and retry logic to prevent "context deadline exceeded" errors:
+* Always `READ` first to fetch line numbers & SHA.
+* Line numbers are 1-based inclusive.
+* The closing tag `<<LOOM_EDIT` is mandatory.
+* Cross-platform newlines are normalised automatically.
 
-#### Default Timeouts
-- **Regular requests**: 120 seconds (2 minutes)
-- **Streaming requests**: 300 seconds (5 minutes)
-- **Retry attempts**: 3 with exponential backoff
+---
 
-#### For Users Experiencing Frequent Timeouts
+## TUI Key-bindings
 
-If you frequently encounter timeout errors, especially during peak OpenAI usage periods, you can increase the timeout values:
+| Key | Action |
+|-----|--------|
+| **Enter** | Send message / confirm dialog |
+| **Tab** | Switch Chat ↔ File Tree ↔ Tasks |
+| **↑ / ↓** | Scroll messages (Chat) or navigate autocomplete |
+| **Ctrl + S** | Summarise current session |
+| **Ctrl + C** | Cancel streaming / exit confirmation |
+| **/@** | Trigger command / file autocomplete |
 
-```json
-{
-  "llm_timeout": 300,
-  "llm_stream_timeout": 900,
-  "llm_max_retries": 5
-}
+Slash commands inside Chat: `/files`, `/stats`, `/tasks`, `/test`, `/summary`, `/rationale`, `/debug`, `/help`, `/quit`.
+
+---
+
+## CLI Commands
+
+```text
+loom                # Launch interactive TUI (default)
+loom index          # Rebuild file index
+loom config get k   # Get config value
+loom config set k v # Set config value
+loom sessions       # List previous chat sessions
+loom migrate        # Migrate cache format (if prompted after version upgrades)
 ```
 
-#### Retry Logic
-Loom automatically retries failed requests for:
-- **Network issues**: Connection timeouts, DNS failures, temporary network problems
-- **API issues**: Rate limiting (429), server errors (5xx), context deadline exceeded
-- **Temporary failures**: Transient OpenAI API fluctuations
+Run `loom <command> --help` for full usage.
 
-#### Configuration Commands
-```bash
-# Set longer timeouts for slow connections
-./loom config set llm_timeout 300
-./loom config set llm_stream_timeout 600
-./loom config set llm_max_retries 5
+---
 
-# View current timeout settings
-./loom config get llm_timeout
-./loom config get llm_stream_timeout
+## Security & Safeguards
+
+* **Explicit Tasks** – No hidden actions; every file read, edit, or shell command is visible.
+* **Confirmation Dialogs** – Destructive tasks (`RUN`, `LOOM_EDIT`) always require `y / n`.
+* **Workspace Jail** – Access is restricted to the current workspace path – no `../` escapes.
+* **Secret Scrubbing** – Known secret patterns are redacted from file previews.
+* **Safe Defaults** – Shell disabled unless `enable_shell:true`.
+
+---
+
+## Architecture Overview
+
+```mermaid
+graph TD;
+    CLI -->|Cobra| CMD[cmd/]
+    TUI -->|BubbleTea| TUI[tui/]
+    TUI --> TASK_ENGINE
+    CLI --> TASK_ENGINE
+    TASK_ENGINE[task/] --> INDEXER[indexer/]
+    TASK_ENGINE --> MEMORY[memory/]
+    TASK_ENGINE --> LLM
+    LLM -->|Adapters| OPENAI & OLLAMA & CLAUDE
+    TASK_ENGINE --> WORKSPACE((Workspace Files))
 ```
 
-## Security Features
+---
 
-### Secret Detection
-Automatically detects and redacts 25+ types of secrets:
-- **API Keys** — AWS, Google, Azure, GitHub, GitLab
-- **Authentication** — Passwords, tokens, certificates
-- **Database** — Connection strings, credentials
-- **Payment** — Stripe, PayPal keys
-- **Communication** — Slack, Discord tokens
-- **Personal Info** — Email addresses, phone numbers
+## Contributing
 
-### Security Constraints
-- All operations restricted to workspace directory
-- Binary files automatically excluded
-- Secrets redacted from file content
-- User confirmation for destructive operations
-- File size limits prevent resource exhaustion
+1. Fork the repo & clone.
+2. `make test` – run the unit test suite.
+3. Follow Go formatting (`go fmt ./...`).
+4. Open a PR with a clear description. The AI prompt enhancer will guide the review.
 
-## Testing Features
-
-### Test Discovery
-Automatically discovers tests in multiple languages:
-- **Go** — `*_test.go` files with standard testing
-- **JavaScript/TypeScript** — `*.test.js`, `*.spec.js` with Jest/Mocha
-- **Python** — `test_*.py`, `*_test.py` with pytest
-
-### Test Integration
-- **Automatic Execution** — Run tests after code changes
-- **Failure Analysis** — AI analyzes test failures and suggests fixes
-- **Test-First Development** — Optional enforcement of tests before implementation
-- **Framework Support** — Works with popular testing frameworks
-
-### Test Commands
-```bash
-# Discover and run tests
-/test
-
-# Test-specific responses to AI prompts
-"yes" - Run discovered tests
-"no" - Skip testing for now
-```
-
-## Project Statistics & Analysis
-
-### Workspace Analysis
-Loom provides detailed insights into your project:
-- **File Count** — Total files indexed with language breakdown
-- **Size Analysis** — Total project size and file size distribution
-- **Language Detection** — Automatic identification of 30+ programming languages
-- **File Status** — Modified files, language breakdown, change tracking
-- **Change Tracking** — Real-time file modification detection
-
-### Performance Benchmarks
-- **Small Projects** (< 100 files): < 200ms indexing
-- **Medium Projects** (100-1000 files): < 1 second indexing
-- **Large Projects** (1000+ files): < 2 seconds indexing
-- **Cache Reload**: < 50ms for any project size
-- **LLM Streaming**: < 100ms response latency
-
-## Session & Persistence
-
-### Session Features
-- **Persistent History** — Chat preserved across sessions
-- **Crash Recovery** — Automatic detection and recovery
-- **Session Loading** — Continue from latest or specific sessions
-- **Task Auditing** — Complete record of all operations
-- **Auto-save** — Configurable session persistence
-
-### Session Commands
-```bash
-# Continue latest session
-./loom --continue
-
-# Load specific session
-./loom --session "2024-01-15-1430"
-
-# List available sessions
-./loom sessions list
-
-# Clean old sessions
-./loom sessions clean
-```
-
-## Troubleshooting
-
-### LLM Issues
-- **"LLM not available"** — Verify API key and model configuration
-- **OpenAI errors** — Check API key with `echo $OPENAI_API_KEY`
-- **Ollama connection** — Ensure Ollama is running with `ollama serve`
-- **Model not found** — For Ollama, run `ollama pull <model-name>` first
-
-#### Timeout Errors
-- **"context deadline exceeded"** — LLM request timed out, increase timeout values:
-  ```bash
-  ./loom config set llm_timeout 300          # 5 minutes
-  ./loom config set llm_stream_timeout 600   # 10 minutes
-  ./loom config set llm_max_retries 5        # More retry attempts
-  ```
-- **Frequent timeouts** — May occur during peak OpenAI usage; Loom will automatically retry
-- **Streaming timeouts** — For long conversations, streaming timeout is separate from regular timeout
-- **Network issues** — Loom includes exponential backoff retry for transient network problems
-
-### Task Execution Issues
-- **AI explains but doesn't act** — Enable debug mode with `/debug` command
-- **Tasks not parsed** — Check if AI is outputting proper natural language task commands
-- **Task confirmation** — Destructive operations require user approval by design
-
-### Debug Mode
-```bash
-# Enable task debugging
-export LOOM_DEBUG_TASKS=1
-./loom
-
-# Or toggle in session
-/debug
-```
-
-Debug mode shows detailed task parsing information when AI suggests actions but doesn't provide executable task commands. It helps identify when the AI indicates it wants to perform actions but doesn't use the proper natural language task format.
-
-### Performance Issues
-- **Slow indexing** — Check `.gitignore` patterns and exclude large directories
-- **High memory usage** — Reduce `max_file_size` in configuration
-- **Cache corruption** — Delete `.loom/index.cache` and rebuild
-
-### Session Recovery
-```bash
-# Check for recoverable sessions
-./loom sessions recover
-
-# Force clean start
-rm -rf .loom/sessions/
-./loom init
-```
-
-## Example Usage Scenarios
-
-### Project Exploration
-```
-> Tell me about this project
-
-Loom: I'll comprehensively analyze this project. Let me start by reading the README and exploring the structure.
-
-OBJECTIVE: Understand this Go project's architecture and key components
-
-README.md
-root/
-main.go
-...
-
-OBJECTIVE_COMPLETE: This is a sophisticated AI coding assistant built in Go...
-[Detailed architectural analysis follows]
-```
-
-### Code Implementation
-```
-> Add error handling to the main function
-
-Loom: I'll enhance the main function with comprehensive error handling.
-
-📖 Reading file: main.go
-
-🔧 READ main.go
-```
-
-### Testing Integration
-```
-> Run the tests
-
-Test Discovery Complete
-Found 15 tests in the workspace. Would you like to run them?
-
-> yes
-
-All tests passed! Your changes look good.
-Test Results: 15 passed, 0 failed, 0 skipped
-```
-
-### File Management
-```
-> Show me the current workspace state
-
-Workspace Status:
-Files: 42 indexed
-Languages: Go 78.2%, Markdown 12.1%, YAML 9.7%
-Recent changes: 3 files modified
-Tasks: Ready
-
-> Tell me about the recent changes
-
-Recent Changes:
-• Enhanced main.go with error handling
-• Updated configuration structure
-• Added comprehensive documentation
-```
-
-## Advanced Features
-
-### Autonomous Exploration
-Loom can autonomously explore and understand codebases:
-- **Project Convention Analysis** — Automatically detects coding standards
-- **Architectural Insights** — Understands component relationships
-- **Technology Stack Analysis** — Identifies frameworks and patterns
-- **Best Practice Detection** — Recognizes project-specific conventions
-
-### Context Optimization
-- **Smart Token Management** — Efficient use of LLM context windows
-- **File Reference System** — Summaries instead of full file inclusion
-- **Language-Aware Snippets** — Extracts meaningful code structures
-- **Auto-Summarization** — Compresses chat history intelligently
-
-### File Operations
-- **Individual Changes** — Edit, create, and delete files one at a time
-- **Change Preview** — Review all file modifications before application
-- **Task Confirmation** — Interactive approval for each operation
-- **Safe Execution** — Backup and validation for all changes
-
-## Future Roadmap
-
-- **Advanced Code Analysis** — Syntax tree parsing and AST manipulation
-- **Plugin System** — Custom task types and integrations
-- **IDE Integration** — Language server protocol support
-- **Multi-file Search/Replace** — Pattern-based modifications
-- **Project Templates** — Scaffolding with customizable generators
-- **CI/CD Integration** — Pipeline integration and automation
-- **Real-time Collaboration** — Shared sessions and pair programming
-- **Advanced Debugging** — Integrated debugger and profiler support
-- **Code Quality Metrics** — Automated code review and suggestions
+> **Coding style**: Small, composable functions, explicit error returns, table-driven tests.
 
 ---
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-I am not expecting anyone to contribute as I started this as a little project just for myself.
-
-## Acknowledgments
-
-Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea) for the terminal interface, [fsnotify](https://github.com/fsnotify/fsnotify) for efficient file watching, [Cobra](https://github.com/spf13/cobra) for CLI command structure, and OpenAI, Claude, and Ollama for LLM integration.
-
-*Tim Anthony Alexander, 2025.*
+This project is licensed under the [MIT License](LICENSE). 
