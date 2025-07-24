@@ -162,6 +162,13 @@ type model struct {
 	fileAutocompleteSelectedIndex int      // Currently selected file index
 	fileAutocompleteStartPos      int      // Position in input where @ was typed
 
+	// Command autocomplete (e.g., /help, /stats)
+	commandAutocompleteActive        bool     // Whether command autocomplete is active
+	commandAutocompleteQuery         string   // Current query for command autocomplete
+	commandAutocompleteCandidates    []string // Matching commands
+	commandAutocompleteSelectedIndex int      // Selected command index
+	commandAutocompleteStartPos      int      // Position in input where / was typed
+
 	// LLM integration
 	llmAdapter       llm.LLMAdapter
 	chatSession      *chat.Session
@@ -169,6 +176,8 @@ type model struct {
 	isStreaming      bool
 	llmError         error
 	streamChan       chan llm.StreamChunk
+	// Allows external interruption of an active LLM request
+	streamCancel context.CancelFunc
 
 	// Task execution
 	taskManager       *taskPkg.Manager
@@ -223,14 +232,29 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "n", "N":
 				return m.handleTaskConfirmation(false)
 			case "ctrl+c":
-				return m, tea.Quit
+				// Ctrl+C no longer quits. Ignore inside confirmation dialog.
+				return m, nil
 			}
 			return m, nil // Ignore other keys during confirmation
 		}
 
 		switch msg.String() {
 		case "ctrl+c":
-			return m, tea.Quit
+			// If streaming, cancel the ongoing LLM request instead of quitting.
+			if m.isStreaming {
+				if m.streamCancel != nil {
+					m.streamCancel()
+					m.streamCancel = nil
+				}
+				m.isStreaming = false
+				m.streamChan = nil
+				// Optional: add a brief message so the user knows the stream was interrupted.
+				interruptMsg := llm.Message{Role: "assistant", Content: "⏹️ Streaming interrupted.", Timestamp: time.Now()}
+				m.chatSession.AddMessage(interruptMsg)
+				m.messages = m.chatSession.GetDisplayMessages()
+				m.updateWrappedMessages()
+			}
+			return m, nil
 		case "ctrl+s":
 			// Generate summary with Ctrl+S
 			if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
@@ -261,19 +285,31 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "up":
 			// File autocomplete navigation
-			if m.fileAutocompleteActive && m.fileAutocompleteSelectedIndex > 0 {
-				m.fileAutocompleteSelectedIndex--
+			if m.commandAutocompleteActive {
+				if m.commandAutocompleteSelectedIndex > 0 {
+					m.commandAutocompleteSelectedIndex--
+				}
+				return m, nil
+			} else if m.fileAutocompleteActive {
+				if m.fileAutocompleteSelectedIndex > 0 {
+					m.fileAutocompleteSelectedIndex--
+				}
 				return m, nil
 			} else if m.currentView == viewChat && m.messageScroll > 0 {
 				m.messageScroll--
 			}
 		case "down":
 			// File autocomplete navigation
-			if m.fileAutocompleteActive {
+			if m.commandAutocompleteActive {
+				if m.commandAutocompleteSelectedIndex < len(m.commandAutocompleteCandidates)-1 {
+					m.commandAutocompleteSelectedIndex++
+				}
+				return m, nil
+			} else if m.fileAutocompleteActive {
 				if m.fileAutocompleteSelectedIndex < len(m.fileAutocompleteCandidates)-1 {
 					m.fileAutocompleteSelectedIndex++
-					return m, nil
 				}
+				return m, nil
 			} else if m.currentView == viewChat {
 				maxScroll := len(m.messageLines) - m.getAvailableMessageHeight()
 				if maxScroll > 0 && m.messageScroll < maxScroll {
@@ -281,14 +317,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case "esc":
-			// Cancel file autocomplete
+			// Cancel autocompletes
 			if m.fileAutocompleteActive {
 				m.fileAutocompleteActive = false
+			}
+			if m.commandAutocompleteActive {
+				m.commandAutocompleteActive = false
 				return m, nil
 			}
 		case "enter":
-			// Handle file autocomplete selection
-			if m.fileAutocompleteActive {
+			// Handle command autocomplete selection
+			if m.commandAutocompleteActive {
+				m.selectCommandAutocomplete()
+				return m, nil
+			} else if m.fileAutocompleteActive {
 				m.selectFileAutocomplete()
 				return m, nil
 			} else if m.currentView == viewChat && strings.TrimSpace(m.input) != "" && !m.isStreaming {
@@ -498,7 +540,8 @@ Current Status:
 • ↑↓ - Scroll in chat view
 • Enter - Send message or confirm actions
 • Ctrl+S - Quick summary generation
-• Ctrl+C - Exit application
+• Ctrl+C - Cancel streaming
+• /quit - Exit application
 
 **Special Commands:**
 • /files - Show file count and language breakdown
@@ -627,18 +670,32 @@ Ask me anything about your code, architecture, or programming questions!`
 			}
 		case "backspace":
 			if m.currentView == viewChat && len(m.input) > 0 && !m.isStreaming {
-				// If in autocomplete mode, update the query
+				// Handle command autocomplete backspace
+				if m.commandAutocompleteActive {
+					if m.commandAutocompleteStartPos == len(m.input)-1 {
+						m.commandAutocompleteActive = false
+					} else {
+						m.input = m.input[:len(m.input)-1]
+						m.commandAutocompleteQuery = m.input[m.commandAutocompleteStartPos+1:]
+						m.commandAutocompleteCandidates = m.getCommandCandidates(m.commandAutocompleteQuery)
+						if m.commandAutocompleteSelectedIndex >= len(m.commandAutocompleteCandidates) {
+							m.commandAutocompleteSelectedIndex = len(m.commandAutocompleteCandidates) - 1
+						}
+						return m, nil
+					}
+				}
+				// Handle file autocomplete backspace
 				if m.fileAutocompleteActive {
 					// If we're right after the @ symbol, cancel autocomplete
 					if m.fileAutocompleteStartPos == len(m.input)-1 {
 						m.fileAutocompleteActive = false
 					} else {
-						// Otherwise update the query
 						m.input = m.input[:len(m.input)-1]
 						m.fileAutocompleteQuery = m.input[m.fileAutocompleteStartPos+1:]
 						return m, m.updateFileAutocompleteCandidates()
 					}
 				}
+
 				m.input = m.input[:len(m.input)-1]
 			}
 		case "@":
@@ -657,9 +714,39 @@ Ask me anything about your code, architecture, or programming questions!`
 
 				return m, m.updateFileAutocompleteCandidates()
 			}
+		case "/":
+			if m.currentView == viewChat && !m.isStreaming {
+				m.input += "/"
+				// Trigger command autocomplete only if this is the first character (start of input)
+				if len(m.input) == 1 {
+					m.commandAutocompleteActive = true
+					m.commandAutocompleteQuery = ""
+					m.commandAutocompleteCandidates = m.getCommandCandidates("")
+					m.commandAutocompleteSelectedIndex = 0
+					m.commandAutocompleteStartPos = len(m.input) - 1
+				}
+				return m, nil
+			}
 		default:
 			if m.currentView == viewChat && !m.isStreaming {
-				if m.fileAutocompleteActive {
+				// Handle characters during command autocomplete first
+				if m.commandAutocompleteActive {
+					char := msg.String()
+					// Space ends autocomplete
+					if char == " " {
+						m.commandAutocompleteActive = false
+						m.input += char
+						return m, nil
+					}
+
+					m.input += char
+					m.commandAutocompleteQuery = m.input[m.commandAutocompleteStartPos+1:]
+					m.commandAutocompleteCandidates = m.getCommandCandidates(m.commandAutocompleteQuery)
+					if m.commandAutocompleteSelectedIndex >= len(m.commandAutocompleteCandidates) {
+						m.commandAutocompleteSelectedIndex = len(m.commandAutocompleteCandidates) - 1
+					}
+					return m, nil
+				} else if m.fileAutocompleteActive {
 					// Handle characters typed during autocomplete
 					char := msg.String()
 
@@ -920,12 +1007,20 @@ func (m model) View() string {
 			Width(m.width - 2).
 			Render(inputContent)
 
-		// Add file autocomplete dropdown if active
+		// Add autocomplete dropdowns if active
 		if m.fileAutocompleteActive {
 			autocompleteView := m.renderFileAutocomplete()
 			// Style the autocomplete view to ensure it's clearly visible
 			styledAutocomplete := lipgloss.NewStyle().
 				Margin(1, 0, 0, 2). // Add margin for visibility (top, right, bottom, left)
+				MaxWidth(m.width - 10).
+				Render(autocompleteView)
+
+			mainContent = lipgloss.JoinVertical(lipgloss.Left, messages, input, styledAutocomplete)
+		} else if m.commandAutocompleteActive {
+			autocompleteView := m.renderCommandAutocomplete()
+			styledAutocomplete := lipgloss.NewStyle().
+				Margin(1, 0, 0, 2).
 				MaxWidth(m.width - 10).
 				Render(autocompleteView)
 
@@ -963,11 +1058,11 @@ func (m model) View() string {
 	var helpText string
 	switch m.currentView {
 	case viewChat:
-		helpText = "Tab: Views  •  ↑↓: Scroll  •  Ctrl+S: Summary  •  /help: Commands  •  Ctrl+C: Quit"
+		helpText = "Tab: Views  •  ↑↓: Scroll  •  Ctrl+S: Summary  •  /help: Commands  •  Ctrl+C: Cancel"
 	case viewFileTree:
-		helpText = "Tab: Chat/Tasks  •  /help: All Commands  •  Ctrl+C: Quit"
+		helpText = "Tab: Chat/Tasks  •  /help: All Commands  •  Ctrl+C: Cancel"
 	case viewTasks:
-		helpText = "Tab: Chat/File Tree  •  /help: All Commands  •  Ctrl+C: Quit"
+		helpText = "Tab: Chat/File Tree  •  /help: All Commands  •  Ctrl+C: Cancel"
 	}
 
 	nav := lipgloss.NewStyle().
@@ -1205,6 +1300,8 @@ func (m *model) sendToLLMWithTasks(userInput string) tea.Cmd {
 
 		// Create context with timeout
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		// Save cancel func so we can interrupt with Ctrl+C
+		m.streamCancel = cancel
 
 		// Get messages for the LLM with optimized context
 		var messages []llm.Message
@@ -1255,6 +1352,7 @@ func (m *model) continueLLMAfterTasks() tea.Cmd {
 	return func() tea.Msg {
 		// Create context with timeout
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		m.streamCancel = cancel
 
 		// Get messages for the LLM with optimized context
 		var messages []llm.Message
@@ -2874,4 +2972,77 @@ func (m *model) formatTaskResultForLLM(task *taskPkg.Task, response *taskPkg.Tas
 		Content:   content.String(),
 		Timestamp: time.Now(),
 	}
+}
+
+// selectCommandAutocomplete selects the highlighted command suggestion
+func (m *model) selectCommandAutocomplete() {
+	if len(m.commandAutocompleteCandidates) == 0 {
+		m.commandAutocompleteActive = false
+		return
+	}
+
+	selected := m.commandAutocompleteCandidates[m.commandAutocompleteSelectedIndex]
+
+	beforeSlash := m.input[:m.commandAutocompleteStartPos]
+	afterQuery := m.input[m.commandAutocompleteStartPos+1+len(m.commandAutocompleteQuery):]
+
+	// Insert the full selected command (which already includes the leading '/')
+	m.input = beforeSlash + selected + " " + afterQuery
+	m.commandAutocompleteActive = false
+}
+
+// getCommandCandidates returns commands matching the query prefix (case-insensitive)
+func (m *model) getCommandCandidates(query string) []string {
+	commands := []string{"/files", "/stats", "/tasks", "/test", "/summary", "/rationale", "/debug", "/help", "/quit"}
+
+	if query == "" {
+		return commands
+	}
+
+	lower := strings.ToLower(query)
+	var res []string
+	for _, cmd := range commands {
+		withoutSlash := strings.TrimPrefix(cmd, "/")
+		if strings.HasPrefix(strings.ToLower(withoutSlash), lower) {
+			res = append(res, cmd)
+		}
+	}
+	return res
+}
+
+// renderCommandAutocomplete renders the command autocomplete dropdown
+func (m model) renderCommandAutocomplete() string {
+	if !m.commandAutocompleteActive {
+		return ""
+	}
+
+	if len(m.commandAutocompleteCandidates) == 0 {
+		return fileAutocompleteStyle.
+			Width(40).
+			Render("⌨️ No matching commands\n\nType to search or press Esc to cancel")
+	}
+
+	var sb strings.Builder
+	maxWidth := 0
+	for _, cmd := range m.commandAutocompleteCandidates {
+		if len(cmd) > maxWidth {
+			maxWidth = len(cmd)
+		}
+	}
+	maxWidth += 6
+
+	sb.WriteString("⌨️ Commands matching: " + m.commandAutocompleteQuery + "\n\n")
+
+	for i, cmd := range m.commandAutocompleteCandidates {
+		if i == m.commandAutocompleteSelectedIndex {
+			highlighted := fileAutocompleteSelectedStyle.Render(" " + cmd + " ")
+			sb.WriteString("▶ " + highlighted + "\n")
+		} else {
+			sb.WriteString("  " + cmd + "\n")
+		}
+	}
+
+	sb.WriteString("\n↑↓: Select • Enter: Choose • Esc: Cancel")
+
+	return fileAutocompleteStyle.Width(maxWidth).Render(sb.String())
 }
