@@ -2454,6 +2454,16 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 		taskEventChan = make(chan taskPkg.TaskExecutionEvent, 10)
 	}
 
+	// -----------------------------------------------------------
+	// Project summary (generate once per workspace and cache)
+	// -----------------------------------------------------------
+	projectSummary := ""
+	if summary, err := loadOrGenerateProjectSummary(workspacePath, idx, llmAdapter); err == nil {
+		projectSummary = strings.TrimSpace(summary)
+	} else {
+		fmt.Printf("Warning: failed to load/generate project summary: %v\n", err)
+	}
+
 	// Add enhanced system prompt if this is a new session (no previous messages)
 	if len(chatSession.GetMessages()) == 0 {
 		promptEnhancer := llm.NewPromptEnhancer(workspacePath, idx)
@@ -2468,11 +2478,18 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 	}
 
 	m := model{
-		workspacePath:     workspacePath,
-		config:            cfg,
-		index:             idx,
-		input:             "",
-		messages:          chatSession.GetDisplayMessages(),
+		workspacePath: workspacePath,
+		config:        cfg,
+		index:         idx,
+		input:         "",
+		messages: func() []string {
+			msgs := chatSession.GetDisplayMessages()
+			if projectSummary != "" {
+				summaryDisplay := fmt.Sprintf("Loom: 📄 **Project Summary**\n\n%s", projectSummary)
+				msgs = append([]string{summaryDisplay, ""}, msgs...)
+			}
+			return msgs
+		}(),
 		currentView:       viewChat,
 		llmAdapter:        llmAdapter,
 		chatSession:       chatSession,
