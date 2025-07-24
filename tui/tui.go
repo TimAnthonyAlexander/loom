@@ -215,6 +215,9 @@ type model struct {
 
 	// User visible input
 	userVisibleInput string
+
+	// Cached project summary to display at top of chat
+	projectSummary string
 }
 
 func (m model) Init() tea.Cmd {
@@ -2230,6 +2233,12 @@ func (m *model) updateWrappedMessages() {
 
 // updateWrappedMessagesWithOptions updates the wrapped message lines with auto-scroll options
 func (m *model) updateWrappedMessagesWithOptions(forceAutoScroll bool) {
+	// Ensure project summary appears at the top of chat view
+	if m.projectSummary != "" {
+		if len(m.messages) == 0 || m.messages[0] != m.projectSummary {
+			m.messages = append([]string{m.projectSummary, ""}, m.messages...)
+		}
+	}
 	if m.width <= 0 {
 		m.width = 80 // Default width
 	}
@@ -2512,6 +2521,7 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 		// Initialize completion detection
 		completionDetector:  taskPkg.NewCompletionDetector(),
 		maxCompletionChecks: 5, // Allow more thorough completion checking
+		projectSummary:      projectSummary,
 	}
 
 	// Set up unified debug handler to send debug messages to chat instead of breaking TUI
