@@ -238,6 +238,76 @@ func (cm *ContextManager) condenseMessage(msg llm.Message) (llm.Message, int) {
 		return msg, cm.tokenEstimator.EstimateTokens(msg.Content)
 	}
 
+	// Preserve search results since they're critical for filename searches
+	// Specifically preserve the FOUND FILES MATCHING NAME section
+	if strings.Contains(msg.Content, "TASK_RESULT:") &&
+		(strings.Contains(msg.Content, "Search for") ||
+			strings.Contains(msg.Content, "SEARCH") ||
+			strings.Contains(msg.Content, "🔍")) {
+		// Special handling for search results to preserve filename results
+		if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
+			// This is a critical search result with filename matches
+			// Keep it intact or do minimal condensing if it's extremely long
+			content := msg.Content
+			if len(content) > 5000 {
+				// If it's extremely long, keep the TASK_RESULT line, the section headers,
+				// and all filename matches but truncate other content
+				lines := strings.Split(content, "\n")
+				var condensed strings.Builder
+				inFilenameSection := false
+				filenameSectionFound := false
+
+				for _, line := range lines {
+					// Always keep task result header and section headers
+					if strings.Contains(line, "TASK_RESULT:") ||
+						strings.Contains(line, "ATTENTION LLM") ||
+						strings.Contains(line, "PATH:") ||
+						strings.Contains(line, "SUMMARY:") {
+						condensed.WriteString(line)
+						condensed.WriteString("\n")
+						continue
+					}
+
+					// Detect filename section
+					if strings.Contains(line, "FOUND FILES MATCHING NAME") {
+						inFilenameSection = true
+						filenameSectionFound = true
+						condensed.WriteString(line)
+						condensed.WriteString("\n")
+						continue
+					}
+
+					// End of filename section
+					if inFilenameSection && strings.Contains(line, "────") {
+						inFilenameSection = false
+						condensed.WriteString(line)
+						condensed.WriteString("\n")
+						condensed.WriteString("\n[Content matches truncated for brevity]\n")
+						continue
+					}
+
+					// Within filename section, keep all lines
+					if inFilenameSection {
+						condensed.WriteString(line)
+						condensed.WriteString("\n")
+						continue
+					}
+				}
+
+				if filenameSectionFound {
+					return llm.Message{
+						Role:      msg.Role,
+						Content:   condensed.String(),
+						Timestamp: msg.Timestamp,
+					}, cm.tokenEstimator.EstimateTokens(condensed.String())
+				}
+			}
+
+			// Not extremely long or no filename section found, return as-is
+			return msg, cm.tokenEstimator.EstimateTokens(content)
+		}
+	}
+
 	// For long messages, extract key parts
 	content := msg.Content
 	if len(content) > 1000 {

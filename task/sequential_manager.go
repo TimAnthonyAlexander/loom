@@ -506,6 +506,14 @@ func (stm *SequentialTaskManager) cleanSynthesisContent(synthesis string) string
 // formatTaskResultForExploration formats task results for the hidden exploration context
 func (stm *SequentialTaskManager) formatTaskResultForExploration(task *Task, response *TaskResponse) llm.Message {
 	var content strings.Builder
+	
+	// DEBUG: Log task type and search flags
+	fmt.Printf("DEBUG: Formatting task result - Type: %s, Path: %s\n", task.Type, task.Path)
+	if task.Type == TaskTypeSearch {
+		fmt.Printf("DEBUG: Search task details - Query: '%s', SearchNames: %v, CombineResults: %v\n", 
+			task.Query, task.SearchNames, task.CombineResults)
+		fmt.Printf("DEBUG: ActualContent starts with: %s\n", truncateForLog(response.ActualContent, 100))
+	}
 
 	content.WriteString(fmt.Sprintf("TASK_RESULT: %s\n", task.Description()))
 
@@ -523,12 +531,36 @@ func (stm *SequentialTaskManager) formatTaskResultForExploration(task *Task, res
 			content.WriteString(fmt.Sprintf("ERROR: %s\n", response.Error))
 		}
 	}
-
-	return llm.Message{
+	
+	// DEBUG: Log what we're returning
+	resultMsg := llm.Message{
 		Role:      "assistant",
 		Content:   content.String(),
 		Timestamp: time.Now(),
 	}
+	fmt.Printf("DEBUG: Returning result with role '%s' and content length %d\n", 
+		resultMsg.Role, len(resultMsg.Content))
+	if strings.Contains(resultMsg.Content, "FOUND FILES MATCHING NAME") {
+		fmt.Printf("DEBUG: Result contains filename search results\n")
+	} else if task.Type == TaskTypeSearch && task.SearchNames {
+		fmt.Printf("DEBUG: WARNING! Filename search but no FOUND FILES in result\n")
+	}
+
+	return resultMsg
+}
+
+// Helper function to truncate strings for log output
+func truncateForLog(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
+}
+
+// FormatTaskResultForTest exposes formatTaskResultForExploration for testing
+func (stm *SequentialTaskManager) FormatTaskResultForTest(task *Task, response *TaskResponse) string {
+	msg := stm.formatTaskResultForExploration(task, response)
+	return msg.Content
 }
 
 // addToExplorationContext adds a message to the hidden exploration context
