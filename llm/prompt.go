@@ -236,7 +236,6 @@ When searching for files, use grep or ripgrep to locate files, and use the SEARC
 **LIST**: List directory contents
 - 🔧 LIST . (current directory)
 - 🔧 LIST src/ (specific directory)
-- 🔧 LIST . recursive (recursive listing)
 
 **READ**: Read file contents with line numbers
 - 🔧 READ filename.go (reads with default 200 line limit)
