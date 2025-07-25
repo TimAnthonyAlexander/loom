@@ -508,8 +508,8 @@ func (stm *SequentialTaskManager) ParseSingleTask(llmResponse string) (*Task, st
 		}
 
 		// Parse options, including the "including filename matches" phrase
-		if strings.Contains(strings.ToLower(options), "filename") || 
-		   strings.Contains(strings.ToLower(options), "name") {
+		if strings.Contains(strings.ToLower(options), "filename") ||
+			strings.Contains(strings.ToLower(options), "name") {
 			task.SearchNames = true
 		}
 
