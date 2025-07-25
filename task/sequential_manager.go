@@ -490,7 +490,43 @@ func (stm *SequentialTaskManager) ParseSingleTask(llmResponse string) (*Task, st
 		responsePreview = responsePreview[:100] + "..."
 	}
 
-	// Look for single SEARCH pattern first
+	// CRITICAL FIX: Look for the emoji search pattern reported by the user
+	emojiSearchPattern := regexp.MustCompile(`(?i)(?:Task:)?\s*🔍\s*Search\s+(?:for)?\s*['"]?(.+?)['"]?(?:\s+\(([^)]+)\))?$`)
+	if matches := emojiSearchPattern.FindStringSubmatch(llmResponse); len(matches) > 0 {
+		// Extract search query (first capture group)
+		searchQuery := matches[1]
+		var options string
+		if len(matches) > 2 {
+			options = matches[2]
+		}
+
+		// Create a search task
+		task := &Task{
+			Type:  TaskTypeSearch,
+			Path:  ".",
+			Query: searchQuery,
+		}
+
+		// Parse options, including the "including filename matches" phrase
+		if strings.Contains(strings.ToLower(options), "filename") || 
+		   strings.Contains(strings.ToLower(options), "name") {
+			task.SearchNames = true
+		}
+
+		if strings.Contains(strings.ToLower(options), "content") {
+			task.CombineResults = true
+		}
+
+		// Default to searching both if no specific option is provided
+		if !task.SearchNames && !task.CombineResults {
+			task.SearchNames = true
+			task.CombineResults = true
+		}
+
+		return task, "", nil
+	}
+
+	// Look for single SEARCH pattern (standard format)
 	searchPattern := regexp.MustCompile(`(?i)^SEARCH\s+(.+?)(?:\s+(.+))?$`)
 	if matches := searchPattern.FindStringSubmatch(llmResponse); len(matches) > 0 {
 		// Extract search query and options
@@ -511,12 +547,16 @@ func (stm *SequentialTaskManager) ParseSingleTask(llmResponse string) (*Task, st
 		if strings.Contains(strings.ToLower(options), "name") ||
 			strings.Contains(strings.ToLower(options), "file") {
 			task.SearchNames = true
-
 		}
 
 		if strings.Contains(strings.ToLower(options), "content") {
 			task.CombineResults = true
+		}
 
+		// Default to both if neither is specified
+		if !task.SearchNames && !task.CombineResults {
+			task.SearchNames = true
+			task.CombineResults = true
 		}
 
 		return task, "", nil
@@ -525,7 +565,6 @@ func (stm *SequentialTaskManager) ParseSingleTask(llmResponse string) (*Task, st
 	// Try parsing as JSON task
 	var taskList TaskList
 	if err := json.Unmarshal([]byte(llmResponse), &taskList); err == nil && len(taskList.Tasks) > 0 {
-
 		return &taskList.Tasks[0], stm.extractNonTaskContent(llmResponse), nil
 	}
 
@@ -533,19 +572,16 @@ func (stm *SequentialTaskManager) ParseSingleTask(llmResponse string) (*Task, st
 	var task Task
 	if err := json.Unmarshal([]byte(llmResponse), &task); err == nil {
 		if task.Type != "" {
-
 			return &task, stm.extractNonTaskContent(llmResponse), nil
 		}
 	}
 
 	// Try parsing as raw task JSON
 	if task, content, err := stm.parseRawTaskJSON(llmResponse); err == nil && task != nil {
-
 		return task, content, nil
 	}
 
 	// No task found
-
 	return nil, llmResponse, nil
 }
 
