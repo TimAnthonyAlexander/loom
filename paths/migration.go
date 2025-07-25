@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // MigrationStatus represents the status of migration for a workspace
@@ -223,46 +222,4 @@ func copyDirectory(src, dst string) error {
 
 		return copyFile(path, destPath)
 	})
-}
-
-// ListLegacyWorkspaces finds all workspaces that have legacy .loom directories
-func ListLegacyWorkspaces(searchPaths []string) ([]MigrationStatus, error) {
-	var legacyWorkspaces []MigrationStatus
-
-	for _, searchPath := range searchPaths {
-		err := filepath.Walk(searchPath, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return nil // Skip errors
-			}
-
-			// Look for .loom directories
-			if info.IsDir() && info.Name() == ".loom" {
-				workspacePath := filepath.Dir(path)
-
-				// Skip if this is inside another .loom directory
-				if strings.Contains(workspacePath, ".loom") {
-					return nil
-				}
-
-				status, err := CheckMigrationStatus(workspacePath)
-				if err != nil {
-					return nil // Skip errors
-				}
-
-				if status.HasLegacyLoom && status.MigrationNeeded {
-					legacyWorkspaces = append(legacyWorkspaces, *status)
-				}
-
-				return filepath.SkipDir // Don't recurse into .loom
-			}
-
-			return nil
-		})
-
-		if err != nil {
-			return nil, fmt.Errorf("failed to search %s: %w", searchPath, err)
-		}
-	}
-
-	return legacyWorkspaces, nil
 }

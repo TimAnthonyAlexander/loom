@@ -1,7 +1,6 @@
 package loom_edit
 
 import (
-	"crypto/sha1"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -221,10 +220,6 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 	}
 
 	return cmd, nil
-}
-
-func HashContent(content string) string {
-	return fmt.Sprintf("%x", sha1.Sum([]byte(content)))
 }
 
 // ApplyEdit applies an EditCommand to a file

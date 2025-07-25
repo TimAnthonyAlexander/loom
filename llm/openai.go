@@ -349,13 +349,3 @@ func (o *OpenAIAdapter) GetModelName() string {
 func (o *OpenAIAdapter) IsAvailable() bool {
 	return o.config.APIKey != "" && o.config.Model != ""
 }
-
-// parseOpenAIModel extracts the model name from a model string like "openai:gpt-4o"
-func parseOpenAIModel(modelStr string) string {
-	parts := strings.SplitN(modelStr, ":", 2)
-	if len(parts) == 2 && parts[0] == "openai" {
-		return parts[1]
-	}
-	// Fallback - assume it's just the model name
-	return modelStr
-}

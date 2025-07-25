@@ -301,8 +301,3 @@ func (s *Summarizer) filterProgressMessages(messages []llm.Message) []llm.Messag
 	}
 	return filtered
 }
-
-// IsAvailable checks if the summarizer can be used
-func (s *Summarizer) IsAvailable() bool {
-	return s.llmAdapter != nil && s.llmAdapter.IsAvailable()
-}
