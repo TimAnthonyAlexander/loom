@@ -317,9 +317,6 @@ func ApplyEdit(filePath string, cmd *EditCommand) error {
 	if err != nil {
 		// Special handling for file not found when using REPLACE
 		if os.IsNotExist(err) && cmd.Action == "REPLACE" {
-			// We'll create a new file with the content
-			fmt.Printf("File %s not found, will create new file\n", filePath)
-
 			// For new files, ensure directory exists
 			dir := filepath.Dir(filePath)
 			if err := os.MkdirAll(dir, 0755); err != nil {

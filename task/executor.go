@@ -370,7 +370,7 @@ func (e *Executor) applyLoomEdit(task *Task, fullPath string) *TaskResponse {
 	if editCmd.Action == "REPLACE" || editCmd.Action == "DELETE" {
 		if editCmd.Start == editCmd.End {
 			// This is allowed, but let's log it for visibility
-			fmt.Printf("Note: %s action with single line range %d-%d\n", editCmd.Action, editCmd.Start, editCmd.End)
+			// fmt.Printf("Note: %s action with single line range %d-%d\n", editCmd.Action, editCmd.Start, editCmd.End)
 		}
 	}
 
