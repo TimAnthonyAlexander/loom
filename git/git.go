@@ -481,3 +481,21 @@ func (status *RepositoryStatus) FormatStatus() string {
 
 	return strings.Join(parts, ", ")
 }
+
+func NewRepository(workspacePath string) (*Repository, error) {
+	repo := &Repository{
+		workspacePath: workspacePath,
+	}
+
+	// Check if this is a Git repository
+	if err := repo.checkGitRepo(); err != nil {
+		return repo, nil // Not a Git repo, return empty repo
+	}
+
+	// Load basic repository info
+	if err := repo.loadRepositoryInfo(); err != nil {
+		return nil, fmt.Errorf("failed to load repository info: %w", err)
+	}
+
+	return repo, nil
+}

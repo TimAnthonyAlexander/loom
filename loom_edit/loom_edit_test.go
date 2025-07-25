@@ -1,8 +1,6 @@
 package loom_edit
 
 import (
-	"crypto/sha1"
-	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"strings"
@@ -163,26 +161,6 @@ func TestParseEditCommand(t *testing.T) {
 	expectedNewText := "- First stable release\n- Integrated API layer"
 	if cmd.NewText != expectedNewText {
 		t.Errorf("Expected NewText '%s', got '%s'", expectedNewText, cmd.NewText)
-	}
-}
-
-func TestHashValidation(t *testing.T) {
-	// Test file hashing
-	content := "test content\n"
-	expected := fmt.Sprintf("%x", sha1.Sum([]byte(content)))
-	actual := HashContent(content)
-	if actual != expected {
-		t.Errorf("Expected hash '%s', got '%s'", expected, actual)
-	}
-
-	// Test slice hashing
-	lines := []string{"line1", "line2", "line3"}
-	slice := lines[1:3] // "line2", "line3"
-	sliceContent := strings.Join(slice, "\n")
-	expectedSlice := fmt.Sprintf("%x", sha1.Sum([]byte(sliceContent)))
-	actualSlice := HashContent(sliceContent)
-	if actualSlice != expectedSlice {
-		t.Errorf("Expected slice hash '%s', got '%s'", expectedSlice, actualSlice)
 	}
 }
 

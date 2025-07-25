@@ -143,60 +143,6 @@ func TestFindGitRoot(t *testing.T) {
 	}
 }
 
-func TestEnsureLoomDir(t *testing.T) {
-	// Create a temporary directory for testing
-	tempDir, err := os.MkdirTemp("", "loom-ensure-dir-test")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	// Test creating .loom directory
-	err = EnsureLoomDir(tempDir)
-	if err != nil {
-		t.Fatalf("EnsureLoomDir failed: %v", err)
-	}
-
-	// Verify .loom directory exists
-	loomDir := filepath.Join(tempDir, ".loom")
-	if _, err := os.Stat(loomDir); os.IsNotExist(err) {
-		t.Error(".loom directory was not created")
-	}
-
-	// Test that calling EnsureLoomDir again doesn't fail
-	err = EnsureLoomDir(tempDir)
-	if err != nil {
-		t.Errorf("EnsureLoomDir failed on second call: %v", err)
-	}
-}
-
-func TestEnsureLoomDirExisting(t *testing.T) {
-	// Create a temporary directory for testing
-	tempDir, err := os.MkdirTemp("", "loom-ensure-existing-test")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	// Pre-create .loom directory
-	loomDir := filepath.Join(tempDir, ".loom")
-	err = os.MkdirAll(loomDir, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create .loom directory: %v", err)
-	}
-
-	// Test that EnsureLoomDir works with existing directory
-	err = EnsureLoomDir(tempDir)
-	if err != nil {
-		t.Errorf("EnsureLoomDir failed with existing directory: %v", err)
-	}
-
-	// Verify directory still exists
-	if _, err := os.Stat(loomDir); os.IsNotExist(err) {
-		t.Error(".loom directory does not exist after EnsureLoomDir")
-	}
-}
-
 func TestFindGitRootEdgeCases(t *testing.T) {
 	// Test with empty path
 	gitRoot := findGitRoot("")

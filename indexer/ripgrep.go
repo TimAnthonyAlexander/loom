@@ -103,3 +103,11 @@ func RunRipgrepWithArgs(args ...string) ([]byte, error) {
 	cmd := exec.Command(rgBinary, args...)
 	return cmd.CombinedOutput()
 }
+
+func RunRipgrep(args ...string) ([]byte, error) {
+	// Default arguments for ripgrep
+	defaultArgs := []string{"--color=always", "--line-number", "--smart-case", "--hidden"}
+	args = append(defaultArgs, args...)
+
+	return RunRipgrepWithArgs(args...)
+}
