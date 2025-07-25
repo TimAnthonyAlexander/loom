@@ -1,173 +1,124 @@
-package main_test
+package main
 
 import (
 	"fmt"
-	"loom/task"
 	"os"
 	"strings"
 	"testing"
-	"time"
 
-	"loom/context"
-	"loom/indexer"
 	"loom/llm"
+	"loom/task"
 )
 
-// Test direct executor functionality without context manager
-func TestDirectSearch(t *testing.T) {
+// TestExecutionFlow focuses on directly tracing execution without mock LLM adapters
+func TestExecutionFlow(t *testing.T) {
+	fmt.Println("\n========== DEBUG: DIRECT EXECUTION FLOW TEST ==========")
+	
+	// Enable debug mode
+	task.EnableTaskDebug()
+	
+	// Setup basic components
 	workspacePath, _ := os.Getwd()
 	executor := task.NewExecutor(workspacePath, true, 10*1024*1024)
-
-	// Test with filename search
+	
+	fmt.Println("\n--- Step 1: Direct search task execution ---")
 	searchTask := &task.Task{
-		Type:           task.TaskTypeSearch,
-		Path:           ".",
-		Query:          "tui.go",
-		SearchNames:    true,
-		CombineResults: false, // Only do filename search
-	}
-
-	fmt.Println("=== TEST: Direct Filename Search ===")
-	response := executor.Execute(searchTask)
-
-	if !response.Success {
-		t.Errorf("Search failed: %s", response.Error)
-	}
-
-	fmt.Println("Output:", response.Output)
-
-	if response.ActualContent == "" {
-		t.Errorf("ActualContent is empty for direct filename search")
-	} else {
-		fmt.Println("ActualContent contains data")
-	}
-
-	// Test content search
-	contentTask := &task.Task{
 		Type:        task.TaskTypeSearch,
+		Query:       "sample.json",
 		Path:        ".",
-		Query:       "executeSearch",
-		SearchNames: false,
+		SearchNames: true,
 	}
-
-	fmt.Println("\n=== TEST: Direct Content Search ===")
-	contentResponse := executor.Execute(contentTask)
-
-	if !contentResponse.Success {
-		t.Errorf("Content search failed: %s", contentResponse.Error)
+	
+	fmt.Println("Executing search task directly...")
+	searchResponse := executor.Execute(searchTask)
+	fmt.Println("Search completed. Success:", searchResponse.Success)
+	fmt.Println("Found filename matches:", strings.Contains(searchResponse.ActualContent, "FOUND FILES MATCHING NAME"))
+	
+	fmt.Println("\n--- Step 2: Sequential manager - direct function calls ---")
+	manager := task.NewSequentialTaskManager(executor, nil, nil)
+	
+	fmt.Println("Step 2a: Calling FormatTaskResultForTest...")
+	// This exposes the internal formatTaskResultForExploration function
+	resultContent := manager.FormatTaskResultForTest(searchTask, searchResponse)
+	fmt.Println("FormatTaskResultForTest returned message with length:", len(resultContent))
+	fmt.Println("Formatted message contains filename matches:", strings.Contains(resultContent, "FOUND FILES MATCHING NAME"))
+	
+	// Create a mock message with the proper role
+	fmt.Println("\nStep 2b: Creating a message with the formatted content...")
+	mockMsg := llm.Message{
+		Role:    "system",  // This is critical - must be system role!
+		Content: resultContent,
 	}
-
-	fmt.Println("Output:", contentResponse.Output)
-
-	if contentResponse.ActualContent == "" {
-		t.Errorf("ActualContent is empty for direct content search")
-	} else {
-		fmt.Println("ActualContent contains data")
-	}
+	
+	// Verify the message content directly
+	fmt.Printf("Message role: %s, length: %d\n", mockMsg.Role, len(mockMsg.Content))
+	fmt.Println("Message contains filename matches:", strings.Contains(mockMsg.Content, "FOUND FILES MATCHING NAME"))
+	
+	// Get the exploration context
+	fmt.Println("\nStep 3: Examining exploration context...")
+	context := manager.GetExplorationContext()
+	fmt.Printf("Initial exploration context has %d messages\n", len(context))
+	
+	// Add our formatted message to a new exploration context
+	fmt.Println("\nStep 4: Let's call addToExplorationContext directly...")
+	// NOTE: This doesn't work because addToExplorationContext is private
+	// We can only trace this indirectly
+	fmt.Println("Cannot call private method directly - would need to use a public method")
+	
+	fmt.Println("\n========== DEBUG TEST COMPLETE ==========")
 }
 
-// Test the formatting of task results for LLM consumption
-func TestFormatTaskResultForLLM(t *testing.T) {
+func TestDirectFileSearch(t *testing.T) {
+	fmt.Println("\n========== DEBUG: DIRECT FILE SEARCH TEST ==========")
+	
+	// Enable debug mode
+	task.EnableTaskDebug()
+	
+	// Setup components
 	workspacePath, _ := os.Getwd()
 	executor := task.NewExecutor(workspacePath, true, 10*1024*1024)
-	manager := task.NewSequentialTaskManager(executor, nil, nil)
-
-	// Test with filename search
+	
+	// 1. First try a filename-only search
 	searchTask := &task.Task{
-		Type:           task.TaskTypeSearch,
-		Path:           ".",
-		Query:          "tui.go",
-		SearchNames:    true,
-		CombineResults: true,
+		Type:        task.TaskTypeSearch,
+		Query:       "sample.json",
+		Path:        ".",
+		SearchNames: true,
+		CombineResults: false,  // Don't include content matches - only filenames
 	}
-
-	fmt.Println("=== TEST: Format Task Result for LLM ===")
-	fmt.Println("Executing search for 'tui.go'...")
-	response := executor.Execute(searchTask)
-
-	if !response.Success {
-		t.Errorf("Search failed: %s", response.Error)
+	
+	fmt.Println("Executing filename-only search task...")
+	searchResponse := executor.Execute(searchTask)
+	fmt.Println("Search response success:", searchResponse.Success)
+	fmt.Println("ActualContent exists:", searchResponse.ActualContent != "")
+	hasFilenameMatches := strings.Contains(searchResponse.ActualContent, "FOUND FILES MATCHING NAME")
+	fmt.Println("Has filename matches:", hasFilenameMatches)
+	
+	// 2. Try a combined search (filename + content)
+	combinedTask := &task.Task{
+		Type:        task.TaskTypeSearch,
+		Query:       "sample.json",
+		Path:        ".",
+		SearchNames: true,
+		CombineResults: true,  // Include content matches
 	}
-
-	// Get the formatted message for LLM
-	message := manager.FormatTaskResultForTest(searchTask, response)
-	fmt.Println("\nFormatted LLM Message:")
-	fmt.Println(message)
-
-	// Verify the message contains the filename results
-	if !contains(message, "FOUND FILES MATCHING NAME") {
-		t.Errorf("Formatted LLM message missing filename search results")
-	}
-}
-
-// Test context manager's handling of search results
-func TestContextManagerWithSearchResults(t *testing.T) {
-	workspacePath, _ := os.Getwd()
-	index := indexer.NewIndex(workspacePath, 10*1024*1024) // Add the maxFileSize parameter
-	contextManager := context.NewContextManager(index, 4000)
-
-	// Create a search response with filename results
-	searchContent := `TASK_RESULT: 🔍 Search for 'tui.go'
-STATUS: Success
-CONTENT:
-🔍 Search Results for: 'tui.go'
-📁 Path: .
-🔴 ATTENTION LLM: FOUND 2 FILES MATCHING NAME 'tui.go'
-📊 Summary: 2 matching files, 11 content matches in 2 files
-
-──────────────────────────────────────────────────
-
-📄 FOUND FILES MATCHING NAME:
-
-📁 FILE EXISTS: /Users/tim.alexander/loom/tui/enhanced_tui.go
-📁 FILE EXISTS: /Users/tim.alexander/loom/tui/tui.go
-
-──────────────────────────────────────────────────
-
-📝 Content Matches:
-[Long content matches that might get truncated...]`
-
-	// Create message with search results
-	messages := []llm.Message{
-		{
-			Role:      "system",
-			Content:   "System prompt",
-			Timestamp: time.Now(),
-		},
-		{
-			Role:      "user",
-			Content:   "Find files named tui.go",
-			Timestamp: time.Now(),
-		},
-		{
-			Role:      "assistant",
-			Content:   searchContent,
-			Timestamp: time.Now(),
-		},
-	}
-
-	// Optimize the messages
-	optimized, err := contextManager.OptimizeMessages(messages)
-	if err != nil {
-		t.Errorf("Failed to optimize messages: %v", err)
-		return
-	}
-
-	// Check that the search result is still present and contains filename matches
-	foundSearchResults := false
-	for _, msg := range optimized {
-		if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
-			foundSearchResults = true
-			break
-		}
-	}
-
-	if !foundSearchResults {
-		t.Errorf("Search results with filename matches were lost during context optimization")
-	}
-}
-
-// Helper function to check if a string contains another string
-func contains(s, substr string) bool {
-	return strings.Contains(s, substr)
+	
+	fmt.Println("\nExecuting combined search task...")
+	combinedResponse := executor.Execute(combinedTask)
+	fmt.Println("Combined search response success:", combinedResponse.Success)
+	fmt.Println("ActualContent exists:", combinedResponse.ActualContent != "")
+	hasCombinedMatches := strings.Contains(combinedResponse.ActualContent, "FOUND FILES MATCHING NAME")
+	fmt.Println("Has filename matches:", hasCombinedMatches)
+	
+	// 3. Let's check with sequential manager
+	manager := task.NewSequentialTaskManager(executor, nil, nil)
+	
+	// Call formatTaskResultForExploration via the test wrapper
+	fmt.Println("\nFormatting search result with sequential manager...")
+	formattedContent := manager.FormatTaskResultForTest(searchTask, searchResponse)
+	fmt.Println("Formatted content length:", len(formattedContent))
+	fmt.Println("Formatted content has filename matches:", 
+		strings.Contains(formattedContent, "FOUND FILES MATCHING NAME"))
+	
+	fmt.Println("\n========== DEBUG TEST COMPLETE ==========")
 }

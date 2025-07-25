@@ -515,11 +515,13 @@ func (stm *SequentialTaskManager) formatTaskResultForExploration(task *Task, res
 	var content strings.Builder
 
 	// DEBUG: Log task type and search flags
-	fmt.Printf("DEBUG: Formatting task result - Type: %s, Path: %s\n", task.Type, task.Path)
+	fmt.Printf("DEBUG: [CRITICAL-SEQ] Formatting task result - Type: %s, Path: %s\n", task.Type, task.Path)
 	if task.Type == TaskTypeSearch {
-		fmt.Printf("DEBUG: Search task details - Query: '%s', SearchNames: %v, CombineResults: %v\n",
+		fmt.Printf("DEBUG: [CRITICAL-SEQ] Search task details - Query: '%s', SearchNames: %v, CombineResults: %v\n",
 			task.Query, task.SearchNames, task.CombineResults)
-		fmt.Printf("DEBUG: ActualContent starts with: %s\n", truncateForLog(response.ActualContent, 100))
+		fmt.Printf("DEBUG: [CRITICAL-SEQ] ActualContent size: %d bytes\n", len(response.ActualContent))
+		fmt.Printf("DEBUG: [CRITICAL-SEQ] Has filename results: %v\n",
+			strings.Contains(response.ActualContent, "FOUND FILES MATCHING NAME"))
 	}
 
 	content.WriteString(fmt.Sprintf("TASK_RESULT: %s\n", task.Description()))
@@ -548,12 +550,12 @@ func (stm *SequentialTaskManager) formatTaskResultForExploration(task *Task, res
 	}
 
 	// DEBUG: Log what we're returning
-	fmt.Printf("DEBUG: Returning result with role '%s' and content length %d\n",
+	fmt.Printf("DEBUG: [CRITICAL-SEQ] Created message with role '%s' and content length %d\n",
 		resultMsg.Role, len(resultMsg.Content))
 	if strings.Contains(resultMsg.Content, "FOUND FILES MATCHING NAME") {
-		fmt.Printf("DEBUG: Result contains filename search results\n")
+		fmt.Printf("DEBUG: [CRITICAL-SEQ] Message contains filename search results\n")
 	} else if task.Type == TaskTypeSearch && task.SearchNames {
-		fmt.Printf("DEBUG: WARNING! Filename search but no FOUND FILES in result\n")
+		fmt.Printf("DEBUG: [CRITICAL-SEQ] WARNING! Filename search but no FOUND FILES in formatted message\n")
 	}
 
 	return resultMsg
@@ -575,15 +577,38 @@ func (stm *SequentialTaskManager) FormatTaskResultForTest(task *Task, response *
 
 // addToExplorationContext adds a message to the hidden exploration context
 func (stm *SequentialTaskManager) addToExplorationContext(message llm.Message) {
+	fmt.Printf("DEBUG: [CRITICAL-SEQ] Adding message to exploration context - Role: %s, Length: %d\n",
+		message.Role, len(message.Content))
+
+	// Check if this message contains filename search results
+	if strings.Contains(message.Content, "FOUND FILES MATCHING NAME") {
+		fmt.Printf("DEBUG: [CRITICAL-SEQ] *** Adding message with filename search results to context ***\n")
+	}
+
 	stm.explorationContext = append(stm.explorationContext, message)
+	fmt.Printf("DEBUG: [CRITICAL-SEQ] Exploration context now has %d messages\n", len(stm.explorationContext))
 
 	// Limit context size to prevent token overflow
 	maxContextMessages := 50
 	if len(stm.explorationContext) > maxContextMessages {
 		// Keep first message (user query) and trim from middle
+		fmt.Printf("DEBUG: [CRITICAL-SEQ] Trimming context from %d to %d messages\n",
+			len(stm.explorationContext), maxContextMessages)
 		start := stm.explorationContext[:1]
 		end := stm.explorationContext[len(stm.explorationContext)-maxContextMessages+1:]
 		stm.explorationContext = append(start, end...)
+
+		// Check if we might have lost filename search results
+		filenameResultsFound := false
+		for _, msg := range stm.explorationContext {
+			if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
+				filenameResultsFound = true
+				break
+			}
+		}
+		if !filenameResultsFound {
+			fmt.Printf("DEBUG: [CRITICAL-SEQ] WARNING! All filename search results might have been lost during context trimming\n")
+		}
 	}
 }
 
