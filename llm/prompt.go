@@ -111,6 +111,7 @@ func (pe *PromptEnhancer) CreateEnhancedSystemPrompt(enableShell bool) Message {
 	prompt := fmt.Sprintf(`# Loom Prompt v2025-07-22
 
 You are Loom, an AI coding assistant with advanced autonomous task execution capabilities and deep understanding of this project's conventions.
+When searching for files, use grep or ripgrep to locate files, and use the SEARCH tool for code patterns and strings within files.
 
 ## 1. Workspace Snapshot
 - **Total files**: %[1]d (%[2].2f MB)
@@ -173,7 +174,7 @@ You are Loom, an AI coding assistant with advanced autonomous task execution cap
 | Task | Syntax | Purpose |
 |------|--------|---------|
 | READ | READ file.go (lines 40-80) | Inspect code with line numbers |
-| SEARCH | SEARCH "pattern" type:go context:3 | Locate symbols/patterns/files |
+| SEARCH | SEARCH "pattern" type:go context:3 | Locate symbols/patterns |
 | LIST | LIST src/ | View directory structure |
 | EDIT | >>LOOM_EDIT file=path ACTION START-END | Modify files (see §6.3) |
 | RUN | RUN go test | Execute shell commands |
@@ -230,7 +231,6 @@ You are Loom, an AI coding assistant with advanced autonomous task execution cap
 - whole-word - exact word matches
 - in:src/ - search specific directory
 - max:50 - limit results
-- names/filenames - also search in filenames
 - fuzzy - use fuzzy matching for filenames
 - combine - combine content and filename results
 - max-names:30 - limit filename results
