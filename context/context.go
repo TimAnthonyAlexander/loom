@@ -78,10 +78,12 @@ func NewContextManager(index *indexer.Index, maxTokens int) *ContextManager {
 
 // OptimizeMessages optimizes a list of messages for context window constraints
 func (cm *ContextManager) OptimizeMessages(messages []llm.Message) ([]llm.Message, error) {
+
 	if len(messages) == 0 {
 		return messages, nil
 	}
 
+	// Check for search results with filename matches
 	// Categorize messages by role
 	systemMessages := []llm.Message{}
 	userMessages := []llm.Message{}
@@ -108,9 +110,20 @@ func (cm *ContextManager) OptimizeMessages(messages []llm.Message) ([]llm.Messag
 		if totalTokens+tokens < cm.maxTokens {
 			optimized = append(optimized, msg)
 			totalTokens += tokens
+
+			// Track if we kept a message with filename matches
+			if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
+				// Filename matches found in system message and preserved
+			}
 		} else {
 			// System messages are critical - if we can't include all of them,
 			// we're likely over capacity and need to trim somewhere else
+
+			if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
+				// Critical filename match in system message - force include
+				optimized = append(optimized, msg)
+				totalTokens += tokens
+			}
 		}
 	}
 
@@ -174,12 +187,34 @@ func (cm *ContextManager) OptimizeMessages(messages []llm.Message) ([]llm.Messag
 			if totalTokens+tokens < cm.maxTokens {
 				optimized = append(optimized, msg)
 				totalTokens += tokens
+
+				// Track if we kept a recent message with filename matches
+				if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
+
+				}
 			} else {
 				// If we can't include a recent message, try to condense it
 				condensed, condensedTokens := cm.condenseMessage(msg)
 				if totalTokens+condensedTokens < cm.maxTokens {
 					optimized = append(optimized, condensed)
 					totalTokens += condensedTokens
+
+					// Check if condensing preserved filename matches
+					if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
+						if strings.Contains(condensed.Content, "FOUND FILES MATCHING NAME") {
+							// Filename matches preserved in condensed message
+						} else {
+							// Filename matches were lost in condensing!
+							// Replace the condensed message with the original one to preserve matches
+							optimized[len(optimized)-1] = msg
+							totalTokens = totalTokens - condensedTokens + cm.tokenEstimator.EstimateTokens(msg.Content)
+						}
+					}
+				} else if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
+					// Critical - must include the message with filename matches even if it's over budget
+					// Consider removing earlier non-critical messages to make room
+					optimized = append(optimized, msg)
+					totalTokens += cm.tokenEstimator.EstimateTokens(msg.Content)
 				}
 			}
 		}
@@ -199,6 +234,36 @@ func (cm *ContextManager) OptimizeMessages(messages []llm.Message) ([]llm.Messag
 				if totalTokens+condensedTokens < cm.maxTokens {
 					optimized = append(optimized, condensed)
 					totalTokens += condensedTokens
+				}
+			}
+		}
+	}
+
+	// Final check for search results with filename matches in optimized context
+	hasFilenameResults := false
+	for _, msg := range messages {
+		if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
+			hasFilenameResults = true
+			break
+		}
+	}
+
+	if hasFilenameResults {
+		// Verify that at least one of the optimized messages contains filename matches
+		foundInOptimized := false
+		for _, msg := range optimized {
+			if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
+				foundInOptimized = true
+				break
+			}
+		}
+
+		// If filename matches were lost during optimization, find and add the most recent one
+		if !foundInOptimized {
+			for i := len(messages) - 1; i >= 0; i-- {
+				if strings.Contains(messages[i].Content, "FOUND FILES MATCHING NAME") {
+					optimized = append(optimized, messages[i])
+					break
 				}
 			}
 		}
@@ -233,8 +298,6 @@ func (cm *ContextManager) extractCurrentObjective(messages []llm.Message) *llm.M
 
 // condenseMessage tries to shorten a message while preserving key information
 func (cm *ContextManager) condenseMessage(msg llm.Message) (llm.Message, int) {
-	fmt.Printf("DEBUG: [CRITICAL-CONTEXT] condenseMessage called for message with role=%s, length=%d\n",
-		msg.Role, len(msg.Content))
 
 	// Check if this is a search result message with filename matches
 	hasSearchResults := strings.Contains(msg.Content, "TASK_RESULT:") &&
@@ -242,17 +305,16 @@ func (cm *ContextManager) condenseMessage(msg llm.Message) (llm.Message, int) {
 	hasFilenameMatches := strings.Contains(msg.Content, "FOUND FILES MATCHING NAME")
 
 	if hasSearchResults {
-		fmt.Printf("DEBUG: [CRITICAL-CONTEXT] Message contains search results\n")
 		if hasFilenameMatches {
-			fmt.Printf("DEBUG: [CRITICAL-CONTEXT] *** Message contains FILENAME matches ***\n")
+			// Always preserve messages with filename matches
+			return msg, cm.tokenEstimator.EstimateTokens(msg.Content)
 		} else {
-			fmt.Printf("DEBUG: [CRITICAL-CONTEXT] Message contains content search only (no filename matches)\n")
+			// Regular search result, continue with normal processing
 		}
 	}
 
 	// Don't attempt to condense system messages
 	if msg.Role == "system" {
-		fmt.Printf("DEBUG: [CRITICAL-CONTEXT] Keeping system message intact (not condensing)\n")
 		return msg, cm.tokenEstimator.EstimateTokens(msg.Content)
 	}
 
@@ -264,12 +326,10 @@ func (cm *ContextManager) condenseMessage(msg llm.Message) (llm.Message, int) {
 			strings.Contains(msg.Content, "🔍")) {
 		// Special handling for search results to preserve filename results
 		if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
-			fmt.Printf("DEBUG: [CRITICAL-CONTEXT] Special handling for search result with filename matches\n")
 			// This is a critical search result with filename matches
 			// Keep it intact or do minimal condensing if it's extremely long
 			content := msg.Content
 			if len(content) > 5000 {
-				fmt.Printf("DEBUG: [CRITICAL-CONTEXT] Long search result (>5000 chars), applying minimal condensing\n")
 				// If it's extremely long, keep the TASK_RESULT line, the section headers,
 				// and all filename matches but truncate other content
 				lines := strings.Split(content, "\n")
@@ -316,10 +376,7 @@ func (cm *ContextManager) condenseMessage(msg llm.Message) (llm.Message, int) {
 
 				if filenameSectionFound {
 					condensedContent := condensed.String()
-					fmt.Printf("DEBUG: [CRITICAL-CONTEXT] Condensed search result from %d to %d chars, preserving filename matches\n",
-						len(content), len(condensedContent))
-					fmt.Printf("DEBUG: [CRITICAL-CONTEXT] Condensed result still has filename matches: %v\n",
-						strings.Contains(condensedContent, "FOUND FILES MATCHING NAME"))
+
 					return llm.Message{
 						Role:      msg.Role,
 						Content:   condensedContent,
@@ -327,8 +384,12 @@ func (cm *ContextManager) condenseMessage(msg llm.Message) (llm.Message, int) {
 					}, cm.tokenEstimator.EstimateTokens(condensedContent)
 				}
 			} else {
-				fmt.Printf("DEBUG: [CRITICAL-CONTEXT] Keeping search result with filename matches intact\n")
+				// For shorter content, preserve it entirely
+				return msg, cm.tokenEstimator.EstimateTokens(msg.Content)
 			}
+			return msg, cm.tokenEstimator.EstimateTokens(msg.Content)
+		} else {
+			// Regular search result without filename matches
 			return msg, cm.tokenEstimator.EstimateTokens(msg.Content)
 		}
 	}

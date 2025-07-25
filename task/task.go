@@ -53,8 +53,6 @@ func debugLog(message string) {
 
 	if debugHandler != nil {
 		debugHandler(message)
-	} else {
-		fmt.Printf("DEBUG: %s\n", message)
 	}
 }
 

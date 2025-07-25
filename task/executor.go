@@ -936,9 +936,6 @@ func (e *Executor) executeRegularShellCommand(task *Task) *TaskResponse {
 func (e *Executor) executeSearch(task *Task) *TaskResponse {
 	response := &TaskResponse{Task: *task}
 
-	fmt.Printf("DEBUG: [CRITICAL] executeSearch called - Query: '%s', Path: '%s', SearchNames: %v, CombineResults: %v\n",
-		task.Query, task.Path, task.SearchNames, task.CombineResults)
-
 	// Security: ensure search path is within workspace
 	_, err := e.securePath(task.Path)
 	if err != nil {
@@ -954,17 +951,12 @@ func (e *Executor) executeSearch(task *Task) *TaskResponse {
 	combinedTask.CombineResults = true
 	combinedTask.SearchNames = true
 
-	fmt.Printf("DEBUG: [CRITICAL] Modified task for executeFilenameSearch - SearchNames: %v, CombineResults: %v\n",
-		combinedTask.SearchNames, combinedTask.CombineResults)
-
 	// Execute the combined search
 	return e.executeFilenameSearch(&combinedTask, response)
 }
 
 // executeFilenameSearch performs a search focused on filenames and combines results if needed
 func (e *Executor) executeFilenameSearch(task *Task, contentResponse *TaskResponse) *TaskResponse {
-	fmt.Printf("DEBUG: [CRITICAL] executeFilenameSearch called - Query: '%s', Path: '%s', SearchNames: %v, CombineResults: %v\n",
-		task.Query, task.Path, task.SearchNames, task.CombineResults)
 
 	// Create path args
 	searchPath, err := e.securePath(task.Path)
@@ -984,7 +976,7 @@ func (e *Executor) executeFilenameSearch(task *Task, contentResponse *TaskRespon
 	// PART 1: FILENAME SEARCH
 	// First try using the find command if we need filename search
 	if task.SearchNames || task.CombineResults {
-		fmt.Printf("DEBUG: [CRITICAL] Performing filename search - Query: '%s'\n", task.Query)
+
 		// Build a find command to locate files by name
 		findCmd := exec.Command("find", searchPath, "-type", "f", "-name", "*"+task.Query+"*", "-not", "-path", "*/\\.*")
 		findOutput, findErr := findCmd.CombinedOutput()
@@ -999,9 +991,9 @@ func (e *Executor) executeFilenameSearch(task *Task, contentResponse *TaskRespon
 					filenameCount++
 				}
 			}
-			fmt.Printf("DEBUG: [CRITICAL] Found %d filename matches using find\n", filenameCount)
+
 		} else {
-			fmt.Printf("DEBUG: [CRITICAL] Find command failed, falling back to ripgrep for filename search\n")
+
 			// Fallback to ripgrep for filename search if find fails
 			nameArgs := []string{}
 
@@ -1053,7 +1045,7 @@ func (e *Executor) executeFilenameSearch(task *Task, contentResponse *TaskRespon
 						filenameCount++
 					}
 				}
-				fmt.Printf("DEBUG: [CRITICAL] Found %d filename matches using ripgrep\n", filenameCount)
+
 			}
 		}
 	}
@@ -1061,7 +1053,7 @@ func (e *Executor) executeFilenameSearch(task *Task, contentResponse *TaskRespon
 	// PART 2: CONTENT SEARCH
 	// Only run content search if we need to combine results
 	if task.CombineResults {
-		fmt.Printf("DEBUG: [CRITICAL] Performing content search - Query: '%s'\n", task.Query)
+
 		// Build ripgrep command arguments for content search
 		args := []string{}
 
@@ -1145,9 +1137,9 @@ func (e *Executor) executeFilenameSearch(task *Task, contentResponse *TaskRespon
 		contentOutput, contentErr = indexer.RunRipgrepWithArgs(args...)
 
 		if contentErr == nil && len(contentOutput) > 0 {
-			fmt.Printf("DEBUG: [CRITICAL] Content search found matches, output length: %d bytes\n", len(contentOutput))
+
 		} else {
-			fmt.Printf("DEBUG: [CRITICAL] Content search completed - error: %v, output: %d bytes\n", contentErr, len(contentOutput))
+
 		}
 	}
 
@@ -1170,17 +1162,17 @@ func (e *Executor) executeFilenameSearch(task *Task, contentResponse *TaskRespon
 		}
 
 		fileCount = len(fileSet)
-		fmt.Printf("DEBUG: [CRITICAL] Content search found %d matches in %d files\n", matchCount, fileCount)
+
 	} else if contentErr != nil && !strings.Contains(contentErr.Error(), "exit status 1") {
 		contentResponse.Error = fmt.Sprintf("content search failed: %v", contentErr)
-		fmt.Printf("DEBUG: [CRITICAL] Content search failed with error: %v\n", contentErr)
+
 		return contentResponse
 	}
 
 	// PART 4: HANDLE NO RESULTS CASE
 	// If no results at all, return appropriate message
 	if filenameCount == 0 && matchCount == 0 {
-		fmt.Printf("DEBUG: [CRITICAL] No results found for query: '%s'\n", task.Query)
+
 		contentResponse.Success = true
 		contentResponse.Output = fmt.Sprintf("Search completed: '%s' - No matches found", task.Query)
 		contentResponse.ActualContent = fmt.Sprintf("No files matching '%s' were found and no content matches.\n\nSearch parameters:\n- Path: %s\n- Options: %s\n- Filename search: %t\n- Fuzzy search: %t",
@@ -1276,15 +1268,13 @@ func (e *Executor) executeFilenameSearch(task *Task, contentResponse *TaskRespon
 	contentResponse.Output = fmt.Sprintf("Search completed: '%s' - Found %s",
 		task.Query, strings.Join(messageParts, ", "))
 
-	fmt.Printf("DEBUG: [CRITICAL] Search completed - Query: '%s', Success: %v, Output: '%s', ActualContent size: %d bytes\n",
-		task.Query, contentResponse.Success, contentResponse.Output, len(contentResponse.ActualContent))
-
+	// Check structure of the response
 	if filenameCount > 0 {
-		fmt.Printf("DEBUG: [CRITICAL] *** File results included in response: %d files ***\n", filenameCount)
-	}
-	if matchCount > 0 {
-		fmt.Printf("DEBUG: [CRITICAL] *** Content results included in response: %d matches in %d files ***\n",
-			matchCount, fileCount)
+		if !strings.Contains(contentResponse.ActualContent, "FOUND FILES MATCHING NAME") {
+
+		} else {
+
+		}
 	}
 
 	return contentResponse

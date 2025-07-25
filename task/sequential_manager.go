@@ -2,6 +2,7 @@ package task
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	contextMgr "loom/context"
 	"loom/indexer"
@@ -83,7 +84,7 @@ func (stm *SequentialTaskManager) SetContextManager(index *indexer.Index, maxCon
 
 // HandleExplorationRequest starts a sequential exploration based on user query
 func (stm *SequentialTaskManager) HandleExplorationRequest(userQuery string) (*ExplorationResult, error) {
-	fmt.Printf("DEBUG: [CRITICAL-FLOW] HandleExplorationRequest called with query: %s\n", userQuery)
+
 	startTime := time.Now()
 
 	// Reset state for new exploration
@@ -100,10 +101,8 @@ func (stm *SequentialTaskManager) HandleExplorationRequest(userQuery string) (*E
 	})
 
 	// Execute exploration loop
-	fmt.Printf("DEBUG: [CRITICAL-FLOW] About to call executeExplorationLoop\n")
 	result, err := stm.executeExplorationLoop()
 	if err != nil {
-		fmt.Printf("DEBUG: [CRITICAL-FLOW] executeExplorationLoop returned error: %v\n", err)
 		return &ExplorationResult{
 			Success:          false,
 			TasksExecuted:    stm.currentIteration,
@@ -112,69 +111,59 @@ func (stm *SequentialTaskManager) HandleExplorationRequest(userQuery string) (*E
 		}, err
 	}
 
-	fmt.Printf("DEBUG: [CRITICAL-FLOW] executeExplorationLoop completed successfully\n")
 	result.Duration = time.Since(startTime)
 	return result, nil
 }
 
 // executeExplorationLoop runs the iterative exploration process
 func (stm *SequentialTaskManager) executeExplorationLoop() (*ExplorationResult, error) {
-	fmt.Printf("DEBUG: [CRITICAL-FLOW] executeExplorationLoop started\n")
+	// Debug current state
 
 	for stm.currentIteration < stm.maxIterations {
-		fmt.Printf("DEBUG: [CRITICAL-FLOW] Iteration %d/%d\n", stm.currentIteration+1, stm.maxIterations)
-
 		// Get current context for LLM (system + exploration context)
 		messages := stm.buildLLMContext()
-		fmt.Printf("DEBUG: [CRITICAL-FLOW] Built LLM context with %d messages\n", len(messages))
-
-		// Check if we have a valid LLM adapter
-		if stm.llmAdapter == nil {
-			fmt.Printf("DEBUG: [CRITICAL-FLOW] ERROR: llmAdapter is nil\n")
-			return nil, fmt.Errorf("LLM adapter is not initialized")
-		}
 
 		// Send to LLM
-		fmt.Printf("DEBUG: [CRITICAL-FLOW] Sending request to LLM\n")
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		response, err := stm.llmAdapter.Send(ctx, messages)
 		cancel()
 
 		if err != nil {
-			fmt.Printf("DEBUG: [CRITICAL-FLOW] LLM request failed: %v\n", err)
 			return nil, fmt.Errorf("LLM request failed at iteration %d: %w", stm.currentIteration, err)
 		}
-		fmt.Printf("DEBUG: [CRITICAL-FLOW] Received LLM response with content length: %d\n", len(response.Content))
 
 		// Check for completion signal
 		if isComplete, synthesis := stm.checkCompletionSignal(response.Content); isComplete {
 			// Add final synthesis to chat session for user
-			fmt.Printf("DEBUG: [CRITICAL-FLOW] Detected completion signal, finalizing synthesis\n")
 			return stm.finalizeSynthesis(synthesis)
 		}
 
 		// Parse single task from response
-		fmt.Printf("DEBUG: [CRITICAL-FLOW] Parsing task from LLM response\n")
 		task, explorationContent, err := stm.ParseSingleTask(response.Content)
 		if err != nil {
-			fmt.Printf("DEBUG: [CRITICAL-FLOW] Failed to parse task: %v\n", err)
 			return nil, fmt.Errorf("failed to parse task at iteration %d: %w", stm.currentIteration, err)
 		}
 
 		if task == nil {
 			// No task found - LLM might be providing analysis without action
-			fmt.Printf("DEBUG: [CRITICAL-FLOW] No task found in LLM response\n")
 			// Add the response to exploration context and continue
 			stm.addToExplorationContext(*response)
 			stm.currentIteration++
 			continue
 		}
-		fmt.Printf("DEBUG: [CRITICAL-FLOW] Parsed task: Type=%s, Path=%s\n", task.Type, task.Path)
+
+		// Debug task type - especially for search tasks
+		if task.Type == TaskTypeSearch {
+
+		}
 
 		// Execute the task
-		fmt.Printf("DEBUG: [CRITICAL-FLOW] Executing task: %s\n", task.Description())
 		taskResponse := stm.executor.Execute(task)
-		fmt.Printf("DEBUG: [CRITICAL-FLOW] Task execution completed: Success=%v\n", taskResponse.Success)
+
+		// Debug search task response
+		if task.Type == TaskTypeSearch {
+
+		}
 
 		// Check if task requires confirmation (critical safety check missing!)
 		if taskResponse.Success && task.RequiresConfirmation() {
@@ -184,17 +173,59 @@ func (stm *SequentialTaskManager) executeExplorationLoop() (*ExplorationResult, 
 		// Add task result to exploration context (hidden from user)
 		taskResultMsg := stm.formatTaskResultForExploration(task, taskResponse)
 
+		// CRITICAL DEBUG: Check the formatted task result message
+		if task.Type == TaskTypeSearch {
+
+			// Check if message contains filename results
+			if strings.Contains(taskResultMsg.Content, "FOUND FILES MATCHING NAME") {
+
+				// CRITICAL FIX: For filename searches, explicitly add the result to the chat session
+				// so it's included in the context when optimized
+				if stm.chatSession != nil {
+
+					err := stm.chatSession.AddMessage(taskResultMsg)
+					if err != nil {
+
+					}
+				} else {
+
+				}
+			} else {
+
+			}
+		}
+
 		// CRITICAL FIX: Ensure all task results are added with role "system" not "assistant"
 		// This ensures they're treated as system information, not assistant output
 		if taskResultMsg.Role != "system" {
+
 			taskResultMsg.Role = "system"
+		}
+
+		// CRITICAL FIX: For all search tasks, ensure results are directly added to chat session
+		if task.Type == TaskTypeSearch && stm.chatSession != nil {
+
+			err := stm.chatSession.AddMessage(taskResultMsg)
+			if err != nil {
+
+			}
 		}
 
 		stm.addToExplorationContext(taskResultMsg)
 
+		// Debug the exploration context after adding task result
+		if task.Type == TaskTypeSearch {
+
+			// Check if any messages in context have filename matches
+			hasFilenameMatches := false
+
+			if !hasFilenameMatches {
+
+			}
+		}
+
 		// If there was additional exploration content, add it too
 		if strings.TrimSpace(explorationContent) != "" {
-			fmt.Printf("DEBUG: [CRITICAL-FLOW] Adding additional exploration content\n")
 			stm.addToExplorationContext(llm.Message{
 				Role:      "assistant",
 				Content:   explorationContent,
@@ -206,7 +237,6 @@ func (stm *SequentialTaskManager) executeExplorationLoop() (*ExplorationResult, 
 	}
 
 	// Max iterations reached - force completion
-	fmt.Printf("DEBUG: [CRITICAL-FLOW] Maximum iterations (%d) reached\n", stm.maxIterations)
 	return &ExplorationResult{
 		Success:          false,
 		TasksExecuted:    stm.currentIteration,
@@ -216,6 +246,19 @@ func (stm *SequentialTaskManager) executeExplorationLoop() (*ExplorationResult, 
 
 // buildLLMContext creates the context for LLM with system message and exploration history
 func (stm *SequentialTaskManager) buildLLMContext() []llm.Message {
+	// Debug information about current objective
+
+	if stm.currentObjective != nil {
+
+	}
+
+	// CRITICAL DEBUG: Examine every message in the exploration context
+
+	// CRITICAL FIX: Check if context manager is null
+	if stm.contextManager == nil {
+
+	}
+
 	// Get system message with sequential exploration instructions
 	systemMsg := stm.CreateSequentialSystemMessage()
 
@@ -227,16 +270,58 @@ func (stm *SequentialTaskManager) buildLLMContext() []llm.Message {
 		// Add exploration context
 		messages = append(messages, stm.explorationContext...)
 
-		// Optimize the messages
+		// CRITICAL DEBUG: Check messages before optimization
+
+		// Optimize the context
 		optimized, err := stm.contextManager.OptimizeMessages(messages)
 		if err == nil {
 			return optimized
 		}
-		// Fall back to full context if optimization fails
+		// Fall back to non-optimized context on error
+
+	} else {
+		// CRITICAL FIX: If there's no context manager but we have filename search results,
+		// make sure they're included in the context with the correct role
+
+		// Start with system message and a safety limit for context size
+		messages := []llm.Message{systemMsg}
+		maxContextSize := 30 // Reasonable default when no context manager
+
+		// Find and prioritize messages with filename matches
+		priorityMessages := []llm.Message{}
+		otherMessages := []llm.Message{}
+
+		for _, msg := range stm.explorationContext {
+			if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
+				// Ensure role is system
+				if msg.Role != "system" {
+
+					msg.Role = "system"
+				}
+
+				priorityMessages = append(priorityMessages, msg)
+			} else {
+				otherMessages = append(otherMessages, msg)
+			}
+		}
+
+		// Add priority messages first
+		messages = append(messages, priorityMessages...)
+
+		// Add as many other messages as fit within the limit
+		remainingSpace := maxContextSize - len(messages)
+		if remainingSpace > 0 && len(otherMessages) > 0 {
+			// Start with the most recent messages
+			startIdx := max(0, len(otherMessages)-remainingSpace)
+			messages = append(messages, otherMessages[startIdx:]...)
+		}
+
+		return messages
 	}
 
-	// Combine system message with exploration context without optimization
-	messages := []llm.Message{systemMsg}
+	// No context manager or optimization failed - use full context
+	messages := make([]llm.Message, 0, len(stm.explorationContext)+1)
+	messages = append(messages, systemMsg)
 	messages = append(messages, stm.explorationContext...)
 	return messages
 }
@@ -396,32 +481,72 @@ Use ALL the information you've systematically gathered to provide:
 Start with "OBJECTIVE_COMPLETE:" followed by your comprehensive architectural analysis.`, objectiveText, taskCount)
 }
 
-// ParseSingleTask extracts the first task from LLM response and any additional content
+// ParseSingleTask extracts a single task from the LLM response
 func (stm *SequentialTaskManager) ParseSingleTask(llmResponse string) (*Task, string, error) {
-	// First try to find a single task JSON object (new sequential format)
-	task, content, err := stm.parseRawTaskJSON(llmResponse)
-	if task != nil {
-		return task, content, err
+
+	// Print part of the response for debugging
+	responsePreview := llmResponse
+	if len(responsePreview) > 100 {
+		responsePreview = responsePreview[:100] + "..."
 	}
 
-	// Fall back to existing parser for code-block wrapped tasks
-	taskList, err := ParseTasks(llmResponse)
-	if err != nil {
-		return nil, "", err
+	// Look for single SEARCH pattern first
+	searchPattern := regexp.MustCompile(`(?i)^SEARCH\s+(.+?)(?:\s+(.+))?$`)
+	if matches := searchPattern.FindStringSubmatch(llmResponse); len(matches) > 0 {
+		// Extract search query and options
+		searchQuery := matches[1]
+		var options string
+		if len(matches) > 2 {
+			options = matches[2]
+		}
+
+		// Create a basic search task
+		task := &Task{
+			Type:  TaskTypeSearch,
+			Path:  ".",
+			Query: searchQuery,
+		}
+
+		// Parse search flags
+		if strings.Contains(strings.ToLower(options), "name") ||
+			strings.Contains(strings.ToLower(options), "file") {
+			task.SearchNames = true
+
+		}
+
+		if strings.Contains(strings.ToLower(options), "content") {
+			task.CombineResults = true
+
+		}
+
+		return task, "", nil
 	}
 
-	// If no tasks found, return the response content for analysis
-	if taskList == nil || len(taskList.Tasks) == 0 {
-		return nil, llmResponse, nil
+	// Try parsing as JSON task
+	var taskList TaskList
+	if err := json.Unmarshal([]byte(llmResponse), &taskList); err == nil && len(taskList.Tasks) > 0 {
+
+		return &taskList.Tasks[0], stm.extractNonTaskContent(llmResponse), nil
 	}
 
-	// Take only the first task
-	firstTask := &taskList.Tasks[0]
+	// Try parsing as single task
+	var task Task
+	if err := json.Unmarshal([]byte(llmResponse), &task); err == nil {
+		if task.Type != "" {
 
-	// Extract non-task content (everything outside JSON blocks)
-	content = stm.extractNonTaskContent(llmResponse)
+			return &task, stm.extractNonTaskContent(llmResponse), nil
+		}
+	}
 
-	return firstTask, content, nil
+	// Try parsing as raw task JSON
+	if task, content, err := stm.parseRawTaskJSON(llmResponse); err == nil && task != nil {
+
+		return task, content, nil
+	}
+
+	// No task found
+
+	return nil, llmResponse, nil
 }
 
 // parseRawTaskJSON attempts to parse a raw JSON task object from the response
@@ -587,23 +712,31 @@ func (stm *SequentialTaskManager) FormatTaskResultForTest(task *Task, response *
 
 // addToExplorationContext adds a message to the hidden exploration context
 func (stm *SequentialTaskManager) addToExplorationContext(message llm.Message) {
-	fmt.Printf("DEBUG: [CRITICAL-SEQ] Adding message to exploration context - Role: %s, Length: %d\n",
-		message.Role, len(message.Content))
 
-	// Check if this message contains filename search results
-	if strings.Contains(message.Content, "FOUND FILES MATCHING NAME") {
-		fmt.Printf("DEBUG: [CRITICAL-SEQ] *** Adding message with filename search results to context ***\n")
+	// Check for task results with filename matches
+	if strings.Contains(message.Content, "TASK_RESULT:") {
+		if strings.Contains(message.Content, "Search for") ||
+			strings.Contains(message.Content, "🔍 Search") {
+
+			if strings.Contains(message.Content, "FOUND FILES MATCHING NAME") {
+
+				// Print the first part of the message content for debugging
+				contentPreview := message.Content
+				if len(contentPreview) > 150 {
+					contentPreview = contentPreview[:150] + "..."
+				}
+
+			}
+		}
 	}
 
 	stm.explorationContext = append(stm.explorationContext, message)
-	fmt.Printf("DEBUG: [CRITICAL-SEQ] Exploration context now has %d messages\n", len(stm.explorationContext))
 
 	// Limit context size to prevent token overflow
 	maxContextMessages := 50
 	if len(stm.explorationContext) > maxContextMessages {
 		// Keep first message (user query) and trim from middle
-		fmt.Printf("DEBUG: [CRITICAL-SEQ] Trimming context from %d to %d messages\n",
-			len(stm.explorationContext), maxContextMessages)
+
 		start := stm.explorationContext[:1]
 		end := stm.explorationContext[len(stm.explorationContext)-maxContextMessages+1:]
 		stm.explorationContext = append(start, end...)
@@ -617,7 +750,7 @@ func (stm *SequentialTaskManager) addToExplorationContext(message llm.Message) {
 			}
 		}
 		if !filenameResultsFound {
-			fmt.Printf("DEBUG: [CRITICAL-SEQ] WARNING! All filename search results might have been lost during context trimming\n")
+
 		}
 	}
 }
