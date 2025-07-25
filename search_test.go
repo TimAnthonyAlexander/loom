@@ -103,7 +103,7 @@ func TestFormatTaskResultForLLM(t *testing.T) {
 // Test context manager's handling of search results
 func TestContextManagerWithSearchResults(t *testing.T) {
 	workspacePath, _ := os.Getwd()
-	index := indexer.NewIndex(workspacePath)
+	index := indexer.NewIndex(workspacePath, 10*1024*1024) // Add the maxFileSize parameter
 	contextManager := context.NewContextManager(index, 4000)
 
 	// Create a search response with filename results
