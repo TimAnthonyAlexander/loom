@@ -1112,28 +1112,6 @@ func isLikelyInteractiveCommand(command string) bool {
 	return false
 }
 
-// parseEditLineRange extracts line range information from EDIT_LINES marker
-func parseEditLineRange(task *Task, lineRange string) {
-	// Handle single line: "15"
-	if !strings.Contains(lineRange, "-") {
-		if lineNum, err := strconv.Atoi(strings.TrimSpace(lineRange)); err == nil {
-			task.TargetLine = lineNum
-		}
-		return
-	}
-
-	// Handle range: "15-17"
-	parts := strings.Split(lineRange, "-")
-	if len(parts) == 2 {
-		if startLine, err := strconv.Atoi(strings.TrimSpace(parts[0])); err == nil {
-			if endLine, err := strconv.Atoi(strings.TrimSpace(parts[1])); err == nil {
-				task.TargetStartLine = startLine
-				task.TargetEndLine = endLine
-			}
-		}
-	}
-}
-
 // extractContentFromCodeBlock looks for content in code blocks following a task command
 func extractContentFromCodeBlock(lines []string, startIdx int) string {
 	if startIdx >= len(lines) {

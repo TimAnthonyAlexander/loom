@@ -244,85 +244,6 @@ func (stm *SequentialTaskManager) extractNonTaskContent(response string) string 
 	return strings.Join(content, "\n")
 }
 
-// checkCompletionSignal checks if the response indicates objective completion
-func (stm *SequentialTaskManager) checkCompletionSignal(response string) (bool, string) {
-	// Check if the response is a text-only message with no commands
-	// This would signal completion in our new model
-	taskPatterns := []string{
-		"🔧 READ", "📖 READ",
-		"🔧 LIST", "📂 LIST",
-		"🔧 SEARCH", "🔍 SEARCH",
-		"🔧 RUN",
-		"🔧 MEMORY", "💾 MEMORY",
-		">>LOOM_EDIT", "✏️ Edit",
-		"\nREAD ",
-		"\nLIST ",
-		"\nSEARCH ",
-		"\nRUN ",
-		"\nMEMORY ",
-	}
-
-	for _, pattern := range taskPatterns {
-		if strings.Contains(response, pattern) {
-			return false, ""
-		}
-	}
-
-	// Look for LOOM_EDIT blocks
-	if regexp.MustCompile(`(?s)>>LOOM_EDIT.*?<<LOOM_EDIT`).MatchString(response) {
-		return false, ""
-	}
-
-	// If no commands are found and there's substantial content,
-	// consider it a completion signal
-	if len(response) > 80 || strings.Contains(response, "\n") {
-		return true, response
-	}
-
-	return false, ""
-}
-
-// finalizeSynthesis processes the final synthesis and adds it to chat
-func (stm *SequentialTaskManager) finalizeSynthesis(synthesis string) (*ExplorationResult, error) {
-	// Clean up the synthesis content
-	cleanSynthesis := stm.cleanSynthesisContent(synthesis)
-
-	// Add final synthesis to chat session for user display
-	finalMessage := llm.Message{
-		Role:      "assistant",
-		Content:   cleanSynthesis,
-		Timestamp: time.Now(),
-	}
-
-	if err := stm.chatSession.AddMessage(finalMessage); err != nil {
-		return nil, fmt.Errorf("failed to add synthesis to chat: %w", err)
-	}
-
-	return &ExplorationResult{
-		Success:          true,
-		FinalSynthesis:   cleanSynthesis,
-		TasksExecuted:    stm.currentIteration,
-		CompletionReason: "Exploration completed successfully",
-	}, nil
-}
-
-// cleanSynthesisContent removes completion signals and formats the synthesis
-func (stm *SequentialTaskManager) cleanSynthesisContent(synthesis string) string {
-	content := synthesis
-
-	// Remove completion signal prefixes
-	for _, signal := range stm.completionSignals {
-		if strings.HasPrefix(strings.ToUpper(content), strings.ToUpper(signal)) {
-			content = strings.TrimPrefix(content, signal)
-			content = strings.TrimPrefix(content, ":")
-			content = strings.TrimSpace(content)
-			break
-		}
-	}
-
-	return content
-}
-
 // formatTaskResultForExploration formats task results for the hidden exploration context
 func (stm *SequentialTaskManager) formatTaskResultForExploration(task *Task, response *TaskResponse) llm.Message {
 	var content strings.Builder
@@ -357,63 +278,10 @@ func (stm *SequentialTaskManager) formatTaskResultForExploration(task *Task, res
 	return resultMsg
 }
 
-// Helper function to truncate strings for log output
-func truncateForLog(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
-}
-
 // FormatTaskResultForTest exposes formatTaskResultForExploration for testing
 func (stm *SequentialTaskManager) FormatTaskResultForTest(task *Task, response *TaskResponse) string {
 	msg := stm.formatTaskResultForExploration(task, response)
 	return msg.Content
-}
-
-// addToExplorationContext adds a message to the hidden exploration context
-func (stm *SequentialTaskManager) addToExplorationContext(message llm.Message) {
-
-	// Check for task results with filename matches
-	if strings.Contains(message.Content, "TASK_RESULT:") {
-		if strings.Contains(message.Content, "Search for") ||
-			strings.Contains(message.Content, "🔍 Search") {
-
-			if strings.Contains(message.Content, "FOUND FILES MATCHING NAME") {
-
-				// Print the first part of the message content for debugging
-				contentPreview := message.Content
-				if len(contentPreview) > 150 {
-					contentPreview = contentPreview[:150] + "..."
-				}
-
-			}
-		}
-	}
-
-	stm.explorationContext = append(stm.explorationContext, message)
-
-	// Limit context size to prevent token overflow
-	maxContextMessages := 50
-	if len(stm.explorationContext) > maxContextMessages {
-		// Keep first message (user query) and trim from middle
-
-		start := stm.explorationContext[:1]
-		end := stm.explorationContext[len(stm.explorationContext)-maxContextMessages+1:]
-		stm.explorationContext = append(start, end...)
-
-		// Check if we might have lost filename search results
-		filenameResultsFound := false
-		for _, msg := range stm.explorationContext {
-			if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
-				filenameResultsFound = true
-				break
-			}
-		}
-		if !filenameResultsFound {
-
-		}
-	}
 }
 
 // GetExplorationContext returns the current exploration context (for debugging)
