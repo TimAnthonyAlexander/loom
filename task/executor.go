@@ -93,6 +93,10 @@ func (e *Executor) Execute(task *Task) *TaskResponse {
 func (e *Executor) executeReadFile(task *Task) *TaskResponse {
 	response := &TaskResponse{Task: *task}
 
+	// Remove any @ symbols from the path (from file attachments in UI)
+	cleanPath := strings.ReplaceAll(task.Path, "@", "")
+	task.Path = cleanPath
+
 	// Security: ensure path is within workspace
 	fullPath, err := e.securePath(task.Path)
 	if err != nil {
@@ -142,6 +146,18 @@ func (e *Executor) executeReadFile(task *Task) *TaskResponse {
 	if err != nil {
 		response.Error = fmt.Sprintf("failed to count file lines: %v", err)
 		return response
+	}
+
+	// Validate line range if specified
+	if task.StartLine > totalLines {
+		response.Error = fmt.Sprintf("file %s has only %d lines, but requested start line %d", task.Path, totalLines, task.StartLine)
+		return response
+	}
+
+	if task.EndLine > totalLines {
+		// Just a warning, we'll adjust the end line
+		response.Output = fmt.Sprintf("Warning: file %s has only %d lines, but requested end line %d. Adjusting to read all available lines.", task.Path, totalLines, task.EndLine)
+		task.EndLine = totalLines
 	}
 
 	// Read file
@@ -267,9 +283,9 @@ func (e *Executor) executeReadFile(task *Task) *TaskResponse {
 	var statusMsg string
 	if task.StartLine > 0 || task.EndLine > 0 {
 		// Check if requested range exceeded file size
-		if task.EndLine > 0 && task.EndLine > totalLines {
-			statusMsg = fmt.Sprintf("Reading file: %s (requested lines %d-%d, read entire file: lines %d-%d, %d total lines)",
-				task.Path, task.StartLine, task.EndLine, startLine, lastLineRead, totalLines)
+		if task.EndLine > 0 && task.EndLine > totalLines && response.Output == "" {
+			statusMsg = fmt.Sprintf("Reading file: %s (requested lines %d-%d, actual file has only %d lines, reading lines %d-%d)",
+				task.Path, task.StartLine, task.EndLine, totalLines, startLine, lastLineRead)
 		} else {
 			statusMsg = fmt.Sprintf("Reading file: %s (lines %d-%d, %d lines read, %d total lines)",
 				task.Path, startLine, lastLineRead, linesRead, totalLines)
@@ -283,7 +299,13 @@ func (e *Executor) executeReadFile(task *Task) *TaskResponse {
 		statusMsg += fmt.Sprintf(", %d more lines available", remainingLines)
 	}
 
-	response.Output = statusMsg
+	// If we already have an output message (warning), keep it
+	if response.Output == "" {
+		response.Output = statusMsg
+	} else {
+		response.Output += "\n" + statusMsg
+	}
+
 	return response
 }
 

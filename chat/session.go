@@ -298,42 +298,62 @@ func (s *Session) GetOptimizedContextMessages(contextManager *context.ContextMan
 
 // GetDisplayMessages returns messages formatted for display (excluding system messages)
 func (s *Session) GetDisplayMessages() []string {
-	var display []string
-	for _, msg := range s.messages {
-		if msg.Role != "system" {
-			role := "You"
-			if msg.Role == "assistant" {
-				role = "Loom"
-			}
+	var displayMessages []string
 
-			// Skip task audit messages in display
-			if strings.HasPrefix(msg.Content, "TASK_AUDIT:") {
+	systemCount := 0
+	for i, msg := range s.messages {
+		// Skip system messages except for the first one, and skip completion detector interactions
+		if msg.Role == "system" {
+			systemCount++
+			if systemCount > 1 && s.isCompletionDetectorInteraction(msg.Content) {
 				continue
 			}
-
-			// CRITICAL FIX: Skip internal TASK_RESULT messages that are meant for LLM only
-			if strings.HasPrefix(msg.Content, "TASK_RESULT:") {
-				continue
-			}
-
-			var content string
-			if msg.Role == "assistant" {
-				// Only filter assistant messages, not user messages
-				content = s.filterTaskResultForDisplay(msg.Content)
-			} else {
-				// User messages should be displayed as-is without any task filtering
-				content = msg.Content
-			}
-
-			// Skip empty content (like completion detector interactions)
-			if strings.TrimSpace(content) == "" {
-				continue
-			}
-
-			display = append(display, fmt.Sprintf("%s: %s", role, content))
 		}
+
+		// Hide "Continue." messages - these are just auto-continuation prompts
+		if msg.Role == "user" && (msg.Content == "Continue." ||
+			strings.HasPrefix(msg.Content, "Continue with the next step") ||
+			msg.Content == "Please continue working on this task.") {
+			continue
+		}
+
+		// Format message for display
+		var formattedMessage string
+		if msg.Role == "user" {
+			formattedMessage = fmt.Sprintf("You: %s", msg.Content)
+		} else if msg.Role == "assistant" {
+			// Filter out JSON task blocks for assistant messages
+			content := s.filterJSONTaskBlocks(msg.Content)
+			content = s.filterTaskResultForDisplay(content)
+			formattedMessage = fmt.Sprintf("Loom: %s", content)
+		} else if msg.Role == "system" {
+			if i == 0 {
+				// First system message is the initial prompt, don't show to user
+				continue
+			}
+			// Special treatment for system messages that are task results
+			if strings.HasPrefix(msg.Content, "TASK_RESULT:") {
+				// Skip task result messages meant for LLM
+				continue
+			} else if strings.Contains(msg.Content, "TASK_CONFIRMATION:") {
+				// Special display for confirmation messages
+				parts := strings.SplitN(msg.Content, "TASK_CONFIRMATION: ", 2)
+				if len(parts) > 1 {
+					formattedMessage = fmt.Sprintf("System: %s", parts[1])
+				} else {
+					formattedMessage = fmt.Sprintf("System: %s", msg.Content)
+				}
+			} else {
+				formattedMessage = fmt.Sprintf("System: %s", msg.Content)
+			}
+		} else {
+			formattedMessage = fmt.Sprintf("%s: %s", msg.Role, msg.Content)
+		}
+
+		displayMessages = append(displayMessages, formattedMessage)
 	}
-	return display
+
+	return displayMessages
 }
 
 // filterTaskResultForDisplay filters task result messages to show only status messages to users

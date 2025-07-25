@@ -113,10 +113,10 @@ func TestAddMessage(t *testing.T) {
 		t.Errorf("Expected 6 messages, got %d", len(messages))
 	}
 
-	// But system message should be excluded from display messages
+	// But system message should be excluded from display messages (the first system message is allowed)
 	displayMessages := session.GetDisplayMessages()
-	if len(displayMessages) != 5 {
-		t.Errorf("Expected 5 display messages, got %d", len(displayMessages))
+	if len(displayMessages) != 6 {
+		t.Errorf("Expected 6 display messages, got %d", len(displayMessages))
 	}
 
 	// Add messages to exceed maxMessages

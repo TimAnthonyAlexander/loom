@@ -419,23 +419,23 @@ func TestTaskDescription(t *testing.T) {
 	}{
 		{
 			task:     Task{Type: TaskTypeReadFile, Path: "main.go", MaxLines: 100},
-			expected: "Read main.go (max 100 lines)",
+			expected: "📖 Read main.go (max 100 lines)",
 		},
 		{
 			task:     Task{Type: TaskTypeReadFile, Path: "main.go", StartLine: 10, EndLine: 20},
-			expected: "Read main.go (lines 10-20)",
+			expected: "📖 Read main.go (lines 10-20)",
 		},
 		{
 			task:     Task{Type: TaskTypeEditFile, Path: "main.go", LoomEditCommand: true},
-			expected: "Edit main.go (LOOM_EDIT format)",
+			expected: "✏️ Edit main.go (LOOM_EDIT format)",
 		},
 		{
 			task:     Task{Type: TaskTypeListDir, Path: "src", Recursive: true},
-			expected: "List directory src (recursive)",
+			expected: "📂 List directory src (recursive)",
 		},
 		{
 			task:     Task{Type: TaskTypeRunShell, Command: "go build"},
-			expected: "Run command: go build",
+			expected: "🔧 Run command: go build",
 		},
 	}
 
