@@ -2863,6 +2863,19 @@ func (m *model) formatTaskResultForLLM(task *taskPkg.Task, response *taskPkg.Tas
 
 	content.WriteString(fmt.Sprintf("TASK_RESULT: %s\n", task.Description()))
 
+	// For search tasks, make it extra clear when files are found by name
+	if task.Type == taskPkg.TaskTypeSearch && task.SearchNames {
+		if response.Success {
+			// Check if the response mentions files found
+			if strings.Contains(response.ActualContent, "FOUND FILES MATCHING NAME") ||
+				strings.Contains(response.ActualContent, "FILE EXISTS:") {
+				content.WriteString("IMPORTANT: Files matching this name WERE FOUND in the repository.\n")
+			} else {
+				content.WriteString("IMPORTANT: No files matching this name were found in the repository.\n")
+			}
+		}
+	}
+
 	if response.Success {
 		content.WriteString("STATUS: Success\n")
 		// Use ActualContent for LLM context (includes full file content, etc.)

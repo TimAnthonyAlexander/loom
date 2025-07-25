@@ -937,161 +937,22 @@ func (e *Executor) executeSearch(task *Task) *TaskResponse {
 	response := &TaskResponse{Task: *task}
 
 	// Security: ensure search path is within workspace
-	searchPath, err := e.securePath(task.Path)
+	_, err := e.securePath(task.Path)
 	if err != nil {
 		response.Error = err.Error()
 		return response
 	}
 
-	// Build ripgrep command arguments
-	args := []string{}
+	// By default, always search both content and filenames
+	// We'll clone the task so we don't modify the original
+	combinedTask := *task
 
-	// Add pattern (query)
-	args = append(args, task.Query)
+	// Set both flags to ensure we search both filenames and content
+	combinedTask.CombineResults = true
+	combinedTask.SearchNames = true
 
-	// Add search path
-	args = append(args, searchPath)
-
-	// Add flags based on task options
-	if task.IgnoreCase {
-		args = append([]string{"-i"}, args...)
-	}
-
-	if task.WholeWord {
-		args = append([]string{"-w"}, args...)
-	}
-
-	if task.FixedString {
-		args = append([]string{"-F"}, args...)
-	}
-
-	if task.FilenamesOnly {
-		args = append([]string{"-l"}, args...)
-	}
-
-	if task.CountMatches {
-		args = append([]string{"-c"}, args...)
-	}
-
-	if task.UsePCRE2 {
-		args = append([]string{"-P"}, args...)
-	}
-
-	// Add context options
-	if task.ContextBefore > 0 {
-		args = append([]string{fmt.Sprintf("-B%d", task.ContextBefore)}, args...)
-	}
-
-	if task.ContextAfter > 0 {
-		args = append([]string{fmt.Sprintf("-A%d", task.ContextAfter)}, args...)
-	}
-
-	// Add file type filters
-	for _, fileType := range task.FileTypes {
-		args = append([]string{"-t", fileType}, args...)
-	}
-
-	for _, excludeType := range task.ExcludeTypes {
-		args = append([]string{"-T", excludeType}, args...)
-	}
-
-	// Add glob patterns
-	for _, glob := range task.GlobPatterns {
-		args = append([]string{"-g", glob}, args...)
-	}
-
-	for _, excludeGlob := range task.ExcludeGlobs {
-		args = append([]string{"-g", "!" + excludeGlob}, args...)
-	}
-
-	// Add search hidden files option
-	if task.SearchHidden {
-		args = append([]string{"--hidden"}, args...)
-	}
-
-	// Limit output to prevent overwhelming results
-	if task.MaxResults > 0 {
-		args = append([]string{"-m", fmt.Sprintf("%d", task.MaxResults)}, args...)
-	}
-
-	// Always add line numbers for better context
-	if !task.FilenamesOnly && !task.CountMatches {
-		args = append([]string{"-n"}, args...)
-	}
-
-	// Add color output for better readability
-	args = append([]string{"--color=always"}, args...)
-
-	// If SearchNames flag is set, run the filename search directly
-	if task.SearchNames {
-		return e.executeFilenameSearch(task, response)
-	}
-
-	// Execute ripgrep
-	output, err := indexer.RunRipgrepWithArgs(args...)
-	if err != nil {
-		// Check if it's just "no matches found" (exit code 1)
-		if strings.Contains(err.Error(), "exit status 1") {
-			// No matches found is not an error, just empty results
-			response.Success = true
-			response.Output = fmt.Sprintf("Search completed: '%s' - No matches found", task.Query)
-			response.ActualContent = fmt.Sprintf("No matches found for search query: '%s'\n\nSearch parameters:\n- Path: %s\n- Options: %s",
-				task.Query, task.Path, e.formatSearchOptions(task))
-			return response
-		}
-
-		response.Error = fmt.Sprintf("ripgrep search failed: %v", err)
-		return response
-	}
-
-	// Process and format output
-	outputStr := string(output)
-
-	// Count matches and files for summary
-	lines := strings.Split(strings.TrimSpace(outputStr), "\n")
-	if len(lines) == 1 && lines[0] == "" {
-		// Empty output
-		response.Success = true
-		response.Output = fmt.Sprintf("Search completed: '%s' - No matches found", task.Query)
-		response.ActualContent = fmt.Sprintf("No matches found for search query: '%s'\n\nSearch parameters:\n- Path: %s\n- Options: %s",
-			task.Query, task.Path, e.formatSearchOptions(task))
-		return response
-	}
-
-	// Count matches and files
-	matchCount := 0
-	fileSet := make(map[string]bool)
-
-	for _, line := range lines {
-		if line != "" {
-			matchCount++
-			// Extract filename (everything before first colon)
-			if colonIdx := strings.Index(line, ":"); colonIdx > 0 {
-				filename := line[:colonIdx]
-				fileSet[filename] = true
-			}
-		}
-	}
-
-	fileCount := len(fileSet)
-
-	// Format search results with intelligent truncation
-	formattedOutput := e.formatSearchResults(outputStr, task, matchCount, fileCount)
-
-	// Store actual search results for LLM
-	response.ActualContent = formattedOutput
-	response.Success = true
-
-	// Create concise user status message
-	if task.FilenamesOnly {
-		response.Output = fmt.Sprintf("Search completed: '%s' - Found %d files with matches", task.Query, fileCount)
-	} else if task.CountMatches {
-		response.Output = fmt.Sprintf("Search completed: '%s' - Found %d total matches", task.Query, matchCount)
-	} else {
-		response.Output = fmt.Sprintf("Search completed: '%s' - Found %d matches in %d files", task.Query, matchCount, fileCount)
-	}
-
-	return response
+	// Execute the combined search
+	return e.executeFilenameSearch(&combinedTask, response)
 }
 
 // executeFilenameSearch performs a search focused on filenames and combines results if needed
@@ -1103,93 +964,229 @@ func (e *Executor) executeFilenameSearch(task *Task, contentResponse *TaskRespon
 		return contentResponse
 	}
 
-	// Build args for filename search
-	nameArgs := []string{}
+	// Variables to store all our search results
+	var filenameResults string
+	var filenameCount int
+	var contentOutput []byte
+	var contentErr error
+	var fileCount int
+	var matchCount int
 
-	// For fuzzy matching, transform the query into a more forgiving pattern
-	queryToUse := task.Query
-	if task.FuzzyMatch {
-		// Create a fuzzy pattern: convert "prompt.go" to ".*p.*r.*o.*m.*p.*t.*\..*g.*o.*"
-		var fuzzyPattern strings.Builder
-		fuzzyPattern.WriteString(".*")
-		for _, char := range task.Query {
-			fuzzyPattern.WriteRune(char)
-			fuzzyPattern.WriteString(".*")
+	// PART 1: FILENAME SEARCH
+	// First try using the find command if we need filename search
+	if task.SearchNames || task.CombineResults {
+		// Build a find command to locate files by name
+		findCmd := exec.Command("find", searchPath, "-type", "f", "-name", "*"+task.Query+"*", "-not", "-path", "*/\\.*")
+		findOutput, findErr := findCmd.CombinedOutput()
+
+		if findErr == nil && len(findOutput) > 0 {
+			filenameResults = strings.TrimSpace(string(findOutput))
+			filenameLines := strings.Split(filenameResults, "\n")
+
+			// Count non-empty lines for results
+			for _, line := range filenameLines {
+				if line != "" {
+					filenameCount++
+				}
+			}
+		} else {
+			// Fallback to ripgrep for filename search if find fails
+			nameArgs := []string{}
+
+			// For fuzzy matching, transform the query into a more forgiving pattern
+			queryToUse := task.Query
+			if task.FuzzyMatch {
+				// Create a fuzzy pattern: convert "prompt.go" to ".*p.*r.*o.*m.*p.*t.*\..*g.*o.*"
+				var fuzzyPattern strings.Builder
+				fuzzyPattern.WriteString(".*")
+				for _, char := range task.Query {
+					fuzzyPattern.WriteRune(char)
+					fuzzyPattern.WriteString(".*")
+				}
+				queryToUse = fuzzyPattern.String()
+			}
+
+			// Modify the query to match filenames better
+			if !task.FuzzyMatch && !strings.HasPrefix(queryToUse, "*") && !strings.HasSuffix(queryToUse, "*") {
+				// For non-fuzzy filename searches, add * before and after to match partial names
+				queryToUse = "*" + queryToUse + "*"
+			}
+
+			// Use --files to list files and --iglob to filter filenames
+			nameArgs = append(nameArgs, "--files")
+			nameArgs = append(nameArgs, "--iglob", queryToUse)
+
+			// Add search path
+			nameArgs = append(nameArgs, searchPath)
+
+			// Add flags based on task options
+			if task.IgnoreCase {
+				nameArgs = append([]string{"-i"}, nameArgs...)
+			}
+
+			// Add search hidden files option
+			if task.SearchHidden {
+				nameArgs = append([]string{"--hidden"}, nameArgs...)
+			}
+
+			// Run the ripgrep filename search
+			rgOutput, rgErr := indexer.RunRipgrepWithArgs(nameArgs...)
+
+			if rgErr == nil && len(rgOutput) > 0 {
+				filenameResults = strings.TrimSpace(string(rgOutput))
+				filenameLines := strings.Split(filenameResults, "\n")
+
+				for _, line := range filenameLines {
+					if line != "" {
+						filenameCount++
+					}
+				}
+			}
 		}
-		queryToUse = fuzzyPattern.String()
 	}
 
-	// Modify the query to match filenames better
-	if !task.FuzzyMatch && !strings.HasPrefix(queryToUse, "*") && !strings.HasSuffix(queryToUse, "*") {
-		// For non-fuzzy filename searches, add * before and after to match partial names
-		queryToUse = "*" + queryToUse + "*"
+	// PART 2: CONTENT SEARCH
+	// Only run content search if we need to combine results
+	if task.CombineResults {
+		// Build ripgrep command arguments for content search
+		args := []string{}
+
+		// Add pattern (query)
+		args = append(args, task.Query)
+
+		// Add search path
+		args = append(args, searchPath)
+
+		// Add flags based on task options
+		if task.IgnoreCase {
+			args = append([]string{"-i"}, args...)
+		}
+
+		if task.WholeWord {
+			args = append([]string{"-w"}, args...)
+		}
+
+		if task.FixedString {
+			args = append([]string{"-F"}, args...)
+		}
+
+		if task.FilenamesOnly {
+			args = append([]string{"-l"}, args...)
+		}
+
+		if task.CountMatches {
+			args = append([]string{"-c"}, args...)
+		}
+
+		if task.UsePCRE2 {
+			args = append([]string{"-P"}, args...)
+		}
+
+		// Add context options
+		if task.ContextBefore > 0 {
+			args = append([]string{fmt.Sprintf("-B%d", task.ContextBefore)}, args...)
+		}
+
+		if task.ContextAfter > 0 {
+			args = append([]string{fmt.Sprintf("-A%d", task.ContextAfter)}, args...)
+		}
+
+		// Add file type filters
+		for _, fileType := range task.FileTypes {
+			args = append([]string{"-t", fileType}, args...)
+		}
+
+		for _, excludeType := range task.ExcludeTypes {
+			args = append([]string{"-T", excludeType}, args...)
+		}
+
+		// Add glob patterns
+		for _, glob := range task.GlobPatterns {
+			args = append([]string{"-g", glob}, args...)
+		}
+
+		for _, excludeGlob := range task.ExcludeGlobs {
+			args = append([]string{"-g", "!" + excludeGlob}, args...)
+		}
+
+		// Add search hidden files option
+		if task.SearchHidden {
+			args = append([]string{"--hidden"}, args...)
+		}
+
+		// Limit output to prevent overwhelming results
+		if task.MaxResults > 0 {
+			args = append([]string{"-m", fmt.Sprintf("%d", task.MaxResults)}, args...)
+		}
+
+		// Always add line numbers for better context
+		if !task.FilenamesOnly && !task.CountMatches {
+			args = append([]string{"-n"}, args...)
+		}
+
+		// Add color output for better readability
+		args = append([]string{"--color=always"}, args...)
+
+		// Execute ripgrep for content search
+		contentOutput, contentErr = indexer.RunRipgrepWithArgs(args...)
 	}
 
-	// Use -g flag for filename matching which is more reliable than content search
-	nameArgs = append(nameArgs, "-g", queryToUse)
-	nameArgs = append(nameArgs, "--files")
+	// PART 3: PROCESS CONTENT SEARCH RESULTS
+	contentResults := ""
+	if contentErr == nil && len(contentOutput) > 0 {
+		contentResults = strings.TrimSpace(string(contentOutput))
+		lines := strings.Split(contentResults, "\n")
+		fileSet := make(map[string]bool)
 
-	// Add search path
-	nameArgs = append(nameArgs, searchPath)
+		for _, line := range lines {
+			if line != "" {
+				matchCount++
+				// Extract filename (everything before first colon)
+				if colonIdx := strings.Index(line, ":"); colonIdx > 0 {
+					filename := line[:colonIdx]
+					fileSet[filename] = true
+				}
+			}
+		}
 
-	// Add flags based on task options
-	if task.IgnoreCase {
-		nameArgs = append([]string{"-i"}, nameArgs...)
-	}
-
-	// Add file type filters
-	for _, fileType := range task.FileTypes {
-		nameArgs = append([]string{"-t", fileType}, nameArgs...)
-	}
-
-	for _, excludeType := range task.ExcludeTypes {
-		nameArgs = append([]string{"-T", excludeType}, nameArgs...)
-	}
-
-	// Add glob patterns
-	for _, glob := range task.GlobPatterns {
-		nameArgs = append([]string{"-g", glob}, nameArgs...)
-	}
-
-	for _, excludeGlob := range task.ExcludeGlobs {
-		nameArgs = append([]string{"-g", "!" + excludeGlob}, nameArgs...)
-	}
-
-	// Add search hidden files option
-	if task.SearchHidden {
-		nameArgs = append([]string{"--hidden"}, nameArgs...)
-	}
-
-	// Run the filename search
-	filenameOutput, err := indexer.RunRipgrepWithArgs(nameArgs...)
-	if err != nil && !strings.Contains(err.Error(), "exit status 1") {
-		contentResponse.Error = fmt.Sprintf("filename search failed: %v", err)
+		fileCount = len(fileSet)
+	} else if contentErr != nil && !strings.Contains(contentErr.Error(), "exit status 1") {
+		contentResponse.Error = fmt.Sprintf("content search failed: %v", contentErr)
 		return contentResponse
 	}
 
-	// If no filename results, return appropriate message
-	if filenameOutput == nil || len(filenameOutput) == 0 || strings.TrimSpace(string(filenameOutput)) == "" {
+	// PART 4: HANDLE NO RESULTS CASE
+	// If no results at all, return appropriate message
+	if filenameCount == 0 && matchCount == 0 {
 		contentResponse.Success = true
-		contentResponse.Output = fmt.Sprintf("Search completed: '%s' - No matching filenames found", task.Query)
-		contentResponse.ActualContent = fmt.Sprintf("No files matching '%s' were found.\n\nSearch parameters:\n- Path: %s\n- Options: %s\n- Filename search: %t\n- Fuzzy search: %t",
-			task.Query, task.Path, e.formatSearchOptions(task), task.SearchNames, task.FuzzyMatch)
+		contentResponse.Output = fmt.Sprintf("Search completed: '%s' - No matches found", task.Query)
+		contentResponse.ActualContent = fmt.Sprintf("No files matching '%s' were found and no content matches.\n\nSearch parameters:\n- Path: %s\n- Options: %s\n- Filename search: %t\n- Fuzzy search: %t",
+			task.Query, task.Path, e.formatSearchOptions(task), true, task.FuzzyMatch)
 		return contentResponse
 	}
 
-	// Count the filename matches
-	filenameLines := strings.Split(strings.TrimSpace(string(filenameOutput)), "\n")
-	filenameCount := 0
-	for _, line := range filenameLines {
-		if line != "" {
-			filenameCount++
-		}
+	// PART 5: FORMAT RESULTS
+	// Format the combined results
+	var resultOutput strings.Builder
+	resultOutput.WriteString(fmt.Sprintf("🔍 Search Results for: '%s'\n", task.Query))
+	resultOutput.WriteString(fmt.Sprintf("📁 Path: %s\n", task.Path))
+
+	// EXPLICIT GUIDANCE FOR LLM PARSING
+	if filenameCount > 0 {
+		resultOutput.WriteString(fmt.Sprintf("🔴 ATTENTION LLM: FOUND %d FILES MATCHING NAME '%s'\n", filenameCount, task.Query))
+	} else {
+		resultOutput.WriteString(fmt.Sprintf("🔴 ATTENTION LLM: NO FILES FOUND MATCHING NAME '%s'\n", task.Query))
 	}
 
-	// Format the results
-	var resultOutput strings.Builder
-	resultOutput.WriteString(fmt.Sprintf("🔍 Filename Search Results for: '%s'\n", task.Query))
-	resultOutput.WriteString(fmt.Sprintf("📁 Path: %s\n", task.Path))
-	resultOutput.WriteString(fmt.Sprintf("📊 Summary: %d files found\n", filenameCount))
+	// Build summary line
+	summaryParts := []string{}
+	if filenameCount > 0 {
+		summaryParts = append(summaryParts, fmt.Sprintf("%d matching files", filenameCount))
+	}
+	if matchCount > 0 {
+		summaryParts = append(summaryParts, fmt.Sprintf("%d content matches in %d files", matchCount, fileCount))
+	}
+	resultOutput.WriteString(fmt.Sprintf("📊 Summary: %s\n", strings.Join(summaryParts, ", ")))
 
 	if task.FuzzyMatch {
 		resultOutput.WriteString("⚙️  Options: fuzzy matching\n")
@@ -1200,22 +1197,61 @@ func (e *Executor) executeFilenameSearch(task *Task, contentResponse *TaskRespon
 
 	resultOutput.WriteString("\n" + strings.Repeat("─", 50) + "\n\n")
 
-	// Add files
-	for i, filename := range filenameLines {
-		// Limit to max results
-		if task.MaxNameResults > 0 && i >= task.MaxNameResults {
-			resultOutput.WriteString(fmt.Sprintf("\n...and %d more files (results limited to %d)",
-				filenameCount-task.MaxNameResults, task.MaxNameResults))
-			break
+	// Add filename matches first if available
+	if filenameCount > 0 {
+		resultOutput.WriteString("📄 FOUND FILES MATCHING NAME:\n\n")
+		filenameLines := strings.Split(filenameResults, "\n")
+		for i, filename := range filenameLines {
+			// Limit to max results
+			if task.MaxNameResults > 0 && i >= task.MaxNameResults {
+				resultOutput.WriteString(fmt.Sprintf("\n...and %d more files (results limited to %d)",
+					filenameCount-task.MaxNameResults, task.MaxNameResults))
+				break
+			}
+			if filename != "" {
+				resultOutput.WriteString(fmt.Sprintf("📁 FILE EXISTS: %s\n", filename))
+			}
 		}
-		resultOutput.WriteString(filename + "\n")
 	}
 
+	// Add content matches if available
+	if matchCount > 0 {
+		if filenameCount > 0 {
+			resultOutput.WriteString("\n\n" + strings.Repeat("─", 50) + "\n\n")
+		}
+		resultOutput.WriteString("📝 Content Matches:\n\n")
+		resultOutput.WriteString(contentResults)
+	}
+
+	// Add usage hints for large result sets
+	if matchCount > 50 || filenameCount > 50 {
+		resultOutput.WriteString("\n\n💡 Tip: Use more specific search terms or file type filters to narrow results:")
+		resultOutput.WriteString("\n   🔧 SEARCH \"specific phrase\" type:go")
+		resultOutput.WriteString("\n   🔧 SEARCH pattern glob:*.ts -glob:*.test.ts")
+	}
+
+	// PART 6: CREATE RESPONSE
 	// Update the response
 	contentResponse.ActualContent = resultOutput.String()
 	contentResponse.Success = true
-	contentResponse.Output = fmt.Sprintf("Search completed: '%s' - Found %d matching files",
-		task.Query, filenameCount)
+
+	// Create a concise user status message
+	messageParts := []string{}
+	if filenameCount > 0 {
+		messageParts = append(messageParts, fmt.Sprintf("%d matching files", filenameCount))
+	}
+	if matchCount > 0 {
+		if task.FilenamesOnly {
+			messageParts = append(messageParts, fmt.Sprintf("%d files with content matches", fileCount))
+		} else if task.CountMatches {
+			messageParts = append(messageParts, fmt.Sprintf("%d total content matches", matchCount))
+		} else {
+			messageParts = append(messageParts, fmt.Sprintf("%d content matches in %d files", matchCount, fileCount))
+		}
+	}
+
+	contentResponse.Output = fmt.Sprintf("Search completed: '%s' - Found %s",
+		task.Query, strings.Join(messageParts, ", "))
 
 	return contentResponse
 }

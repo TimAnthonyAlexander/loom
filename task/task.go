@@ -1906,11 +1906,7 @@ func (t *Task) Description() string {
 			description += " (whole words)"
 		}
 		if t.SearchNames {
-			if t.FuzzyMatch {
-				description += " (including fuzzy filename matches)"
-			} else {
-				description += " (including filename matches)"
-			}
+			description += " (including filename matches)"
 		}
 		return description
 
