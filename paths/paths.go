@@ -171,101 +171,22 @@ func (p *ProjectPaths) GetProjectInfo() map[string]interface{} {
 }
 
 // ListAllProjects returns information about all projects in the user loom directory
-func ListAllProjects() ([]map[string]interface{}, error) {
-	userLoomDir, err := GetUserLoomDir()
-	if err != nil {
-		return nil, err
-	}
 
-	projectsDir := filepath.Join(userLoomDir, "projects")
+// Check if projects directory exists
 
-	// Check if projects directory exists
-	if _, err := os.Stat(projectsDir); os.IsNotExist(err) {
-		return []map[string]interface{}{}, nil
-	}
-
-	entries, err := os.ReadDir(projectsDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read projects directory: %w", err)
-	}
-
-	var projects []map[string]interface{}
-	for _, entry := range entries {
-		if entry.IsDir() {
-			projectHash := entry.Name()
-			projectDir := filepath.Join(projectsDir, projectHash)
-
-			// Note: We can't easily reverse the hash to get the original path,
-			// but we could store it in a metadata file if needed
-			workspacePath := "unknown"
-
-			projects = append(projects, map[string]interface{}{
-				"project_hash":   projectHash,
-				"project_dir":    projectDir,
-				"workspace_path": workspacePath,
-			})
-		}
-	}
-
-	return projects, nil
-}
+// Note: We can't easily reverse the hash to get the original path,
+// but we could store it in a metadata file if needed
 
 // CleanupEmptyProjects removes project directories that are empty or contain only empty subdirectories
-func CleanupEmptyProjects() error {
-	userLoomDir, err := GetUserLoomDir()
-	if err != nil {
-		return err
-	}
 
-	projectsDir := filepath.Join(userLoomDir, "projects")
+// Check if projects directory exists
 
-	// Check if projects directory exists
-	if _, err := os.Stat(projectsDir); os.IsNotExist(err) {
-		return nil
-	}
+// Check if directory is empty or contains only empty subdirectories
 
-	entries, err := os.ReadDir(projectsDir)
-	if err != nil {
-		return fmt.Errorf("failed to read projects directory: %w", err)
-	}
+// Skip on error
 
-	for _, entry := range entries {
-		if entry.IsDir() {
-			projectDir := filepath.Join(projectsDir, entry.Name())
-
-			// Check if directory is empty or contains only empty subdirectories
-			isEmpty, err := isDirectoryEmpty(projectDir)
-			if err != nil {
-				continue // Skip on error
-			}
-
-			if isEmpty {
-				os.RemoveAll(projectDir) // Ignore errors during cleanup
-			}
-		}
-	}
-
-	return nil
-}
+// Ignore errors during cleanup
 
 // isDirectoryEmpty checks if a directory is empty or contains only empty subdirectories
-func isDirectoryEmpty(dirPath string) (bool, error) {
-	entries, err := os.ReadDir(dirPath)
-	if err != nil {
-		return false, err
-	}
 
-	for _, entry := range entries {
-		if entry.IsDir() {
-			subEmpty, err := isDirectoryEmpty(filepath.Join(dirPath, entry.Name()))
-			if err != nil || !subEmpty {
-				return false, err
-			}
-		} else {
-			// Found a file, directory is not empty
-			return false, nil
-		}
-	}
-
-	return true, nil
-}
+// Found a file, directory is not empty

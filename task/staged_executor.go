@@ -21,24 +21,10 @@ type StagedExecutor struct {
 }
 
 // NewStagedExecutor creates a new staged executor
-func NewStagedExecutor(baseExecutor *Executor, contextManager *context.ContextManager, workspacePath string) (*StagedExecutor, error) {
-	// Get project paths
-	projectPaths, err := paths.NewProjectPaths(workspacePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create project paths: %w", err)
-	}
 
-	// Ensure project directories exist
-	if err := projectPaths.EnsureProjectDir(); err != nil {
-		return nil, fmt.Errorf("failed to create project directories: %w", err)
-	}
+// Get project paths
 
-	return &StagedExecutor{
-		Executor:       baseExecutor,
-		contextManager: contextManager,
-		projectPaths:   projectPaths,
-	}, nil
-}
+// Ensure project directories exist
 
 // PrepareActionPlan prepares an action plan by staging all edits
 func (se *StagedExecutor) PrepareActionPlan(plan *ActionPlan) (*ActionPlanExecution, error) {

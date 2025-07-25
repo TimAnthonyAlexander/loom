@@ -758,13 +758,6 @@ func parseSearchTask(args string) *Task {
 			task.CombineResults = true
 			task.SearchNames = true // Combining results implies searching both
 
-		case strings.HasPrefix(part, "max-names:"):
-			// Max filename results: max-names:30
-			if maxStr := strings.TrimPrefix(part, "max-names:"); maxStr != "" {
-				if max, err := strconv.Atoi(maxStr); err == nil {
-					task.MaxNameResults = max
-				}
-			}
 		}
 	}
 
@@ -1115,26 +1108,10 @@ func isLikelyInteractiveCommand(command string) bool {
 }
 
 // parseEditLineRange extracts line range information from EDIT_LINES marker
-func parseEditLineRange(task *Task, lineRange string) {
-	// Handle single line: "15"
-	if !strings.Contains(lineRange, "-") {
-		if lineNum, err := strconv.Atoi(strings.TrimSpace(lineRange)); err == nil {
-			task.TargetLine = lineNum
-		}
-		return
-	}
 
-	// Handle range: "15-17"
-	parts := strings.Split(lineRange, "-")
-	if len(parts) == 2 {
-		if startLine, err := strconv.Atoi(strings.TrimSpace(parts[0])); err == nil {
-			if endLine, err := strconv.Atoi(strings.TrimSpace(parts[1])); err == nil {
-				task.TargetStartLine = startLine
-				task.TargetEndLine = endLine
-			}
-		}
-	}
-}
+// Handle single line: "15"
+
+// Handle range: "15-17"
 
 // extractContentFromCodeBlock looks for content in code blocks following a task command
 func extractContentFromCodeBlock(lines []string, startIdx int) string {

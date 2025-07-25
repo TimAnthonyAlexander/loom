@@ -36,16 +36,8 @@ type SecretDetector struct {
 }
 
 // NewSecretDetector creates a new secret detector with comprehensive patterns
-func NewSecretDetector() *SecretDetector {
-	detector := &SecretDetector{
-		patterns: make([]SecretPattern, 0),
-	}
 
-	// Add all the secret patterns
-	detector.addDefaultPatterns()
-
-	return detector
-}
+// Add all the secret patterns
 
 // addDefaultPatterns adds comprehensive secret detection patterns
 func (sd *SecretDetector) addDefaultPatterns() {

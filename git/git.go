@@ -48,23 +48,12 @@ type CommitInfo struct {
 }
 
 // NewRepository creates a new Git repository interface
-func NewRepository(workspacePath string) (*Repository, error) {
-	repo := &Repository{
-		workspacePath: workspacePath,
-	}
 
-	// Check if this is a Git repository
-	if err := repo.checkGitRepo(); err != nil {
-		return repo, nil // Return non-Git repo (isGitRepo will be false)
-	}
+// Check if this is a Git repository
 
-	// Get current branch and remote
-	if err := repo.loadRepositoryInfo(); err != nil {
-		return repo, fmt.Errorf("failed to load repository info: %w", err)
-	}
+// Return non-Git repo (isGitRepo will be false)
 
-	return repo, nil
-}
+// Get current branch and remote
 
 // checkGitRepo checks if the workspace is a Git repository
 func (r *Repository) checkGitRepo() error {

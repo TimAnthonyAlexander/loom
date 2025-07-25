@@ -622,12 +622,6 @@ func (cm *ContextManager) FormatFileSnippets(snippets []*FileSnippet) string {
 }
 
 // Helper functions
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
 
 func max(a, b int) int {
 	if a > b {

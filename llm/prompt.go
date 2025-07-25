@@ -231,9 +231,6 @@ When searching for files, use grep or ripgrep to locate files, and use the SEARC
 - whole-word - exact word matches
 - in:src/ - search specific directory
 - max:50 - limit results
-- fuzzy - use fuzzy matching for filenames
-- combine - combine content and filename results
-- max-names:30 - limit filename results
 
 ### 6.2 LIST / READ
 **LIST**: List directory contents

@@ -47,7 +47,3 @@ func findGitRoot(startPath string) string {
 
 // EnsureLoomDir creates a .loom directory in the given workspace path
 // This is kept for backward compatibility with tests
-func EnsureLoomDir(workspacePath string) error {
-	loomDir := filepath.Join(workspacePath, ".loom")
-	return os.MkdirAll(loomDir, 0755)
-}

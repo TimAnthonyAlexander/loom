@@ -69,9 +69,6 @@ func CreateAdapterFromConfig(cfg ConfigInterface) (LLMAdapter, error) {
 }
 
 // CreateAdapter creates an LLM adapter based on the model configuration (legacy version)
-func CreateAdapter(modelStr, apiKey, baseURL string) (LLMAdapter, error) {
-	return createAdapterWithTimeouts(modelStr, apiKey, baseURL, DefaultTimeout, DefaultStreamTimeout, DefaultMaxRetries)
-}
 
 // createAdapterWithTimeouts is the internal function that creates adapters with specific timeout settings
 func createAdapterWithTimeouts(modelStr, apiKey, baseURL string, timeout, streamTimeout time.Duration, maxRetries int) (LLMAdapter, error) {
@@ -123,19 +120,5 @@ func createAdapterWithTimeouts(modelStr, apiKey, baseURL string, timeout, stream
 }
 
 // GetProviderFromModel extracts the provider from a model string
-func GetProviderFromModel(modelStr string) string {
-	parts := strings.SplitN(modelStr, ":", 2)
-	if len(parts) == 2 {
-		return parts[0]
-	}
-	return "unknown"
-}
 
 // GetModelFromModel extracts the model name from a model string
-func GetModelFromModel(modelStr string) string {
-	parts := strings.SplitN(modelStr, ":", 2)
-	if len(parts) == 2 {
-		return parts[1]
-	}
-	return modelStr
-}

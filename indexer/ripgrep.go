@@ -89,16 +89,7 @@ func findModuleRoot() (string, error) {
 	return "", os.ErrNotExist
 }
 
-func RunRipgrep(pattern, path string) ([]byte, error) {
-	rgBinary := rgPath()
-
-	// Check if the binary exists and provide helpful error
-	if _, err := os.Stat(rgBinary); os.IsNotExist(err) {
-		return nil, fmt.Errorf("ripgrep binary not found at %s. Please install ripgrep system-wide using 'brew install ripgrep' (macOS), 'apt install ripgrep' (Ubuntu), or download from https://github.com/BurntSushi/ripgrep/releases", rgBinary)
-	}
-
-	return exec.Command(rgBinary, pattern, path).CombinedOutput()
-}
+// Check if the binary exists and provide helpful error
 
 // RunRipgrepWithArgs runs ripgrep with custom arguments for advanced search features
 func RunRipgrepWithArgs(args ...string) ([]byte, error) {

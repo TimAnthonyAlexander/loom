@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -230,11 +229,5 @@ func (o *OllamaAdapter) IsAvailable() bool {
 }
 
 // parseOllamaModel extracts the model name from a model string like "ollama:codellama"
-func parseOllamaModel(modelStr string) string {
-	parts := strings.SplitN(modelStr, ":", 2)
-	if len(parts) == 2 && parts[0] == "ollama" {
-		return parts[1]
-	}
-	// Fallback - assume it's just the model name
-	return modelStr
-}
+
+// Fallback - assume it's just the model name

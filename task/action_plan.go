@@ -57,12 +57,6 @@ type ActionPlanParser struct {
 }
 
 // NewActionPlanParser creates a new action plan parser
-func NewActionPlanParser() *ActionPlanParser {
-	return &ActionPlanParser{
-		taskRegex: regexp.MustCompile("```json\n([^`]+)\n```"),
-		planRegex: regexp.MustCompile("```action-plan\n([^`]+)\n```"),
-	}
-}
 
 // ParseActionPlan extracts an action plan from LLM response text
 func (app *ActionPlanParser) ParseActionPlan(text string) (*ActionPlan, error) {
@@ -277,9 +271,6 @@ func (plan *ActionPlan) Summary() string {
 }
 
 // generatePlanID generates a unique ID for an action plan
-func generatePlanID() string {
-	return fmt.Sprintf("plan_%d", time.Now().UnixNano())
-}
 
 // DetectTestFirst analyzes the plan to determine if test-first approach should be used
 func (plan *ActionPlan) DetectTestFirst() bool {
@@ -338,4 +329,8 @@ func (plan *ActionPlan) GetImplementationTasks() []Task {
 	}
 
 	return implTasks
+}
+
+func generatePlanID() string {
+	return fmt.Sprintf("plan_%d", time.Now().UnixNano())
 }
