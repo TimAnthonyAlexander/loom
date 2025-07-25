@@ -928,7 +928,12 @@ func (e *Executor) executeRegularShellCommand(task *Task) *TaskResponse {
 		response.Success = true
 	}
 
+	// Store output for both user display and LLM context
 	response.Output = output.String()
+	// Ensure the LLM always has access to the full command output, even when
+	// the command exits with a non-zero status. This fixes the bug where the
+	// LLM could not see shell results because ActualContent was empty.
+	response.ActualContent = output.String()
 	return response
 }
 
@@ -2587,7 +2592,12 @@ func (e *Executor) executeMemory(task *Task) *TaskResponse {
 	total, active := e.memoryStore.GetMemoryCount()
 	output.WriteString(fmt.Sprintf("\nMemory Store Summary: %d total memories, %d active\n", total, active))
 
+	// Store output for both user display and LLM context
 	response.Output = output.String()
+	// Ensure the LLM always has access to the full command output, even when
+	// the command exits with a non-zero status. This fixes the bug where the
+	// LLM could not see shell results because ActualContent was empty.
+	response.ActualContent = output.String()
 	return response
 }
 

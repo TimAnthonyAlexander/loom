@@ -2083,12 +2083,7 @@ func isTextOnlyResponse(response string) bool {
 		return false
 	}
 
-	// If no commands are found and there's substantial content, it's a text-only response
-	if len(response) > 80 || strings.Contains(response, "\n") {
-		return true
-	}
-
-	return false
+	return true
 }
 
 // addSystemMessage helper method to add system messages to chat
@@ -2875,6 +2870,13 @@ func (m *model) formatTaskResultForLLM(task *taskPkg.Task, response *taskPkg.Tas
 		content.WriteString("STATUS: Failed\n")
 		if response.Error != "" {
 			content.WriteString(fmt.Sprintf("ERROR: %s\n", response.Error))
+		}
+		// Provide any output or diagnostic content to the LLM even when the
+		// task fails so it can reason about the failure.
+		if response.ActualContent != "" {
+			content.WriteString(fmt.Sprintf("CONTENT:\n%s\n", response.ActualContent))
+		} else if response.Output != "" {
+			content.WriteString(fmt.Sprintf("CONTENT:\n%s\n", response.Output))
 		}
 	}
 

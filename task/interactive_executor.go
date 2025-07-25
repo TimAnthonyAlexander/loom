@@ -172,6 +172,7 @@ func (ie *InteractiveExecutor) executeWithPredefinedInput(task *Task) *TaskRespo
 		case <-session.done:
 			response.Success = true
 			response.Output = ie.formatInteractiveOutput(session)
+			response.ActualContent = response.Output
 			return response
 		case <-ctx.Done():
 			response.Error = fmt.Sprintf("command timed out after %d seconds", task.Timeout)
@@ -222,7 +223,9 @@ func (ie *InteractiveExecutor) executeRegularCommand(task *Task) *TaskResponse {
 		response.Success = true
 	}
 
+	// Store output for both user display and LLM context
 	response.Output = output.String()
+	response.ActualContent = output.String()
 	return response
 }
 

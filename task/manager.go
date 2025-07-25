@@ -317,10 +317,29 @@ func (m *Manager) formatTaskResult(task *Task, response *TaskResponse) string {
 		if response.Approved {
 			result.WriteString("👍 User approved changes\n")
 		}
+		// Show command or operation output (trimmed to avoid flooding chat)
+		if response.Output != "" {
+			trimmed := response.Output
+			const maxLen = 500
+			if len(trimmed) > maxLen {
+				trimmed = trimmed[:maxLen] + "… (truncated)"
+			}
+			result.WriteString("📄 Output:\n")
+			result.WriteString(trimmed + "\n")
+		}
 	} else {
 		result.WriteString("❌ Status: Failed\n")
 		if response.Error != "" {
 			result.WriteString(fmt.Sprintf("💥 Error: %s\n", response.Error))
+		}
+		if response.Output != "" {
+			trimmed := response.Output
+			const maxLen = 500
+			if len(trimmed) > maxLen {
+				trimmed = trimmed[:maxLen] + "… (truncated)"
+			}
+			result.WriteString("📄 Output (partial):\n")
+			result.WriteString(trimmed + "\n")
 		}
 	}
 

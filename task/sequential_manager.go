@@ -522,6 +522,13 @@ func (stm *SequentialTaskManager) formatTaskResultForExploration(task *Task, res
 		if response.Error != "" {
 			content.WriteString(fmt.Sprintf("ERROR: %s\n", response.Error))
 		}
+		// Even for failed commands, include any available output so the LLM
+		// can inspect logs, exit codes, or diagnostic messages.
+		if response.ActualContent != "" {
+			content.WriteString(fmt.Sprintf("CONTENT:\n%s\n", response.ActualContent))
+		} else if response.Output != "" {
+			content.WriteString(fmt.Sprintf("CONTENT:\n%s\n", response.Output))
+		}
 	}
 
 	return llm.Message{
