@@ -137,6 +137,7 @@ func (m *Manager) HandleLLMResponse(llmResponse string, eventChan chan<- TaskExe
 
 		// Execute the task
 		response := m.executor.Execute(&currentTask)
+		// Execute the task
 		execution.Responses = append(execution.Responses, *response)
 
 		if !response.Success {

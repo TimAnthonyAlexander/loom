@@ -1477,7 +1477,6 @@ func (m *model) handleObjectiveExploration(llmResponse string) tea.Msg {
 	}
 
 	if task != nil {
-		// Execute the task
 		response := m.taskExecutor.Execute(task)
 
 		// Add task result to accumulated data

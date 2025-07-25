@@ -785,7 +785,6 @@ func (e *Executor) executeFilenameSearch(task *Task, contentResponse *TaskRespon
 	// PART 1: FILENAME SEARCH
 	// First try using the find command if we need filename search
 	if task.SearchNames || task.CombineResults {
-
 		// Build a find command to locate files by name
 		findCmd := exec.Command("find", searchPath, "-type", "f", "-name", "*"+task.Query+"*", "-not", "-path", "*/\\.*")
 		findOutput, findErr := findCmd.CombinedOutput()

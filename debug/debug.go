@@ -19,11 +19,15 @@ func DumpAndDie(v any) {
 }
 
 func LogToFile(v any) {
-	f, err := os.OpenFile("debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile("/Users/tim.alexander/loom/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "log open error: %v\n", err)
+		return
 	}
-	defer f.Close()
+	defer func() {
+		f.Sync()
+		f.Close()
+	}()
 
 	logger := log.New(f, "[DEBUG] ", log.LstdFlags|log.Lshortfile)
 	logger.Printf("%#v", v)
