@@ -78,198 +78,204 @@ func NewContextManager(index *indexer.Index, maxTokens int) *ContextManager {
 
 // OptimizeMessages optimizes a list of messages for context window constraints
 func (cm *ContextManager) OptimizeMessages(messages []llm.Message) ([]llm.Message, error) {
+	// TEMPORARY FIX: Return all messages without any filtering or optimization
+	// to ensure no filename search results are lost
+	return messages, nil
 
-	if len(messages) == 0 {
-		return messages, nil
-	}
-
-	// Check for search results with filename matches
-	// Categorize messages by role
-	systemMessages := []llm.Message{}
-	userMessages := []llm.Message{}
-	assistantMessages := []llm.Message{}
-
-	for _, msg := range messages {
-		switch msg.Role {
-		case "system":
-			systemMessages = append(systemMessages, msg)
-		case "user":
-			userMessages = append(userMessages, msg)
-		case "assistant":
-			assistantMessages = append(assistantMessages, msg)
+	// Original optimization logic is commented out below
+	/*
+		if len(messages) == 0 {
+			return messages, nil
 		}
-	}
 
-	// Initialize optimized messages array
-	optimized := make([]llm.Message, 0, len(messages))
-	totalTokens := 0
+		// Check for search results with filename matches
+		// Categorize messages by role
+		systemMessages := []llm.Message{}
+		userMessages := []llm.Message{}
+		assistantMessages := []llm.Message{}
 
-	// ALWAYS include system messages (highest priority)
-	for _, msg := range systemMessages {
-		tokens := cm.tokenEstimator.EstimateTokens(msg.Content)
-		if totalTokens+tokens < cm.maxTokens {
-			optimized = append(optimized, msg)
-			totalTokens += tokens
+		for _, msg := range messages {
+			switch msg.Role {
+			case "system":
+				systemMessages = append(systemMessages, msg)
+			case "user":
+				userMessages = append(userMessages, msg)
+			case "assistant":
+				assistantMessages = append(assistantMessages, msg)
+			}
+		}
 
-			// Track if we kept a message with filename matches
-			if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
-				// Filename matches found in system message and preserved
+		// Initialize optimized messages array
+		optimized := make([]llm.Message, 0, len(messages))
+		totalTokens := 0
+
+		// ALWAYS include system messages (highest priority)
+		for _, msg := range systemMessages {
+			tokens := cm.tokenEstimator.EstimateTokens(msg.Content)
+			if totalTokens+tokens < cm.maxTokens {
+				optimized = append(optimized, msg)
+				totalTokens += tokens
+
+				// Track if we kept a message with filename matches
+				if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
+					// Filename matches found in system message and preserved
+				}
+			} else {
+				// System messages are critical - if we can't include all of them,
+				// we're likely over capacity and need to trim somewhere else
+
+				if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
+					// Critical filename match in system message - force include
+					optimized = append(optimized, msg)
+					totalTokens += tokens
+				}
+			}
+		}
+
+		// Add the initial user message if it exists (important for establishing context)
+		if len(userMessages) > 0 {
+			initialMsg := userMessages[0]
+			tokens := cm.tokenEstimator.EstimateTokens(initialMsg.Content)
+			if totalTokens+tokens < cm.maxTokens {
+				optimized = append(optimized, initialMsg)
+				totalTokens += tokens
+			}
+		}
+
+		// Define the number of recent messages to always include
+		const recentMessagesToKeep = 10
+
+		// Calculate remaining messages that need optimization
+		var remainingMessages []llm.Message
+		if len(messages) > recentMessagesToKeep+len(systemMessages)+1 { // +1 for initial message
+			// We need to exclude the system messages, initial message, and N recent messages
+			startIdx := 0
+			for _, msg := range messages {
+				if msg.Role == "system" {
+					startIdx++
+				}
+			}
+			startIdx++ // Skip the initial user message too
+
+			// All messages except system, initial and recent
+			if startIdx+recentMessagesToKeep < len(messages) {
+				endIdx := len(messages) - recentMessagesToKeep
+				remainingMessages = messages[startIdx:endIdx]
+			}
+		}
+
+		// Create a summary of older messages if needed
+		if len(remainingMessages) > 0 {
+			summary := cm.summarizeOlderMessages(remainingMessages)
+			summaryTokens := cm.tokenEstimator.EstimateTokens(summary.Content)
+			if totalTokens+summaryTokens < cm.maxTokens {
+				optimized = append(optimized, summary)
+				totalTokens += summaryTokens
+			}
+		}
+
+		// Include the current objective/task if it can be identified
+		objective := cm.extractCurrentObjective(messages)
+		if objective != nil {
+			objectiveTokens := cm.tokenEstimator.EstimateTokens(objective.Content)
+			if totalTokens+objectiveTokens < cm.maxTokens {
+				optimized = append(optimized, *objective)
+				totalTokens += objectiveTokens
+			}
+		}
+
+		// Add recent messages (always keep these)
+		if len(messages) > recentMessagesToKeep {
+			recentMessages := messages[len(messages)-recentMessagesToKeep:]
+			for _, msg := range recentMessages {
+				tokens := cm.tokenEstimator.EstimateTokens(msg.Content)
+				if totalTokens+tokens < cm.maxTokens {
+					optimized = append(optimized, msg)
+					totalTokens += tokens
+
+					// Track if we kept a message with filename matches
+					if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
+						// Filename matches preserved
+					}
+				} else {
+					// If we can't include a recent message, try to condense it
+					condensed, condensedTokens := cm.condenseMessage(msg)
+					if totalTokens+condensedTokens < cm.maxTokens {
+						optimized = append(optimized, condensed)
+						totalTokens += condensedTokens
+
+						// Check if condensing preserved filename matches
+						if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
+							if strings.Contains(condensed.Content, "FOUND FILES MATCHING NAME") {
+								// Filename matches preserved in condensed message
+							} else {
+								// Filename matches were lost in condensing!
+								// Replace the condensed message with the original one to preserve matches
+								optimized[len(optimized)-1] = msg
+								totalTokens = totalTokens - condensedTokens + cm.tokenEstimator.EstimateTokens(msg.Content)
+							}
+						}
+					} else if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
+						// Critical - must include the message with filename matches even if it's over budget
+						// Consider removing earlier non-critical messages to make room
+						optimized = append(optimized, msg)
+						totalTokens += cm.tokenEstimator.EstimateTokens(msg.Content)
+					}
+				}
 			}
 		} else {
-			// System messages are critical - if we can't include all of them,
-			// we're likely over capacity and need to trim somewhere else
-
-			if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
-				// Critical filename match in system message - force include
-				optimized = append(optimized, msg)
-				totalTokens += tokens
-			}
-		}
-	}
-
-	// Add the initial user message if it exists (important for establishing context)
-	if len(userMessages) > 0 {
-		initialMsg := userMessages[0]
-		tokens := cm.tokenEstimator.EstimateTokens(initialMsg.Content)
-		if totalTokens+tokens < cm.maxTokens {
-			optimized = append(optimized, initialMsg)
-			totalTokens += tokens
-		}
-	}
-
-	// Define the number of recent messages to always include
-	const recentMessagesToKeep = 10
-
-	// Calculate remaining messages that need optimization
-	var remainingMessages []llm.Message
-	if len(messages) > recentMessagesToKeep+len(systemMessages)+1 { // +1 for initial message
-		// We need to exclude the system messages, initial message, and N recent messages
-		startIdx := 0
-		for _, msg := range messages {
-			if msg.Role == "system" {
-				startIdx++
-			}
-		}
-		startIdx++ // Skip the initial user message too
-
-		// All messages except system, initial and recent
-		if startIdx+recentMessagesToKeep < len(messages) {
-			endIdx := len(messages) - recentMessagesToKeep
-			remainingMessages = messages[startIdx:endIdx]
-		}
-	}
-
-	// Create a summary of older messages if needed
-	if len(remainingMessages) > 0 {
-		summary := cm.summarizeOlderMessages(remainingMessages)
-		summaryTokens := cm.tokenEstimator.EstimateTokens(summary.Content)
-		if totalTokens+summaryTokens < cm.maxTokens {
-			optimized = append(optimized, summary)
-			totalTokens += summaryTokens
-		}
-	}
-
-	// Include the current objective/task if it can be identified
-	objective := cm.extractCurrentObjective(messages)
-	if objective != nil {
-		objectiveTokens := cm.tokenEstimator.EstimateTokens(objective.Content)
-		if totalTokens+objectiveTokens < cm.maxTokens {
-			optimized = append(optimized, *objective)
-			totalTokens += objectiveTokens
-		}
-	}
-
-	// Add recent messages (always keep these)
-	if len(messages) > recentMessagesToKeep {
-		recentMessages := messages[len(messages)-recentMessagesToKeep:]
-		for _, msg := range recentMessages {
-			tokens := cm.tokenEstimator.EstimateTokens(msg.Content)
-			if totalTokens+tokens < cm.maxTokens {
-				optimized = append(optimized, msg)
-				totalTokens += tokens
-
-				// Track if we kept a recent message with filename matches
-				if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
-
+			// If we have fewer messages than our target, just include them all
+			for i, msg := range messages {
+				// Skip messages we've already added (system messages and initial message)
+				if msg.Role == "system" || (msg.Role == "user" && i == 0) {
+					continue
 				}
-			} else {
-				// If we can't include a recent message, try to condense it
-				condensed, condensedTokens := cm.condenseMessage(msg)
-				if totalTokens+condensedTokens < cm.maxTokens {
-					optimized = append(optimized, condensed)
-					totalTokens += condensedTokens
-
-					// Check if condensing preserved filename matches
-					if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
-						if strings.Contains(condensed.Content, "FOUND FILES MATCHING NAME") {
-							// Filename matches preserved in condensed message
-						} else {
-							// Filename matches were lost in condensing!
-							// Replace the condensed message with the original one to preserve matches
-							optimized[len(optimized)-1] = msg
-							totalTokens = totalTokens - condensedTokens + cm.tokenEstimator.EstimateTokens(msg.Content)
-						}
-					}
-				} else if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
-					// Critical - must include the message with filename matches even if it's over budget
-					// Consider removing earlier non-critical messages to make room
+				tokens := cm.tokenEstimator.EstimateTokens(msg.Content)
+				if totalTokens+tokens < cm.maxTokens {
 					optimized = append(optimized, msg)
-					totalTokens += cm.tokenEstimator.EstimateTokens(msg.Content)
+					totalTokens += tokens
+				} else {
+					condensed, condensedTokens := cm.condenseMessage(msg)
+					if totalTokens+condensedTokens < cm.maxTokens {
+						optimized = append(optimized, condensed)
+						totalTokens += condensedTokens
+					}
 				}
 			}
 		}
-	} else {
-		// If we have fewer messages than our target, just include them all
-		for i, msg := range messages {
-			// Skip messages we've already added (system messages and initial message)
-			if msg.Role == "system" || (msg.Role == "user" && i == 0) {
-				continue
-			}
-			tokens := cm.tokenEstimator.EstimateTokens(msg.Content)
-			if totalTokens+tokens < cm.maxTokens {
-				optimized = append(optimized, msg)
-				totalTokens += tokens
-			} else {
-				condensed, condensedTokens := cm.condenseMessage(msg)
-				if totalTokens+condensedTokens < cm.maxTokens {
-					optimized = append(optimized, condensed)
-					totalTokens += condensedTokens
-				}
-			}
-		}
-	}
 
-	// Final check for search results with filename matches in optimized context
-	hasFilenameResults := false
-	for _, msg := range messages {
-		if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
-			hasFilenameResults = true
-			break
-		}
-	}
-
-	if hasFilenameResults {
-		// Verify that at least one of the optimized messages contains filename matches
-		foundInOptimized := false
-		for _, msg := range optimized {
+		// Final check for search results with filename matches in optimized context
+		hasFilenameResults := false
+		for _, msg := range messages {
 			if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
-				foundInOptimized = true
+				hasFilenameResults = true
 				break
 			}
 		}
 
-		// If filename matches were lost during optimization, find and add the most recent one
-		if !foundInOptimized {
-			for i := len(messages) - 1; i >= 0; i-- {
-				if strings.Contains(messages[i].Content, "FOUND FILES MATCHING NAME") {
-					optimized = append(optimized, messages[i])
+		if hasFilenameResults {
+			// Verify that at least one of the optimized messages contains filename matches
+			foundInOptimized := false
+			for _, msg := range optimized {
+				if strings.Contains(msg.Content, "FOUND FILES MATCHING NAME") {
+					foundInOptimized = true
 					break
 				}
 			}
-		}
-	}
 
-	return optimized, nil
+			// If filename matches were lost during optimization, find and add the most recent one
+			if !foundInOptimized {
+				for i := len(messages) - 1; i >= 0; i-- {
+					if strings.Contains(messages[i].Content, "FOUND FILES MATCHING NAME") {
+						optimized = append(optimized, messages[i])
+						break
+					}
+				}
+			}
+		}
+
+		return optimized, nil
+	*/
 }
 
 // extractCurrentObjective tries to find the current objective from recent assistant messages
