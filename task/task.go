@@ -747,7 +747,7 @@ func parseSearchTask(args string) *Task {
 			}
 
 		// New options
-		case part == "names" || part == "filenames" || part == "-n":
+		case part == "names" || part == "filenames" || part == "names/filenames":
 			task.SearchNames = true
 
 		case part == "fuzzy" || part == "fuzzy-match":

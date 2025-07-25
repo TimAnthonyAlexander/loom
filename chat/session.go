@@ -412,27 +412,34 @@ func (s *Session) filterTaskResultForDisplay(content string) string {
 	return strings.Join(filteredLines, "\n")
 }
 
-// filterJSONTaskBlocks removes JSON task blocks from LLM responses and replaces with clean descriptions
 func (s *Session) filterJSONTaskBlocks(content string) string {
-	// First check for natural language tasks (much simpler)
+	// First check for natural language tasks
 	lines := strings.Split(content, "\n")
 	var filteredLines []string
 	var taskDescriptions []string
+	var invalidCommands []string
 
-	taskPattern := regexp.MustCompile(`^🔧\s+(READ|LIST|RUN)\s+(.+)`)
-	// Remove the overly broad simplePattern that incorrectly matches natural language
-	// Only match the explicit task format with 🔧 prefix
+	// Match correctly formatted task commands with emoji prefix
+	taskPattern := regexp.MustCompile(`^(?:🔧|📖|📂|✏️|🔍|💾)\s+(READ|LIST|RUN|SEARCH|MEMORY)\s+(.+)`)
+
+	// Match basic task commands without emoji prefix
+	simpleTaskPattern := regexp.MustCompile(`^(READ|LIST|RUN|SEARCH|MEMORY)\s+(.+)`)
+
+	// Match malformed command patterns
+	malformedArrowPattern := regexp.MustCompile(`(?:→|->)\s*(?:READ|LIST|RUN|SEARCH|MEMORY)`)
+	malformedCodePattern := regexp.MustCompile("```\\w*\\s*(?:→|->)?\\s*(?:READ|LIST|RUN|SEARCH|MEMORY)")
+	malformedParamPattern := regexp.MustCompile(`(?:file|path)=([^\s]+)`)
 
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 
-		// Skip LOOM_EDIT commands - they should be shown as-is, not filtered
+		// Skip LOOM_EDIT commands - they should be shown as-is
 		if strings.Contains(trimmed, "LOOM_EDIT") {
 			filteredLines = append(filteredLines, line)
 			continue
 		}
 
-		// Check for natural language tasks (only the explicit 🔧 format)
+		// Check for natural language tasks with emoji prefix
 		if matches := taskPattern.FindStringSubmatch(trimmed); len(matches) == 3 {
 			taskType := strings.ToUpper(matches[1])
 			taskArgs := strings.TrimSpace(matches[2])
@@ -441,7 +448,54 @@ func (s *Session) filterJSONTaskBlocks(content string) string {
 			continue // Skip this line in output
 		}
 
+		// Check for simple tasks without emoji
+		if matches := simpleTaskPattern.FindStringSubmatch(trimmed); len(matches) == 3 {
+			// Skip if it looks like conversational text
+			if s.isLikelyConversationalText(trimmed, matches[1], matches[2]) {
+				filteredLines = append(filteredLines, line)
+				continue
+			}
+
+			taskType := strings.ToUpper(matches[1])
+			taskArgs := strings.TrimSpace(matches[2])
+			desc := formatNaturalLanguageTaskDescription(taskType, taskArgs)
+			taskDescriptions = append(taskDescriptions, desc)
+			continue // Skip this line in output
+		}
+
+		// Check for malformed commands
+		if malformedArrowPattern.MatchString(trimmed) ||
+			malformedCodePattern.MatchString(trimmed) ||
+			malformedParamPattern.MatchString(trimmed) {
+			invalidCommands = append(invalidCommands, trimmed)
+			continue // Skip this line in output
+		}
+
+		// Not a task or malformed command, include in output
 		filteredLines = append(filteredLines, line)
+	}
+
+	// Handle invalid commands if found
+	if len(invalidCommands) > 0 {
+		invalidCommandMsg := "❌ Invalid command format detected. Please use one of these formats instead:\n" +
+			"📖 READ filename.go\n" +
+			"📂 LIST directory_name\n" +
+			"🔍 SEARCH \"pattern\" names\n" +
+			"🔧 RUN command\n\n" +
+			"Do not use arrows (→), code blocks (```), or parameter formats (file=...)."
+
+		// If we also found valid tasks, add them
+		if len(taskDescriptions) > 0 {
+			taskSummary := ""
+			if len(taskDescriptions) == 1 {
+				taskSummary = taskDescriptions[0]
+			} else {
+				taskSummary = fmt.Sprintf("🔧 Executing %d tasks:\n%s", len(taskDescriptions), strings.Join(taskDescriptions, "\n"))
+			}
+			invalidCommandMsg = invalidCommandMsg + "\n\n" + taskSummary
+		}
+
+		return invalidCommandMsg
 	}
 
 	// If we found natural language tasks, create summary
@@ -461,7 +515,7 @@ func (s *Session) filterJSONTaskBlocks(content string) string {
 		return filteredContent + "\n\n" + taskSummary
 	}
 
-	// Fall back to JSON block filtering for backward compatibility
+	// Fall back to JSON block filtering
 	content = strings.Join(filteredLines, "\n")
 
 	// Find JSON code blocks using regex
@@ -488,6 +542,16 @@ func (s *Session) filterJSONTaskBlocks(content string) string {
 		// Parse the JSON to extract task information
 		var data map[string]interface{}
 		if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
+			// Check if this looks like a malformed task
+			if strings.Contains(jsonStr, "\"type\"") && (strings.Contains(jsonStr, "\"ReadFile\"") ||
+				strings.Contains(jsonStr, "\"ListDir\"") ||
+				strings.Contains(jsonStr, "\"RunShell\"") ||
+				strings.Contains(jsonStr, "\"Search\"")) {
+
+				// Replace with helpful error message
+				return re.ReplaceAllString(content, "\n❌ Invalid task format. Please use natural language commands instead.")
+			}
+
 			continue // Skip invalid JSON
 		}
 
@@ -509,43 +573,59 @@ func (s *Session) filterJSONTaskBlocks(content string) string {
 				continue
 			}
 
-			taskType, hasType := taskMap["type"].(string)
-			path, hasPath := taskMap["path"].(string)
-			command, hasCommand := taskMap["command"].(string)
-
-			if !hasType {
+			// Extract task type and path/command/query
+			typeVal, ok := taskMap["type"]
+			if !ok {
 				continue
 			}
 
-			// Generate clean description based on task type
+			taskType, ok := typeVal.(string)
+			if !ok {
+				continue
+			}
+
+			// Format description based on task type
+			var desc string
 			switch taskType {
 			case "ReadFile":
-				if hasPath && path != "" {
-					jsonTaskDescriptions = append(jsonTaskDescriptions, "📖 Reading file: "+path)
+				if path, ok := taskMap["path"].(string); ok {
+					desc = fmt.Sprintf("📖 Reading file: %s", path)
 				} else {
-					jsonTaskDescriptions = append(jsonTaskDescriptions, "📖 Reading file")
+					desc = "📖 Reading file"
 				}
 			case "EditFile":
-				if hasPath && path != "" {
-					jsonTaskDescriptions = append(jsonTaskDescriptions, "✏️ Editing file: "+path)
+				if path, ok := taskMap["path"].(string); ok {
+					desc = fmt.Sprintf("✏️ Editing file: %s", path)
 				} else {
-					jsonTaskDescriptions = append(jsonTaskDescriptions, "✏️ Editing file")
+					desc = "✏️ Editing file"
 				}
 			case "ListDir":
-				if hasPath && path != "" && path != "." {
-					jsonTaskDescriptions = append(jsonTaskDescriptions, "📁 Listing directory: "+path)
+				if path, ok := taskMap["path"].(string); ok {
+					if path == "." {
+						desc = "📂 Listing current directory"
+					} else {
+						desc = fmt.Sprintf("📂 Listing directory: %s", path)
+					}
 				} else {
-					jsonTaskDescriptions = append(jsonTaskDescriptions, "📁 Listing current directory")
+					desc = "📂 Listing directory"
 				}
 			case "RunShell":
-				if hasCommand && command != "" {
-					jsonTaskDescriptions = append(jsonTaskDescriptions, "⚡ Running command: "+command)
+				if cmd, ok := taskMap["command"].(string); ok {
+					desc = fmt.Sprintf("⚡ Running command: %s", cmd)
 				} else {
-					jsonTaskDescriptions = append(jsonTaskDescriptions, "⚡ Running shell command")
+					desc = "⚡ Running command"
+				}
+			case "Search":
+				if query, ok := taskMap["query"].(string); ok {
+					desc = fmt.Sprintf("🔍 Searching for: %s", query)
+				} else {
+					desc = "🔍 Searching files"
 				}
 			default:
-				jsonTaskDescriptions = append(jsonTaskDescriptions, "🔧 Executing task: "+taskType)
+				desc = fmt.Sprintf("🔧 Executing task: %s", taskType)
 			}
+
+			jsonTaskDescriptions = append(jsonTaskDescriptions, desc)
 		}
 	}
 
@@ -559,12 +639,48 @@ func (s *Session) filterJSONTaskBlocks(content string) string {
 		}
 
 		// Replace all JSON blocks with the clean task summary
-		filteredContent := re.ReplaceAllString(content, "\n"+taskSummary)
-		return filteredContent
+		return re.ReplaceAllString(content, "\n"+taskSummary)
 	}
 
-	// If no valid tasks found, just remove the JSON blocks
-	return re.ReplaceAllString(content, "\n🔧 Executing tasks...")
+	// If no valid tasks found but there are code blocks, add a helpful message
+	if len(matches) > 0 {
+		return re.ReplaceAllString(content, "\n❌ Invalid command format. Please use natural language commands like 📖 READ filename instead.")
+	}
+
+	// No changes needed
+	return content
+}
+
+// isLikelyConversationalText determines if a line is likely a statement rather than a command
+func (s *Session) isLikelyConversationalText(line, taskType, taskArgs string) bool {
+	// Check if there's a period in the middle of the sentence (common in conversational text)
+	hasPeriod := strings.Contains(taskArgs, ".")
+	hasComma := strings.Contains(taskArgs, ",")
+
+	// Skip common phrases that look like commands but are actually text
+	lowercaseLine := strings.ToLower(line)
+	conversationalPhrases := []string{
+		"read the", "read through", "read all", "read about",
+		"read more", "read up on", "i'll read", "we'll read",
+		"you should read", "you need to read", "let's read", "read next",
+		"list of", "list all", "list the", "i'll list", "we'll list",
+		"run the", "run a", "run this", "i'll run", "we'll run", "you should run",
+		"search for", "search the", "i'll search", "we'll search", "let's search",
+	}
+
+	for _, phrase := range conversationalPhrases {
+		if strings.Contains(lowercaseLine, phrase) {
+			return true
+		}
+	}
+
+	// If the text is long or has multiple sentences, it's likely conversational
+	words := strings.Fields(taskArgs)
+	if len(words) > 10 || (hasPeriod && len(words) > 5) || hasComma {
+		return true
+	}
+
+	return false
 }
 
 // formatNaturalLanguageTaskDescription creates clean descriptions for natural language tasks
