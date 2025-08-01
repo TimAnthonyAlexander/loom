@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // trimAssistantContent removes trailing spaces or tabs at the end of every line.
@@ -17,9 +18,15 @@ import (
 func trimAssistantContent(s string) string {
 	lines := strings.Split(s, "\n")
 	for i, line := range lines {
-		lines[i] = strings.TrimRight(line, " \t")
+		// Remove trailing spaces, tabs, or carriage returns — but keep other characters.
+		lines[i] = strings.TrimRightFunc(line, func(r rune) bool {
+			return r == ' ' || r == '\t' || r == '\r'
+		})
 	}
-	return strings.Join(lines, "\n")
+	// Re-join using "\n". This guarantees there is no trailing space before a newline.
+	result := strings.Join(lines, "\n")
+	// Trim any whitespace characters (spaces, tabs, newlines, carriage-returns) at the very end of the whole string.
+	return strings.TrimRightFunc(result, unicode.IsSpace)
 }
 
 // ClaudeAdapter implements LLMAdapter for Claude API
@@ -117,10 +124,7 @@ func (c *ClaudeAdapter) Send(ctx context.Context, messages []Message) (*Message,
 			}
 			continue
 		}
-		content := msg.Content
-		if msg.Role == "assistant" {
-			content = trimAssistantContent(content)
-		}
+		content := trimAssistantContent(msg.Content)
 		claudeMessages = append(claudeMessages, ClaudeMessage{
 			Role:    msg.Role,
 			Content: content,
@@ -194,10 +198,7 @@ func (c *ClaudeAdapter) Stream(ctx context.Context, messages []Message, chunks c
 			}
 			continue
 		}
-		content := msg.Content
-		if msg.Role == "assistant" {
-			content = trimAssistantContent(content)
-		}
+		content := trimAssistantContent(msg.Content)
 		claudeMessages = append(claudeMessages, ClaudeMessage{
 			Role:    msg.Role,
 			Content: content,
