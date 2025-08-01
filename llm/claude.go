@@ -12,6 +12,16 @@ import (
 	"time"
 )
 
+// trimAssistantContent removes trailing spaces or tabs at the end of every line.
+// Claude rejects assistant messages with such whitespace.
+func trimAssistantContent(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lines[i] = strings.TrimRight(line, " \t")
+	}
+	return strings.Join(lines, "\n")
+}
+
 // ClaudeAdapter implements LLMAdapter for Claude API
 type ClaudeAdapter struct {
 	client  *http.Client
@@ -107,9 +117,13 @@ func (c *ClaudeAdapter) Send(ctx context.Context, messages []Message) (*Message,
 			}
 			continue
 		}
+		content := msg.Content
+		if msg.Role == "assistant" {
+			content = trimAssistantContent(content)
+		}
 		claudeMessages = append(claudeMessages, ClaudeMessage{
 			Role:    msg.Role,
-			Content: msg.Content,
+			Content: content,
 		})
 	}
 
@@ -180,9 +194,13 @@ func (c *ClaudeAdapter) Stream(ctx context.Context, messages []Message, chunks c
 			}
 			continue
 		}
+		content := msg.Content
+		if msg.Role == "assistant" {
+			content = trimAssistantContent(content)
+		}
 		claudeMessages = append(claudeMessages, ClaudeMessage{
 			Role:    msg.Role,
-			Content: msg.Content,
+			Content: content,
 		})
 	}
 
