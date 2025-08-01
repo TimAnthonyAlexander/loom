@@ -3,6 +3,7 @@ package task
 import (
 	"context"
 	"fmt"
+	"loom/debug"
 	"loom/llm"
 	"strings"
 	"time"
@@ -137,6 +138,7 @@ func (m *Manager) HandleLLMResponse(llmResponse string, eventChan chan<- TaskExe
 
 		// Execute the task
 		response := m.executor.Execute(&currentTask)
+		debug.LogToFile(fmt.Sprintf("Task response for %s: %+v", currentTask.Description(), response))
 		execution.Responses = append(execution.Responses, *response)
 
 		if !response.Success {
@@ -164,7 +166,6 @@ func (m *Manager) HandleLLMResponse(llmResponse string, eventChan chan<- TaskExe
 			continue
 		}
 
-		// REMOVED: No more confirmations - files are applied immediately during execution
 		// Task completed successfully
 		eventChan <- TaskExecutionEvent{
 			Type:      "task_completed",
@@ -181,9 +182,12 @@ func (m *Manager) HandleLLMResponse(llmResponse string, eventChan chan<- TaskExe
 			Timestamp: time.Now(),
 		}
 
+		debug.LogToFile(fmt.Sprintf("Adding task result to chat: %s", taskResultMessage.Content))
 		if err := m.chatSession.AddMessage(taskResultMessage); err != nil {
+			debug.LogToFile(fmt.Sprintf("Warning: failed to add task result to chat: %v", err))
 			fmt.Printf("Warning: failed to add task result to chat: %v\n", err)
 		}
+		debug.LogToFile(fmt.Sprintf("chat messages: %+v", m.chatSession.GetMessages()))
 	}
 
 	// All tasks completed

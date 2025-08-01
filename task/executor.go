@@ -669,11 +669,13 @@ func (e *Executor) performLineBasedEdit(originalContent string, task *Task, targ
 
 // executeListDir lists files in a directory with limits and gitignore support
 func (e *Executor) executeListDir(task *Task) *TaskResponse {
+
 	response := &TaskResponse{Task: *task}
 
 	// Security: ensure path is within workspace
 	fullPath, err := e.securePath(task.Path)
 	if err != nil {
+
 		response.Error = err.Error()
 		return response
 	}
@@ -681,123 +683,68 @@ func (e *Executor) executeListDir(task *Task) *TaskResponse {
 	// Check if directory exists
 	info, err := os.Stat(fullPath)
 	if err != nil {
+
 		response.Error = fmt.Sprintf("directory not found: %s", task.Path)
 		return response
 	}
 
 	if !info.IsDir() {
+
 		response.Error = fmt.Sprintf("path is not a directory: %s", task.Path)
 		return response
 	}
 
 	var output strings.Builder
+
 	output.WriteString(fmt.Sprintf("Directory listing for %s:\n\n", task.Path))
 
 	fileCount := 0
 	truncated := false
 
-	if task.Recursive {
-		err = filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return nil // Skip errors
-			}
+	entries, err := os.ReadDir(fullPath)
 
-			// Calculate depth relative to starting directory
-			relPath, _ := filepath.Rel(fullPath, path)
-			depth := strings.Count(relPath, string(filepath.Separator))
-			if relPath == "." {
-				depth = 0
-			}
+	if err != nil {
+		response.Error = fmt.Sprintf("failed to read directory: %v", err)
+		return response
+	}
 
-			// Check depth limit
-			if depth > MaxDirectoryListingDepth {
-				if info.IsDir() {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-
-			// Get relative path from workspace root for gitignore checking
-			workspaceRelPath, _ := filepath.Rel(e.workspacePath, path)
-
-			// Skip if matches gitignore patterns
-			if e.shouldSkipPath(workspaceRelPath, info.IsDir()) {
-				if info.IsDir() {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-
-			// Check file count limit
-			if fileCount >= MaxDirectoryListingFiles {
-				truncated = true
-				return fmt.Errorf("limit reached") // Stop walking
-			}
-
-			// Check output size limit
-			if output.Len() >= MaxListingOutputSize {
-				truncated = true
-				return fmt.Errorf("output size limit reached")
-			}
-
-			if info.IsDir() {
-				output.WriteString(fmt.Sprintf("📁 %s/\n", workspaceRelPath))
-			} else {
-				size := e.formatFileSize(info.Size())
-				output.WriteString(fmt.Sprintf("📄 %s (%s)\n", workspaceRelPath, size))
-			}
-			fileCount++
-			return nil
-		})
-
-		// If error is our limit check, clear it
-		if err != nil && (strings.Contains(err.Error(), "limit reached") || strings.Contains(err.Error(), "output size limit")) {
-			err = nil
-		}
-	} else {
-		entries, err := os.ReadDir(fullPath)
-		if err != nil {
-			response.Error = fmt.Sprintf("failed to read directory: %v", err)
-			return response
+	for _, entry := range entries {
+		// Check file count limit
+		if fileCount >= MaxDirectoryListingFiles {
+			truncated = true
+			break
 		}
 
-		for _, entry := range entries {
-			// Check file count limit
-			if fileCount >= MaxDirectoryListingFiles {
-				truncated = true
-				break
-			}
-
-			// Check output size limit
-			if output.Len() >= MaxListingOutputSize {
-				truncated = true
-				break
-			}
-
-			// Get relative path for gitignore checking
-			entryPath := filepath.Join(task.Path, entry.Name())
-			if task.Path == "." {
-				entryPath = entry.Name()
-			}
-
-			// Skip if matches gitignore patterns
-			if e.shouldSkipPath(entryPath, entry.IsDir()) {
-				continue
-			}
-
-			if entry.IsDir() {
-				output.WriteString(fmt.Sprintf("📁 %s/\n", entry.Name()))
-			} else {
-				info, _ := entry.Info()
-				size := e.formatFileSize(info.Size())
-				output.WriteString(fmt.Sprintf("📄 %s (%s)\n", entry.Name(), size))
-			}
-			fileCount++
+		// Check output size limit
+		if output.Len() >= MaxListingOutputSize {
+			truncated = true
+			break
 		}
+
+		// Get relative path for gitignore checking
+		entryPath := filepath.Join(task.Path, entry.Name())
+		if task.Path == "." {
+			entryPath = entry.Name()
+		}
+
+		// Skip if matches gitignore patterns
+		if e.shouldSkipPath(entryPath, entry.IsDir()) {
+			continue
+		}
+
+		if entry.IsDir() {
+			output.WriteString(fmt.Sprintf("📁 %s/\n", entry.Name()))
+		} else {
+			info, _ := entry.Info()
+			size := e.formatFileSize(info.Size())
+			output.WriteString(fmt.Sprintf("📄 %s (%s)\n", entry.Name(), size))
+		}
+		fileCount++
 	}
 
 	// Add truncation notice if needed
 	if truncated {
+
 		output.WriteString(fmt.Sprintf("\n⚠️  Listing truncated at %d items (limits: %d files, %d chars, %d depth)\n",
 			fileCount, MaxDirectoryListingFiles, MaxListingOutputSize, MaxDirectoryListingDepth))
 	}
@@ -808,11 +755,7 @@ func (e *Executor) executeListDir(task *Task) *TaskResponse {
 	response.Success = true
 	// Show status message to user
 	statusMsg := ""
-	if task.Recursive {
-		statusMsg = fmt.Sprintf("Reading folder structure: %s (recursive, %d items", task.Path, fileCount)
-	} else {
-		statusMsg = fmt.Sprintf("Reading folder structure: %s (%d items", task.Path, fileCount)
-	}
+	statusMsg = fmt.Sprintf("Reading folder structure: %s (%d items", task.Path, fileCount)
 
 	if truncated {
 		statusMsg += ", truncated"
