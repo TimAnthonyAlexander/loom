@@ -29,6 +29,7 @@ type ClaudeMessage struct {
 type ClaudeRequest struct {
 	Model     string          `json:"model"`
 	MaxTokens int             `json:"max_tokens"`
+	System    string          `json:"system,omitempty"`
 	Messages  []ClaudeMessage `json:"messages"`
 	Stream    bool            `json:"stream,omitempty"`
 }
@@ -94,18 +95,28 @@ func NewClaudeAdapter(config AdapterConfig) *ClaudeAdapter {
 
 // Send implements LLMAdapter.Send
 func (c *ClaudeAdapter) Send(ctx context.Context, messages []Message) (*Message, error) {
-	// Convert our messages to Claude format
-	claudeMessages := make([]ClaudeMessage, len(messages))
-	for i, msg := range messages {
-		claudeMessages[i] = ClaudeMessage{
+	// Separate system prompt and convert remaining messages to Claude format
+	var systemPrompt string
+	claudeMessages := make([]ClaudeMessage, 0, len(messages))
+	for _, msg := range messages {
+		if msg.Role == "system" {
+			if systemPrompt == "" {
+				systemPrompt = msg.Content
+			} else {
+				systemPrompt += "\n" + msg.Content
+			}
+			continue
+		}
+		claudeMessages = append(claudeMessages, ClaudeMessage{
 			Role:    msg.Role,
 			Content: msg.Content,
-		}
+		})
 	}
 
 	request := ClaudeRequest{
 		Model:     c.config.Model,
 		MaxTokens: 4096, // Default max tokens
+		System:    systemPrompt,
 		Messages:  claudeMessages,
 		Stream:    false,
 	}
@@ -157,18 +168,28 @@ func (c *ClaudeAdapter) Send(ctx context.Context, messages []Message) (*Message,
 func (c *ClaudeAdapter) Stream(ctx context.Context, messages []Message, chunks chan<- StreamChunk) error {
 	defer close(chunks)
 
-	// Convert our messages to Claude format
-	claudeMessages := make([]ClaudeMessage, len(messages))
-	for i, msg := range messages {
-		claudeMessages[i] = ClaudeMessage{
+	// Separate system prompt and convert remaining messages to Claude format
+	var systemPrompt string
+	claudeMessages := make([]ClaudeMessage, 0, len(messages))
+	for _, msg := range messages {
+		if msg.Role == "system" {
+			if systemPrompt == "" {
+				systemPrompt = msg.Content
+			} else {
+				systemPrompt += "\n" + msg.Content
+			}
+			continue
+		}
+		claudeMessages = append(claudeMessages, ClaudeMessage{
 			Role:    msg.Role,
 			Content: msg.Content,
-		}
+		})
 	}
 
 	request := ClaudeRequest{
 		Model:     c.config.Model,
 		MaxTokens: 4096, // Default max tokens
+		System:    systemPrompt,
 		Messages:  claudeMessages,
 		Stream:    true,
 	}
@@ -249,47 +270,10 @@ func (c *ClaudeAdapter) GetModelName() string {
 	return c.config.Model
 }
 
-// IsAvailable implements LLMAdapter.IsAvailable
+// IsAvailable implements LLMAdapter.IsAvailable.
+// We simply check that a model name and API key have been provided.
+// Performing a network round-trip here makes the UI sluggish because
+// this method is called frequently during rendering.
 func (c *ClaudeAdapter) IsAvailable() bool {
-	if c.config.APIKey == "" || c.config.Model == "" {
-		return false
-	}
-
-	// Test connection to Claude API with a minimal request
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	// Create a minimal test message
-	testMessages := []ClaudeMessage{
-		{Role: "user", Content: "Hi"},
-	}
-
-	request := ClaudeRequest{
-		Model:     c.config.Model,
-		MaxTokens: 1,
-		Messages:  testMessages,
-	}
-
-	requestBody, err := json.Marshal(request)
-	if err != nil {
-		return false
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/v1/messages", bytes.NewBuffer(requestBody))
-	if err != nil {
-		return false
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", c.config.APIKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-
-	// Accept both 200 and rate limit errors as "available" since they indicate valid auth
-	return resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusTooManyRequests
+	return c.config.APIKey != "" && c.config.Model != ""
 }
