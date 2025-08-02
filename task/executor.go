@@ -452,15 +452,15 @@ func (e *Executor) applyLoomEdit(task *Task, fullPath string) *TaskResponse {
 			response.VerificationText = validationResult.VerificationText
 		}
 
-		// Update ActualContent to include verification
-		response.ActualContent = fmt.Sprintf("LOOM_EDIT applied successfully to %s\nOperation: %s on lines %d-%d\n\n%s",
-			task.Path, editCmd.Action, editCmd.Start, editCmd.End, response.VerificationText)
+		// Update ActualContent with basic success message (VerificationText will be shown separately)
+		response.ActualContent = fmt.Sprintf("LOOM_EDIT applied successfully to %s\nOperation: %s on lines %d-%d",
+			task.Path, editCmd.Action, editCmd.Start, editCmd.End)
 	} else {
 		// Fallback: Extract edit context for basic verification
 		if editContext, err := e.extractEditContext(fullPath, editCmd, originalContent); err == nil {
 			response.VerificationText = e.formatVerificationForLLM(editContext, nil)
-			response.ActualContent = fmt.Sprintf("LOOM_EDIT applied successfully to %s\nOperation: %s on lines %d-%d\n\n%s",
-				task.Path, editCmd.Action, editCmd.Start, editCmd.End, response.VerificationText)
+			response.ActualContent = fmt.Sprintf("LOOM_EDIT applied successfully to %s\nOperation: %s on lines %d-%d",
+				task.Path, editCmd.Action, editCmd.Start, editCmd.End)
 		} else {
 			response.ActualContent = fmt.Sprintf("LOOM_EDIT applied successfully to %s\nOperation: %s on lines %d-%d\nFile updated with validated changes.",
 				task.Path, editCmd.Action, editCmd.Start, editCmd.End)
