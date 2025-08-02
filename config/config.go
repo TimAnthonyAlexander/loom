@@ -8,16 +8,27 @@ import (
 	"strconv"
 )
 
+// ValidationConfig holds validation-specific configuration
+type ValidationConfig struct {
+	EnableLSP             bool     `json:"enable_lsp"`
+	EnableVerification    bool     `json:"enable_verification"`
+	ContextLines          int      `json:"context_lines"`
+	RollbackOnSyntaxError bool     `json:"rollback_on_syntax_error"`
+	LSPTimeoutSeconds     int      `json:"lsp_timeout_seconds"`
+	SupportedLanguages    []string `json:"supported_languages"`
+}
+
 // Config represents the loom configuration
 type Config struct {
-	Model            string `json:"model"`
-	EnableShell      bool   `json:"enable_shell"`
-	MaxFileSize      int64  `json:"max_file_size"`      // Maximum file size to index in bytes
-	APIKey           string `json:"api_key"`            // API key for LLM providers
-	BaseURL          string `json:"base_url"`           // Base URL for LLM providers (optional)
-	LLMTimeout       int    `json:"llm_timeout"`        // LLM request timeout in seconds (default: 120)
-	LLMStreamTimeout int    `json:"llm_stream_timeout"` // LLM streaming timeout in seconds (default: 300)
-	LLMMaxRetries    int    `json:"llm_max_retries"`    // Maximum number of retries for failed LLM requests (default: 3)
+	Model            string           `json:"model"`
+	EnableShell      bool             `json:"enable_shell"`
+	MaxFileSize      int64            `json:"max_file_size"`      // Maximum file size to index in bytes
+	APIKey           string           `json:"api_key"`            // API key for LLM providers
+	BaseURL          string           `json:"base_url"`           // Base URL for LLM providers (optional)
+	LLMTimeout       int              `json:"llm_timeout"`        // LLM request timeout in seconds (default: 120)
+	LLMStreamTimeout int              `json:"llm_stream_timeout"` // LLM streaming timeout in seconds (default: 300)
+	LLMMaxRetries    int              `json:"llm_max_retries"`    // Maximum number of retries for failed LLM requests (default: 3)
+	Validation       ValidationConfig `json:"validation"`         // Validation configuration
 }
 
 // DefaultConfig returns a config with default values
@@ -29,6 +40,14 @@ func DefaultConfig() *Config {
 		LLMTimeout:       120,        // 2 minutes default
 		LLMStreamTimeout: 300,        // 5 minutes default for streaming
 		LLMMaxRetries:    3,          // 3 retries default
+		Validation: ValidationConfig{
+			EnableLSP:             false, // Start disabled until LSP integration is complete
+			EnableVerification:    true,  // Context extraction is always useful
+			ContextLines:          8,
+			RollbackOnSyntaxError: false, // Conservative default
+			LSPTimeoutSeconds:     5,
+			SupportedLanguages:    []string{"go", "typescript", "javascript", "python", "rust", "java"},
+		},
 	}
 }
 
@@ -71,6 +90,18 @@ func (c *Config) Get(key string) (interface{}, error) {
 		return c.LLMStreamTimeout, nil
 	case "llm_max_retries":
 		return c.LLMMaxRetries, nil
+	case "validation.enable_lsp":
+		return c.Validation.EnableLSP, nil
+	case "validation.enable_verification":
+		return c.Validation.EnableVerification, nil
+	case "validation.context_lines":
+		return c.Validation.ContextLines, nil
+	case "validation.rollback_on_syntax_error":
+		return c.Validation.RollbackOnSyntaxError, nil
+	case "validation.lsp_timeout_seconds":
+		return c.Validation.LSPTimeoutSeconds, nil
+	case "validation.supported_languages":
+		return c.Validation.SupportedLanguages, nil
 	default:
 		return nil, fmt.Errorf("unknown config key: %s", key)
 	}
@@ -140,6 +171,56 @@ func (c *Config) Set(key string, value interface{}) error {
 			return fmt.Errorf("llm_max_retries must be non-negative, got: %d", val)
 		}
 		c.LLMMaxRetries = val
+		return nil
+	case "validation.enable_lsp":
+		switch str {
+		case "true":
+			c.Validation.EnableLSP = true
+		case "false":
+			c.Validation.EnableLSP = false
+		default:
+			return fmt.Errorf("expected 'true' or 'false' for validation.enable_lsp, got: %s", str)
+		}
+		return nil
+	case "validation.enable_verification":
+		switch str {
+		case "true":
+			c.Validation.EnableVerification = true
+		case "false":
+			c.Validation.EnableVerification = false
+		default:
+			return fmt.Errorf("expected 'true' or 'false' for validation.enable_verification, got: %s", str)
+		}
+		return nil
+	case "validation.context_lines":
+		val, err := strconv.Atoi(str)
+		if err != nil {
+			return fmt.Errorf("expected numeric value for validation.context_lines, got: %s", str)
+		}
+		if val < 0 {
+			return fmt.Errorf("validation.context_lines must be non-negative, got: %d", val)
+		}
+		c.Validation.ContextLines = val
+		return nil
+	case "validation.rollback_on_syntax_error":
+		switch str {
+		case "true":
+			c.Validation.RollbackOnSyntaxError = true
+		case "false":
+			c.Validation.RollbackOnSyntaxError = false
+		default:
+			return fmt.Errorf("expected 'true' or 'false' for validation.rollback_on_syntax_error, got: %s", str)
+		}
+		return nil
+	case "validation.lsp_timeout_seconds":
+		val, err := strconv.Atoi(str)
+		if err != nil {
+			return fmt.Errorf("expected numeric value for validation.lsp_timeout_seconds, got: %s", str)
+		}
+		if val <= 0 {
+			return fmt.Errorf("validation.lsp_timeout_seconds must be positive, got: %d", val)
+		}
+		c.Validation.LSPTimeoutSeconds = val
 		return nil
 	default:
 		return fmt.Errorf("unknown config key: %s", key)
@@ -229,5 +310,24 @@ func mergeCfg(dst, src *Config) {
 	}
 	if src.LLMMaxRetries >= 0 {
 		dst.LLMMaxRetries = src.LLMMaxRetries
+	}
+
+	// Merge validation configuration
+	// Note: For boolean fields, we'll always take the source value if source config exists
+	dst.Validation.EnableLSP = src.Validation.EnableLSP
+	dst.Validation.EnableVerification = src.Validation.EnableVerification
+	dst.Validation.RollbackOnSyntaxError = src.Validation.RollbackOnSyntaxError
+
+	// Merge numeric validation settings if they're non-zero (explicitly set)
+	if src.Validation.ContextLines > 0 {
+		dst.Validation.ContextLines = src.Validation.ContextLines
+	}
+	if src.Validation.LSPTimeoutSeconds > 0 {
+		dst.Validation.LSPTimeoutSeconds = src.Validation.LSPTimeoutSeconds
+	}
+
+	// Merge supported languages if explicitly set
+	if len(src.Validation.SupportedLanguages) > 0 {
+		dst.Validation.SupportedLanguages = src.Validation.SupportedLanguages
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"loom/indexer"
 	"loom/loom_edit"
 	"loom/memory"
+	"loom/validation"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -36,6 +37,7 @@ type Executor struct {
 	gitIgnore           *indexer.GitIgnore
 	interactiveExecutor *InteractiveExecutor
 	memoryStore         *memory.MemoryStore
+	validator           *validation.Validator
 }
 
 // NewExecutor creates a new task executor
@@ -53,6 +55,10 @@ func NewExecutor(workspacePath string, enableShell bool, maxFileSize int64) *Exe
 	// Create memory store
 	memoryStore := memory.NewMemoryStore(workspacePath)
 
+	// Create validator with default configuration
+	validationConfig := validation.DefaultValidationConfig()
+	validator := validation.NewValidator(workspacePath, &validationConfig)
+
 	return &Executor{
 		workspacePath:       workspacePath,
 		enableShell:         enableShell,
@@ -60,6 +66,7 @@ func NewExecutor(workspacePath string, enableShell bool, maxFileSize int64) *Exe
 		gitIgnore:           gitIgnore,
 		interactiveExecutor: interactiveExecutor,
 		memoryStore:         memoryStore,
+		validator:           validator,
 	}
 }
 
@@ -375,6 +382,14 @@ func (e *Executor) applyLoomEdit(task *Task, fullPath string) *TaskResponse {
 		}
 	}
 
+	// Read original content before applying edit (for validation context and edit summary)
+	var originalContent string
+	if editCmd.Action != "CREATE" {
+		if content, err := os.ReadFile(fullPath); err == nil {
+			originalContent = string(content)
+		}
+	}
+
 	// Apply the edit using the loom_edit module
 	err = loom_edit.ApplyEdit(fullPath, editCmd)
 	if err != nil {
@@ -382,7 +397,7 @@ func (e *Executor) applyLoomEdit(task *Task, fullPath string) *TaskResponse {
 		return response
 	}
 
-	// Success! Generate edit summary
+	// Success! Generate edit summary and validation context
 	response.Success = true
 
 	// Read the updated file content for analysis
@@ -404,13 +419,52 @@ func (e *Executor) applyLoomEdit(task *Task, fullPath string) *TaskResponse {
 		response.Output = fmt.Sprintf("File edited successfully: %s (%s lines %d-%d)", task.Path, editCmd.Action, editCmd.Start, editCmd.End)
 	}
 
-	// Create detailed message for LLM
-	response.ActualContent = fmt.Sprintf("LOOM_EDIT applied successfully to %s\nOperation: %s on lines %d-%d\nFile updated with validated changes.",
-		task.Path, editCmd.Action, editCmd.Start, editCmd.End)
-
 	// Create a proper EditSummary for display
-	if originalContent, err := os.ReadFile(fullPath); err == nil {
-		response.EditSummary = e.analyzeContentChanges(string(originalContent), string(newContent), task.Path, task)
+	if originalContent != "" {
+		response.EditSummary = e.analyzeContentChanges(originalContent, string(newContent), task.Path, task)
+	}
+
+	// Enhanced: Perform comprehensive validation with potential rollback
+	if e.validator != nil {
+		validationResult, err := e.validator.ValidateEditOperation(fullPath, editCmd, originalContent)
+		if err != nil {
+			// Log warning but don't fail the edit
+			fmt.Printf("Warning: Validation failed for %s: %v\n", task.Path, err)
+			response.VerificationText = "Validation unavailable - edit completed without verification"
+		} else {
+			// Check if rollback is needed
+			if validationResult.ShouldRollback {
+				// Rollback the edit
+				if rollbackErr := e.validator.RollbackEdit(fullPath, originalContent, validationResult.Validation); rollbackErr != nil {
+					// Rollback failed - this is serious
+					response.Error = fmt.Sprintf("Edit validation failed and rollback failed: %v. File may be in inconsistent state.", rollbackErr)
+					response.Success = false
+					return response
+				}
+
+				// Rollback succeeded
+				response.Error = e.validator.FormatRollbackMessage(validationResult.Validation, editCmd)
+				response.Success = false
+				return response
+			}
+
+			// Validation passed or only had warnings
+			response.VerificationText = validationResult.VerificationText
+		}
+
+		// Update ActualContent to include verification
+		response.ActualContent = fmt.Sprintf("LOOM_EDIT applied successfully to %s\nOperation: %s on lines %d-%d\n\n%s",
+			task.Path, editCmd.Action, editCmd.Start, editCmd.End, response.VerificationText)
+	} else {
+		// Fallback: Extract edit context for basic verification
+		if editContext, err := e.extractEditContext(fullPath, editCmd, originalContent); err == nil {
+			response.VerificationText = e.formatVerificationForLLM(editContext, nil)
+			response.ActualContent = fmt.Sprintf("LOOM_EDIT applied successfully to %s\nOperation: %s on lines %d-%d\n\n%s",
+				task.Path, editCmd.Action, editCmd.Start, editCmd.End, response.VerificationText)
+		} else {
+			response.ActualContent = fmt.Sprintf("LOOM_EDIT applied successfully to %s\nOperation: %s on lines %d-%d\nFile updated with validated changes.",
+				task.Path, editCmd.Action, editCmd.Start, editCmd.End)
+		}
 	}
 
 	return response
@@ -2249,7 +2303,7 @@ func (e *Executor) executeMemory(task *Task) *TaskResponse {
 	switch strings.ToLower(task.MemoryOperation) {
 	case "create", "update", "get":
 		if memResponse.Memory != nil {
-			output.WriteString(fmt.Sprintf("\nMemory Details:\n"))
+			output.WriteString("\nMemory Details:\n")
 			output.WriteString(fmt.Sprintf("  ID: %s\n", memResponse.Memory.ID))
 			output.WriteString(fmt.Sprintf("  Content: %s\n", memResponse.Memory.Content))
 			if memResponse.Memory.Description != "" {
@@ -2304,4 +2358,49 @@ func (e *Executor) executeMemory(task *Task) *TaskResponse {
 // GetMemoryStore returns the memory store for external access
 func (e *Executor) GetMemoryStore() *memory.MemoryStore {
 	return e.memoryStore
+}
+
+// extractEditContext extracts context around an edit for verification
+func (e *Executor) extractEditContext(filePath string, editCmd *loom_edit.EditCommand, originalContent string) (*validation.EditContext, error) {
+	return validation.ExtractEditContext(filePath, editCmd, originalContent)
+}
+
+// formatVerificationForLLM creates verification text for LLM feedback
+func (e *Executor) formatVerificationForLLM(context *validation.EditContext, validationResult *validation.ValidationResult) string {
+	return validation.FormatVerificationForLLM(context, validationResult)
+}
+
+// SetValidationConfig updates the validation configuration
+func (e *Executor) SetValidationConfig(config *validation.ValidationConfig) {
+	if config == nil {
+		return
+	}
+
+	// Shutdown existing validator if any
+	if e.validator != nil {
+		e.validator.Shutdown()
+	}
+
+	// Create new validator with updated config
+	e.validator = validation.NewValidator(e.workspacePath, config)
+}
+
+// SetValidationConfigFromMainConfig updates validation config from main config
+func (e *Executor) SetValidationConfigFromMainConfig(mainConfig interface{}) {
+	// This is a temporary bridge until we properly integrate config types
+	// For now, just use defaults if validation is enabled
+	defaultConfig := validation.DefaultValidationConfig()
+	defaultConfig.EnableVerification = true
+
+	// Try to extract specific fields if they exist in the config
+	// This is a simplified conversion - could be enhanced later
+
+	e.SetValidationConfig(&defaultConfig)
+}
+
+// Shutdown gracefully shuts down the executor and its components
+func (e *Executor) Shutdown() {
+	if e.validator != nil {
+		e.validator.Shutdown()
+	}
 }

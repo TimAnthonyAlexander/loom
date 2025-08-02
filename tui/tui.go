@@ -2448,6 +2448,11 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 
 	// Initialize task system with enhanced M6 features
 	taskExecutor := taskPkg.NewExecutor(workspacePath, cfg.EnableShell, cfg.MaxFileSize)
+
+	// Configure validation settings
+	if cfg.Validation.EnableVerification {
+		taskExecutor.SetValidationConfigFromMainConfig(cfg)
+	}
 	var taskManager *taskPkg.Manager
 	var enhancedManager *taskPkg.EnhancedManager
 	var sequentialManager *taskPkg.SequentialTaskManager

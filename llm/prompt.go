@@ -258,28 +258,33 @@ When searching for files, use grep or ripgrep to locate files, and use the SEARC
 
 **IMPORTANT**: LOOM_EDIT is the ONLY supported method for editing files. Natural language editing commands are not supported.
 
-Start and End line are required
+**🔧 MANDATORY COMPONENTS** (All required for successful execution):
+- **file=** - Relative path to target file (NO absolute paths, NO @ symbols)
+- **ACTION** - One of: REPLACE, INSERT_AFTER, INSERT_BEFORE, DELETE, CREATE, SEARCH_REPLACE
+- **START-END** - Line numbers (1-based inclusive) OR just START for single line
+- **Content block** - New text between LOOM_EDIT tags (empty for DELETE)
+- **Closing tag** - Must end with <<LOOM_EDIT
 
-**Syntax**:
+**Syntax Template**:
 `+"`"+`
 >>LOOM_EDIT file=<RELATIVE_PATH> <ACTION> <START>-<END>
 <NEW TEXT LINES…>
 <<LOOM_EDIT
 `+"`"+`
 
-**Actions**:
-- **REPLACE**: Replace lines START-END with new content
-- **INSERT_AFTER**: Insert new content after line START  
-- **INSERT_BEFORE**: Insert new content before line START
-- **DELETE**: Remove lines START-END (empty body)
-- **SEARCH_REPLACE**: Replace all occurrences of a string with another string
+**Actions Explained**:
+- **REPLACE**: Replace lines START-END with new content (requires existing file READ first)
+- **INSERT_AFTER**: Insert new content after line START (requires existing file READ first)
+- **INSERT_BEFORE**: Insert new content before line START (requires existing file read first)
+- **DELETE**: Remove lines START-END (empty content block, requires existing file read first)
+- **CREATE**: Create entirely new file (no READ required, use START 1-1)
+- **SEARCH_REPLACE**: Replace all occurrences of exact string match
 
-**Rules**:
-- Always READ file first to get current SHA and line numbers (SHA provided automatically)
-- Line numbers are 1-based inclusive
-- System handles cross-platform newlines automatically
-
-**For new files**: Use CREATE action or simple content block.
+**🔍 Pre-Edit Requirements**:
+- For existing files: ALWAYS READ file first to get current state and line numbers
+- For new files: Use CREATE action with file path and content
+- Verify line numbers from READ output before editing
+- Check file exists in READ results before attempting modifications
 
 ### 6.4 RUN
 Shell command execution.
@@ -293,11 +298,15 @@ Store important information across conversations. Create memories proactively wh
 
 Basic operations: create, update, get, delete, list
 
-## 7. Prohibited Actions
+## 7. Prohibited Actions & Error Prevention
 - ❌ Executing multiple commands in single response
 - ❌ Edit without LOOM_EDIT format for existing files (LOOM_EDIT IS NOT A TASK)
 - ❌ Edit without reading file first to get current SHA and line numbers
 - ❌ Use invalid file SHA or old slice SHA in LOOM_EDIT commands
+- ❌ Missing mandatory LOOM_EDIT components (file=, action, line numbers, closing tag)
+- ❌ Using absolute paths or @ symbols in file paths
+- ❌ Guessing line numbers instead of using READ output
+- ❌ Using REPLACE/INSERT/DELETE actions on non-existent files (use CREATE instead)
 - ❌ Use RUN+grep when SEARCH is available
 - ❌ Use find+grep combinations (use SEARCH with filters)
 - ❌ Provide partial file content without line ranges
@@ -305,9 +314,36 @@ Basic operations: create, update, get, delete, list
 - ❌ Reading the same file lines multiple times - use incremental line ranges
 - ❌ Including @ in file paths - this is a user UI attachment marker
 
+**🛡️ Error Prevention Mantra**: READ first, verify line numbers, check syntax, then edit.
+
 ## 8. Appendices
 
 ### A. LOOM_EDIT Examples
+
+**🆕 Creating New Files**:
+`+"`"+`
+>>LOOM_EDIT file=src/new_module.go CREATE 1-1
+package main
+
+import "fmt"
+
+func NewFunction() {
+    fmt.Println("New file created")
+}
+<<LOOM_EDIT
+`+"`"+`
+
+`+"`"+`
+>>LOOM_EDIT file=config/settings.json CREATE 1-1
+{
+    "version": "1.0.0",
+    "debug": false,
+    "port": 8080
+}
+<<LOOM_EDIT
+`+"`"+`
+
+**📝 Modifying Existing Files** (Remember: READ file first!):
 
 **Single line replacement**:
 `+"`"+`
@@ -333,23 +369,107 @@ Basic operations: create, update, get, delete, list
 <<LOOM_EDIT
 `+"`"+`
 
+**Insert before line**:
+`+"`"+`
+>>LOOM_EDIT file=main.go INSERT_BEFORE 1
+// Package comment
+<<LOOM_EDIT
+`+"`"+`
+
 **Delete lines**:
 `+"`"+`
 >>LOOM_EDIT file=utils.go DELETE 20-22
 <<LOOM_EDIT
 `+"`"+`
 
-**Search and replace**:
+**Search and replace (simple)**:
 `+"`"+`
 >>LOOM_EDIT file=config.go SEARCH_REPLACE "localhost:8080" "localhost:9090"
 <<LOOM_EDIT
 `+"`"+`
 
-**Multiline search and replace**:
+**Search and replace (multiline)**:
 `+"`"+`
 >>LOOM_EDIT file=settings.json SEARCH_REPLACE "\"port\": 8080,
   \"host\": \"localhost\"" "\"port\": 9090,
   \"host\": \"api.example.com\""
+<<LOOM_EDIT
+`+"`"+`
+
+### A.1 LOOM_EDIT Error Prevention & Recovery
+
+**🚨 Common Errors and Solutions**:
+
+1. **"File not found" error**:
+   - ✅ Solution: Use CREATE action for new files
+   - ✅ Solution: Verify file path with LIST command first
+   - ❌ Wrong: Trying REPLACE on non-existent file
+
+2. **"Line number out of range" error**:
+   - ✅ Solution: Always READ file first to see current line count
+   - ✅ Solution: Use exact line numbers from READ output
+   - ❌ Wrong: Guessing line numbers without reading
+
+3. **"Invalid syntax" error**:
+   - ✅ Solution: Check all mandatory components are present
+   - ✅ Solution: Verify file= path has no spaces or @ symbols
+   - ✅ Solution: Ensure closing <<LOOM_EDIT tag is present
+   - ❌ Wrong: Missing action or line numbers
+
+4. **"SHA mismatch" error**:
+   - ✅ Solution: READ file again to get current state
+   - ✅ Solution: Don't edit files that changed since last READ
+   - ❌ Wrong: Using old line numbers from previous READ
+
+**🔧 Error Recovery Workflow**:
+1. If LOOM_EDIT fails, READ the file again to see current state
+2. Verify the exact line numbers you want to modify
+3. Check that your syntax matches the mandatory template exactly
+4. Try the edit again with corrected parameters
+
+**📋 Pre-Edit Checklist**:
+- [ ] File path is relative (no leading /, no @ symbols)
+- [ ] Action is one of: REPLACE, INSERT_AFTER, INSERT_BEFORE, DELETE, CREATE, SEARCH_REPLACE
+- [ ] Line numbers are from recent READ output (for existing files)
+- [ ] Content block is properly formatted
+- [ ] Closing <<LOOM_EDIT tag is present
+- [ ] For new files: Using CREATE action with any line numbers (typically 1-1)
+
+### A.2 Quick Reference - Most Common Patterns
+
+**📄 Create new file**:
+`+"`"+`
+>>LOOM_EDIT file=path/to/new_file.ext CREATE 1-1
+file content here
+<<LOOM_EDIT
+`+"`"+`
+
+**✏️ Replace single line** (READ file first!):
+`+"`"+`
+>>LOOM_EDIT file=existing_file.ext REPLACE 25
+new line content
+<<LOOM_EDIT
+`+"`"+`
+
+**✏️ Replace multiple lines** (READ file first!):
+`+"`"+`
+>>LOOM_EDIT file=existing_file.ext REPLACE 25-30
+line 1 of new content
+line 2 of new content
+line 3 of new content
+<<LOOM_EDIT
+`+"`"+`
+
+**➕ Add content after line** (READ file first!):
+`+"`"+`
+>>LOOM_EDIT file=existing_file.ext INSERT_AFTER 25
+new content to insert
+<<LOOM_EDIT
+`+"`"+`
+
+**🔍 Find and replace text**:
+`+"`"+`
+>>LOOM_EDIT file=existing_file.ext SEARCH_REPLACE "old text" "new text"
 <<LOOM_EDIT
 `+"`"+`
 

@@ -175,13 +175,14 @@ type EditSummary struct {
 
 // TaskResponse represents the result of executing a task
 type TaskResponse struct {
-	Task          Task         `json:"task"`
-	Success       bool         `json:"success"`
-	Output        string       `json:"output,omitempty"`         // Display message for user
-	ActualContent string       `json:"actual_content,omitempty"` // Actual content for LLM (hidden from user)
-	EditSummary   *EditSummary `json:"edit_summary,omitempty"`   // Detailed edit information (for EditFile tasks)
-	Error         string       `json:"error,omitempty"`
-	Approved      bool         `json:"approved,omitempty"` // For tasks requiring confirmation
+	Task             Task         `json:"task"`
+	Success          bool         `json:"success"`
+	Output           string       `json:"output,omitempty"`         // Display message for user
+	ActualContent    string       `json:"actual_content,omitempty"` // Actual content for LLM (hidden from user)
+	EditSummary      *EditSummary `json:"edit_summary,omitempty"`   // Detailed edit information (for EditFile tasks)
+	Error            string       `json:"error,omitempty"`
+	Approved         bool         `json:"approved,omitempty"`          // For tasks requiring confirmation
+	VerificationText string       `json:"verification_text,omitempty"` // Enhanced verification text for LLM
 }
 
 // tryLoomEditParsing attempts to parse LOOM_EDIT commands from LLM response
