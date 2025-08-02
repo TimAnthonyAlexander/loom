@@ -251,11 +251,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.isStreaming = false
 				m.streamChan = nil
+				m.streamingContent = "" // Clear streaming content on cancellation
 				// Optional: add a brief message so the user knows the stream was interrupted.
 				interruptMsg := llm.Message{Role: "assistant", Content: "⏹️ Streaming interrupted.", Timestamp: time.Now()}
 				m.chatSession.AddMessage(interruptMsg)
 				m.messages = m.chatSession.GetDisplayMessages()
-				m.updateWrappedMessages()
+				m.updateWrappedMessagesWithOptions(false)
 			}
 			return m, nil
 		case "ctrl+s":
@@ -796,8 +797,9 @@ Ask me anything about your code, architecture, or programming questions!`
 		if msg.Error != nil {
 			m.isStreaming = false
 			m.streamChan = nil
+			m.streamingContent = "" // Clear streaming content on error
 			m.messages = append(m.messages, fmt.Sprintf("Loom: Error: %v", msg.Error))
-			m.updateWrappedMessages()
+			m.updateWrappedMessagesWithOptions(false)
 			return m, nil
 		}
 
@@ -820,11 +822,21 @@ Ask me anything about your code, architecture, or programming questions!`
 
 				// Refresh display messages from chat session to ensure sync
 				m.messages = m.chatSession.GetDisplayMessages()
-				m.updateWrappedMessages()
+
+				// Save streaming content for task processing before clearing
+				finalStreamingContent := m.streamingContent
+				m.streamingContent = "" // Clear streaming content to prevent artifacts
+
+				// Update wrapped messages with the final state
+				m.updateWrappedMessagesWithOptions(false)
 
 				// Process LLM response for tasks (use original content for task parsing)
-				return m, m.handleLLMResponseForTasks(m.streamingContent)
+				return m, m.handleLLMResponseForTasks(finalStreamingContent)
 			}
+
+			// Clear streaming content even if empty to ensure clean state
+			m.streamingContent = ""
+			m.updateWrappedMessagesWithOptions(false)
 			return m, nil
 		}
 
@@ -954,12 +966,8 @@ func (m model) View() string {
 
 	switch m.currentView {
 	case viewChat:
-		// Update wrapped messages when needed
-		if m.isStreaming {
-			m.updateWrappedMessagesWithOptions(true)
-		} else {
-			m.updateWrappedMessages()
-		}
+		// Update wrapped messages consistently
+		m.updateWrappedMessagesWithOptions(m.isStreaming)
 
 		// Calculate message area height (subtract 2 for input + spacing)
 		messageHeight := contentHeight - 2
