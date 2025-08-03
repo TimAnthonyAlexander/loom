@@ -280,6 +280,58 @@ When searching for files, use grep or ripgrep to locate files, and use the SEARC
 - **CREATE**: Create entirely new file (no READ required, use START 1-1) [LOOM_EDIT action, not a task]
 - **SEARCH_REPLACE**: Replace all occurrences of exact string match
 
+**🎯 Smart Action Selection Guide**:
+Choose the most appropriate action based on your editing intent:
+
+**Text Substitution** → Use **SEARCH_REPLACE**:
+- ✅ Changing variable names, function names, or values
+- ✅ Replacing repeated text patterns across lines
+- ✅ Updating configuration values or URLs
+- ✅ When exact text is known but line numbers might change
+- Example: Replace "localhost:8080" → "api.example.com:443"
+
+**Adding New Content** → Use **INSERT_AFTER/INSERT_BEFORE**:
+- ✅ Adding new lines at specific locations
+- ✅ Inserting imports, function definitions, or comments
+- ✅ Adding entries to lists or configuration blocks
+- ❌ Don't use REPLACE with empty target lines
+- Example: Add import after existing imports
+
+**Modifying Existing Lines** → Use **REPLACE**:
+- ✅ Complex line restructuring or logic changes  
+- ✅ Multi-line modifications with structural changes
+- ✅ When INSERT/DELETE won't achieve the desired result
+- ❌ Don't use for simple text substitutions
+- Example: Restructure function signatures or complex expressions
+
+**Removing Content** → Use **DELETE**:
+- ✅ Removing entire lines, functions, or blocks
+- ✅ Cleaning up unused code or comments
+- ❌ Don't use REPLACE with empty content
+- Example: Delete deprecated functions
+
+**Creating Files** → Use **CREATE**:
+- ✅ New files that don't exist yet
+- ❌ Don't use READ first for CREATE operations
+- Example: Generate new configuration or code files
+
+**🧠 Action Selection Decision Tree**:
+1. **Does the file exist?** 
+   - No → Use CREATE
+   - Yes → Continue to step 2
+
+2. **What type of change are you making?**
+   - Simple text/value change → Use SEARCH_REPLACE
+   - Adding new content → Use INSERT_AFTER/INSERT_BEFORE  
+   - Complex line modification → Use REPLACE
+   - Removing content → Use DELETE
+
+3. **Verify your choice:**
+   - For text changes: Can you describe the exact text to find/replace? → SEARCH_REPLACE
+   - For additions: Are you adding at a specific position? → INSERT_*
+   - For modifications: Do you need to restructure multiple lines? → REPLACE
+   - For deletions: Are you removing complete lines/blocks? → DELETE
+
 **🔍 Pre-Edit Requirements**:
 - For existing files: ALWAYS READ file first to get current state and line numbers
 - For new files: Use CREATE action with file path and content
@@ -397,7 +449,95 @@ func NewFunction() {
 <<LOOM_EDIT
 `+"`"+`
 
-### A.1 LOOM_EDIT Error Prevention & Recovery
+### A.1 Smart Action Selection Examples
+
+**🔍 Text Substitution Examples** (Use SEARCH_REPLACE):
+
+**Example 1: Update configuration value**
+`+"`"+`
+>>LOOM_EDIT file=config.json SEARCH_REPLACE "localhost:8080" "api.example.com:443"
+<<LOOM_EDIT
+`+"`"+`
+
+**Example 2: Rename variable across multiple lines**
+`+"`"+`
+>>LOOM_EDIT file=server.go SEARCH_REPLACE "oldVariableName" "newVariableName"
+<<LOOM_EDIT
+`+"`"+`
+
+**➕ Content Insertion Examples** (Use INSERT_AFTER/INSERT_BEFORE):
+
+**Example 1: Add import after existing imports**
+`+"`"+`
+>>LOOM_EDIT file=main.go INSERT_AFTER 3
+import "time"
+<<LOOM_EDIT
+`+"`"+`
+
+**Example 2: Add function at end of file**
+`+"`"+`
+>>LOOM_EDIT file=utils.go INSERT_AFTER 45
+func NewHelper() string {
+    return "helper"
+}
+<<LOOM_EDIT
+`+"`"+`
+
+**⚙️ Complex Modification Examples** (Use REPLACE):
+
+**Example 1: Restructure function signature**
+`+"`"+`
+>>LOOM_EDIT file=handler.go REPLACE 15-17
+func ProcessRequest(ctx context.Context, req *Request) (*Response, error) {
+    // Enhanced with context support
+    return handleRequest(ctx, req)
+}
+<<LOOM_EDIT
+`+"`"+`
+
+**🗑️ Content Deletion Examples** (Use DELETE):
+
+**Example 1: Remove deprecated function**
+`+"`"+`
+>>LOOM_EDIT file=legacy.go DELETE 25-35
+<<LOOM_EDIT
+`+"`"+`
+
+**❌ Common Action Selection Mistakes**:
+
+**Mistake 1: Using REPLACE for simple text substitution**
+❌ Wrong approach:
+`+"`"+`
+>>LOOM_EDIT file=config.go REPLACE 8
+const API_URL = "api.example.com"
+<<LOOM_EDIT
+`+"`"+`
+
+✅ Better approach:
+`+"`"+`
+>>LOOM_EDIT file=config.go SEARCH_REPLACE "localhost:8080" "api.example.com"
+<<LOOM_EDIT
+`+"`"+`
+
+**Mistake 2: Using REPLACE with empty content instead of DELETE**
+❌ Wrong approach:
+`+"`"+`
+>>LOOM_EDIT file=old.go REPLACE 10-15
+
+<<LOOM_EDIT
+`+"`"+`
+
+✅ Better approach:
+`+"`"+`
+>>LOOM_EDIT file=old.go DELETE 10-15
+<<LOOM_EDIT
+`+"`"+`
+
+**Mistake 3: Using SEARCH_REPLACE for complex structural changes**
+❌ Wrong: Trying to SEARCH_REPLACE entire function definitions
+✅ Better: Use REPLACE with specific line ranges for structural changes
+
+### A.2 LOOM_EDIT Error Prevention & Recovery
 
 **🚨 Common Errors and Solutions**:
 
@@ -436,7 +576,7 @@ func NewFunction() {
 - [ ] Closing <<LOOM_EDIT tag is present
 - [ ] For new files: Using CREATE action with any line numbers (typically 1-1)
 
-### A.2 Quick Reference - Most Common Patterns
+### A.3 Quick Reference - Most Common Patterns
 
 **📄 Create new file**:
 `+"`"+`

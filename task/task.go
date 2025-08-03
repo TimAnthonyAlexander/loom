@@ -250,6 +250,7 @@ type ProgressiveValidationResult struct {
 	CurrentStage    string            `json:"current_stage"`     // Current or failed stage
 	Stages          []ValidationStage `json:"stages"`            // All validation stages
 	DryRunPreview   *DryRunPreview    `json:"dry_run_preview"`   // Preview of changes (if requested)
+	ActionAnalysis  *ActionAnalysis   `json:"action_analysis"`   // Smart action selection analysis
 	CanProceed      bool              `json:"can_proceed"`       // Whether edit can proceed
 	TotalDurationMs int64             `json:"total_duration_ms"` // Total validation time
 	FailureStage    string            `json:"failure_stage"`     // Stage where validation failed
@@ -270,6 +271,38 @@ type DryRunPreview struct {
 	ChangesSummary     string        `json:"changes_summary"`     // Summary of changes
 	SafetyWarnings     []string      `json:"safety_warnings"`     // Any safety concerns
 	RecommendedActions []string      `json:"recommended_actions"` // Recommended next steps
+}
+
+// EditIntent represents what the LLM is trying to accomplish with an edit
+type EditIntent struct {
+	IntentType    string  `json:"intent_type"`    // "text_substitution", "line_modification", "content_insertion", "content_deletion", "file_creation"
+	TargetScope   string  `json:"target_scope"`   // "specific_text", "line_range", "end_of_file", "beginning_of_file", "whole_file"
+	ContentType   string  `json:"content_type"`   // "code", "text", "configuration", "documentation"
+	ChangeNature  string  `json:"change_nature"`  // "simple_replace", "complex_modification", "addition", "removal"
+	SearchPattern string  `json:"search_pattern"` // Extracted search pattern (if applicable)
+	Confidence    float64 `json:"confidence"`     // Confidence in intent analysis (0.0-1.0)
+}
+
+// ActionSuggestion represents an alternative action recommendation
+type ActionSuggestion struct {
+	SuggestedAction string   `json:"suggested_action"` // Recommended LOOM_EDIT action
+	Reasoning       string   `json:"reasoning"`        // Why this action is better
+	Benefits        []string `json:"benefits"`         // Benefits of using this action
+	ExampleUsage    string   `json:"example_usage"`    // Example of how to use this action
+	ConfidenceScore float64  `json:"confidence_score"` // Confidence in this suggestion (0.0-1.0)
+	EfficiencyGain  string   `json:"efficiency_gain"`  // How much more efficient this would be
+}
+
+// ActionAnalysis contains analysis of action choice and recommendations
+type ActionAnalysis struct {
+	CurrentAction    string             `json:"current_action"`    // The action the LLM chose
+	IsOptimal        bool               `json:"is_optimal"`        // Whether the current action is optimal
+	AnalysisType     string             `json:"analysis_type"`     // "optimal", "suboptimal", "inefficient", "problematic"
+	EditIntent       EditIntent         `json:"edit_intent"`       // Analyzed intent
+	Suggestions      []ActionSuggestion `json:"suggestions"`       // Alternative action suggestions
+	OptimizationTips []string           `json:"optimization_tips"` // General tips for better action selection
+	PatternMatches   []string           `json:"pattern_matches"`   // Recognized patterns in the edit
+	ContextWarnings  []string           `json:"context_warnings"`  // Context-specific warnings
 }
 
 // PreviewLine represents a line in the dry-run preview
@@ -2547,6 +2580,11 @@ func (pvr *ProgressiveValidationResult) FormatForLLM() string {
 		formatted.WriteString("\n")
 	}
 
+	// Action analysis if available
+	if pvr.ActionAnalysis != nil {
+		formatted.WriteString(pvr.ActionAnalysis.FormatForLLM())
+	}
+
 	// Dry run preview if available
 	if pvr.DryRunPreview != nil {
 		formatted.WriteString(pvr.DryRunPreview.FormatForLLM())
@@ -2625,6 +2663,88 @@ func (drp *DryRunPreview) FormatForLLM() string {
 		formatted.WriteString("\n💡 RECOMMENDED ACTIONS:\n")
 		for i, action := range drp.RecommendedActions {
 			formatted.WriteString(fmt.Sprintf("%d. %s\n", i+1, action))
+		}
+	}
+
+	return formatted.String()
+}
+
+// FormatForLLM formats the action analysis for LLM consumption
+func (aa *ActionAnalysis) FormatForLLM() string {
+	var formatted strings.Builder
+
+	formatted.WriteString("🎯 SMART ACTION SELECTION ANALYSIS\n")
+	formatted.WriteString("-" + strings.Repeat("-", 35) + "\n")
+
+	// Current action assessment
+	statusIcon := "✅"
+	if aa.AnalysisType == "suboptimal" {
+		statusIcon = "⚠️"
+	} else if aa.AnalysisType == "inefficient" {
+		statusIcon = "🔄"
+	} else if aa.AnalysisType == "problematic" {
+		statusIcon = "❌"
+	}
+
+	formatted.WriteString(fmt.Sprintf("%s Current Action: %s (%s)\n", statusIcon, aa.CurrentAction, strings.ToUpper(aa.AnalysisType)))
+
+	// Edit intent analysis
+	formatted.WriteString(fmt.Sprintf("🎯 Detected Intent: %s\n", aa.EditIntent.IntentType))
+	formatted.WriteString(fmt.Sprintf("📍 Target Scope: %s\n", aa.EditIntent.TargetScope))
+	formatted.WriteString(fmt.Sprintf("📄 Content Type: %s\n", aa.EditIntent.ContentType))
+
+	if aa.EditIntent.SearchPattern != "" {
+		formatted.WriteString(fmt.Sprintf("🔍 Search Pattern: %s\n", aa.EditIntent.SearchPattern))
+	}
+
+	formatted.WriteString(fmt.Sprintf("🎲 Confidence: %.1f%%\n", aa.EditIntent.Confidence*100))
+
+	// Pattern matches
+	if len(aa.PatternMatches) > 0 {
+		formatted.WriteString("\n🧩 RECOGNIZED PATTERNS:\n")
+		for i, pattern := range aa.PatternMatches {
+			formatted.WriteString(fmt.Sprintf("%d. %s\n", i+1, pattern))
+		}
+	}
+
+	// Action suggestions (if not optimal)
+	if len(aa.Suggestions) > 0 {
+		formatted.WriteString("\n💡 SUGGESTED ACTIONS:\n")
+		for i, suggestion := range aa.Suggestions {
+			formatted.WriteString(fmt.Sprintf("%d. **%s** (%.1f%% confidence)\n", i+1, suggestion.SuggestedAction, suggestion.ConfidenceScore*100))
+			formatted.WriteString(fmt.Sprintf("   📝 Reasoning: %s\n", suggestion.Reasoning))
+
+			if len(suggestion.Benefits) > 0 {
+				formatted.WriteString("   ✅ Benefits:\n")
+				for _, benefit := range suggestion.Benefits {
+					formatted.WriteString(fmt.Sprintf("     • %s\n", benefit))
+				}
+			}
+
+			if suggestion.ExampleUsage != "" {
+				formatted.WriteString(fmt.Sprintf("   💻 Example: %s\n", suggestion.ExampleUsage))
+			}
+
+			if suggestion.EfficiencyGain != "" {
+				formatted.WriteString(fmt.Sprintf("   ⚡ Efficiency: %s\n", suggestion.EfficiencyGain))
+			}
+			formatted.WriteString("\n")
+		}
+	}
+
+	// Optimization tips
+	if len(aa.OptimizationTips) > 0 {
+		formatted.WriteString("🔧 OPTIMIZATION TIPS:\n")
+		for i, tip := range aa.OptimizationTips {
+			formatted.WriteString(fmt.Sprintf("%d. %s\n", i+1, tip))
+		}
+	}
+
+	// Context warnings
+	if len(aa.ContextWarnings) > 0 {
+		formatted.WriteString("\n⚠️  CONTEXT WARNINGS:\n")
+		for i, warning := range aa.ContextWarnings {
+			formatted.WriteString(fmt.Sprintf("%d. %s\n", i+1, warning))
 		}
 	}
 

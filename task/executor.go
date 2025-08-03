@@ -2881,7 +2881,10 @@ func (e *Executor) runProgressiveValidation(task *Task, fullPath string) *Progre
 		return result
 	}
 
-	// Stage 5: Dry Run Preview (if requested)
+	// Stage 5: Action Analysis (Smart Action Selection)
+	e.analyzeActionSelection(fullPath, editCmd, task, result)
+
+	// Stage 6: Dry Run Preview (if requested)
 	if task.DryRun {
 		e.generateDryRunPreview(fullPath, editCmd, result)
 	}
@@ -3412,6 +3415,364 @@ func (e *Executor) generateSearchReplacePreview(currentLines, newLines []string,
 			NewContent: "",
 			IsTarget:   false,
 		})
+	}
+}
+
+// analyzeActionSelection performs smart action selection analysis
+func (e *Executor) analyzeActionSelection(fullPath string, editCmd *loom_edit.EditCommand, task *Task, result *ProgressiveValidationResult) {
+	stageStart := time.Now()
+	result.AddStage("action_analysis", "pending", "Analyzing action selection...")
+
+	// Analyze the edit intent
+	intent := e.analyzeEditIntent(editCmd, fullPath)
+
+	// Determine if current action is optimal
+	analysis := e.evaluateActionChoice(editCmd, intent, fullPath)
+
+	// Generate suggestions if needed
+	if !analysis.IsOptimal {
+		analysis.Suggestions = e.generateActionSuggestions(editCmd, intent, fullPath)
+	}
+
+	// Add optimization tips
+	analysis.OptimizationTips = e.generateOptimizationTips(editCmd, intent)
+
+	// Add context warnings if applicable
+	analysis.ContextWarnings = e.generateContextWarnings(editCmd, intent, fullPath)
+
+	duration := time.Since(stageStart).Milliseconds()
+	result.ActionAnalysis = analysis
+
+	// Format stage completion message
+	statusMsg := "Action choice is optimal"
+	stageStatus := "passed"
+
+	if analysis.AnalysisType == "suboptimal" {
+		statusMsg = fmt.Sprintf("Action choice is suboptimal - %s would be better", analysis.Suggestions[0].SuggestedAction)
+		stageStatus = "warning"
+	} else if analysis.AnalysisType == "inefficient" {
+		statusMsg = fmt.Sprintf("Action choice is inefficient - consider %s", analysis.Suggestions[0].SuggestedAction)
+		stageStatus = "warning"
+	} else if analysis.AnalysisType == "problematic" {
+		statusMsg = fmt.Sprintf("Action choice may cause issues - %s recommended", analysis.Suggestions[0].SuggestedAction)
+		stageStatus = "warning"
+	}
+
+	var suggestions []string
+	if len(analysis.Suggestions) > 0 {
+		suggestions = []string{analysis.Suggestions[0].Reasoning}
+	}
+
+	result.SetStageDetails(fmt.Sprintf("Intent: %s, Confidence: %.1f%%", intent.IntentType, intent.Confidence*100), suggestions, duration)
+	result.MarkStageComplete(stageStatus, statusMsg)
+}
+
+// analyzeEditIntent determines what the LLM is trying to accomplish
+func (e *Executor) analyzeEditIntent(editCmd *loom_edit.EditCommand, filePath string) EditIntent {
+	intent := EditIntent{
+		Confidence: 0.8, // Default confidence
+	}
+
+	// Analyze based on action type
+	switch editCmd.Action {
+	case "CREATE":
+		intent.IntentType = "file_creation"
+		intent.TargetScope = "whole_file"
+		intent.ChangeNature = "addition"
+		intent.Confidence = 0.95
+
+	case "DELETE":
+		intent.IntentType = "content_deletion"
+		intent.ChangeNature = "removal"
+		if editCmd.Start == editCmd.End {
+			intent.TargetScope = "single_line"
+		} else {
+			intent.TargetScope = "line_range"
+		}
+
+	case "SEARCH_REPLACE":
+		intent.IntentType = "text_substitution"
+		intent.TargetScope = "specific_text"
+		intent.ChangeNature = "simple_replace"
+		intent.SearchPattern = editCmd.OldString
+
+		// Analyze search pattern complexity
+		if strings.Contains(editCmd.OldString, "\n") {
+			intent.TargetScope = "multiline_text"
+			intent.ChangeNature = "complex_modification"
+		}
+
+	case "REPLACE":
+		intent.IntentType = "line_modification"
+		intent.ChangeNature = "complex_modification"
+		if editCmd.Start == editCmd.End {
+			intent.TargetScope = "single_line"
+		} else {
+			intent.TargetScope = "line_range"
+		}
+
+		// Check if this looks like it should be a text substitution
+		if e.looksLikeTextSubstitution(editCmd, filePath) {
+			intent.IntentType = "text_substitution"
+			intent.ChangeNature = "simple_replace"
+		}
+
+	case "INSERT_AFTER", "INSERT_BEFORE":
+		intent.IntentType = "content_insertion"
+		intent.ChangeNature = "addition"
+
+		// Determine insertion scope
+		if editCmd.Start == 1 {
+			intent.TargetScope = "beginning_of_file"
+		} else {
+			// Check if it's at end of file
+			if fileContent, err := os.ReadFile(filePath); err == nil {
+				lines := strings.Split(string(fileContent), "\n")
+				if editCmd.Start >= len(lines)-1 {
+					intent.TargetScope = "end_of_file"
+				} else {
+					intent.TargetScope = "middle_insertion"
+				}
+			}
+		}
+	}
+
+	// Analyze content type
+	intent.ContentType = e.determineContentType(editCmd, filePath)
+
+	return intent
+}
+
+// evaluateActionChoice determines if the current action is optimal
+func (e *Executor) evaluateActionChoice(editCmd *loom_edit.EditCommand, intent EditIntent, filePath string) *ActionAnalysis {
+	analysis := &ActionAnalysis{
+		CurrentAction:   editCmd.Action,
+		IsOptimal:       true,
+		AnalysisType:    "optimal",
+		EditIntent:      intent,
+		Suggestions:     []ActionSuggestion{},
+		PatternMatches:  []string{},
+		ContextWarnings: []string{},
+	}
+
+	// Check for common suboptimal patterns
+	switch intent.IntentType {
+	case "text_substitution":
+		if editCmd.Action != "SEARCH_REPLACE" {
+			analysis.IsOptimal = false
+			analysis.AnalysisType = "suboptimal"
+			analysis.PatternMatches = append(analysis.PatternMatches, "Simple text substitution detected")
+		}
+
+	case "content_insertion":
+		if editCmd.Action == "REPLACE" && e.isEmptyLineRange(editCmd, filePath) {
+			analysis.IsOptimal = false
+			analysis.AnalysisType = "inefficient"
+			analysis.PatternMatches = append(analysis.PatternMatches, "Replacing empty content with insertion")
+		}
+
+	case "line_modification":
+		if editCmd.Action == "SEARCH_REPLACE" && intent.TargetScope == "line_range" {
+			analysis.IsOptimal = false
+			analysis.AnalysisType = "suboptimal"
+			analysis.PatternMatches = append(analysis.PatternMatches, "Line-based modification using text search")
+		}
+	}
+
+	// Check for efficiency issues
+	if editCmd.Action == "REPLACE" && editCmd.Start == editCmd.End && strings.TrimSpace(editCmd.NewText) == "" {
+		analysis.IsOptimal = false
+		analysis.AnalysisType = "inefficient"
+		analysis.PatternMatches = append(analysis.PatternMatches, "Using REPLACE to delete single line")
+	}
+
+	return analysis
+}
+
+// generateActionSuggestions creates alternative action recommendations
+func (e *Executor) generateActionSuggestions(editCmd *loom_edit.EditCommand, intent EditIntent, filePath string) []ActionSuggestion {
+	var suggestions []ActionSuggestion
+
+	switch intent.IntentType {
+	case "text_substitution":
+		if editCmd.Action != "SEARCH_REPLACE" {
+			suggestion := ActionSuggestion{
+				SuggestedAction: "SEARCH_REPLACE",
+				Reasoning:       "Text substitution is more precisely handled with SEARCH_REPLACE",
+				Benefits: []string{
+					"Automatically finds and replaces all occurrences",
+					"No need to specify exact line numbers",
+					"Works across multiple lines if needed",
+					"More maintainable when file changes",
+				},
+				ExampleUsage:    fmt.Sprintf(">>LOOM_EDIT file=%s SEARCH_REPLACE \"old_text\" \"new_text\"", editCmd.File),
+				ConfidenceScore: 0.9,
+				EfficiencyGain:  "Reduces error-prone manual line counting",
+			}
+			suggestions = append(suggestions, suggestion)
+		}
+
+	case "content_insertion":
+		if editCmd.Action == "REPLACE" {
+			var suggestedAction string
+			if intent.TargetScope == "end_of_file" {
+				suggestedAction = "INSERT_AFTER"
+			} else {
+				suggestedAction = "INSERT_BEFORE"
+			}
+
+			suggestion := ActionSuggestion{
+				SuggestedAction: suggestedAction,
+				Reasoning:       "Insertion is clearer than replacing with additional content",
+				Benefits: []string{
+					"More semantically correct for adding content",
+					"Preserves existing content structure",
+					"Clearer intent for code reviewers",
+				},
+				ExampleUsage:    fmt.Sprintf(">>LOOM_EDIT file=%s %s %d", editCmd.File, suggestedAction, editCmd.Start),
+				ConfidenceScore: 0.85,
+				EfficiencyGain:  "Better semantic clarity",
+			}
+			suggestions = append(suggestions, suggestion)
+		}
+
+	case "content_deletion":
+		if editCmd.Action == "REPLACE" && strings.TrimSpace(editCmd.NewText) == "" {
+			suggestion := ActionSuggestion{
+				SuggestedAction: "DELETE",
+				Reasoning:       "DELETE action is more explicit for removing content",
+				Benefits: []string{
+					"Clearer intent - obviously removing content",
+					"No empty content block needed",
+					"More semantically correct",
+				},
+				ExampleUsage:    fmt.Sprintf(">>LOOM_EDIT file=%s DELETE %d-%d", editCmd.File, editCmd.Start, editCmd.End),
+				ConfidenceScore: 0.95,
+				EfficiencyGain:  "Simpler syntax, clearer intent",
+			}
+			suggestions = append(suggestions, suggestion)
+		}
+	}
+
+	return suggestions
+}
+
+// generateOptimizationTips provides general tips for better action selection
+func (e *Executor) generateOptimizationTips(editCmd *loom_edit.EditCommand, intent EditIntent) []string {
+	var tips []string
+
+	switch intent.IntentType {
+	case "text_substitution":
+		tips = append(tips, "Use SEARCH_REPLACE for simple text changes to avoid line number dependencies")
+		tips = append(tips, "SEARCH_REPLACE works better when file structure might change")
+
+	case "content_insertion":
+		tips = append(tips, "Use INSERT_AFTER/INSERT_BEFORE instead of REPLACE when adding new content")
+		tips = append(tips, "INSERT actions are clearer for code review and debugging")
+
+	case "line_modification":
+		tips = append(tips, "Use REPLACE for complex line modifications")
+		tips = append(tips, "Consider SEARCH_REPLACE if changing specific text patterns")
+
+	case "content_deletion":
+		tips = append(tips, "Use DELETE action for removing content instead of REPLACE with empty content")
+	}
+
+	// Add general tips based on file type
+	fileExt := strings.ToLower(filepath.Ext(editCmd.File))
+	switch fileExt {
+	case ".go", ".py", ".js", ".ts":
+		tips = append(tips, "For code files, prefer precise actions that match the semantic change")
+	case ".json", ".yaml", ".yml":
+		tips = append(tips, "For config files, SEARCH_REPLACE often works better for value changes")
+	case ".md", ".txt":
+		tips = append(tips, "For text files, SEARCH_REPLACE is often more maintainable")
+	}
+
+	return tips
+}
+
+// generateContextWarnings creates context-specific warnings
+func (e *Executor) generateContextWarnings(editCmd *loom_edit.EditCommand, intent EditIntent, filePath string) []string {
+	var warnings []string
+
+	// Check for potentially risky patterns
+	if editCmd.Action == "REPLACE" && editCmd.End-editCmd.Start > 10 {
+		warnings = append(warnings, "Large line range replacement - consider smaller, more focused edits")
+	}
+
+	if editCmd.Action == "SEARCH_REPLACE" && len(strings.Split(editCmd.OldString, "\n")) > 5 {
+		warnings = append(warnings, "Multi-line SEARCH_REPLACE can be fragile - consider line-based REPLACE")
+	}
+
+	if intent.IntentType == "text_substitution" && strings.Contains(editCmd.OldString, editCmd.NewString) {
+		warnings = append(warnings, "Replacement contains search text - verify this won't cause infinite loops")
+	}
+
+	return warnings
+}
+
+// Helper methods for content analysis
+
+// looksLikeTextSubstitution determines if a REPLACE action is really a text substitution
+func (e *Executor) looksLikeTextSubstitution(editCmd *loom_edit.EditCommand, filePath string) bool {
+	// If it's a single line and the new content looks like a simple substitution
+	if editCmd.Start == editCmd.End {
+		// Read the current line to see if it's a simple text change
+		if content, err := os.ReadFile(filePath); err == nil {
+			lines := strings.Split(string(content), "\n")
+			if editCmd.Start <= len(lines) {
+				oldLine := lines[editCmd.Start-1]
+				newLine := editCmd.NewText
+
+				// Check if it's a simple word/phrase substitution
+				oldWords := strings.Fields(oldLine)
+				newWords := strings.Fields(newLine)
+
+				if len(oldWords) == len(newWords) {
+					// Same number of words, likely a substitution
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// isEmptyLineRange checks if the target line range is empty or whitespace
+func (e *Executor) isEmptyLineRange(editCmd *loom_edit.EditCommand, filePath string) bool {
+	if content, err := os.ReadFile(filePath); err == nil {
+		lines := strings.Split(string(content), "\n")
+		for i := editCmd.Start - 1; i < editCmd.End && i < len(lines); i++ {
+			if strings.TrimSpace(lines[i]) != "" {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+// determineContentType analyzes what type of content is being edited
+func (e *Executor) determineContentType(editCmd *loom_edit.EditCommand, filePath string) string {
+	fileExt := strings.ToLower(filepath.Ext(filePath))
+
+	switch fileExt {
+	case ".go", ".py", ".js", ".ts", ".java", ".cpp", ".c", ".rs":
+		return "code"
+	case ".json", ".yaml", ".yml", ".toml", ".ini":
+		return "configuration"
+	case ".md", ".txt", ".rst":
+		return "documentation"
+	default:
+		// Analyze content to determine type
+		if strings.Contains(editCmd.NewText, "func ") || strings.Contains(editCmd.NewText, "class ") {
+			return "code"
+		} else if strings.Contains(editCmd.NewText, ":") && strings.Contains(editCmd.NewText, "{") {
+			return "configuration"
+		} else {
+			return "text"
+		}
 	}
 }
 
