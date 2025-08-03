@@ -142,6 +142,12 @@ type Task struct {
 	MemoryTags        []string `json:"memory_tags,omitempty"`        // Memory tags
 	MemoryActive      *bool    `json:"memory_active,omitempty"`      // Whether memory is active (nil means no change for update)
 	MemoryDescription string   `json:"memory_description,omitempty"` // Memory description
+
+	// Progressive validation and dry-run support (NEW)
+	DryRun                bool `json:"dry_run,omitempty"`                 // If true, validate and preview but don't apply changes
+	ProgressiveValidation bool `json:"progressive_validation,omitempty"`  // If true, provide detailed validation feedback
+	ValidationStages      bool `json:"validation_stages,omitempty"`       // If true, show each validation stage
+	SkipFinalConfirmation bool `json:"skip_final_confirmation,omitempty"` // If true, skip final confirmation for dry-runs
 }
 
 // InteractivePrompt represents an expected prompt and its response in interactive commands
@@ -228,17 +234,65 @@ type ValidationSummary struct {
 	RollbackTriggered bool     `json:"rollback_triggered"` // Whether rollback was triggered
 }
 
+// ValidationStage represents a single stage in progressive validation
+type ValidationStage struct {
+	Name        string   `json:"name"`        // Stage name (syntax, file_state, line_range, content, preview)
+	Status      string   `json:"status"`      // "pending", "passed", "failed", "warning"
+	Message     string   `json:"message"`     // Stage result message
+	Details     string   `json:"details"`     // Additional details
+	Suggestions []string `json:"suggestions"` // Stage-specific suggestions
+	Duration    int64    `json:"duration_ms"` // Time taken for this stage in milliseconds
+}
+
+// ProgressiveValidationResult contains the results of all validation stages
+type ProgressiveValidationResult struct {
+	OverallStatus   string            `json:"overall_status"`    // "passed", "failed", "warnings"
+	CurrentStage    string            `json:"current_stage"`     // Current or failed stage
+	Stages          []ValidationStage `json:"stages"`            // All validation stages
+	DryRunPreview   *DryRunPreview    `json:"dry_run_preview"`   // Preview of changes (if requested)
+	CanProceed      bool              `json:"can_proceed"`       // Whether edit can proceed
+	TotalDurationMs int64             `json:"total_duration_ms"` // Total validation time
+	FailureStage    string            `json:"failure_stage"`     // Stage where validation failed
+	ValidationCount int               `json:"validation_count"`  // Number of stages completed
+}
+
+// DryRunPreview shows what changes would be made without applying them
+type DryRunPreview struct {
+	FilePath           string        `json:"file_path"`           // Target file path
+	FileExists         bool          `json:"file_exists"`         // Whether file currently exists
+	CurrentLines       int           `json:"current_lines"`       // Current line count
+	CurrentSize        int64         `json:"current_size"`        // Current file size
+	ExpectedLines      int           `json:"expected_lines"`      // Expected line count after edit
+	ExpectedSize       int64         `json:"expected_size"`       // Expected file size after edit
+	LineDelta          int           `json:"line_delta"`          // Change in line count (+/-)
+	SizeDelta          int64         `json:"size_delta"`          // Change in size (+/-)
+	PreviewLines       []PreviewLine `json:"preview_lines"`       // Lines that will be affected
+	ChangesSummary     string        `json:"changes_summary"`     // Summary of changes
+	SafetyWarnings     []string      `json:"safety_warnings"`     // Any safety concerns
+	RecommendedActions []string      `json:"recommended_actions"` // Recommended next steps
+}
+
+// PreviewLine represents a line in the dry-run preview
+type PreviewLine struct {
+	LineNumber int    `json:"line_number"` // 1-based line number (0 for new lines)
+	ChangeType string `json:"change_type"` // "unchanged", "modified", "added", "deleted"
+	OldContent string `json:"old_content"` // Original content (empty for additions)
+	NewContent string `json:"new_content"` // New content (empty for deletions)
+	IsTarget   bool   `json:"is_target"`   // Whether this line is the target of the operation
+}
+
 // TaskResponse represents the result of executing a task
 type TaskResponse struct {
-	Task             Task             `json:"task"`
-	Success          bool             `json:"success"`
-	Output           string           `json:"output,omitempty"`         // Display message for user
-	ActualContent    string           `json:"actual_content,omitempty"` // Actual content for LLM (hidden from user)
-	EditSummary      *EditSummary     `json:"edit_summary,omitempty"`   // Detailed edit information (for EditFile tasks)
-	Error            string           `json:"error,omitempty"`
-	ContextualError  *ContextualError `json:"contextual_error,omitempty"`  // Rich error context for LLM
-	Approved         bool             `json:"approved,omitempty"`          // For tasks requiring confirmation
-	VerificationText string           `json:"verification_text,omitempty"` // Enhanced verification text for LLM
+	Task                  Task                         `json:"task"`
+	Success               bool                         `json:"success"`
+	Output                string                       `json:"output,omitempty"`         // Display message for user
+	ActualContent         string                       `json:"actual_content,omitempty"` // Actual content for LLM (hidden from user)
+	EditSummary           *EditSummary                 `json:"edit_summary,omitempty"`   // Detailed edit information (for EditFile tasks)
+	Error                 string                       `json:"error,omitempty"`
+	ContextualError       *ContextualError             `json:"contextual_error,omitempty"`       // Rich error context for LLM
+	ProgressiveValidation *ProgressiveValidationResult `json:"progressive_validation,omitempty"` // Progressive validation results
+	Approved              bool                         `json:"approved,omitempty"`               // For tasks requiring confirmation
+	VerificationText      string                       `json:"verification_text,omitempty"`      // Enhanced verification text for LLM
 }
 
 // tryLoomEditParsing attempts to parse LOOM_EDIT commands from LLM response
@@ -2043,11 +2097,17 @@ func (es *EditSummary) GetCompactSummary() string {
 
 // GetLLMSummary returns a detailed summary formatted for LLM consumption with enhanced feedback
 func (tr *TaskResponse) GetLLMSummary() string {
-	// If there's a contextual error, return that instead
+	// Priority 1: Progressive validation results (includes dry-run previews)
+	if tr.ProgressiveValidation != nil {
+		return tr.ProgressiveValidation.FormatForLLM()
+	}
+
+	// Priority 2: Contextual errors
 	if tr.ContextualError != nil {
 		return tr.ContextualError.FormatForLLM()
 	}
 
+	// Priority 3: Standard edit summary
 	if tr.EditSummary == nil {
 		return ""
 	}
@@ -2347,4 +2407,237 @@ func (ce *ContextualError) FormatForLLM() string {
 	}
 
 	return formatted.String()
+}
+
+// NewProgressiveValidationResult creates a new progressive validation result
+func NewProgressiveValidationResult() *ProgressiveValidationResult {
+	return &ProgressiveValidationResult{
+		OverallStatus:   "pending",
+		CurrentStage:    "syntax",
+		Stages:          []ValidationStage{},
+		CanProceed:      false,
+		ValidationCount: 0,
+	}
+}
+
+// AddStage adds a validation stage to the result
+func (pvr *ProgressiveValidationResult) AddStage(name, status, message string) *ValidationStage {
+	stage := ValidationStage{
+		Name:        name,
+		Status:      status,
+		Message:     message,
+		Suggestions: []string{},
+		Duration:    0,
+	}
+
+	pvr.Stages = append(pvr.Stages, stage)
+	pvr.CurrentStage = name
+	pvr.ValidationCount++
+
+	return &pvr.Stages[len(pvr.Stages)-1]
+}
+
+// SetStageDetails updates the details and suggestions for the last added stage
+func (pvr *ProgressiveValidationResult) SetStageDetails(details string, suggestions []string, duration int64) {
+	if len(pvr.Stages) > 0 {
+		lastStage := &pvr.Stages[len(pvr.Stages)-1]
+		lastStage.Details = details
+		lastStage.Suggestions = suggestions
+		lastStage.Duration = duration
+	}
+}
+
+// MarkStageComplete marks the current stage as completed
+func (pvr *ProgressiveValidationResult) MarkStageComplete(status, message string) {
+	if len(pvr.Stages) > 0 {
+		lastStage := &pvr.Stages[len(pvr.Stages)-1]
+		lastStage.Status = status
+		lastStage.Message = message
+
+		// Update overall status based on stage completion
+		if status == "failed" {
+			pvr.OverallStatus = "failed"
+			pvr.FailureStage = lastStage.Name
+			pvr.CanProceed = false
+		} else if status == "warning" && pvr.OverallStatus != "failed" {
+			pvr.OverallStatus = "warnings"
+		} else if status == "passed" && pvr.OverallStatus == "pending" {
+			pvr.OverallStatus = "passed"
+		}
+	}
+}
+
+// SetCanProceed sets whether the edit can proceed after validation
+func (pvr *ProgressiveValidationResult) SetCanProceed(canProceed bool) {
+	pvr.CanProceed = canProceed
+	if canProceed && pvr.OverallStatus != "failed" {
+		if pvr.OverallStatus == "pending" {
+			pvr.OverallStatus = "passed"
+		}
+	}
+}
+
+// CalculateTotalDuration calculates the total duration from all stages
+func (pvr *ProgressiveValidationResult) CalculateTotalDuration() {
+	total := int64(0)
+	for _, stage := range pvr.Stages {
+		total += stage.Duration
+	}
+	pvr.TotalDurationMs = total
+}
+
+// FormatForLLM formats the progressive validation result for LLM consumption
+func (pvr *ProgressiveValidationResult) FormatForLLM() string {
+	var formatted strings.Builder
+
+	// Header
+	formatted.WriteString("🔍 PROGRESSIVE VALIDATION REPORT\n")
+	formatted.WriteString("=" + strings.Repeat("=", 45) + "\n\n")
+
+	// Overall status
+	statusIcon := "✅"
+	if pvr.OverallStatus == "failed" {
+		statusIcon = "❌"
+	} else if pvr.OverallStatus == "warnings" {
+		statusIcon = "⚠️"
+	} else if pvr.OverallStatus == "pending" {
+		statusIcon = "⏳"
+	}
+
+	formatted.WriteString(fmt.Sprintf("%s Overall Status: %s\n", statusIcon, strings.ToUpper(pvr.OverallStatus)))
+	formatted.WriteString(fmt.Sprintf("📊 Validation Stages: %d completed\n", pvr.ValidationCount))
+	formatted.WriteString(fmt.Sprintf("⏱️  Total Time: %dms\n", pvr.TotalDurationMs))
+
+	if pvr.CanProceed {
+		formatted.WriteString("✅ Can Proceed: YES\n")
+	} else {
+		formatted.WriteString("❌ Can Proceed: NO\n")
+	}
+
+	if pvr.FailureStage != "" {
+		formatted.WriteString(fmt.Sprintf("🚫 Failed at: %s stage\n", pvr.FailureStage))
+	}
+
+	// Individual stages
+	formatted.WriteString("\n📋 VALIDATION STAGES:\n")
+	for i, stage := range pvr.Stages {
+		stageIcon := "⏳"
+		switch stage.Status {
+		case "passed":
+			stageIcon = "✅"
+		case "failed":
+			stageIcon = "❌"
+		case "warning":
+			stageIcon = "⚠️"
+		}
+
+		formatted.WriteString(fmt.Sprintf("%d. %s %s (%dms)\n", i+1, stageIcon, strings.ToTitle(stage.Name), stage.Duration))
+		formatted.WriteString(fmt.Sprintf("   %s\n", stage.Message))
+
+		if stage.Details != "" {
+			formatted.WriteString(fmt.Sprintf("   Details: %s\n", stage.Details))
+		}
+
+		if len(stage.Suggestions) > 0 {
+			formatted.WriteString("   Suggestions:\n")
+			for j, suggestion := range stage.Suggestions {
+				formatted.WriteString(fmt.Sprintf("   %d) %s\n", j+1, suggestion))
+			}
+		}
+		formatted.WriteString("\n")
+	}
+
+	// Dry run preview if available
+	if pvr.DryRunPreview != nil {
+		formatted.WriteString(pvr.DryRunPreview.FormatForLLM())
+	}
+
+	return formatted.String()
+}
+
+// FormatForLLM formats the dry-run preview for LLM consumption
+func (drp *DryRunPreview) FormatForLLM() string {
+	var formatted strings.Builder
+
+	formatted.WriteString("👁️  DRY RUN PREVIEW\n")
+	formatted.WriteString("-" + strings.Repeat("-", 30) + "\n")
+
+	formatted.WriteString(fmt.Sprintf("📁 File: %s\n", drp.FilePath))
+
+	if drp.FileExists {
+		formatted.WriteString(fmt.Sprintf("📊 Current: %d lines, %d bytes\n", drp.CurrentLines, drp.CurrentSize))
+		formatted.WriteString(fmt.Sprintf("📈 After Edit: %d lines, %d bytes\n", drp.ExpectedLines, drp.ExpectedSize))
+
+		deltaIcon := "📉"
+		if drp.LineDelta > 0 {
+			deltaIcon = "📈"
+		} else if drp.LineDelta == 0 {
+			deltaIcon = "📊"
+		}
+		formatted.WriteString(fmt.Sprintf("%s Line Change: %+d\n", deltaIcon, drp.LineDelta))
+
+		sizeIcon := "📉"
+		if drp.SizeDelta > 0 {
+			sizeIcon = "📈"
+		} else if drp.SizeDelta == 0 {
+			sizeIcon = "📊"
+		}
+		formatted.WriteString(fmt.Sprintf("%s Size Change: %+d bytes\n", sizeIcon, drp.SizeDelta))
+	} else {
+		formatted.WriteString("📝 New file will be created\n")
+		formatted.WriteString(fmt.Sprintf("📊 Expected: %d lines, %d bytes\n", drp.ExpectedLines, drp.ExpectedSize))
+	}
+
+	formatted.WriteString(fmt.Sprintf("📝 Changes: %s\n", drp.ChangesSummary))
+
+	// Show preview lines
+	if len(drp.PreviewLines) > 0 {
+		formatted.WriteString("\n📄 PREVIEW OF CHANGES:\n")
+		for _, line := range drp.PreviewLines {
+			prefix := "  "
+			if line.IsTarget {
+				prefix = "►"
+			}
+
+			switch line.ChangeType {
+			case "added":
+				formatted.WriteString(fmt.Sprintf("%s + %s\n", prefix, line.NewContent))
+			case "deleted":
+				formatted.WriteString(fmt.Sprintf("%s - %s\n", prefix, line.OldContent))
+			case "modified":
+				formatted.WriteString(fmt.Sprintf("%s ~ %s\n", prefix, line.NewContent))
+			case "unchanged":
+				formatted.WriteString(fmt.Sprintf("%s   %s\n", prefix, line.OldContent))
+			}
+		}
+	}
+
+	// Safety warnings
+	if len(drp.SafetyWarnings) > 0 {
+		formatted.WriteString("\n⚠️  SAFETY WARNINGS:\n")
+		for i, warning := range drp.SafetyWarnings {
+			formatted.WriteString(fmt.Sprintf("%d. %s\n", i+1, warning))
+		}
+	}
+
+	// Recommended actions
+	if len(drp.RecommendedActions) > 0 {
+		formatted.WriteString("\n💡 RECOMMENDED ACTIONS:\n")
+		for i, action := range drp.RecommendedActions {
+			formatted.WriteString(fmt.Sprintf("%d. %s\n", i+1, action))
+		}
+	}
+
+	return formatted.String()
+}
+
+// GetLLMSummaryWithProgressive returns enhanced summary with progressive validation
+func (tr *TaskResponse) GetLLMSummaryWithProgressive() string {
+	// If there's progressive validation, return that
+	if tr.ProgressiveValidation != nil {
+		return tr.ProgressiveValidation.FormatForLLM()
+	}
+
+	// Fall back to existing summary logic
+	return tr.GetLLMSummary()
 }

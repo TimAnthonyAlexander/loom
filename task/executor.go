@@ -373,10 +373,29 @@ func (e *Executor) applyLoomEdit(task *Task, fullPath string) *TaskResponse {
 		}
 	}()
 
+	// Run progressive validation if requested or if enabled by default
+	if task.ProgressiveValidation || task.DryRun || task.ValidationStages {
+		progressiveResult := e.runProgressiveValidation(task, fullPath)
+		response.ProgressiveValidation = progressiveResult
+
+		// If validation failed or this is a dry run, return early
+		if !progressiveResult.CanProceed {
+			response.Success = false
+			if progressiveResult.OverallStatus == "failed" {
+				response.Error = fmt.Sprintf("Progressive validation failed at %s stage", progressiveResult.FailureStage)
+			} else {
+				response.Success = true // Dry run is considered successful
+				response.Output = "Dry run completed successfully"
+			}
+			response.ActualContent = progressiveResult.FormatForLLM()
+			return response
+		}
+	}
+
 	// Parse the LOOM_EDIT command from the task content
 	editCmd, err := loom_edit.ParseEditCommand(task.Content)
 	if err != nil {
-		// Create contextual syntax error
+		// Create contextual syntax error (fallback if progressive validation wasn't used)
 		contextualError := e.createContextualSyntaxError(task.Path, "UNKNOWN", err.Error())
 		response.ContextualError = contextualError
 		response.Error = contextualError.Message
@@ -2820,6 +2839,580 @@ func (e *Executor) convertLoomEditErrorToContextual(filePath string, editCmd *lo
 		AddPreventionTip("Always READ files before editing to get the current state")
 
 	return contextualError
+}
+
+// runProgressiveValidation runs through all validation stages with detailed feedback
+func (e *Executor) runProgressiveValidation(task *Task, fullPath string) *ProgressiveValidationResult {
+	start := time.Now()
+	result := NewProgressiveValidationResult()
+
+	// Stage 1: Syntax Validation
+	if !e.validateSyntaxStage(task, result) {
+		result.CalculateTotalDuration()
+		return result
+	}
+
+	// Parse the command for subsequent stages
+	editCmd, err := loom_edit.ParseEditCommand(task.Content)
+	if err != nil {
+		// This should not happen if syntax validation passed, but handle it
+		result.AddStage("syntax_parse", "failed", "Failed to parse after syntax validation")
+		result.SetStageDetails(err.Error(), []string{"Check LOOM_EDIT syntax"}, time.Since(start).Milliseconds())
+		result.MarkStageComplete("failed", "Internal parsing error")
+		result.CalculateTotalDuration()
+		return result
+	}
+
+	// Stage 2: File State Validation
+	if !e.validateFileStateStage(fullPath, editCmd, result) {
+		result.CalculateTotalDuration()
+		return result
+	}
+
+	// Stage 3: Line Range Validation
+	if !e.validateLineRangeStage(fullPath, editCmd, result) {
+		result.CalculateTotalDuration()
+		return result
+	}
+
+	// Stage 4: Content Validation (for SEARCH_REPLACE)
+	if !e.validateContentStage(fullPath, editCmd, result) {
+		result.CalculateTotalDuration()
+		return result
+	}
+
+	// Stage 5: Dry Run Preview (if requested)
+	if task.DryRun {
+		e.generateDryRunPreview(fullPath, editCmd, result)
+	}
+
+	// All stages passed
+	result.SetCanProceed(!task.DryRun) // Can proceed if not a dry run
+	result.CalculateTotalDuration()
+
+	return result
+}
+
+// validateSyntaxStage validates LOOM_EDIT command syntax
+func (e *Executor) validateSyntaxStage(task *Task, result *ProgressiveValidationResult) bool {
+	stageStart := time.Now()
+	result.AddStage("syntax", "pending", "Validating LOOM_EDIT syntax...")
+
+	// Parse the LOOM_EDIT command
+	_, err := loom_edit.ParseEditCommand(task.Content)
+	duration := time.Since(stageStart).Milliseconds()
+
+	if err != nil {
+		suggestions := []string{
+			"Check LOOM_EDIT format: >>LOOM_EDIT file=path ACTION start-end",
+			"Ensure closing tag <<LOOM_EDIT is present",
+			"Verify line numbers are valid integers",
+		}
+
+		// Add specific suggestions based on error type
+		if strings.Contains(err.Error(), "line number") {
+			suggestions = append(suggestions, "Use positive integers for line numbers (1, 2, 3...)")
+		}
+		if strings.Contains(err.Error(), "missing closing") {
+			suggestions = append(suggestions, "Add the closing <<LOOM_EDIT tag")
+		}
+		if strings.Contains(err.Error(), "header format") {
+			suggestions = append(suggestions, "Check file path has no spaces or special characters")
+		}
+
+		result.SetStageDetails(err.Error(), suggestions, duration)
+		result.MarkStageComplete("failed", "LOOM_EDIT syntax is invalid")
+		return false
+	}
+
+	result.SetStageDetails("LOOM_EDIT syntax is well-formed", []string{}, duration)
+	result.MarkStageComplete("passed", "Syntax validation successful")
+	return true
+}
+
+// validateFileStateStage validates file existence and permissions
+func (e *Executor) validateFileStateStage(fullPath string, editCmd *loom_edit.EditCommand, result *ProgressiveValidationResult) bool {
+	stageStart := time.Now()
+	result.AddStage("file_state", "pending", "Validating file state...")
+
+	fileInfo, err := os.Stat(fullPath)
+	duration := time.Since(stageStart).Milliseconds()
+
+	// Handle CREATE action specially
+	if editCmd.Action == "CREATE" {
+		if err == nil {
+			// File exists but CREATE was requested
+			suggestions := []string{
+				fmt.Sprintf("Use REPLACE action instead: >>LOOM_EDIT file=%s REPLACE 1-1", editCmd.File),
+				"Or choose a different filename for CREATE",
+				"READ the existing file to see its content first",
+			}
+			result.SetStageDetails("File already exists", suggestions, duration)
+			result.MarkStageComplete("failed", "Cannot CREATE file that already exists")
+			return false
+		} else {
+			// File doesn't exist, which is correct for CREATE
+			result.SetStageDetails("File does not exist (correct for CREATE)", []string{}, duration)
+			result.MarkStageComplete("passed", "File state valid for CREATE action")
+			return true
+		}
+	}
+
+	// For non-CREATE actions, file must exist
+	if err != nil {
+		suggestions := []string{
+			fmt.Sprintf("Use CREATE action instead: >>LOOM_EDIT file=%s CREATE 1-1", editCmd.File),
+			"Check if the file path is correct",
+			"Use LIST command to see available files",
+		}
+		result.SetStageDetails("File does not exist", suggestions, duration)
+		result.MarkStageComplete("failed", "File not found for modification")
+		return false
+	}
+
+	// Check if it's a directory
+	if fileInfo.IsDir() {
+		suggestions := []string{
+			"Specify a file inside the directory",
+			"Use LIST to see files in the directory",
+		}
+		result.SetStageDetails("Path is a directory, not a file", suggestions, duration)
+		result.MarkStageComplete("failed", "Cannot edit directory")
+		return false
+	}
+
+	// Check file size
+	if fileInfo.Size() > e.maxFileSize {
+		suggestions := []string{
+			"File is too large for editing",
+			"Consider editing smaller sections",
+		}
+		result.SetStageDetails(fmt.Sprintf("File size %.2fMB exceeds limit %.2fMB",
+			float64(fileInfo.Size())/1024/1024, float64(e.maxFileSize)/1024/1024), suggestions, duration)
+		result.MarkStageComplete("failed", "File too large")
+		return false
+	}
+
+	// Check if file is binary
+	if e.isBinaryFile(fullPath) {
+		suggestions := []string{
+			"Binary files cannot be edited with LOOM_EDIT",
+			"Use text files only",
+		}
+		result.SetStageDetails("File appears to be binary", suggestions, duration)
+		result.MarkStageComplete("failed", "Cannot edit binary file")
+		return false
+	}
+
+	result.SetStageDetails(fmt.Sprintf("File exists and is editable (%d bytes)", fileInfo.Size()), []string{}, duration)
+	result.MarkStageComplete("passed", "File state validation successful")
+	return true
+}
+
+// validateLineRangeStage validates line numbers against file content
+func (e *Executor) validateLineRangeStage(fullPath string, editCmd *loom_edit.EditCommand, result *ProgressiveValidationResult) bool {
+	stageStart := time.Now()
+	result.AddStage("line_range", "pending", "Validating line ranges...")
+
+	// Skip for CREATE action (no existing content to validate against)
+	if editCmd.Action == "CREATE" {
+		duration := time.Since(stageStart).Milliseconds()
+		result.SetStageDetails("Line range validation skipped for CREATE", []string{}, duration)
+		result.MarkStageComplete("passed", "Line range validation not applicable")
+		return true
+	}
+
+	// Read file to count lines
+	content, err := os.ReadFile(fullPath)
+	if err != nil {
+		duration := time.Since(stageStart).Milliseconds()
+		suggestions := []string{
+			"File may have been deleted or moved",
+			"Check file permissions",
+		}
+		result.SetStageDetails(err.Error(), suggestions, duration)
+		result.MarkStageComplete("failed", "Cannot read file for line validation")
+		return false
+	}
+
+	lines := strings.Split(string(content), "\n")
+	totalLines := len(lines)
+	duration := time.Since(stageStart).Milliseconds()
+
+	// Validate start line
+	if editCmd.Start < 1 {
+		suggestions := []string{
+			"Line numbers start from 1, not 0",
+			"Use positive integers for line numbers",
+		}
+		result.SetStageDetails(fmt.Sprintf("Start line %d is invalid", editCmd.Start), suggestions, duration)
+		result.MarkStageComplete("failed", "Invalid start line number")
+		return false
+	}
+
+	if editCmd.Start > totalLines {
+		suggestions := []string{
+			fmt.Sprintf("Use a line number between 1-%d", totalLines),
+			fmt.Sprintf("Use INSERT_AFTER %d to add content at the end", totalLines),
+			"READ the file to see current line count",
+		}
+		result.SetStageDetails(fmt.Sprintf("Start line %d exceeds file length (%d lines)",
+			editCmd.Start, totalLines), suggestions, duration)
+		result.MarkStageComplete("failed", "Start line out of range")
+		return false
+	}
+
+	// Validate end line
+	if editCmd.End < editCmd.Start {
+		suggestions := []string{
+			fmt.Sprintf("End line must be >= start line (%d)", editCmd.Start),
+			"Check your line range specification",
+		}
+		result.SetStageDetails(fmt.Sprintf("End line %d is before start line %d",
+			editCmd.End, editCmd.Start), suggestions, duration)
+		result.MarkStageComplete("failed", "Invalid line range")
+		return false
+	}
+
+	if editCmd.End > totalLines {
+		suggestions := []string{
+			fmt.Sprintf("Use end line %d instead of %d", totalLines, editCmd.End),
+			fmt.Sprintf("Or use line range %d-%d", editCmd.Start, totalLines),
+		}
+		result.SetStageDetails(fmt.Sprintf("End line %d exceeds file length (%d lines)",
+			editCmd.End, totalLines), suggestions, duration)
+		result.MarkStageComplete("failed", "End line out of range")
+		return false
+	}
+
+	details := fmt.Sprintf("Line range %d-%d is valid (file has %d lines)",
+		editCmd.Start, editCmd.End, totalLines)
+	result.SetStageDetails(details, []string{}, duration)
+	result.MarkStageComplete("passed", "Line range validation successful")
+	return true
+}
+
+// validateContentStage validates content-specific requirements (SEARCH_REPLACE)
+func (e *Executor) validateContentStage(fullPath string, editCmd *loom_edit.EditCommand, result *ProgressiveValidationResult) bool {
+	stageStart := time.Now()
+	result.AddStage("content", "pending", "Validating content requirements...")
+
+	// Only SEARCH_REPLACE needs content validation
+	if editCmd.Action != "SEARCH_REPLACE" {
+		duration := time.Since(stageStart).Milliseconds()
+		result.SetStageDetails("Content validation not required for this action", []string{}, duration)
+		result.MarkStageComplete("passed", "Content validation not applicable")
+		return true
+	}
+
+	// Validate SEARCH_REPLACE parameters
+	if editCmd.OldString == "" {
+		duration := time.Since(stageStart).Milliseconds()
+		suggestions := []string{
+			"Provide the text to search for in quotes",
+			"Use format: SEARCH_REPLACE \"old text\" \"new text\"",
+		}
+		result.SetStageDetails("Search string is empty", suggestions, duration)
+		result.MarkStageComplete("failed", "Missing search string")
+		return false
+	}
+
+	// Read file content to check if search string exists
+	content, err := os.ReadFile(fullPath)
+	if err != nil {
+		duration := time.Since(stageStart).Milliseconds()
+		suggestions := []string{
+			"File may have been deleted or moved",
+			"Check file permissions",
+		}
+		result.SetStageDetails(err.Error(), suggestions, duration)
+		result.MarkStageComplete("failed", "Cannot read file for content validation")
+		return false
+	}
+
+	// Normalize content for searching
+	normalizedContent := strings.ReplaceAll(string(content), "\r\n", "\n")
+	normalizedOldString := strings.ReplaceAll(editCmd.OldString, "\r\n", "\n")
+
+	duration := time.Since(stageStart).Milliseconds()
+
+	if !strings.Contains(normalizedContent, normalizedOldString) {
+		suggestions := []string{
+			"Check the exact spelling and case of the search string",
+			"READ the file to see the current content",
+			"Use REPLACE with specific line numbers instead",
+			"Make sure whitespace and formatting match exactly",
+		}
+		result.SetStageDetails(fmt.Sprintf("Search string '%s' not found in file", editCmd.OldString), suggestions, duration)
+		result.MarkStageComplete("failed", "Search string not found")
+		return false
+	}
+
+	// Count occurrences
+	occurrences := strings.Count(normalizedContent, normalizedOldString)
+	details := fmt.Sprintf("Search string found %d time(s) in file", occurrences)
+
+	// Warning for multiple occurrences
+	var warningMsg []string
+	if occurrences > 1 {
+		warningMsg = []string{
+			fmt.Sprintf("String appears %d times - ALL will be replaced", occurrences),
+			"Consider using REPLACE with specific line numbers for precision",
+		}
+		result.SetStageDetails(details, warningMsg, duration)
+		result.MarkStageComplete("warning", "Multiple occurrences will be replaced")
+	} else {
+		result.SetStageDetails(details, []string{}, duration)
+		result.MarkStageComplete("passed", "Content validation successful")
+	}
+
+	return true
+}
+
+// generateDryRunPreview creates a preview of changes without applying them
+func (e *Executor) generateDryRunPreview(fullPath string, editCmd *loom_edit.EditCommand, result *ProgressiveValidationResult) {
+	stageStart := time.Now()
+	result.AddStage("preview", "pending", "Generating dry-run preview...")
+
+	preview := &DryRunPreview{
+		FilePath:           editCmd.File,
+		FileExists:         false,
+		PreviewLines:       []PreviewLine{},
+		SafetyWarnings:     []string{},
+		RecommendedActions: []string{},
+	}
+
+	// Handle CREATE action
+	if editCmd.Action == "CREATE" {
+		newContent := editCmd.NewText
+		newLines := strings.Split(newContent, "\n")
+
+		preview.FileExists = false
+		preview.CurrentLines = 0
+		preview.CurrentSize = 0
+		preview.ExpectedLines = len(newLines)
+		preview.ExpectedSize = int64(len(newContent))
+		preview.LineDelta = len(newLines)
+		preview.SizeDelta = int64(len(newContent))
+		preview.ChangesSummary = fmt.Sprintf("Create new file with %d lines", len(newLines))
+
+		// Show first few lines as preview
+		maxPreview := 10
+		for i, line := range newLines {
+			if i >= maxPreview {
+				break
+			}
+			preview.PreviewLines = append(preview.PreviewLines, PreviewLine{
+				LineNumber: i + 1,
+				ChangeType: "added",
+				OldContent: "",
+				NewContent: line,
+				IsTarget:   true,
+			})
+		}
+
+		if len(newLines) > maxPreview {
+			preview.PreviewLines = append(preview.PreviewLines, PreviewLine{
+				LineNumber: 0,
+				ChangeType: "unchanged",
+				OldContent: fmt.Sprintf("... (%d more lines)", len(newLines)-maxPreview),
+				NewContent: "",
+				IsTarget:   false,
+			})
+		}
+
+		preview.RecommendedActions = []string{
+			"Review the file content above",
+			"Proceed if the content looks correct",
+		}
+
+	} else {
+		// For modification actions, read current file
+		currentContent, err := os.ReadFile(fullPath)
+		if err != nil {
+			duration := time.Since(stageStart).Milliseconds()
+			result.SetStageDetails(err.Error(), []string{"Cannot generate preview"}, duration)
+			result.MarkStageComplete("failed", "Preview generation failed")
+			return
+		}
+
+		currentLines := strings.Split(string(currentContent), "\n")
+		preview.FileExists = true
+		preview.CurrentLines = len(currentLines)
+		preview.CurrentSize = int64(len(currentContent))
+
+		// Simulate the edit to calculate changes
+		e.simulateEdit(currentLines, editCmd, preview)
+	}
+
+	duration := time.Since(stageStart).Milliseconds()
+	result.DryRunPreview = preview
+	result.SetStageDetails(fmt.Sprintf("Preview generated for %s action", editCmd.Action), []string{}, duration)
+	result.MarkStageComplete("passed", "Dry-run preview ready")
+}
+
+// simulateEdit simulates an edit operation for preview purposes
+func (e *Executor) simulateEdit(currentLines []string, editCmd *loom_edit.EditCommand, preview *DryRunPreview) {
+	var newLines []string
+
+	switch editCmd.Action {
+	case "REPLACE":
+		newLines = append(newLines, currentLines[:editCmd.Start-1]...)
+		if editCmd.NewText != "" {
+			newLines = append(newLines, strings.Split(editCmd.NewText, "\n")...)
+		}
+		newLines = append(newLines, currentLines[editCmd.End:]...)
+		preview.ChangesSummary = fmt.Sprintf("Replace lines %d-%d", editCmd.Start, editCmd.End)
+
+	case "INSERT_AFTER":
+		newLines = append(newLines, currentLines[:editCmd.Start]...)
+		if editCmd.NewText != "" {
+			newLines = append(newLines, strings.Split(editCmd.NewText, "\n")...)
+		}
+		newLines = append(newLines, currentLines[editCmd.Start:]...)
+		preview.ChangesSummary = fmt.Sprintf("Insert after line %d", editCmd.Start)
+
+	case "INSERT_BEFORE":
+		newLines = append(newLines, currentLines[:editCmd.Start-1]...)
+		if editCmd.NewText != "" {
+			newLines = append(newLines, strings.Split(editCmd.NewText, "\n")...)
+		}
+		newLines = append(newLines, currentLines[editCmd.Start-1:]...)
+		preview.ChangesSummary = fmt.Sprintf("Insert before line %d", editCmd.Start)
+
+	case "DELETE":
+		newLines = append(newLines, currentLines[:editCmd.Start-1]...)
+		newLines = append(newLines, currentLines[editCmd.End:]...)
+		preview.ChangesSummary = fmt.Sprintf("Delete lines %d-%d", editCmd.Start, editCmd.End)
+
+	case "SEARCH_REPLACE":
+		newContent := strings.Replace(strings.Join(currentLines, "\n"), editCmd.OldString, editCmd.NewString, -1)
+		newLines = strings.Split(newContent, "\n")
+		occurrences := strings.Count(strings.Join(currentLines, "\n"), editCmd.OldString)
+		preview.ChangesSummary = fmt.Sprintf("Replace %d occurrence(s) of search string", occurrences)
+	}
+
+	// Calculate changes
+	preview.ExpectedLines = len(newLines)
+	preview.ExpectedSize = int64(len(strings.Join(newLines, "\n")))
+	preview.LineDelta = preview.ExpectedLines - preview.CurrentLines
+	preview.SizeDelta = preview.ExpectedSize - preview.CurrentSize
+
+	// Generate preview lines (show context around changes)
+	e.generatePreviewLines(currentLines, newLines, editCmd, preview)
+}
+
+// generatePreviewLines generates a preview of the lines that will change
+func (e *Executor) generatePreviewLines(currentLines, newLines []string, editCmd *loom_edit.EditCommand, preview *DryRunPreview) {
+	// For now, show a simple before/after around the target area
+	contextRange := 3
+
+	if editCmd.Action == "SEARCH_REPLACE" {
+		// For search/replace, find affected lines
+		e.generateSearchReplacePreview(currentLines, newLines, editCmd, preview)
+		return
+	}
+
+	// For line-based operations, show context around the target
+	startLine := editCmd.Start - contextRange
+	if startLine < 1 {
+		startLine = 1
+	}
+
+	endLine := editCmd.End + contextRange
+	if endLine > len(currentLines) {
+		endLine = len(currentLines)
+	}
+
+	// Show lines that will be affected
+	for i := startLine; i <= endLine; i++ {
+		isTarget := i >= editCmd.Start && i <= editCmd.End
+
+		if i <= len(currentLines) {
+			changeType := "unchanged"
+			newContent := ""
+
+			if isTarget {
+				switch editCmd.Action {
+				case "DELETE":
+					changeType = "deleted"
+				case "REPLACE":
+					changeType = "modified"
+					// Find corresponding new content
+					if editCmd.NewText != "" {
+						newTextLines := strings.Split(editCmd.NewText, "\n")
+						relativeIndex := i - editCmd.Start
+						if relativeIndex < len(newTextLines) {
+							newContent = newTextLines[relativeIndex]
+						}
+					}
+				default:
+					changeType = "unchanged"
+					newContent = currentLines[i-1]
+				}
+			} else {
+				newContent = currentLines[i-1]
+			}
+
+			preview.PreviewLines = append(preview.PreviewLines, PreviewLine{
+				LineNumber: i,
+				ChangeType: changeType,
+				OldContent: currentLines[i-1],
+				NewContent: newContent,
+				IsTarget:   isTarget,
+			})
+		}
+	}
+
+	// Add inserted content for INSERT operations
+	if editCmd.Action == "INSERT_AFTER" || editCmd.Action == "INSERT_BEFORE" {
+		if editCmd.NewText != "" {
+			insertLines := strings.Split(editCmd.NewText, "\n")
+			for _, line := range insertLines {
+				preview.PreviewLines = append(preview.PreviewLines, PreviewLine{
+					LineNumber: 0, // New line
+					ChangeType: "added",
+					OldContent: "",
+					NewContent: line,
+					IsTarget:   true,
+				})
+			}
+		}
+	}
+}
+
+// generateSearchReplacePreview generates preview for SEARCH_REPLACE operations
+func (e *Executor) generateSearchReplacePreview(currentLines, newLines []string, editCmd *loom_edit.EditCommand, preview *DryRunPreview) {
+	// Find lines that contain the search string
+	searchString := editCmd.OldString
+	maxPreview := 10
+	foundCount := 0
+
+	for i, line := range currentLines {
+		if strings.Contains(line, searchString) {
+			foundCount++
+			if len(preview.PreviewLines) < maxPreview {
+				newLine := strings.Replace(line, editCmd.OldString, editCmd.NewString, -1)
+				preview.PreviewLines = append(preview.PreviewLines, PreviewLine{
+					LineNumber: i + 1,
+					ChangeType: "modified",
+					OldContent: line,
+					NewContent: newLine,
+					IsTarget:   true,
+				})
+			}
+		}
+	}
+
+	if foundCount > maxPreview {
+		preview.PreviewLines = append(preview.PreviewLines, PreviewLine{
+			LineNumber: 0,
+			ChangeType: "unchanged",
+			OldContent: fmt.Sprintf("... (%d more occurrences)", foundCount-maxPreview),
+			NewContent: "",
+			IsTarget:   false,
+		})
+	}
 }
 
 // Shutdown gracefully shuts down the executor and its components
