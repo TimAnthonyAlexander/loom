@@ -450,6 +450,11 @@ func (e *Executor) applyLoomEdit(task *Task, fullPath string) *TaskResponse {
 
 			// Validation passed or only had warnings
 			response.VerificationText = validationResult.VerificationText
+
+			// Enhanced feedback: Populate validation summary in EditSummary
+			if response.EditSummary != nil {
+				response.EditSummary.ValidationSummary = e.createValidationSummary(validationResult.Validation, validationResult.ShouldRollback)
+			}
 		}
 
 		// Update ActualContent with basic success message (VerificationText will be shown separately)
@@ -1786,6 +1791,9 @@ func (e *Executor) analyzeContentChanges(originalContent, newContent, filePath s
 		summary.CharactersRemoved = len(originalContent)
 	}
 
+	// Enhanced feedback: Populate new fields
+	e.populateEnhancedFeedback(summary, originalContent, newContent, filePath, originalLines, newLines)
+
 	// Generate a descriptive summary based on the task and changes
 	summary.Summary = e.generateChangeSummary(task, summary)
 
@@ -1797,6 +1805,190 @@ func (e *Executor) analyzeContentChanges(originalContent, newContent, filePath s
 func (e *Executor) analyzeDiffs(diffs []diffmatchpatch.Diff) (linesAdded, linesRemoved, linesModified int) {
 	// Convert character-level diffs to line-level analysis
 	return e.analyzeContentChangesLineBased(diffs)
+}
+
+// populateEnhancedFeedback populates the enhanced feedback fields in EditSummary
+func (e *Executor) populateEnhancedFeedback(summary *EditSummary, originalContent, newContent, filePath string, originalLines, newLines []string) {
+	// Populate before/after line counts
+	summary.LinesBefore = len(originalLines)
+	summary.LinesAfter = len(newLines)
+
+	// Populate file size information
+	summary.FileSizeBefore = int64(len(originalContent))
+	summary.FileSizeAfter = int64(len(newContent))
+
+	// Generate detailed line-by-line diff
+	summary.DetailedDiff = e.generateDetailedDiff(originalLines, newLines)
+
+	// Validation summary will be populated later by the validation system
+	// Initialize as nil here, will be set by the calling code if validation is performed
+	summary.ValidationSummary = nil
+}
+
+// generateDetailedDiff creates a detailed line-by-line diff for LLM feedback
+func (e *Executor) generateDetailedDiff(originalLines, newLines []string) []LineDiffEntry {
+	var diffEntries []LineDiffEntry
+
+	// For simplicity, we'll create a basic line-by-line comparison
+	// More sophisticated diff algorithms could be used here
+	maxLines := len(originalLines)
+	if len(newLines) > maxLines {
+		maxLines = len(newLines)
+	}
+
+	// Limit the number of diff entries to avoid overwhelming the LLM
+	maxDiffEntries := 50
+	if maxLines > maxDiffEntries {
+		// For large diffs, show first 25 and last 25 changes
+		return e.generateSummarizedDiff(originalLines, newLines, maxDiffEntries)
+	}
+
+	for i := 0; i < maxLines; i++ {
+		var oldContent, newContent string
+		var changeType string
+
+		if i < len(originalLines) {
+			oldContent = originalLines[i]
+		}
+		if i < len(newLines) {
+			newContent = newLines[i]
+		}
+
+		// Determine change type
+		if i >= len(originalLines) {
+			changeType = "added"
+			oldContent = ""
+		} else if i >= len(newLines) {
+			changeType = "removed"
+			newContent = ""
+		} else if oldContent == newContent {
+			changeType = "unchanged"
+		} else {
+			changeType = "modified"
+		}
+
+		// Only include changed lines or a few lines of context
+		if changeType != "unchanged" || e.shouldIncludeContext(i, originalLines, newLines) {
+			diffEntries = append(diffEntries, LineDiffEntry{
+				LineNumber: i + 1,
+				ChangeType: changeType,
+				OldContent: oldContent,
+				NewContent: newContent,
+				Context:    e.generateDiffContext(i, changeType, originalLines, newLines),
+			})
+		}
+	}
+
+	return diffEntries
+}
+
+// generateSummarizedDiff creates a summarized diff for large files
+func (e *Executor) generateSummarizedDiff(originalLines, newLines []string, maxEntries int) []LineDiffEntry {
+	// This is a simplified implementation - show first half and last half of changes
+	firstHalf := maxEntries / 2
+
+	var diffEntries []LineDiffEntry
+
+	// Add first portion
+	for i := 0; i < firstHalf && i < len(originalLines) && i < len(newLines); i++ {
+		if originalLines[i] != newLines[i] {
+			diffEntries = append(diffEntries, LineDiffEntry{
+				LineNumber: i + 1,
+				ChangeType: "modified",
+				OldContent: originalLines[i],
+				NewContent: newLines[i],
+				Context:    "Beginning of file changes",
+			})
+		}
+	}
+
+	// Add separator entry if we're skipping content
+	if len(originalLines) > maxEntries || len(newLines) > maxEntries {
+		diffEntries = append(diffEntries, LineDiffEntry{
+			LineNumber: -1,
+			ChangeType: "summary",
+			OldContent: "",
+			NewContent: "",
+			Context: fmt.Sprintf("... (additional %d lines changed) ...",
+				max(len(originalLines), len(newLines))-maxEntries),
+		})
+	}
+
+	return diffEntries
+}
+
+// shouldIncludeContext determines if a line should be included for context
+func (e *Executor) shouldIncludeContext(lineIndex int, originalLines, newLines []string) bool {
+	// Include context lines around changes
+	contextRange := 2
+
+	for i := max(0, lineIndex-contextRange); i <= min(len(originalLines)-1, lineIndex+contextRange); i++ {
+		if i < len(newLines) && i < len(originalLines) && originalLines[i] != newLines[i] {
+			return true
+		}
+		if i >= len(originalLines) || i >= len(newLines) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// generateDiffContext generates context information for a line change
+func (e *Executor) generateDiffContext(lineIndex int, changeType string, originalLines, newLines []string) string {
+	switch changeType {
+	case "added":
+		return "New line added"
+	case "removed":
+		return "Line removed"
+	case "modified":
+		return "Line content changed"
+	case "unchanged":
+		return "Context line"
+	default:
+		return ""
+	}
+}
+
+// createValidationSummary creates a ValidationSummary from validation results
+func (e *Executor) createValidationSummary(validation *validation.ValidationResult, rollbackTriggered bool) *ValidationSummary {
+	if validation == nil {
+		return nil
+	}
+
+	// Extract critical errors
+	var criticalErrors []string
+	for _, err := range validation.Errors {
+		if err.Severity != nil && *err.Severity == 1 { // Error severity
+			criticalErrors = append(criticalErrors, err.Message)
+		}
+	}
+
+	return &ValidationSummary{
+		IsValid:           validation.IsValid,
+		ErrorCount:        len(validation.Errors),
+		WarningCount:      len(validation.Warnings),
+		HintCount:         len(validation.Hints),
+		CriticalErrors:    criticalErrors,
+		ValidatorUsed:     validation.ValidatorUsed,
+		ProcessTimeMs:     validation.ProcessTime.Milliseconds(),
+		RollbackTriggered: rollbackTriggered,
+	}
+}
+
+// Helper functions
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // analyzeContentChangesLineBased performs line-based diff analysis

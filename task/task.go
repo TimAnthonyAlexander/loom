@@ -171,6 +171,35 @@ type EditSummary struct {
 	Summary            string `json:"summary"` // Brief description of changes
 	WasSuccessful      bool   `json:"was_successful"`
 	IsIdenticalContent bool   `json:"is_identical_content"` // True when new content is identical to existing content
+
+	// Enhanced feedback fields
+	LinesBefore       int                `json:"lines_before"`       // Lines before edit
+	LinesAfter        int                `json:"lines_after"`        // Lines after edit
+	FileSizeBefore    int64              `json:"file_size_before"`   // File size before edit in bytes
+	FileSizeAfter     int64              `json:"file_size_after"`    // File size after edit in bytes
+	DetailedDiff      []LineDiffEntry    `json:"detailed_diff"`      // Line-by-line diff details
+	ValidationSummary *ValidationSummary `json:"validation_summary"` // Validation results summary
+}
+
+// LineDiffEntry represents a single line change in a diff
+type LineDiffEntry struct {
+	LineNumber int    `json:"line_number"` // Line number (1-based)
+	ChangeType string `json:"change_type"` // "added", "removed", "modified", "unchanged"
+	OldContent string `json:"old_content"` // Original line content (empty for additions)
+	NewContent string `json:"new_content"` // New line content (empty for deletions)
+	Context    string `json:"context"`     // Additional context about the change
+}
+
+// ValidationSummary provides a summary of validation results for LLM feedback
+type ValidationSummary struct {
+	IsValid           bool     `json:"is_valid"`           // Overall validation status
+	ErrorCount        int      `json:"error_count"`        // Number of errors
+	WarningCount      int      `json:"warning_count"`      // Number of warnings
+	HintCount         int      `json:"hint_count"`         // Number of hints
+	CriticalErrors    []string `json:"critical_errors"`    // Critical error messages
+	ValidatorUsed     string   `json:"validator_used"`     // Which validator was used
+	ProcessTimeMs     int64    `json:"process_time_ms"`    // Validation processing time in milliseconds
+	RollbackTriggered bool     `json:"rollback_triggered"` // Whether rollback was triggered
 }
 
 // TaskResponse represents the result of executing a task
@@ -1693,14 +1722,6 @@ func ParseTasks(llmResponse string) (*TaskList, error) {
 	return nil, nil
 }
 
-// Helper function for debug output
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // validateTasks performs basic validation on tasks
 func validateTasks(taskList *TaskList) error {
 	if len(taskList.Tasks) == 0 {
@@ -1735,10 +1756,10 @@ func validateTask(task *Task) error {
 
 	case TaskTypeEditFile:
 		if task.Path == "" {
-			return fmt.Errorf("EditFile requires path")
+			return fmt.Errorf("editFile requires path")
 		}
 		if task.Content == "" {
-			return fmt.Errorf("EditFile requires content")
+			return fmt.Errorf("editFile requires content")
 		}
 
 		// For existing files, enforce LOOM_EDIT format
@@ -1759,7 +1780,7 @@ func validateTask(task *Task) error {
 
 	case TaskTypeRunShell:
 		if task.Command == "" {
-			return fmt.Errorf("RunShell requires command")
+			return fmt.Errorf("runShell requires command")
 		}
 		if task.Timeout <= 0 {
 			task.Timeout = 3 // Default 3 second timeout
@@ -1767,7 +1788,7 @@ func validateTask(task *Task) error {
 
 	case TaskTypeSearch:
 		if task.Query == "" {
-			return fmt.Errorf("Search requires query")
+			return fmt.Errorf("search requires query")
 		}
 		if task.Path == "" {
 			task.Path = "." // Default to current directory
@@ -1785,30 +1806,30 @@ func validateTask(task *Task) error {
 
 	case TaskTypeMemory:
 		if task.MemoryOperation == "" {
-			return fmt.Errorf("Memory requires operation (create, update, delete, get, list)")
+			return fmt.Errorf("memory requires operation (create, update, delete, get, list)")
 		}
 
 		operation := strings.ToLower(task.MemoryOperation)
 		switch operation {
 		case "create":
 			if task.MemoryID == "" {
-				return fmt.Errorf("Memory create requires ID")
+				return fmt.Errorf("memory create requires ID")
 			}
 			if task.MemoryContent == "" {
-				return fmt.Errorf("Memory create requires content")
+				return fmt.Errorf("memory create requires content")
 			}
 		case "update":
 			if task.MemoryID == "" {
-				return fmt.Errorf("Memory update requires ID")
+				return fmt.Errorf("memory update requires ID")
 			}
 			// For updates, at least one field must be provided
 			if task.MemoryContent == "" && len(task.MemoryTags) == 0 &&
 				task.MemoryActive == nil && task.MemoryDescription == "" {
-				return fmt.Errorf("Memory update requires at least one field to update (content, tags, active, description)")
+				return fmt.Errorf("memory update requires at least one field to update (content, tags, active, description)")
 			}
 		case "delete", "get":
 			if task.MemoryID == "" {
-				return fmt.Errorf("Memory %s requires ID", operation)
+				return fmt.Errorf("memory %s requires ID", operation)
 			}
 		case "list":
 			// List doesn't require any additional validation
@@ -1993,7 +2014,7 @@ func (es *EditSummary) GetCompactSummary() string {
 	}
 }
 
-// GetLLMSummary returns a detailed summary formatted for LLM consumption
+// GetLLMSummary returns a detailed summary formatted for LLM consumption with enhanced feedback
 func (tr *TaskResponse) GetLLMSummary() string {
 	if tr.EditSummary == nil {
 		return ""
@@ -2002,46 +2023,137 @@ func (tr *TaskResponse) GetLLMSummary() string {
 	es := tr.EditSummary
 	var summary strings.Builder
 
+	// Header with edit status
+	summary.WriteString("🔧 EDIT OPERATION COMPLETE\n")
+	summary.WriteString("=" + strings.Repeat("=", 40) + "\n\n")
+
 	// Handle identical content case with very clear messaging for LLM
 	if es.IsIdenticalContent {
-		summary.WriteString(fmt.Sprintf("Edit completed: %s\n", es.GetCompactSummary()))
-		summary.WriteString("Success: true\n")
+		summary.WriteString(fmt.Sprintf("📁 File: %s\n", es.FilePath))
+		summary.WriteString("✅ Status: SUCCESS (No changes needed)\n")
 		summary.WriteString("🔍 ANALYSIS: The file already contained the exact content you wanted to write.\n")
 		summary.WriteString("📝 RESULT: No changes were made because the content is already correct.\n")
-		summary.WriteString("✅ CONCLUSION: Your intended edit is already in effect - the task is complete.\n")
-		summary.WriteString(fmt.Sprintf("Description: %s", es.Summary))
+		summary.WriteString("✅ CONCLUSION: Your intended edit is already in effect - the task is complete.\n\n")
+
+		// File state information
+		summary.WriteString("📊 FILE STATE:\n")
+		summary.WriteString(fmt.Sprintf("- Lines: %d (unchanged)\n", es.TotalLines))
+		summary.WriteString(fmt.Sprintf("- Size: %d bytes (unchanged)\n", es.FileSizeAfter))
+
+		if es.ValidationSummary != nil {
+			summary.WriteString(tr.formatValidationSummary(es.ValidationSummary))
+		}
+
+		summary.WriteString(fmt.Sprintf("\n📋 Description: %s\n", es.Summary))
 		return summary.String()
 	}
 
-	summary.WriteString(fmt.Sprintf("Edit completed: %s\n", es.GetCompactSummary()))
-	summary.WriteString(fmt.Sprintf("Success: %t\n", es.WasSuccessful))
+	// Main edit result summary
+	summary.WriteString(fmt.Sprintf("📁 File: %s\n", es.FilePath))
+	summary.WriteString(fmt.Sprintf("✅ Status: %s\n", map[bool]string{true: "SUCCESS", false: "FAILED"}[es.WasSuccessful]))
+	summary.WriteString(fmt.Sprintf("🔄 Operation: %s\n\n", strings.ToUpper(es.EditType)))
 
+	// Before/After comparison
+	summary.WriteString("📊 BEFORE/AFTER COMPARISON:\n")
+	summary.WriteString(fmt.Sprintf("- Lines: %d → %d (%+d)\n", es.LinesBefore, es.LinesAfter, es.LinesAfter-es.LinesBefore))
+	summary.WriteString(fmt.Sprintf("- Size: %d → %d bytes (%+d)\n", es.FileSizeBefore, es.FileSizeAfter, es.FileSizeAfter-es.FileSizeBefore))
+
+	// Detailed change breakdown
+	summary.WriteString("\n📝 CHANGE BREAKDOWN:\n")
 	if es.EditType == "create" {
-		summary.WriteString(fmt.Sprintf("- Created new file with %d lines (%d characters)\n",
-			es.TotalLines, es.CharactersAdded))
+		summary.WriteString(fmt.Sprintf("- Created new file with %d lines (%d characters)\n", es.TotalLines, es.CharactersAdded))
 	} else if es.EditType == "modify" {
 		totalChanges := es.LinesAdded + es.LinesRemoved + es.LinesModified
 		if totalChanges == 0 {
-			summary.WriteString("🔍 ANALYSIS: No changes were needed - file content already matches your intent.\n")
-			summary.WriteString("✅ RESULT: The file already contains the desired content.\n")
+			summary.WriteString("- No line changes detected (content identical)\n")
 		} else {
-			summary.WriteString("Changes made:\n")
 			if es.LinesAdded > 0 {
-				summary.WriteString(fmt.Sprintf("- Added %d lines\n", es.LinesAdded))
+				summary.WriteString(fmt.Sprintf("- Lines added: %d\n", es.LinesAdded))
 			}
 			if es.LinesRemoved > 0 {
-				summary.WriteString(fmt.Sprintf("- Removed %d lines\n", es.LinesRemoved))
+				summary.WriteString(fmt.Sprintf("- Lines removed: %d\n", es.LinesRemoved))
 			}
 			if es.LinesModified > 0 {
-				summary.WriteString(fmt.Sprintf("- Modified %d lines\n", es.LinesModified))
+				summary.WriteString(fmt.Sprintf("- Lines modified: %d\n", es.LinesModified))
 			}
 		}
 	} else if es.EditType == "delete" {
-		summary.WriteString(fmt.Sprintf("- Deleted file (%d lines removed)\n", es.LinesRemoved))
+		summary.WriteString(fmt.Sprintf("- Deleted entire file (%d lines removed)\n", es.LinesRemoved))
 	}
 
+	// Line-by-line diff details
+	if len(es.DetailedDiff) > 0 {
+		summary.WriteString("\n📋 LINE-BY-LINE CHANGES:\n")
+		changeCount := 0
+		for _, diff := range es.DetailedDiff {
+			if diff.ChangeType != "unchanged" && changeCount < 10 { // Limit to first 10 changes for readability
+				switch diff.ChangeType {
+				case "added":
+					summary.WriteString(fmt.Sprintf("+ Line %d: %s\n", diff.LineNumber, diff.NewContent))
+				case "removed":
+					summary.WriteString(fmt.Sprintf("- Line %d: %s\n", diff.LineNumber, diff.OldContent))
+				case "modified":
+					summary.WriteString(fmt.Sprintf("~ Line %d: %s → %s\n", diff.LineNumber, diff.OldContent, diff.NewContent))
+				case "summary":
+					summary.WriteString(fmt.Sprintf("  %s\n", diff.Context))
+				}
+				changeCount++
+			}
+		}
+		if len(es.DetailedDiff) > 10 {
+			summary.WriteString(fmt.Sprintf("  ... and %d more changes\n", len(es.DetailedDiff)-10))
+		}
+	}
+
+	// Validation results
+	if es.ValidationSummary != nil {
+		summary.WriteString(tr.formatValidationSummary(es.ValidationSummary))
+	}
+
+	// Summary description
 	if es.Summary != "" {
-		summary.WriteString(fmt.Sprintf("Description: %s", es.Summary))
+		summary.WriteString(fmt.Sprintf("\n📋 Summary: %s\n", es.Summary))
+	}
+
+	return summary.String()
+}
+
+// formatValidationSummary formats validation results for LLM feedback
+func (tr *TaskResponse) formatValidationSummary(vs *ValidationSummary) string {
+	var summary strings.Builder
+
+	summary.WriteString("\n🔍 VALIDATION RESULTS:\n")
+
+	if vs.IsValid {
+		summary.WriteString("✅ Status: VALID - No syntax errors detected\n")
+	} else {
+		summary.WriteString("⚠️  Status: ISSUES DETECTED\n")
+	}
+
+	summary.WriteString(fmt.Sprintf("- Validator: %s (took %dms)\n", vs.ValidatorUsed, vs.ProcessTimeMs))
+
+	if vs.ErrorCount > 0 {
+		summary.WriteString(fmt.Sprintf("- ❌ Errors: %d\n", vs.ErrorCount))
+		for i, err := range vs.CriticalErrors {
+			if i < 3 { // Show first 3 errors
+				summary.WriteString(fmt.Sprintf("  • %s\n", err))
+			}
+		}
+		if len(vs.CriticalErrors) > 3 {
+			summary.WriteString(fmt.Sprintf("  • ... and %d more errors\n", len(vs.CriticalErrors)-3))
+		}
+	}
+
+	if vs.WarningCount > 0 {
+		summary.WriteString(fmt.Sprintf("- ⚠️  Warnings: %d\n", vs.WarningCount))
+	}
+
+	if vs.HintCount > 0 {
+		summary.WriteString(fmt.Sprintf("- 💡 Hints: %d\n", vs.HintCount))
+	}
+
+	if vs.RollbackTriggered {
+		summary.WriteString("🔄 Action: Edit was rolled back due to critical errors\n")
 	}
 
 	return summary.String()
