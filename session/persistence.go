@@ -7,6 +7,7 @@ import (
 	"loom/llm"
 	"loom/paths"
 	"loom/task"
+	"loom/todo"
 	"loom/undo"
 	"os"
 	"path/filepath"
@@ -47,6 +48,9 @@ type SessionState struct {
 	MaxFileSize      int64 `json:"max_file_size"`
 	MaxContextTokens int   `json:"max_context_tokens"`
 	EnableTestFirst  bool  `json:"enable_test_first"`
+
+	// Todo state
+	CurrentTodoList *todo.TodoList `json:"current_todo_list,omitempty"`
 
 	// Recovery and integrity
 	RecoveryInfo    *RecoveryState `json:"recovery_info,omitempty"`

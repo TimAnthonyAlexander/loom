@@ -6,6 +6,7 @@ import (
 	"loom/indexer"
 	"loom/memory"
 	"loom/paths"
+	"loom/todo"
 	"os"
 	"path/filepath"
 	"sort"
@@ -47,6 +48,7 @@ type PromptEnhancer struct {
 	index         *indexer.Index
 	conventions   *ProjectConventions
 	memoryStore   *memory.MemoryStore
+	todoManager   *todo.TodoManager
 }
 
 // NewPromptEnhancer creates a new prompt enhancer
@@ -63,6 +65,11 @@ func NewPromptEnhancer(workspacePath string, index *indexer.Index) *PromptEnhanc
 // SetMemoryStore sets the memory store for the prompt enhancer
 func (pe *PromptEnhancer) SetMemoryStore(memoryStore *memory.MemoryStore) {
 	pe.memoryStore = memoryStore
+}
+
+// SetTodoManager sets the todo manager for the prompt enhancer
+func (pe *PromptEnhancer) SetTodoManager(todoManager *todo.TodoManager) {
+	pe.todoManager = todoManager
 }
 
 // CreateEnhancedSystemPrompt generates a comprehensive system prompt with project conventions
@@ -107,6 +114,7 @@ func (pe *PromptEnhancer) CreateEnhancedSystemPrompt(enableShell bool) Message {
 	testingGuidance := pe.generateTestingGuidance()
 	qualityStandards := pe.generateQualityStandards()
 	memoriesSection := pe.generateMemoriesSection()
+	todoSection := pe.generateTodoSection()
 
 	prompt := fmt.Sprintf(`# Loom Prompt v2025-07-22
 
@@ -159,7 +167,7 @@ When searching for files, use grep or ripgrep to locate files, and use the SEARC
 ❌ 🔧 READ @main.go (NEVER include @ in file paths)
 
 ## 3. Project-Specific Guidelines
-%[12]s
+%[13]s
 
 %[8]s
 
@@ -168,6 +176,8 @@ When searching for files, use grep or ripgrep to locate files, and use the SEARC
 %[10]s
 
 %[11]s
+
+%[12]s
 
 ## 4. Task Reference
 
@@ -179,6 +189,7 @@ When searching for files, use grep or ripgrep to locate files, and use the SEARC
 | EDIT | >>LOOM_EDIT file=path ACTION START-END | Modify files (see §6.3) |
 | RUN | RUN go test | Execute shell commands |
 | MEMORY | MEMORY create key content:"text" | Persist information |
+| TODO | TODO create "item1" "item2" | Manage sequential task lists |
 
 **Basic syntax**: ACTION target [options] -> description
 **Note**: File editing requires the LOOM_EDIT syntax (see §6.3) - other commands support natural language.
@@ -644,6 +655,7 @@ new content to insert
 		qualityStandards,
 		testingGuidance,
 		memoriesSection,
+		todoSection,
 		guidelines)
 
 	return Message{
@@ -904,6 +916,15 @@ func (pe *PromptEnhancer) generateMemoriesSection() string {
 	}
 
 	return memoriesContent
+}
+
+// generateTodoSection creates the todo list section for the system prompt
+func (pe *PromptEnhancer) generateTodoSection() string {
+	if pe.todoManager == nil {
+		return "" // No todo manager available
+	}
+
+	return pe.todoManager.FormatTodoForPrompt()
 }
 
 // formatConventions formats the detected conventions for display

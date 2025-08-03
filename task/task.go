@@ -68,6 +68,7 @@ const (
 	TaskTypeRunShell TaskType = "RunShell"
 	TaskTypeSearch   TaskType = "Search" // NEW: Search files using ripgrep
 	TaskTypeMemory   TaskType = "Memory" // NEW: Memory management operations
+	TaskTypeTodo     TaskType = "Todo"   // NEW: Todo list management operations
 )
 
 // Task represents a single task to be executed
@@ -142,6 +143,11 @@ type Task struct {
 	MemoryTags        []string `json:"memory_tags,omitempty"`        // Memory tags
 	MemoryActive      *bool    `json:"memory_active,omitempty"`      // Whether memory is active (nil means no change for update)
 	MemoryDescription string   `json:"memory_description,omitempty"` // Memory description
+
+	// Todo specific (NEW)
+	TodoOperation string   `json:"todo_operation,omitempty"`  // "create", "check", "uncheck", "show", "clear"
+	TodoTitles    []string `json:"todo_titles,omitempty"`     // Titles for create operation
+	TodoItemOrder int      `json:"todo_item_order,omitempty"` // Item order for check/uncheck operations (1-based)
 
 	// Progressive validation and dry-run support (NEW)
 	DryRun                bool `json:"dry_run,omitempty"`                 // If true, validate and preview but don't apply changes
@@ -393,7 +399,7 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 
 	// Look for task indicators with emoji prefixes
 	// Updated to match both "🔧 READ" and "📖 READ" patterns
-	taskPattern := regexp.MustCompile(`^(?:🔧|📖|📂|✏️|🔍|💾)\s+(READ|LIST|RUN|SEARCH|MEMORY)\s+(.+)`)
+	taskPattern := regexp.MustCompile(`^(?:🔧|📖|📂|✏️|🔍|💾|📝)\s+(READ|LIST|RUN|SEARCH|MEMORY|TODO)\s+(.+)`)
 
 	for i, line := range lines {
 		line = strings.TrimSpace(line)
@@ -512,6 +518,8 @@ func parseNaturalLanguageTask(taskType, args string) *Task {
 		return parseSearchTask(args)
 	case "MEMORY":
 		return parseMemoryTask(args)
+	case "TODO":
+		return parseTodoTask(args)
 	default:
 		return nil
 	}
@@ -1096,6 +1104,93 @@ func parseMemoryTask(args string) *Task {
 				task.MemoryContent = strings.Join(contentWords, " ")
 			}
 		}
+	}
+
+	return task
+}
+
+// parseTodoTask parses natural language TODO commands
+func parseTodoTask(args string) *Task {
+	task := &Task{Type: TaskTypeTodo}
+
+	// Parse todo operation and options
+	// Examples:
+	// - "create \"Read main.go file\" \"Identify the bug\" \"Fix the bug\""
+	// - "check 1"
+	// - "uncheck 2"
+	// - "show"
+	// - "clear"
+
+	parts := parseQuotedArgs(args)
+	if len(parts) == 0 {
+		return nil
+	}
+
+	// First part is the operation
+	operation := strings.ToLower(parts[0])
+	task.TodoOperation = operation
+
+	switch operation {
+	case "create":
+		// Extract todo titles (minimum 2, maximum 10)
+		if len(parts) < 3 { // operation + at least 2 titles
+			debugLog("DEBUG: todo create requires at least 2 titles")
+			return nil
+		}
+		if len(parts) > 11 { // operation + at most 10 titles
+			debugLog("DEBUG: todo create supports at most 10 titles")
+			return nil
+		}
+
+		// Extract titles (remove quotes if present)
+		var titles []string
+		for i := 1; i < len(parts); i++ {
+			title := parts[i]
+			// Remove quotes if present
+			if len(title) >= 2 {
+				if (strings.HasPrefix(title, "\"") && strings.HasSuffix(title, "\"")) ||
+					(strings.HasPrefix(title, "'") && strings.HasSuffix(title, "'")) {
+					title = title[1 : len(title)-1]
+				}
+			}
+			if strings.TrimSpace(title) != "" {
+				titles = append(titles, strings.TrimSpace(title))
+			}
+		}
+
+		if len(titles) < 2 {
+			debugLog("DEBUG: todo create requires at least 2 non-empty titles")
+			return nil
+		}
+
+		task.TodoTitles = titles
+
+	case "check", "uncheck":
+		// Extract item order
+		if len(parts) < 2 {
+			debugLog(fmt.Sprintf("DEBUG: todo %s requires item number", operation))
+			return nil
+		}
+
+		itemOrder, err := strconv.Atoi(parts[1])
+		if err != nil {
+			debugLog(fmt.Sprintf("DEBUG: invalid item number for todo %s: %s", operation, parts[1]))
+			return nil
+		}
+
+		if itemOrder < 1 {
+			debugLog(fmt.Sprintf("DEBUG: item number must be >= 1, got: %d", itemOrder))
+			return nil
+		}
+
+		task.TodoItemOrder = itemOrder
+
+	case "show", "clear":
+		// No additional parameters needed
+
+	default:
+		debugLog(fmt.Sprintf("DEBUG: unknown todo operation: %s", operation))
+		return nil
 	}
 
 	return task

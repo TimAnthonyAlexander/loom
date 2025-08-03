@@ -10,6 +10,7 @@ import (
 	"loom/llm"
 	"loom/session"
 	taskPkg "loom/task"
+	"loom/todo"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -184,6 +185,7 @@ type model struct {
 	enhancedManager   *taskPkg.EnhancedManager
 	sequentialManager *taskPkg.SequentialTaskManager
 	taskExecutor      *taskPkg.Executor
+	todoManager       *todo.TodoManager
 	currentExecution  *taskPkg.TaskExecution
 	taskHistory       []string
 	taskEventChan     chan taskPkg.TaskExecutionEvent
@@ -926,6 +928,7 @@ func (m model) View() string {
 			modelStatus = "🔴 " + m.config.Model
 		}
 
+		// Base info content
 		infoContent := fmt.Sprintf(
 			" %s\n %s  |  Shell Access: %t\n %d files %s",
 			m.workspacePath,
@@ -934,6 +937,12 @@ func (m model) View() string {
 			stats.TotalFiles,
 			langSummary,
 		)
+
+		// Add todo list if active
+		if m.todoManager != nil && m.todoManager.HasActiveTodoList() {
+			todoDisplay := m.renderTodoPanel()
+			infoContent += "\n" + todoDisplay
+		}
 
 		infoPanel := lipgloss.NewStyle().
 			BorderStyle(lipgloss.RoundedBorder()).
@@ -1126,6 +1135,53 @@ func (m model) renderConfirmationDialog() string {
 	content.WriteString("Press 'y' to approve, 'n' to cancel")
 
 	return confirmStyle.Render(content.String())
+}
+
+// renderTodoPanel renders the todo list for the info panel
+func (m model) renderTodoPanel() string {
+	if m.todoManager == nil {
+		return ""
+	}
+
+	currentList := m.todoManager.GetCurrentList()
+	if currentList == nil {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString("📝 TODO:")
+
+	// Show only first 3 items to keep info panel compact
+	itemsToShow := len(currentList.Items)
+	if itemsToShow > 3 {
+		itemsToShow = 3
+	}
+
+	for i := 0; i < itemsToShow; i++ {
+		item := currentList.Items[i]
+		status := "⬜"
+		if item.Checked {
+			status = "✅"
+		} else if i > 0 && !currentList.Items[i-1].Checked {
+			status = "🔒" // Locked because previous item not checked
+		}
+
+		// Truncate long titles for compact display
+		title := item.Title
+		if len(title) > 30 {
+			title = title[:27] + "..."
+		}
+
+		sb.WriteString(fmt.Sprintf(" %s %s", status, title))
+	}
+
+	// Show "..." if there are more items
+	if len(currentList.Items) > 3 {
+		remaining := len(currentList.Items) - 3
+		sb.WriteString(fmt.Sprintf(" (+%d more)", remaining))
+	}
+
+	return sb.String()
 }
 
 // renderTaskView renders the task execution view
@@ -2457,6 +2513,9 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 	// Initialize task system with enhanced M6 features
 	taskExecutor := taskPkg.NewExecutor(workspacePath, cfg.EnableShell, cfg.MaxFileSize)
 
+	// Initialize todo manager
+	todoManager := todo.NewTodoManager(workspacePath)
+
 	// Configure validation settings
 	if cfg.Validation.EnableVerification {
 		taskExecutor.SetValidationConfigFromMainConfig(cfg)
@@ -2502,6 +2561,8 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 		if taskExecutor != nil {
 			promptEnhancer.SetMemoryStore(taskExecutor.GetMemoryStore())
 		}
+		// Set todo manager for todo integration in system prompt
+		promptEnhancer.SetTodoManager(todoManager)
 		systemPrompt := promptEnhancer.CreateEnhancedSystemPrompt(cfg.EnableShell)
 		if err := chatSession.AddMessage(systemPrompt); err != nil {
 			fmt.Printf("Warning: failed to add system prompt: %v\n", err)
@@ -2529,6 +2590,7 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 		enhancedManager:   enhancedManager,
 		sequentialManager: sequentialManager,
 		taskExecutor:      taskExecutor,
+		todoManager:       todoManager,
 		taskEventChan:     taskEventChan,
 		taskHistory:       make([]string, 0),
 		width:             80, // Default width until window size is received
@@ -2919,7 +2981,7 @@ func (m *model) selectCommandAutocomplete() {
 
 // getCommandCandidates returns commands matching the query prefix (case-insensitive)
 func (m *model) getCommandCandidates(query string) []string {
-	commands := []string{"/files", "/stats", "/tasks", "/test", "/summary", "/rationale", "/debug", "/help", "/quit"}
+	commands := []string{"/files", "/stats", "/tasks", "/test", "/summary", "/rationale", "/debug", "/help", "/quit", "/todo"}
 
 	if query == "" {
 		return commands
@@ -3066,11 +3128,28 @@ func (m *model) executeSlashCommand(cmdStr string) tea.Cmd {
 		m.updateWrappedMessages()
 		return nil
 
+	case "/todo":
+		userMsg := llm.Message{Role: "user", Content: cmdStr, Timestamp: time.Now()}
+		m.chatSession.AddMessage(userMsg)
+
+		var todoContent string
+		if m.todoManager != nil {
+			todoContent = m.todoManager.GetTodoStatus()
+		} else {
+			todoContent = "Todo manager not available"
+		}
+
+		resp := llm.Message{Role: "assistant", Content: todoContent, Timestamp: time.Now()}
+		m.chatSession.AddMessage(resp)
+		m.messages = m.chatSession.GetDisplayMessages()
+		m.updateWrappedMessages()
+		return nil
+
 	case "/help":
 		userMsg := llm.Message{Role: "user", Content: cmdStr, Timestamp: time.Now()}
 		m.chatSession.AddMessage(userMsg)
 		// Reuse helpContent string from earlier path (simplified call)
-		helpContent := `🤖 **Loom Help**\n\nUse /files, /stats, /tasks, /test, /summary, /rationale, /debug, /help, /quit` // shorter help here
+		helpContent := `🤖 **Loom Help**\n\nUse /files, /stats, /tasks, /test, /summary, /rationale, /debug, /help, /quit, /todo` // shorter help here
 		resp := llm.Message{Role: "assistant", Content: helpContent, Timestamp: time.Now()}
 		m.chatSession.AddMessage(resp)
 		m.messages = m.chatSession.GetDisplayMessages()

@@ -10,6 +10,7 @@ import (
 	"loom/indexer"
 	"loom/loom_edit"
 	"loom/memory"
+	"loom/todo"
 	"loom/validation"
 	"os"
 	"os/exec"
@@ -37,6 +38,7 @@ type Executor struct {
 	gitIgnore           *indexer.GitIgnore
 	interactiveExecutor *InteractiveExecutor
 	memoryStore         *memory.MemoryStore
+	todoManager         *todo.TodoManager
 	validator           *validation.Validator
 }
 
@@ -55,6 +57,9 @@ func NewExecutor(workspacePath string, enableShell bool, maxFileSize int64) *Exe
 	// Create memory store
 	memoryStore := memory.NewMemoryStore(workspacePath)
 
+	// Create todo manager
+	todoManager := todo.NewTodoManager(workspacePath)
+
 	// Create validator with default configuration
 	validationConfig := validation.DefaultValidationConfig()
 	validator := validation.NewValidator(workspacePath, &validationConfig)
@@ -66,6 +71,7 @@ func NewExecutor(workspacePath string, enableShell bool, maxFileSize int64) *Exe
 		gitIgnore:           gitIgnore,
 		interactiveExecutor: interactiveExecutor,
 		memoryStore:         memoryStore,
+		todoManager:         todoManager,
 		validator:           validator,
 	}
 }
@@ -90,6 +96,8 @@ func (e *Executor) Execute(task *Task) *TaskResponse {
 		return e.executeSearch(task)
 	case TaskTypeMemory:
 		return e.executeMemory(task)
+	case TaskTypeTodo:
+		return e.executeTodo(task)
 	default:
 		response.Error = fmt.Sprintf("unknown task type: %s", task.Type)
 		return response
@@ -2583,6 +2591,61 @@ func (e *Executor) executeMemory(task *Task) *TaskResponse {
 // GetMemoryStore returns the memory store for external access
 func (e *Executor) GetMemoryStore() *memory.MemoryStore {
 	return e.memoryStore
+}
+
+// GetTodoManager returns the todo manager for external access
+func (e *Executor) GetTodoManager() *todo.TodoManager {
+	return e.todoManager
+}
+
+// executeTodo handles todo list operations
+func (e *Executor) executeTodo(task *Task) *TaskResponse {
+	response := &TaskResponse{Task: *task}
+
+	// Handle different todo operations
+	var todoResponse *todo.TodoResponse
+	switch strings.ToLower(task.TodoOperation) {
+	case "create":
+		todoResponse = e.todoManager.CreateTodoList(task.TodoTitles)
+	case "check":
+		todoResponse = e.todoManager.CheckTodoItem(task.TodoItemOrder)
+	case "uncheck":
+		todoResponse = e.todoManager.UncheckTodoItem(task.TodoItemOrder)
+	case "show":
+		todoResponse = e.todoManager.ShowTodoList()
+	case "clear":
+		todoResponse = e.todoManager.ClearTodoList()
+	default:
+		response.Error = fmt.Sprintf("unknown todo operation: %s", task.TodoOperation)
+		return response
+	}
+
+	// Convert todo response to task response
+	response.Success = todoResponse.Success
+	if !todoResponse.Success {
+		response.Error = todoResponse.Error
+		return response
+	}
+
+	// Format output
+	var output strings.Builder
+	output.WriteString(fmt.Sprintf("TODO Operation: %s\n", task.TodoOperation))
+
+	if todoResponse.Message != "" {
+		output.WriteString(fmt.Sprintf("Result: %s\n\n", todoResponse.Message))
+	}
+
+	// Add current todo list status if available
+	if todoResponse.List != nil && todoResponse.List.Active {
+		output.WriteString(e.todoManager.FormatTodoForDisplay())
+	} else if strings.ToLower(task.TodoOperation) == "show" {
+		output.WriteString("No active todo list")
+	}
+
+	// Store output for both user display and LLM context
+	response.Output = output.String()
+	response.ActualContent = output.String()
+	return response
 }
 
 // extractEditContext extracts context around an edit for verification
