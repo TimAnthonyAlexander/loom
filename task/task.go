@@ -190,6 +190,32 @@ type LineDiffEntry struct {
 	Context    string `json:"context"`     // Additional context about the change
 }
 
+// ContextualError provides rich context for edit operation errors
+type ContextualError struct {
+	Type            string        `json:"type"`             // "line_range", "file_not_found", "syntax", "validation", etc.
+	Message         string        `json:"message"`          // Human-readable error message
+	FilePath        string        `json:"file_path"`        // File being operated on
+	FileExists      bool          `json:"file_exists"`      // Whether file exists
+	CurrentLines    int           `json:"current_lines"`    // Current number of lines in file
+	CurrentSize     int64         `json:"current_size"`     // Current file size in bytes
+	RequestedAction string        `json:"requested_action"` // REPLACE, INSERT_AFTER, etc.
+	RequestedStart  int           `json:"requested_start"`  // Requested start line
+	RequestedEnd    int           `json:"requested_end"`    // Requested end line
+	ActualContent   []string      `json:"actual_content"`   // Actual line content around error
+	ContextLines    []ContextLine `json:"context_lines"`    // Context around error with line numbers
+	Suggestions     []string      `json:"suggestions"`      // Suggested corrections
+	RequiredActions []string      `json:"required_actions"` // What the LLM should do next
+	PreventionTips  []string      `json:"prevention_tips"`  // How to prevent this error
+}
+
+// ContextLine represents a line with its number and content
+type ContextLine struct {
+	LineNumber int    `json:"line_number"` // 1-based line number
+	Content    string `json:"content"`     // Line content
+	IsTarget   bool   `json:"is_target"`   // Whether this is the target line for the operation
+	IsError    bool   `json:"is_error"`    // Whether this line has an error
+}
+
 // ValidationSummary provides a summary of validation results for LLM feedback
 type ValidationSummary struct {
 	IsValid           bool     `json:"is_valid"`           // Overall validation status
@@ -204,14 +230,15 @@ type ValidationSummary struct {
 
 // TaskResponse represents the result of executing a task
 type TaskResponse struct {
-	Task             Task         `json:"task"`
-	Success          bool         `json:"success"`
-	Output           string       `json:"output,omitempty"`         // Display message for user
-	ActualContent    string       `json:"actual_content,omitempty"` // Actual content for LLM (hidden from user)
-	EditSummary      *EditSummary `json:"edit_summary,omitempty"`   // Detailed edit information (for EditFile tasks)
-	Error            string       `json:"error,omitempty"`
-	Approved         bool         `json:"approved,omitempty"`          // For tasks requiring confirmation
-	VerificationText string       `json:"verification_text,omitempty"` // Enhanced verification text for LLM
+	Task             Task             `json:"task"`
+	Success          bool             `json:"success"`
+	Output           string           `json:"output,omitempty"`         // Display message for user
+	ActualContent    string           `json:"actual_content,omitempty"` // Actual content for LLM (hidden from user)
+	EditSummary      *EditSummary     `json:"edit_summary,omitempty"`   // Detailed edit information (for EditFile tasks)
+	Error            string           `json:"error,omitempty"`
+	ContextualError  *ContextualError `json:"contextual_error,omitempty"`  // Rich error context for LLM
+	Approved         bool             `json:"approved,omitempty"`          // For tasks requiring confirmation
+	VerificationText string           `json:"verification_text,omitempty"` // Enhanced verification text for LLM
 }
 
 // tryLoomEditParsing attempts to parse LOOM_EDIT commands from LLM response
@@ -2016,6 +2043,11 @@ func (es *EditSummary) GetCompactSummary() string {
 
 // GetLLMSummary returns a detailed summary formatted for LLM consumption with enhanced feedback
 func (tr *TaskResponse) GetLLMSummary() string {
+	// If there's a contextual error, return that instead
+	if tr.ContextualError != nil {
+		return tr.ContextualError.FormatForLLM()
+	}
+
 	if tr.EditSummary == nil {
 		return ""
 	}
@@ -2157,4 +2189,162 @@ func (tr *TaskResponse) formatValidationSummary(vs *ValidationSummary) string {
 	}
 
 	return summary.String()
+}
+
+// NewContextualError creates a contextual error with file state information
+func NewContextualError(errorType, message, filePath string) *ContextualError {
+	return &ContextualError{
+		Type:            errorType,
+		Message:         message,
+		FilePath:        filePath,
+		Suggestions:     []string{},
+		RequiredActions: []string{},
+		PreventionTips:  []string{},
+		ContextLines:    []ContextLine{},
+		ActualContent:   []string{},
+	}
+}
+
+// SetFileContext adds file state context to the error
+func (ce *ContextualError) SetFileContext(exists bool, lines int, size int64) *ContextualError {
+	ce.FileExists = exists
+	ce.CurrentLines = lines
+	ce.CurrentSize = size
+	return ce
+}
+
+// SetRequestContext adds request context to the error
+func (ce *ContextualError) SetRequestContext(action string, start, end int) *ContextualError {
+	ce.RequestedAction = action
+	ce.RequestedStart = start
+	ce.RequestedEnd = end
+	return ce
+}
+
+// AddContextLines adds line content around the error location
+func (ce *ContextualError) AddContextLines(fileContent []string, targetLine int, contextRange int) *ContextualError {
+	if len(fileContent) == 0 {
+		return ce
+	}
+
+	// Inline helper functions
+	max := func(a, b int) int {
+		if a > b {
+			return a
+		}
+		return b
+	}
+	min := func(a, b int) int {
+		if a < b {
+			return a
+		}
+		return b
+	}
+
+	startLine := max(1, targetLine-contextRange)
+	endLine := min(len(fileContent), targetLine+contextRange)
+
+	for i := startLine; i <= endLine; i++ {
+		if i <= len(fileContent) {
+			content := ""
+			if i-1 < len(fileContent) {
+				content = fileContent[i-1] // Convert to 0-based index
+			}
+
+			ce.ContextLines = append(ce.ContextLines, ContextLine{
+				LineNumber: i,
+				Content:    content,
+				IsTarget:   i == targetLine,
+				IsError:    i == targetLine,
+			})
+		}
+	}
+
+	return ce
+}
+
+// AddSuggestion adds a suggested correction
+func (ce *ContextualError) AddSuggestion(suggestion string) *ContextualError {
+	ce.Suggestions = append(ce.Suggestions, suggestion)
+	return ce
+}
+
+// AddRequiredAction adds a required action for the LLM
+func (ce *ContextualError) AddRequiredAction(action string) *ContextualError {
+	ce.RequiredActions = append(ce.RequiredActions, action)
+	return ce
+}
+
+// AddPreventionTip adds a tip for preventing this error
+func (ce *ContextualError) AddPreventionTip(tip string) *ContextualError {
+	ce.PreventionTips = append(ce.PreventionTips, tip)
+	return ce
+}
+
+// FormatForLLM formats the contextual error for LLM consumption
+func (ce *ContextualError) FormatForLLM() string {
+	var formatted strings.Builder
+
+	// Header
+	formatted.WriteString("🚫 EDIT OPERATION FAILED\n")
+	formatted.WriteString("=" + strings.Repeat("=", 40) + "\n\n")
+
+	// Error type and message
+	formatted.WriteString(fmt.Sprintf("❌ Error Type: %s\n", strings.ToUpper(ce.Type)))
+	formatted.WriteString(fmt.Sprintf("📁 File: %s\n", ce.FilePath))
+	formatted.WriteString(fmt.Sprintf("💬 Message: %s\n\n", ce.Message))
+
+	// File state information
+	formatted.WriteString("📊 CURRENT FILE STATE:\n")
+	if ce.FileExists {
+		formatted.WriteString(fmt.Sprintf("✅ File exists: %d lines, %d bytes\n", ce.CurrentLines, ce.CurrentSize))
+	} else {
+		formatted.WriteString("❌ File does not exist\n")
+	}
+
+	// Request context
+	if ce.RequestedAction != "" {
+		formatted.WriteString(fmt.Sprintf("🔧 Requested: %s lines %d-%d\n", ce.RequestedAction, ce.RequestedStart, ce.RequestedEnd))
+	}
+
+	// Line context
+	if len(ce.ContextLines) > 0 {
+		formatted.WriteString("\n📝 FILE CONTENT AROUND ERROR:\n")
+		for _, line := range ce.ContextLines {
+			prefix := "  "
+			if line.IsTarget {
+				prefix = "►"
+			}
+			if line.IsError {
+				prefix = "❌"
+			}
+			formatted.WriteString(fmt.Sprintf("%s Line %d: %s\n", prefix, line.LineNumber, line.Content))
+		}
+	}
+
+	// Suggestions
+	if len(ce.Suggestions) > 0 {
+		formatted.WriteString("\n💡 SUGGESTED CORRECTIONS:\n")
+		for i, suggestion := range ce.Suggestions {
+			formatted.WriteString(fmt.Sprintf("%d. %s\n", i+1, suggestion))
+		}
+	}
+
+	// Required actions
+	if len(ce.RequiredActions) > 0 {
+		formatted.WriteString("\n🎯 REQUIRED ACTIONS:\n")
+		for i, action := range ce.RequiredActions {
+			formatted.WriteString(fmt.Sprintf("%d. %s\n", i+1, action))
+		}
+	}
+
+	// Prevention tips
+	if len(ce.PreventionTips) > 0 {
+		formatted.WriteString("\n🛡️ PREVENTION TIPS:\n")
+		for i, tip := range ce.PreventionTips {
+			formatted.WriteString(fmt.Sprintf("%d. %s\n", i+1, tip))
+		}
+	}
+
+	return formatted.String()
 }

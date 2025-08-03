@@ -114,7 +114,10 @@ func (e *Executor) executeReadFile(task *Task) *TaskResponse {
 	// Check if file exists
 	info, err := os.Stat(fullPath)
 	if err != nil {
-		response.Error = fmt.Sprintf("file not found: %s", task.Path)
+		contextualError := e.createContextualFileNotFoundError(task.Path, "READ")
+		response.ContextualError = contextualError
+		response.Error = contextualError.Message
+		response.ActualContent = contextualError.FormatForLLM()
 		return response
 	}
 
@@ -157,7 +160,11 @@ func (e *Executor) executeReadFile(task *Task) *TaskResponse {
 
 	// Validate line range if specified
 	if task.StartLine > totalLines {
-		response.Error = fmt.Sprintf("file %s has only %d lines, but requested start line %d", task.Path, totalLines, task.StartLine)
+		contextualError := e.createContextualLineRangeError(task.Path, "READ", task.StartLine, task.EndLine, totalLines)
+		e.addFileContentContext(contextualError, fullPath, task.StartLine)
+		response.ContextualError = contextualError
+		response.Error = contextualError.Message
+		response.ActualContent = contextualError.FormatForLLM()
 		return response
 	}
 
@@ -369,8 +376,11 @@ func (e *Executor) applyLoomEdit(task *Task, fullPath string) *TaskResponse {
 	// Parse the LOOM_EDIT command from the task content
 	editCmd, err := loom_edit.ParseEditCommand(task.Content)
 	if err != nil {
-		// Provide more detailed error message with example of correct format
-		response.Error = fmt.Sprintf("Failed to parse LOOM_EDIT command: %v\n\nPlease ensure your LOOM_EDIT command follows the correct format:\n>>LOOM_EDIT file=path ACTION start-end\nnew content\n<<LOOM_EDIT\n\nExample for REPLACE:\n>>LOOM_EDIT file=sample.json REPLACE 3-3\n    \"name\": \"Chair\",\n<<LOOM_EDIT", err)
+		// Create contextual syntax error
+		contextualError := e.createContextualSyntaxError(task.Path, "UNKNOWN", err.Error())
+		response.ContextualError = contextualError
+		response.Error = contextualError.Message
+		response.ActualContent = contextualError.FormatForLLM()
 		return response
 	}
 
@@ -393,7 +403,11 @@ func (e *Executor) applyLoomEdit(task *Task, fullPath string) *TaskResponse {
 	// Apply the edit using the loom_edit module
 	err = loom_edit.ApplyEdit(fullPath, editCmd)
 	if err != nil {
-		response.Error = fmt.Sprintf("Failed to apply LOOM_EDIT: %v\n\nThis could be due to:\n- File SHA mismatch (file was modified since you read it)\n- Invalid line numbers\n\nPlease READ the file again to get the current state and try again.", err)
+		// Convert loom_edit error to contextual error
+		contextualError := e.convertLoomEditErrorToContextual(fullPath, editCmd, err.Error())
+		response.ContextualError = contextualError
+		response.Error = contextualError.Message
+		response.ActualContent = contextualError.FormatForLLM()
 		return response
 	}
 
@@ -2588,6 +2602,224 @@ func (e *Executor) SetValidationConfigFromMainConfig(mainConfig interface{}) {
 	// This is a simplified conversion - could be enhanced later
 
 	e.SetValidationConfig(&defaultConfig)
+}
+
+// createContextualLineRangeError creates a rich contextual error for line range issues
+func (e *Executor) createContextualLineRangeError(filePath string, action string, start, end, actualLines int) *ContextualError {
+	var message string
+	if actualLines == 0 {
+		message = fmt.Sprintf("Cannot %s line %d: file '%s' is empty", strings.ToLower(action), start, filePath)
+	} else if start > actualLines {
+		message = fmt.Sprintf("Line %d does not exist: file '%s' only has %d lines", start, filePath, actualLines)
+	} else if end > actualLines {
+		message = fmt.Sprintf("End line %d does not exist: file '%s' only has %d lines", end, filePath, actualLines)
+	} else {
+		message = fmt.Sprintf("Invalid line range %d-%d for file '%s' with %d lines", start, end, filePath, actualLines)
+	}
+
+	contextualError := NewContextualError("line_range", message, filePath).
+		SetFileContext(true, actualLines, 0). // Size will be set later if needed
+		SetRequestContext(action, start, end)
+
+	// Add specific suggestions based on the situation
+	if actualLines == 0 {
+		contextualError.AddSuggestion(fmt.Sprintf("Use CREATE action to create a new file: >>LOOM_EDIT file=%s CREATE 1-1", filePath)).
+			AddSuggestion("Check if the file path is correct").
+			AddRequiredAction("READ the file first to confirm its current state").
+			AddPreventionTip("Always READ files before editing to see their current state")
+	} else if start > actualLines {
+		if actualLines == 1 {
+			contextualError.AddSuggestion(fmt.Sprintf("Use line 1 instead of line %d", start))
+		} else {
+			contextualError.AddSuggestion(fmt.Sprintf("Use a line number between 1-%d", actualLines))
+		}
+		contextualError.AddSuggestion(fmt.Sprintf("Use INSERT_AFTER %d to add content at the end", actualLines)).
+			AddRequiredAction("READ the file again to see the current line count").
+			AddPreventionTip("Always verify line numbers from READ output before editing")
+	} else if end > actualLines {
+		contextualError.AddSuggestion(fmt.Sprintf("Use end line %d instead of %d", actualLines, end)).
+			AddSuggestion(fmt.Sprintf("Or use line range %d-%d", start, actualLines)).
+			AddRequiredAction("READ the file again to see the current content").
+			AddPreventionTip("Use exact line numbers from READ output")
+	}
+
+	return contextualError
+}
+
+// createContextualFileNotFoundError creates a rich contextual error for missing files
+func (e *Executor) createContextualFileNotFoundError(filePath, action string) *ContextualError {
+	message := fmt.Sprintf("File '%s' does not exist", filePath)
+
+	contextualError := NewContextualError("file_not_found", message, filePath).
+		SetFileContext(false, 0, 0).
+		SetRequestContext(action, 0, 0)
+
+	// Add specific suggestions based on action
+	switch action {
+	case "CREATE":
+		contextualError.AddSuggestion("This is normal for CREATE action - file will be created").
+			AddRequiredAction("Ensure the directory path exists").
+			AddPreventionTip("CREATE action is meant for new files")
+	case "REPLACE", "INSERT_AFTER", "INSERT_BEFORE", "DELETE":
+		contextualError.AddSuggestion(fmt.Sprintf("Use CREATE action instead: >>LOOM_EDIT file=%s CREATE 1-1", filePath)).
+			AddSuggestion("Check if the file path is correct").
+			AddSuggestion("Use LIST command to see available files").
+			AddRequiredAction("Verify the file path and use CREATE for new files").
+			AddPreventionTip("Always READ files before editing to confirm they exist")
+	default:
+		contextualError.AddSuggestion("Check if the file path is correct").
+			AddSuggestion("Use LIST command to see available files").
+			AddRequiredAction("Verify the file exists before attempting to read or edit")
+	}
+
+	return contextualError
+}
+
+// createContextualSyntaxError creates a rich contextual error for LOOM_EDIT syntax issues
+func (e *Executor) createContextualSyntaxError(filePath, action, originalError string) *ContextualError {
+	message := fmt.Sprintf("LOOM_EDIT syntax error: %s", originalError)
+
+	contextualError := NewContextualError("syntax", message, filePath).
+		SetRequestContext(action, 0, 0)
+
+	// Add syntax-specific suggestions
+	contextualError.AddSuggestion("Check the LOOM_EDIT command format: >>LOOM_EDIT file=path ACTION start-end").
+		AddSuggestion("Ensure the closing tag <<LOOM_EDIT is present").
+		AddSuggestion("Verify line numbers are integers (e.g., 5-10, not abc-10)").
+		AddRequiredAction("Fix the LOOM_EDIT syntax and try again").
+		AddPreventionTip("Follow the exact format: >>LOOM_EDIT file=path ACTION start-end")
+
+	if strings.Contains(originalError, "line number") {
+		contextualError.AddSuggestion("Use valid integers for line numbers (e.g., 5, 10-15)").
+			AddSuggestion("Line numbers must be positive integers").
+			AddPreventionTip("Line numbers start from 1, not 0")
+	}
+
+	if strings.Contains(originalError, "missing closing") {
+		contextualError.AddSuggestion("Add the closing tag: <<LOOM_EDIT").
+			AddPreventionTip("Every >>LOOM_EDIT must have a matching <<LOOM_EDIT")
+	}
+
+	return contextualError
+}
+
+// addFileContentContext adds file content context to a contextual error
+func (e *Executor) addFileContentContext(contextualError *ContextualError, filePath string, targetLine int) {
+	if !contextualError.FileExists {
+		return
+	}
+
+	// Read file content
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return
+	}
+
+	lines := strings.Split(string(content), "\n")
+
+	// Update file size in context
+	contextualError.CurrentSize = int64(len(content))
+
+	// Add context lines around the target
+	contextualError.AddContextLines(lines, targetLine, 3)
+}
+
+// convertLoomEditErrorToContextual converts loom_edit errors to rich contextual errors
+func (e *Executor) convertLoomEditErrorToContextual(filePath string, editCmd *loom_edit.EditCommand, originalError string) *ContextualError {
+	// Analyze the error to determine type and create appropriate contextual error
+	errorLower := strings.ToLower(originalError)
+
+	// Handle line range errors
+	if strings.Contains(errorLower, "out of range") {
+		// Extract file state
+		fileExists := true
+		actualLines := 0
+		if content, err := os.ReadFile(filePath); err == nil {
+			lines := strings.Split(string(content), "\n")
+			actualLines = len(lines)
+		} else {
+			fileExists = false
+		}
+
+		contextualError := e.createContextualLineRangeError(filePath, editCmd.Action, editCmd.Start, editCmd.End, actualLines)
+		if fileExists {
+			e.addFileContentContext(contextualError, filePath, editCmd.Start)
+		}
+		return contextualError
+	}
+
+	// Handle file not found errors
+	if strings.Contains(errorLower, "failed to read file") || strings.Contains(errorLower, "no such file") {
+		return e.createContextualFileNotFoundError(filePath, editCmd.Action)
+	}
+
+	// Handle CREATE file already exists error
+	if strings.Contains(errorLower, "cannot create file that already exists") {
+		message := fmt.Sprintf("File '%s' already exists - cannot use CREATE action", filePath)
+		contextualError := NewContextualError("file_exists", message, filePath)
+
+		// Get file state
+		if info, err := os.Stat(filePath); err == nil {
+			if content, err := os.ReadFile(filePath); err == nil {
+				lines := strings.Split(string(content), "\n")
+				contextualError.SetFileContext(true, len(lines), info.Size())
+				e.addFileContentContext(contextualError, filePath, 1)
+			}
+		}
+
+		contextualError.SetRequestContext(editCmd.Action, editCmd.Start, editCmd.End).
+			AddSuggestion("Use REPLACE action instead of CREATE for existing files").
+			AddSuggestion(fmt.Sprintf("Use: >>LOOM_EDIT file=%s REPLACE 1-%d", filePath, contextualError.CurrentLines)).
+			AddSuggestion("Or use a different file name for CREATE").
+			AddRequiredAction("READ the existing file first to see its content").
+			AddRequiredAction("Use REPLACE, INSERT_AFTER, or other actions for existing files").
+			AddPreventionTip("CREATE is only for new files that don't exist yet")
+
+		return contextualError
+	}
+
+	// Handle SEARCH_REPLACE string not found error
+	if strings.Contains(errorLower, "old string not found") {
+		message := fmt.Sprintf("SEARCH_REPLACE failed: target string not found in '%s'", filePath)
+		contextualError := NewContextualError("search_not_found", message, filePath)
+
+		// Get file state
+		if content, err := os.ReadFile(filePath); err == nil {
+			lines := strings.Split(string(content), "\n")
+			contextualError.SetFileContext(true, len(lines), int64(len(content)))
+		}
+
+		contextualError.SetRequestContext(editCmd.Action, editCmd.Start, editCmd.End).
+			AddSuggestion("Check the exact spelling and case of the search string").
+			AddSuggestion("Use READ to see the current file content").
+			AddSuggestion("Try using REPLACE with specific line numbers instead").
+			AddRequiredAction("READ the file to find the correct text to replace").
+			AddPreventionTip("SEARCH_REPLACE requires exact string matches including whitespace")
+
+		return contextualError
+	}
+
+	// Generic fallback error with enhanced context
+	message := fmt.Sprintf("LOOM_EDIT operation failed: %s", originalError)
+	contextualError := NewContextualError("operation_failed", message, filePath).
+		SetRequestContext(editCmd.Action, editCmd.Start, editCmd.End)
+
+	// Try to get file state for context
+	if info, err := os.Stat(filePath); err == nil {
+		if content, err := os.ReadFile(filePath); err == nil {
+			lines := strings.Split(string(content), "\n")
+			contextualError.SetFileContext(true, len(lines), info.Size())
+			e.addFileContentContext(contextualError, filePath, editCmd.Start)
+		}
+	} else {
+		contextualError.SetFileContext(false, 0, 0)
+	}
+
+	contextualError.AddRequiredAction("READ the file to understand its current state").
+		AddRequiredAction("Check the LOOM_EDIT syntax and try again").
+		AddPreventionTip("Always READ files before editing to get the current state")
+
+	return contextualError
 }
 
 // Shutdown gracefully shuts down the executor and its components
