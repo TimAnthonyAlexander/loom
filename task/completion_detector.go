@@ -622,6 +622,7 @@ func (cd *CompletionDetector) isTextOnlyResponse(response string) bool {
 		"🔧 SEARCH", "🔍 SEARCH",
 		"🔧 RUN",
 		"🔧 MEMORY", "💾 MEMORY",
+		"🔧 TODO", "📝 TODO",
 		">>LOOM_EDIT", "✏️ Edit",
 	}
 

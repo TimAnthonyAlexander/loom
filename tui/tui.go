@@ -2118,6 +2118,7 @@ func isTextOnlyResponse(response string) bool {
 		"🔧 SEARCH", "🔍 SEARCH",
 		"🔧 RUN",
 		"🔧 MEMORY", "💾 MEMORY",
+		"🔧 TODO", "📝 TODO",
 		">>LOOM_EDIT", "✏️ Edit",
 	}
 
@@ -2134,6 +2135,7 @@ func isTextOnlyResponse(response string) bool {
 		"SEARCH ",
 		"RUN ",
 		"MEMORY ",
+		"TODO ",
 	}
 
 	for _, pattern := range naturalLangPatterns {

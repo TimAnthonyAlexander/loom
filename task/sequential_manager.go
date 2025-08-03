@@ -436,12 +436,14 @@ func (stm *SequentialTaskManager) checkCompletionSignal(response string) (bool, 
 		"🔧 SEARCH", "🔍 SEARCH",
 		"🔧 RUN",
 		"🔧 MEMORY", "💾 MEMORY",
+		"🔧 TODO", "📝 TODO",
 		">>LOOM_EDIT", "✏️ Edit",
 		"\nREAD ",
 		"\nLIST ",
 		"\nSEARCH ",
 		"\nRUN ",
 		"\nMEMORY ",
+		"\nTODO ",
 	}
 
 	for _, pattern := range taskPatterns {
@@ -610,6 +612,7 @@ func (stm *SequentialTaskManager) IsObjectiveComplete(response string) bool {
 		"🔧 SEARCH", "🔍 SEARCH",
 		"🔧 RUN",
 		"🔧 MEMORY", "💾 MEMORY",
+		"🔧 TODO", "📝 TODO",
 		">>LOOM_EDIT", "✏️ Edit",
 	}
 
