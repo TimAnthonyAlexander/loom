@@ -257,10 +257,12 @@ READ README.md
 - **SEARCH**: Find code patterns (🔧 SEARCH "IndexStats" - USE THIS INSTEAD OF GREP!)
 - **LIST**: List directory contents (🔧 LIST . recursive)
 - **RUN**: Execute commands (🔧 RUN command)
+- **EDIT**: File editing using LOOM_EDIT syntax (see below)
+- **MEMORY**: Store/retrieve information (🔧 MEMORY create key content:"text")
 
 
 ### 7.3 EDIT (LOOM_EDIT Specification)
-To edit, you do not create a task but you use the LOOM_EDIT syntax somewhere in the response.
+To edit files, use the LOOM_EDIT syntax directly in your response (not a task command).
 This is the only way to edit a file.
 
 **Robust, deterministic file editing with SHA validation**
@@ -286,7 +288,7 @@ This is the only way to edit a file.
 - Line numbers are 1-based inclusive
 - System handles cross-platform newlines automatically
 
-**For new files**: Use CREATE action or simple content block.
+**For new files**: Use LOOM_EDIT with CREATE action.
 
 **For search and replace**:
 ` + "`" + `

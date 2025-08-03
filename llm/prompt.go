@@ -277,7 +277,7 @@ When searching for files, use grep or ripgrep to locate files, and use the SEARC
 - **INSERT_AFTER**: Insert new content after line START (requires existing file READ first)
 - **INSERT_BEFORE**: Insert new content before line START (requires existing file read first)
 - **DELETE**: Remove lines START-END (empty content block, requires existing file read first)
-- **CREATE**: Create entirely new file (no READ required, use START 1-1)
+- **CREATE**: Create entirely new file (no READ required, use START 1-1) [LOOM_EDIT action, not a task]
 - **SEARCH_REPLACE**: Replace all occurrences of exact string match
 
 **🔍 Pre-Edit Requirements**:
@@ -306,7 +306,8 @@ Basic operations: create, update, get, delete, list
 - ❌ Missing mandatory LOOM_EDIT components (file=, action, line numbers, closing tag)
 - ❌ Using absolute paths or @ symbols in file paths
 - ❌ Guessing line numbers instead of using READ output
-- ❌ Using REPLACE/INSERT/DELETE actions on non-existent files (use CREATE instead)
+- ❌ Using REPLACE/INSERT/DELETE actions on non-existent files (use CREATE action instead)
+- ❌ Thinking CREATE is a separate task type (CREATE is a LOOM_EDIT action only)
 - ❌ Use RUN+grep when SEARCH is available
 - ❌ Use find+grep combinations (use SEARCH with filters)
 - ❌ Provide partial file content without line ranges
@@ -320,7 +321,7 @@ Basic operations: create, update, get, delete, list
 
 ### A. LOOM_EDIT Examples
 
-**🆕 Creating New Files**:
+**🆕 Creating New Files** (using CREATE action, not CREATE task):
 `+"`"+`
 >>LOOM_EDIT file=src/new_module.go CREATE 1-1
 package main
