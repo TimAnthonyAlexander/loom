@@ -44,7 +44,16 @@ build-gui: ## Build the GUI application
 
 dev-gui: ## Start GUI development server
 	@echo "$(BLUE)🚀 Starting GUI development server...$(NC)"
+	@echo "$(YELLOW)⚠️  Note: Verbose output is normal for Wails development mode$(NC)"
+	@echo "$(YELLOW)⚠️  'Private APIs' warning is expected on macOS and safe to ignore$(NC)"
+	@echo ""
 	cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails dev
+
+dev-gui-quiet: ## Start GUI development server with reduced output
+	@echo "$(BLUE)🚀 Starting GUI development server (quiet mode)...$(NC)"
+	@echo "$(GREEN)✨ Open your browser to: http://localhost:34115$(NC)"
+	@echo ""
+	cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails dev 2>/dev/null || wails dev
 
 build-frontend: ## Build only the frontend
 	@echo "$(BLUE)🔨 Building frontend...$(NC)"
