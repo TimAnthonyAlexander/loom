@@ -26,6 +26,10 @@ export function GetChatState() {
   return window['go']['main']['App']['GetChatState']();
 }
 
+export function GetConfig() {
+  return window['go']['main']['App']['GetConfig']();
+}
+
 export function GetFileAutocomplete(arg1) {
   return window['go']['main']['App']['GetFileAutocomplete'](arg1);
 }
@@ -72,4 +76,8 @@ export function SendMessage(arg1) {
 
 export function StopStreaming() {
   return window['go']['main']['App']['StopStreaming']();
+}
+
+export function UpdateModel(arg1) {
+  return window['go']['main']['App']['UpdateModel'](arg1);
 }

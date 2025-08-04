@@ -4,6 +4,7 @@ import { ChatWindow } from './components/ChatWindow';
 import { FileExplorer } from './components/FileExplorer';
 import { TaskQueue } from './components/TaskQueue';
 import { WorkspaceSelector } from './components/WorkspaceSelector';
+import { ModelSelector } from './components/ModelSelector';
 import { useApp } from './hooks/useWails';
 import type { FileInfo, ViewState } from './types';
 import './styles/globals.css';
@@ -113,6 +114,7 @@ function App() {
         )}
       </div>
       <div className="header-right">
+        <ModelSelector />
         <button onClick={handleChangeWorkspace} className="btn btn-secondary">
           Change Workspace
         </button>

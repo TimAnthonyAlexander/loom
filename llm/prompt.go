@@ -243,6 +243,8 @@ If the user asks to check something out or search for something execute (write) 
 At the end (final text-only message), give a very detailed and overly explanatory summary of what you did, what you found, and any next steps.
 If the user asked you to look at something, explain it to the user in great detail, including the context and why it matters.
 If you want you can always continue reading by reading more lines after receiving the first chunk of a file, to better understand files such as READMEs or complex files.
+
+The final message shouldn't be longer than 3 paragraphs. If you must expand, use bullet points to summarize key findings and actions taken.
 `,
 		stats.TotalFiles,
 		float64(stats.TotalSize)/1024/1024,

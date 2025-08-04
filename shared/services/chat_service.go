@@ -371,6 +371,41 @@ func (cs *ChatService) ClearChat() {
 	cs.session = chat.NewSession(cs.getWorkspacePath(), 50)
 }
 
+// UpdateLLMAdapter updates the LLM adapter and reinitializes dependent components
+func (cs *ChatService) UpdateLLMAdapter(newAdapter llm.LLMAdapter) {
+	cs.mutex.Lock()
+	defer cs.mutex.Unlock()
+
+	cs.llmAdapter = newAdapter
+
+	// Reinitialize task managers if LLM adapter is available
+	if newAdapter != nil {
+		cs.enhancedManager = taskPkg.NewEnhancedManager(cs.taskExecutor, newAdapter, cs.session, cs.index)
+		cs.taskManager = cs.enhancedManager.Manager
+		cs.sequentialManager = taskPkg.NewSequentialTaskManager(cs.taskExecutor, newAdapter, cs.session)
+
+		// Recreate event channels if needed
+		if cs.taskEventChan == nil {
+			cs.taskEventChan = make(chan taskPkg.TaskExecutionEvent, 10)
+			go cs.handleTaskEvents()
+		}
+		if cs.userTaskEventChan == nil {
+			cs.userTaskEventChan = make(chan taskPkg.UserTaskEvent, 10)
+			go cs.handleUserTaskEvents()
+		}
+
+		// Set context manager for the new sequential manager
+		if cs.sequentialManager != nil {
+			cs.sequentialManager.SetContextManager(cs.index, cs.maxContextTokens)
+		}
+	} else {
+		// Clear task managers if no LLM adapter
+		cs.enhancedManager = nil
+		cs.taskManager = nil
+		cs.sequentialManager = nil
+	}
+}
+
 // GetMessages returns all chat messages
 func (cs *ChatService) GetMessages() []models.Message {
 	state := cs.GetChatState()

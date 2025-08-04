@@ -227,6 +227,64 @@ func (a *App) ClearChat() {
 	a.chatService.ClearChat()
 }
 
+// GetConfig returns the current configuration
+func (a *App) GetConfig() map[string]interface{} {
+	if !a.workspaceInitialized || a.config == nil {
+		return map[string]interface{}{}
+	}
+
+	return map[string]interface{}{
+		"model":              a.config.Model,
+		"enable_shell":       a.config.EnableShell,
+		"max_file_size":      a.config.MaxFileSize,
+		"api_key":            a.config.APIKey,
+		"base_url":           a.config.BaseURL,
+		"llm_timeout":        a.config.LLMTimeout,
+		"llm_stream_timeout": a.config.LLMStreamTimeout,
+		"llm_max_retries":    a.config.LLMMaxRetries,
+	}
+}
+
+// UpdateModel updates the model configuration and reinitializes the LLM adapter
+func (a *App) UpdateModel(model string) error {
+	if !a.workspaceInitialized {
+		return fmt.Errorf("workspace not initialized")
+	}
+
+	if a.config == nil {
+		return fmt.Errorf("config not loaded")
+	}
+
+	// Update the model in config
+	a.config.Model = model
+
+	// Save the updated config to local file
+	if err := config.SaveLocalConfig(a.workspacePath, a.config); err != nil {
+		return fmt.Errorf("failed to save config: %v", err)
+	}
+
+	// Reinitialize LLM adapter with new model
+	llmAdapter, err := llm.CreateAdapterFromConfig(a.config)
+	if err != nil {
+		log.Printf("Warning: LLM not available with new model: %v", err)
+		llmAdapter = nil
+	}
+
+	// Update chat service with new LLM adapter
+	if a.chatService != nil {
+		a.chatService.UpdateLLMAdapter(llmAdapter)
+	}
+
+	log.Printf("Model updated to: %s", model)
+
+	// Emit config update event
+	runtime.EventsEmit(a.ctx, "config:updated", map[string]interface{}{
+		"model": model,
+	})
+
+	return nil
+}
+
 // GetAppInfo returns basic app information
 func (a *App) GetAppInfo() map[string]interface{} {
 	return map[string]interface{}{

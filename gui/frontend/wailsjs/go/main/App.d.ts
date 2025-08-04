@@ -14,6 +14,8 @@ export function GetAppInfo():Promise<Record<string, any>>;
 
 export function GetChatState():Promise<models.ChatState>;
 
+export function GetConfig():Promise<Record<string, any>>;
+
 export function GetFileAutocomplete(arg1:string):Promise<Array<string>>;
 
 export function GetFileTree():Promise<Array<models.FileInfo>>;
@@ -37,3 +39,5 @@ export function SelectWorkspace(arg1:string):Promise<void>;
 export function SendMessage(arg1:string):Promise<void>;
 
 export function StopStreaming():Promise<void>;
+
+export function UpdateModel(arg1:string):Promise<void>;
