@@ -163,7 +163,7 @@ func (ts *TaskService) executeTask(taskInfo *models.TaskInfo) {
 		Output:  "Task executed successfully",
 		Success: true,
 	}
-	err := error(nil)
+	var err error
 
 	ts.mutex.Lock()
 
