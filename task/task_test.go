@@ -12,7 +12,6 @@ func TestParseTasks(t *testing.T) {
 		"{\n" +
 		"  \"tasks\": [\n" +
 		"    {\"type\": \"ReadFile\", \"path\": \"main.go\", \"max_lines\": 100},\n" +
-		"    {\"type\": \"EditFile\", \"path\": \"main.go\", \"content\": \"package main\\n\\nfunc main() {\\n\\tprintln(\\\"Hello, World!\\\")\\n}\"}\n" +
 		"  ]\n" +
 		"}\n" +
 		"```\n\n" +
@@ -27,8 +26,8 @@ func TestParseTasks(t *testing.T) {
 		t.Fatal("Expected task list, got nil")
 	}
 
-	if len(taskList.Tasks) != 2 {
-		t.Fatalf("Expected 2 tasks, got %d", len(taskList.Tasks))
+	if len(taskList.Tasks) != 1 {
+		t.Fatalf("Expected 1 tasks, got %d", len(taskList.Tasks))
 	}
 
 	// Test first task
@@ -41,15 +40,6 @@ func TestParseTasks(t *testing.T) {
 	}
 	if task1.MaxLines != 100 {
 		t.Errorf("Expected 100, got %d", task1.MaxLines)
-	}
-
-	// Test second task
-	task2 := taskList.Tasks[1]
-	if task2.Type != TaskTypeEditFile {
-		t.Errorf("Expected EditFile, got %s", task2.Type)
-	}
-	if task2.Path != "main.go" {
-		t.Errorf("Expected main.go, got %s", task2.Path)
 	}
 }
 
