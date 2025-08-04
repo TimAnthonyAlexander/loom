@@ -311,6 +311,18 @@ dist: download-ripgrep ## Build both TUI and GUI executables for all platforms i
 	if [ -f "gui/build/bin/gui-amd64.exe" ]; then cp gui/build/bin/gui-amd64.exe dist/loom-gui-windows-amd64.exe; fi
 	if [ -f "gui/build/bin/gui-arm64.exe" ]; then cp gui/build/bin/gui-arm64.exe dist/loom-gui-windows-arm64.exe; fi
 	
+	@echo "$(BLUE)Creating macOS DMG files...$(NC)"
+	# Create DMG for Intel macOS
+	if [ -d "dist/loom-gui-darwin-amd64.app" ]; then \
+		hdiutil create -volname "Loom GUI (Intel)" -srcfolder "dist/loom-gui-darwin-amd64.app" -ov -format UDZO "dist/loom-gui-darwin-amd64.dmg"; \
+		echo "$(GREEN)✅ Created dist/loom-gui-darwin-amd64.dmg$(NC)"; \
+	fi
+	# Create DMG for Apple Silicon macOS
+	if [ -d "dist/loom-gui-darwin-arm64.app" ]; then \
+		hdiutil create -volname "Loom GUI (Apple Silicon)" -srcfolder "dist/loom-gui-darwin-arm64.app" -ov -format UDZO "dist/loom-gui-darwin-arm64.dmg"; \
+		echo "$(GREEN)✅ Created dist/loom-gui-darwin-arm64.dmg$(NC)"; \
+	fi
+	
 	@echo "$(GREEN)✅ All executables built and placed in dist/!$(NC)"
 	@echo "$(YELLOW)💡 Note: Linux GUI requires Docker. Run 'make dist-with-linux-gui' to include it.$(NC)"
 	@echo "$(BLUE)📦 Contents:$(NC)"
