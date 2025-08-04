@@ -10,14 +10,12 @@ interface TaskQueueProps {
 export function TaskQueue({ className }: TaskQueueProps) {
   const { allTasks, pendingConfirmations, approveTask, rejectTask } = useTasks();
   
-  // Ensure allTasks has a safe structure with proper null safety
-  const safeAllTasks = allTasks || {};
-  const safePendingConfirmations = Array.isArray(pendingConfirmations) ? pendingConfirmations : [];
+  // Use optional chaining for null safety
   const [selectedTab, setSelectedTab] = useState<'pending' | 'executing' | 'completed'>('pending');
   const [showConfirmations, setShowConfirmations] = useState(true);
 
   // Check if we have any task data at all
-  const hasAnyTasks = Object.keys(safeAllTasks).length > 0 || safePendingConfirmations.length > 0;
+  const hasAnyTasks = Object.keys(allTasks ?? {}).length > 0 || (pendingConfirmations?.length ?? 0) > 0;
 
   const getStatusIcon = (status: string): string => {
     switch (status) {
