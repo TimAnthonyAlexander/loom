@@ -20,11 +20,18 @@ func main() {
 
 	// Create application with options
 	err := wails.Run(&options.App{
-		Title:     "Loom - AI Coding Assistant",
-		Width:     1400,
-		Height:    900,
-		MinWidth:  800,
-		MinHeight: 600,
+		Title:            "Loom - AI Coding Assistant",
+		Width:            1400,
+		Height:           900,
+		MinWidth:         800,
+		MinHeight:        600,
+		MaxWidth:         0, // 0 means no limit
+		MaxHeight:        0, // 0 means no limit
+		WindowStartState: options.Normal,
+		Frameless:        false, // Ensure we have window frame/decorations
+		DisableResize:    false, // Allow resizing
+		Fullscreen:       false, // Start in windowed mode
+		AlwaysOnTop:      false, // Don't stay on top
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
