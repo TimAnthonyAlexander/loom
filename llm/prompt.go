@@ -244,6 +244,7 @@ At the end (final text-only message), give a very detailed and overly explanator
 If the user asked you to look at something, explain it to the user in great detail, including the context and why it matters.
 If you want you can always continue reading by reading more lines after receiving the first chunk of a file, to better understand files such as READMEs or complex files.
 
+Be careful not to accidentally write a READ command when having read a file and then trying to summarize it. It will trigger a READ command again.
 The final message shouldn't be longer than 3 paragraphs. If you must expand, use bullet points to summarize key findings and actions taken.
 `,
 		stats.TotalFiles,
