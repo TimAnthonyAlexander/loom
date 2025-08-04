@@ -40,8 +40,8 @@ func NewApp(workspacePath string, cfg *config.Config, idx *indexer.Index) *App {
 		llmAdapter = nil
 	}
 
-	// Initialize services
-	chatService := services.NewChatService(workspacePath, llmAdapter, eventBus)
+	// Initialize services with full Loom integration
+	chatService := services.NewChatService(workspacePath, llmAdapter, eventBus, cfg, idx)
 	taskService := services.NewTaskService(workspacePath, eventBus)
 	fileService := services.NewFileService(workspacePath, idx, eventBus)
 
@@ -312,8 +312,8 @@ func (a *App) selectWorkspaceInternal(workspacePath string) error {
 		llmAdapter = nil
 	}
 
-	// Initialize services
-	a.chatService = services.NewChatService(workspacePath, llmAdapter, a.eventBus)
+	// Initialize services with full Loom integration
+	a.chatService = services.NewChatService(workspacePath, llmAdapter, a.eventBus, cfg, idx)
 	a.taskService = services.NewTaskService(workspacePath, a.eventBus)
 	a.fileService = services.NewFileService(workspacePath, idx, a.eventBus)
 
