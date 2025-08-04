@@ -304,13 +304,28 @@ dist: download-ripgrep ## Build both TUI and GUI executables for all platforms i
 	cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails build --platform=darwin/amd64,darwin/arm64,windows/amd64,windows/arm64
 	
 	@echo "$(BLUE)Copying GUI executables to dist/...$(NC)"
-	cp gui/build/loom-gui dist/loom-gui-darwin-amd64 2>/dev/null || cp gui/build/Loom* dist/loom-gui-darwin-amd64 2>/dev/null || echo "Darwin amd64 GUI not found"
-	find gui/build -name "*arm64*" -type f -executable -exec cp {} dist/loom-gui-darwin-arm64 \; 2>/dev/null || echo "Darwin arm64 GUI not found"
-	find gui/build -name "*.exe" -type f -exec cp {} dist/loom-gui-windows-amd64.exe \; 2>/dev/null || echo "Windows GUI not found"
-	find gui/build -name "*windows*arm64*" -type f -exec cp {} dist/loom-gui-windows-arm64.exe \; 2>/dev/null || echo "Windows arm64 GUI not found"
+	# macOS .app bundles
+	if [ -d "gui/build/bin/gui-amd64.app" ]; then cp -r gui/build/bin/gui-amd64.app dist/loom-gui-darwin-amd64.app; fi
+	if [ -d "gui/build/bin/gui-arm64.app" ]; then cp -r gui/build/bin/gui-arm64.app dist/loom-gui-darwin-arm64.app; fi
+	# Windows executables  
+	if [ -f "gui/build/bin/gui-amd64.exe" ]; then cp gui/build/bin/gui-amd64.exe dist/loom-gui-windows-amd64.exe; fi
+	if [ -f "gui/build/bin/gui-arm64.exe" ]; then cp gui/build/bin/gui-arm64.exe dist/loom-gui-windows-arm64.exe; fi
 	
 	@echo "$(GREEN)✅ All executables built and placed in dist/!$(NC)"
+	@echo "$(YELLOW)💡 Note: Linux GUI requires Docker. Run 'make dist-with-linux-gui' to include it.$(NC)"
 	@echo "$(BLUE)📦 Contents:$(NC)"
+	@ls -la dist/
+
+dist-with-linux-gui: dist ## Build all executables including Linux GUI (requires Docker)
+	@echo "$(BLUE)🔨 Building Linux GUI (requires Docker)...$(NC)"
+	@if command -v docker >/dev/null 2>&1; then \
+		cd gui && ./build-linux.sh; \
+		if [ -f "gui/build/bin/linux/gui" ]; then cp gui/build/bin/linux/gui dist/loom-gui-linux-amd64; fi; \
+		echo "$(GREEN)✅ Linux GUI added to dist/!$(NC)"; \
+	else \
+		echo "$(RED)❌ Docker not found. Linux GUI build requires Docker.$(NC)"; \
+	fi
+	@echo "$(BLUE)📦 Final contents:$(NC)"
 	@ls -la dist/
 
 # Release helpers
