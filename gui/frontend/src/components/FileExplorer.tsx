@@ -9,10 +9,10 @@ interface FileExplorerProps {
 }
 
 export function FileExplorer({ className, onFileSelect }: FileExplorerProps) {
-  const { fileTree, projectSummary, searchFiles } = useFiles();
+  const { fileTree, projectSummary, searchFiles, isLoading } = useFiles();
   
-  // Ensure fileTree is safe to use
-  const safeFileTree = fileTree || [];
+  // Ensure fileTree is safe to use with proper null safety
+  const safeFileTree = Array.isArray(fileTree) ? fileTree : [];
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<FileInfo[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
@@ -179,28 +179,46 @@ export function FileExplorer({ className, onFileSelect }: FileExplorerProps) {
         </div>
       </div>
 
-      {/* Search */}
-      <div className="file-search">
-        <div className="search-input-container">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            placeholder="Search files..."
-            className="search-input"
-          />
-          <button onClick={handleSearch} className="search-button">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.35-4.35" />
-            </svg>
-          </button>
+      {/* Loading state */}
+      {isLoading && (
+        <div className="loading-state" style={{padding: '32px', textAlign: 'center'}}>
+          <div>Loading files...</div>
         </div>
-      </div>
+      )}
 
-      {/* Project Summary */}
-      {projectSummary && (
+      {/* Empty state when no files and not loading */}
+      {!isLoading && safeFileTree.length === 0 && (
+        <div className="empty-state" style={{padding: '32px', textAlign: 'center', color: 'var(--color-text-muted)'}}>
+          <div style={{fontSize: '48px', marginBottom: '16px'}}>📁</div>
+          <h4>No Files Available</h4>
+          <p>Make sure a workspace is properly selected and initialized.</p>
+        </div>
+      )}
+
+      {/* Search - only show when we have files */}
+      {!isLoading && safeFileTree.length > 0 && (
+        <div className="file-search">
+          <div className="search-input-container">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              placeholder="Search files..."
+              className="search-input"
+            />
+            <button onClick={handleSearch} className="search-button">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.35-4.35" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Project Summary - only show when we have files */}
+      {!isLoading && safeFileTree.length > 0 && projectSummary && (
         <div className="project-summary">
           <div className="summary-text">{projectSummary.summary}</div>
           <div className="language-breakdown">
@@ -217,16 +235,18 @@ export function FileExplorer({ className, onFileSelect }: FileExplorerProps) {
         </div>
       )}
 
-      {/* File Tree */}
-      <div className="file-tree">
-        {searchQuery.trim() && searchResults.length > 0 ? (
-          renderSearchResults()
-        ) : (
-          <div className="file-tree-content">
-            {fileTreeNodes.map(node => renderFileNode(node))}
-          </div>
-        )}
-      </div>
+      {/* File Tree - only show when we have files and not loading */}
+      {!isLoading && safeFileTree.length > 0 && (
+        <div className="file-tree">
+          {searchQuery.trim() && searchResults.length > 0 ? (
+            renderSearchResults()
+          ) : (
+            <div className="file-tree-content">
+              {fileTreeNodes.map(node => renderFileNode(node))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

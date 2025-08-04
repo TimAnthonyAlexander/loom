@@ -46,26 +46,39 @@ function App() {
   };
 
   const renderMainContent = () => {
-    switch (viewState.currentView) {
-      case 'files':
-        return (
-          <div className="main-content files-view">
-            <FileExplorer onFileSelect={handleFileSelect} />
-            {selectedFile && (
-              <div className="file-preview">
-                <h3>Selected: {selectedFile.name}</h3>
-                <p>Path: {selectedFile.path}</p>
-                <p>Size: {selectedFile.size} bytes</p>
-                <p>Language: {selectedFile.language || 'Unknown'}</p>
-              </div>
-            )}
+    try {
+      switch (viewState.currentView) {
+        case 'files':
+          return (
+            <div className="main-content files-view">
+              <FileExplorer onFileSelect={handleFileSelect} />
+              {selectedFile && (
+                <div className="file-preview">
+                  <h3>Selected: {selectedFile.name}</h3>
+                  <p>Path: {selectedFile.path}</p>
+                  <p>Size: {selectedFile.size} bytes</p>
+                  <p>Language: {selectedFile.language || 'Unknown'}</p>
+                </div>
+              )}
+            </div>
+          );
+        case 'tasks':
+          return <TaskQueue className="main-content" />;
+        case 'chat':
+        default:
+          return <ChatWindow className="main-content" />;
+      }
+    } catch (error) {
+      console.error('Error rendering main content:', error);
+      return (
+        <div className="main-content" style={{padding: '20px'}}>
+          <div style={{color: 'red', border: '1px solid red', padding: '10px', borderRadius: '4px'}}>
+            <h3>Error Rendering Content</h3>
+            <p>Check the browser console for details.</p>
+            <pre>{String(error)}</pre>
           </div>
-        );
-      case 'tasks':
-        return <TaskQueue className="main-content" />;
-      case 'chat':
-      default:
-        return <ChatWindow className="main-content" />;
+        </div>
+      );
     }
   };
 

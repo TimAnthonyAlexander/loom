@@ -10,11 +10,14 @@ interface TaskQueueProps {
 export function TaskQueue({ className }: TaskQueueProps) {
   const { allTasks, pendingConfirmations, approveTask, rejectTask } = useTasks();
   
-  // Ensure allTasks has a safe structure
+  // Ensure allTasks has a safe structure with proper null safety
   const safeAllTasks = allTasks || {};
-  const safePendingConfirmations = pendingConfirmations || [];
+  const safePendingConfirmations = Array.isArray(pendingConfirmations) ? pendingConfirmations : [];
   const [selectedTab, setSelectedTab] = useState<'pending' | 'executing' | 'completed'>('pending');
   const [showConfirmations, setShowConfirmations] = useState(true);
+
+  // Check if we have any task data at all
+  const hasAnyTasks = Object.keys(safeAllTasks).length > 0 || safePendingConfirmations.length > 0;
 
   const getStatusIcon = (status: string): string => {
     switch (status) {
@@ -120,51 +123,64 @@ export function TaskQueue({ className }: TaskQueueProps) {
         </div>
       </div>
 
-      {/* Pending Confirmations */}
-      {pendingConfirmations.length > 0 && (
+      {/* Empty state when no tasks */}
+      {!hasAnyTasks && (
+        <div className="empty-state" style={{padding: '32px', textAlign: 'center', color: 'var(--color-text-muted)'}}>
+          <div style={{fontSize: '48px', marginBottom: '16px'}}>📋</div>
+          <h4>No Tasks Available</h4>
+          <p>Tasks will appear here once you start using the chat or when background processes run.</p>
+        </div>
+      )}
+
+      {/* Pending Confirmations - only show when we have tasks */}
+      {hasAnyTasks && safePendingConfirmations.length > 0 && (
         <div className="confirmations-section">
           <div 
             className="section-header clickable"
             onClick={() => setShowConfirmations(!showConfirmations)}
           >
             <h4>
-              Pending Confirmations ({pendingConfirmations.length})
+              Pending Confirmations ({safePendingConfirmations.length})
               <span className="expand-icon">{showConfirmations ? '▼' : '▶'}</span>
             </h4>
           </div>
           
           {showConfirmations && (
             <div className="confirmations-list">
-              {pendingConfirmations.map(renderConfirmationItem)}
+              {safePendingConfirmations.map(renderConfirmationItem)}
             </div>
           )}
         </div>
       )}
 
-      {/* Task Tabs */}
-      <div className="task-tabs">
-        {(['pending', 'executing', 'completed'] as const).map(tab => (
-          <button
-            key={tab}
-            onClick={() => setSelectedTab(tab)}
-            className={`task-tab ${selectedTab === tab ? 'active' : ''}`}
-          >
-            {tab} ({(allTasks[tab] || []).length})
-          </button>
-        ))}
-      </div>
+      {/* Task Tabs - only show when we have tasks */}
+      {hasAnyTasks && (
+        <div className="task-tabs">
+          {(['pending', 'executing', 'completed'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setSelectedTab(tab)}
+              className={`task-tab ${selectedTab === tab ? 'active' : ''}`}
+            >
+              {tab} ({(allTasks[tab] || []).length})
+            </button>
+          ))}
+        </div>
+      )}
 
-      {/* Task List */}
-      <div className="task-list">
-        {(currentTasks && currentTasks.length > 0) ? (
-          currentTasks.map(renderTaskItem)
-        ) : (
-          <div className="empty-state">
-            <div className="empty-icon">📋</div>
-            <div className="empty-text">No {selectedTab} tasks</div>
-          </div>
-        )}
-      </div>
+      {/* Task List - only show when we have tasks */}
+      {hasAnyTasks && (
+        <div className="task-list">
+          {(currentTasks && currentTasks.length > 0) ? (
+            currentTasks.map(renderTaskItem)
+          ) : (
+            <div className="empty-state">
+              <div className="empty-icon">📋</div>
+              <div className="empty-text">No {selectedTab} tasks</div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

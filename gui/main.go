@@ -33,6 +33,9 @@ func main() {
 		DisableResize:    false, // Allow resizing
 		Fullscreen:       false, // Start in windowed mode
 		AlwaysOnTop:      false, // Don't stay on top
+		Debug: options.Debug{
+			OpenInspectorOnStartup: true, // Enable DevTools on startup
+		},
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
