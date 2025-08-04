@@ -36,3 +36,5 @@ type TaskExecutionEvent struct {
 	Timestamp time.Time `json:"timestamp"`
 	Progress  float64   `json:"progress,omitempty"` // 0.0 to 1.0
 }
+
+

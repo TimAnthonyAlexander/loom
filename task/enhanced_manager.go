@@ -34,7 +34,7 @@ func NewEnhancedManager(executor *Executor, llmAdapter llm.LLMAdapter, chatSessi
 }
 
 // HandleLLMResponseEnhanced processes LLM responses with enhanced features
-func (em *EnhancedManager) HandleLLMResponseEnhanced(llmResponse string, eventChan chan<- TaskExecutionEvent) (*TaskExecution, error) {
+func (em *EnhancedManager) HandleLLMResponseEnhanced(llmResponse string, userEventChan chan<- UserTaskEvent, detailedEventChan chan<- TaskExecutionEvent) (*TaskExecution, error) {
 	// Check if this sets a new objective
 	newObjective := em.completionDetector.ExtractObjective(llmResponse)
 	isNewObjectiveSetting := newObjective != "" && !em.completionDetector.objectiveSet
@@ -51,7 +51,7 @@ func (em *EnhancedManager) HandleLLMResponseEnhanced(llmResponse string, eventCh
 	}
 
 	// Handle task execution with the base manager (includes objective validation)
-	execution, err := em.Manager.HandleLLMResponse(llmResponse, eventChan)
+	execution, err := em.Manager.HandleLLMResponse(llmResponse, userEventChan, detailedEventChan)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func (em *EnhancedManager) HandleLLMResponseEnhanced(llmResponse string, eventCh
 
 		// Check if we should run tests after edits
 		if em.autoRunTests && em.hasFileEdits(execution) {
-			return em.handlePostEditTesting(execution, eventChan)
+			return em.handlePostEditTesting(execution, userEventChan, detailedEventChan)
 		}
 	}
 
@@ -88,54 +88,64 @@ func (em *EnhancedManager) hasFileEdits(execution *TaskExecution) bool {
 }
 
 // handlePostEditTesting handles test discovery and execution after file edits
-func (em *EnhancedManager) handlePostEditTesting(execution *TaskExecution, eventChan chan<- TaskExecutionEvent) (*TaskExecution, error) {
+func (em *EnhancedManager) handlePostEditTesting(execution *TaskExecution, userEventChan chan<- UserTaskEvent, detailedEventChan chan<- TaskExecutionEvent) (*TaskExecution, error) {
 	// Discover tests first
 	if err := em.testDiscovery.DiscoverTests(); err != nil {
-		eventChan <- TaskExecutionEvent{
-			Type:    "test_discovery_failed",
-			Message: fmt.Sprintf("Test discovery failed: %v", err),
+		if detailedEventChan != nil {
+			detailedEventChan <- TaskExecutionEvent{
+				Type:    "test_discovery_failed",
+				Message: fmt.Sprintf("Test discovery failed: %v", err),
+			}
 		}
 		return execution, nil // Don't fail the main execution
 	}
 
 	testCount := em.testDiscovery.GetTestCount()
 	if testCount == 0 {
-		eventChan <- TaskExecutionEvent{
-			Type:    "test_discovery_completed",
-			Message: "No tests found in workspace",
+		if detailedEventChan != nil {
+			detailedEventChan <- TaskExecutionEvent{
+				Type:    "test_discovery_completed",
+				Message: "No tests found in workspace",
+			}
 		}
 		return execution, nil
 	}
 
 	// Notify about test discovery
-	eventChan <- TaskExecutionEvent{
-		Type:    "test_discovery_completed",
-		Message: fmt.Sprintf("Found %d tests across %d files", testCount, len(em.testDiscovery.GetDiscoveredTests())),
+	if detailedEventChan != nil {
+		detailedEventChan <- TaskExecutionEvent{
+			Type:    "test_discovery_completed",
+			Message: fmt.Sprintf("Found %d tests across %d files", testCount, len(em.testDiscovery.GetDiscoveredTests())),
+		}
 	}
 
 	// For now, auto-run Go tests if they exist (can be extended)
 	goTests := em.testDiscovery.GetTestsByLanguage("Go")
 	if len(goTests) > 0 {
-		return em.runTestsForLanguage("Go", execution, eventChan)
+		return em.runTestsForLanguage("Go", execution, userEventChan, detailedEventChan)
 	}
 
 	return execution, nil
 }
 
 // runTestsForLanguage runs tests for a specific language
-func (em *EnhancedManager) runTestsForLanguage(language string, execution *TaskExecution, eventChan chan<- TaskExecutionEvent) (*TaskExecution, error) {
-	eventChan <- TaskExecutionEvent{
-		Type:    "test_execution_started",
-		Message: fmt.Sprintf("Running %s tests...", language),
+func (em *EnhancedManager) runTestsForLanguage(language string, execution *TaskExecution, userEventChan chan<- UserTaskEvent, detailedEventChan chan<- TaskExecutionEvent) (*TaskExecution, error) {
+	if detailedEventChan != nil {
+		detailedEventChan <- TaskExecutionEvent{
+			Type:    "test_execution_started",
+			Message: fmt.Sprintf("Running %s tests...", language),
+		}
 	}
 
 	// Run tests with timeout
 	timeout := 30 * time.Second
 	testResult, err := em.testDiscovery.RunTests(language, em.executor.workspacePath, timeout)
 	if err != nil {
-		eventChan <- TaskExecutionEvent{
-			Type:    "test_execution_failed",
-			Message: fmt.Sprintf("Test execution failed: %v", err),
+		if detailedEventChan != nil {
+			detailedEventChan <- TaskExecutionEvent{
+				Type:    "test_execution_failed",
+				Message: fmt.Sprintf("Test execution failed: %v", err),
+			}
 		}
 		return execution, nil
 	}
@@ -143,9 +153,11 @@ func (em *EnhancedManager) runTestsForLanguage(language string, execution *TaskE
 	// Format test results
 	testSummary := em.formatTestResults(testResult)
 
-	eventChan <- TaskExecutionEvent{
-		Type:    "test_execution_completed",
-		Message: testSummary,
+	if detailedEventChan != nil {
+		detailedEventChan <- TaskExecutionEvent{
+			Type:    "test_execution_completed",
+			Message: testSummary,
+		}
 	}
 
 	// Add test results to chat for AI feedback
@@ -161,7 +173,7 @@ func (em *EnhancedManager) runTestsForLanguage(language string, execution *TaskE
 
 	// If tests failed, trigger AI analysis
 	if !testResult.Success && testResult.TestsFailed > 0 {
-		return em.handleTestFailures(testResult, execution, eventChan)
+		return em.handleTestFailures(testResult, execution, userEventChan, detailedEventChan)
 	}
 
 	return execution, nil
@@ -210,10 +222,12 @@ func (em *EnhancedManager) formatTestResults(result *TestResult) string {
 }
 
 // handleTestFailures triggers AI analysis of test failures
-func (em *EnhancedManager) handleTestFailures(testResult *TestResult, execution *TaskExecution, eventChan chan<- TaskExecutionEvent) (*TaskExecution, error) {
-	eventChan <- TaskExecutionEvent{
-		Type:    "test_analysis_started",
-		Message: "Analyzing test failures with AI...",
+func (em *EnhancedManager) handleTestFailures(testResult *TestResult, execution *TaskExecution, userEventChan chan<- UserTaskEvent, detailedEventChan chan<- TaskExecutionEvent) (*TaskExecution, error) {
+	if detailedEventChan != nil {
+		detailedEventChan <- TaskExecutionEvent{
+			Type:    "test_analysis_started",
+			Message: "Analyzing test failures with AI...",
+		}
 	}
 
 	// Create a prompt for the AI to analyze test failures
@@ -243,9 +257,11 @@ Please provide:
 		return execution, fmt.Errorf("failed to add analysis request to chat: %w", err)
 	}
 
-	eventChan <- TaskExecutionEvent{
-		Type:    "test_analysis_requested",
-		Message: "AI analysis of test failures requested - check chat for detailed analysis",
+	if detailedEventChan != nil {
+		detailedEventChan <- TaskExecutionEvent{
+			Type:    "test_analysis_requested",
+			Message: "AI analysis of test failures requested - check chat for detailed analysis",
+		}
 	}
 
 	return execution, nil

@@ -48,8 +48,9 @@ type ChatService struct {
 	maxContextTokens int
 
 	// Task execution tracking
-	currentExecution *taskPkg.TaskExecution
-	taskEventChan    chan taskPkg.TaskExecutionEvent
+	currentExecution  *taskPkg.TaskExecution
+	taskEventChan     chan taskPkg.TaskExecutionEvent
+	userTaskEventChan chan taskPkg.UserTaskEvent
 }
 
 // NewChatService creates a new chat service with full Loom integration
@@ -68,12 +69,14 @@ func NewChatService(workspacePath string, llmAdapter llm.LLMAdapter, eventBus *e
 	var enhancedManager *taskPkg.EnhancedManager
 	var sequentialManager *taskPkg.SequentialTaskManager
 	var taskEventChan chan taskPkg.TaskExecutionEvent
+	var userTaskEventChan chan taskPkg.UserTaskEvent
 
 	if llmAdapter != nil {
 		enhancedManager = taskPkg.NewEnhancedManager(taskExecutor, llmAdapter, session, idx)
 		taskManager = enhancedManager.Manager // For compatibility
 		sequentialManager = taskPkg.NewSequentialTaskManager(taskExecutor, llmAdapter, session)
 		taskEventChan = make(chan taskPkg.TaskExecutionEvent, 10)
+		userTaskEventChan = make(chan taskPkg.UserTaskEvent, 10)
 	}
 
 	// Get max context tokens from config or use default
@@ -114,6 +117,7 @@ func NewChatService(workspacePath string, llmAdapter llm.LLMAdapter, eventBus *e
 		contextManager:    contextManager,
 		maxContextTokens:  maxContextTokens,
 		taskEventChan:     taskEventChan,
+		userTaskEventChan: userTaskEventChan,
 	}
 
 	// Add enhanced system prompt if this is a new session (no previous messages)
@@ -124,9 +128,12 @@ func NewChatService(workspacePath string, llmAdapter llm.LLMAdapter, eventBus *e
 		}
 	}
 
-	// Start task event handler
+	// Start task event handlers
 	if taskEventChan != nil {
 		go cs.handleTaskEvents()
+	}
+	if userTaskEventChan != nil {
+		go cs.handleUserTaskEvents()
 	}
 
 	return cs
@@ -459,7 +466,7 @@ func (cs *ChatService) handleLLMResponseForTasks(llmResponse string) {
 
 	// For non-exploration requests, use standard task management
 	if cs.taskManager != nil {
-		execution, err := cs.taskManager.HandleLLMResponse(llmResponse, cs.taskEventChan)
+		execution, err := cs.taskManager.HandleLLMResponse(llmResponse, cs.userTaskEventChan, cs.taskEventChan)
 		if err != nil {
 			cs.eventBus.Emit(events.ChatError, map[string]string{
 				"error": fmt.Sprintf("Failed to handle LLM response: %v", err),
@@ -567,6 +574,14 @@ func (cs *ChatService) handleTaskEvents() {
 			// All tasks in the current execution are done - continue LLM conversation
 			cs.continueLLMAfterTasks()
 		}
+	}
+}
+
+// handleUserTaskEvents processes user task events and forwards simplified events to the frontend
+func (cs *ChatService) handleUserTaskEvents() {
+	for event := range cs.userTaskEventChan {
+		// Emit simplified user task events to the frontend
+		cs.eventBus.EmitUserTaskEvent(event)
 	}
 }
 

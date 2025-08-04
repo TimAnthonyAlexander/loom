@@ -189,6 +189,7 @@ type model struct {
 	currentExecution  *taskPkg.TaskExecution
 	taskHistory       []string
 	taskEventChan     chan taskPkg.TaskExecutionEvent
+	userTaskEventChan chan taskPkg.UserTaskEvent
 
 	// Task confirmation
 	pendingConfirmation *TaskConfirmationMsg
@@ -1489,7 +1490,7 @@ func (m *model) handleLLMResponseForTasks(llmResponse string) tea.Cmd {
 
 		// For non-exploration requests, use standard task management
 		if m.taskManager != nil {
-			execution, err := m.taskManager.HandleLLMResponse(llmResponse, m.taskEventChan)
+			execution, err := m.taskManager.HandleLLMResponse(llmResponse, m.userTaskEventChan, m.taskEventChan)
 			if err != nil {
 				return StreamMsg{Error: fmt.Errorf("failed to handle LLM response: %w", err)}
 			}
@@ -2526,6 +2527,7 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 	var enhancedManager *taskPkg.EnhancedManager
 	var sequentialManager *taskPkg.SequentialTaskManager
 	var taskEventChan chan taskPkg.TaskExecutionEvent
+	var userTaskEventChan chan taskPkg.UserTaskEvent
 
 	if llmAdapter != nil {
 		enhancedManager = taskPkg.NewEnhancedManager(taskExecutor, llmAdapter, chatSession, idx)
@@ -2544,6 +2546,7 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 		sequentialManager.SetContextManager(idx, maxContextTokens)
 
 		taskEventChan = make(chan taskPkg.TaskExecutionEvent, 10)
+		userTaskEventChan = make(chan taskPkg.UserTaskEvent, 10)
 	}
 
 	// -----------------------------------------------------------
@@ -2594,6 +2597,7 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 		taskExecutor:      taskExecutor,
 		todoManager:       todoManager,
 		taskEventChan:     taskEventChan,
+		userTaskEventChan: userTaskEventChan,
 		taskHistory:       make([]string, 0),
 		width:             80, // Default width until window size is received
 		height:            24, // Default height until window size is received

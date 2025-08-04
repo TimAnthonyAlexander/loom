@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"loom/shared/models"
+	"loom/task"
 	"sync"
 	"time"
 )
@@ -19,12 +20,19 @@ const (
 	ChatStreamEnded     EventType = "chat:stream_ended"
 	ChatError           EventType = "chat:error"
 
-	// Task events
+	// Task events (detailed - for internal LLM processing)
 	TaskCreated            EventType = "task:created"
 	TaskStatusChanged      EventType = "task:status_changed"
 	TaskConfirmationNeeded EventType = "task:confirmation_needed"
 	TaskCompleted          EventType = "task:completed"
 	TaskFailed             EventType = "task:failed"
+
+	// User task events (simplified - for UI display)
+	UserTaskStatusChanged EventType = "user_task:status_changed"
+	UserTaskStarted       EventType = "user_task:started"
+	UserTaskCompleted     EventType = "user_task:completed"
+	UserTaskFailed        EventType = "user_task:failed"
+	UserTaskProgress      EventType = "user_task:progress"
 
 	// File events
 	FileChanged     EventType = "file:changed"
@@ -137,4 +145,20 @@ func (eb *EventBus) EmitSystemError(err error) {
 	eb.Emit(SystemError, map[string]string{
 		"error": err.Error(),
 	})
+}
+
+// EmitUserTaskEvent emits a simplified user task event
+func (eb *EventBus) EmitUserTaskEvent(event task.UserTaskEvent) {
+	switch event.Type {
+	case "started":
+		eb.Emit(UserTaskStarted, event)
+	case "completed":
+		eb.Emit(UserTaskCompleted, event)
+	case "failed":
+		eb.Emit(UserTaskFailed, event)
+	case "progress":
+		eb.Emit(UserTaskProgress, event)
+	default:
+		eb.Emit(UserTaskStatusChanged, event)
+	}
 }

@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv" // Used for parsing integers in natural language task commands
 	"strings"
+	"time"
 )
 
 // Default values for task parameters
@@ -332,6 +333,19 @@ type TaskResponse struct {
 	ProgressiveValidation *ProgressiveValidationResult `json:"progressive_validation,omitempty"` // Progressive validation results
 	Approved              bool                         `json:"approved,omitempty"`               // For tasks requiring confirmation
 	VerificationText      string                       `json:"verification_text,omitempty"`      // Enhanced verification text for LLM
+}
+
+// UserTaskEvent represents simplified task status for user interface
+// This event type contains minimal information for user display, hiding
+// technical details like outputs, errors, and validation results
+type UserTaskEvent struct {
+	TaskID      string    `json:"taskId"`
+	Type        string    `json:"type"`               // "started", "completed", "failed", "progress"
+	Message     string    `json:"message"`            // Simple user-friendly message
+	TaskType    string    `json:"taskType"`           // "read_file", "edit_file", "run_shell", etc.
+	Description string    `json:"description"`        // Brief task description
+	Progress    float64   `json:"progress,omitempty"` // 0.0 to 1.0
+	Timestamp   time.Time `json:"timestamp"`
 }
 
 // tryLoomEditParsing attempts to parse LOOM_EDIT commands from LLM response
