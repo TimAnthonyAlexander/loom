@@ -287,6 +287,32 @@ docs: ## Generate documentation
 	go doc -all . > docs.txt
 	@echo "$(GREEN)✅ Documentation generated: docs.txt$(NC)"
 
+dist: download-ripgrep ## Build both TUI and GUI executables for all platforms in dist/
+	@echo "$(BLUE)🔨 Building TUI and GUI executables for all platforms...$(NC)"
+	rm -rf dist/
+	mkdir -p dist/
+	
+	@echo "$(BLUE)Building TUI executables...$(NC)"
+	GOOS=darwin GOARCH=amd64 go build -o dist/loom-tui-darwin-amd64 .
+	GOOS=darwin GOARCH=arm64 go build -o dist/loom-tui-darwin-arm64 .
+	GOOS=linux GOARCH=amd64 go build -o dist/loom-tui-linux-amd64 .
+	GOOS=linux GOARCH=arm64 go build -o dist/loom-tui-linux-arm64 .
+	GOOS=windows GOARCH=amd64 go build -o dist/loom-tui-windows-amd64.exe .
+	GOOS=windows GOARCH=arm64 go build -o dist/loom-tui-windows-arm64.exe .
+	
+	@echo "$(BLUE)Building GUI executables...$(NC)"
+	cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails build --platform=darwin/amd64,darwin/arm64,windows/amd64,windows/arm64
+	
+	@echo "$(BLUE)Copying GUI executables to dist/...$(NC)"
+	cp gui/build/loom-gui dist/loom-gui-darwin-amd64 2>/dev/null || cp gui/build/Loom* dist/loom-gui-darwin-amd64 2>/dev/null || echo "Darwin amd64 GUI not found"
+	find gui/build -name "*arm64*" -type f -executable -exec cp {} dist/loom-gui-darwin-arm64 \; 2>/dev/null || echo "Darwin arm64 GUI not found"
+	find gui/build -name "*.exe" -type f -exec cp {} dist/loom-gui-windows-amd64.exe \; 2>/dev/null || echo "Windows GUI not found"
+	find gui/build -name "*windows*arm64*" -type f -exec cp {} dist/loom-gui-windows-arm64.exe \; 2>/dev/null || echo "Windows arm64 GUI not found"
+	
+	@echo "$(GREEN)✅ All executables built and placed in dist/!$(NC)"
+	@echo "$(BLUE)📦 Contents:$(NC)"
+	@ls -la dist/
+
 # Release helpers
 version: ## Show version info
 	@echo "$(BLUE)📋 Version information:$(NC)"
