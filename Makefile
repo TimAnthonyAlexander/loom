@@ -81,6 +81,40 @@ build-all: download-ripgrep build-frontend ## Build for all platforms with embed
 	cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails build --platform=linux/amd64,darwin/amd64,darwin/arm64,windows/amd64
 	@echo "$(GREEN)✅ Multi-platform GUI build complete!$(NC)"
 
+# Deployment targets
+deploy-gui: build-gui ## Build GUI for current platform and show deployment info
+	@echo "$(GREEN)🎉 GUI Application Built Successfully!$(NC)"
+	@echo "$(BLUE)📦 Executable location: gui/build/gui$(NC)"
+	@echo ""
+	@echo "$(YELLOW)🚀 Ready to Deploy:$(NC)"
+	@echo "  • The executable is self-contained (includes web UI)"
+	@echo "  • No separate web server needed"
+	@echo "  • Double-click to run or use from command line"
+	@echo ""
+	@ls -la gui/build/
+
+deploy-gui-all: build-all ## Build GUI for all platforms with distribution info
+	@echo "$(GREEN)🎉 Multi-Platform GUI Applications Built!$(NC)"
+	@echo "$(BLUE)📦 GUI Applications:$(NC)"
+	@ls -la gui/build/ | grep -v "^total"
+	@echo ""
+	@echo "$(YELLOW)🚀 Distribution Ready:$(NC)"
+	@echo "  • Each executable is self-contained"
+	@echo "  • No additional files or servers needed"
+	@echo "  • Ready for distribution to end users"
+
+package-gui: build-gui ## Build and create distribution package
+	@echo "$(BLUE)📦 Creating distribution package...$(NC)"
+	mkdir -p dist
+	cp gui/build/gui dist/loom-gui
+	@echo "$(GREEN)✅ Package ready: dist/loom-gui$(NC)"
+	@echo "$(YELLOW)💡 To distribute: Zip the dist/ folder or copy the executable$(NC)"
+
+package-gui-installer: ## Build GUI with installer (Windows/macOS)
+	@echo "$(BLUE)📦 Building GUI with installer...$(NC)"
+	cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails build -nsis
+	@echo "$(GREEN)✅ Installer build complete!$(NC)"
+
 RIPGREP_VERSION=14.1.0
 RIPGREP_DIR=bin
 
