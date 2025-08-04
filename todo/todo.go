@@ -391,21 +391,7 @@ func (tm *TodoManager) FormatTodoForDisplay() string {
 		return "No active todo list"
 	}
 
-	var sb strings.Builder
-	sb.WriteString("📝 **Current TODO List:**\n\n")
-
-	for i, item := range tm.currentList.Items {
-		status := "⬜"
-		if item.Checked {
-			status = "✅"
-		} else if i > 0 && !tm.currentList.Items[i-1].Checked {
-			status = "🔒" // Locked because previous item not checked
-		}
-
-		sb.WriteString(fmt.Sprintf("%s **%d.** %s\n", status, item.Order, item.Title))
-	}
-
-	// Add progress info
+	// Count completed items
 	checkedCount := 0
 	for _, item := range tm.currentList.Items {
 		if item.Checked {
@@ -413,7 +399,19 @@ func (tm *TodoManager) FormatTodoForDisplay() string {
 		}
 	}
 
-	sb.WriteString(fmt.Sprintf("\n**Progress:** %d/%d items completed", checkedCount, len(tm.currentList.Items)))
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("📝 **TODO** (%d/%d):\n", checkedCount, len(tm.currentList.Items)))
+
+	for i, item := range tm.currentList.Items {
+		status := "⬜"
+		if item.Checked {
+			status = "✅"
+		} else if i > 0 && !tm.currentList.Items[i-1].Checked {
+			status = "🔒"
+		}
+
+		sb.WriteString(fmt.Sprintf("%s %d. %s\n", status, item.Order, item.Title))
+	}
 
 	return sb.String()
 }

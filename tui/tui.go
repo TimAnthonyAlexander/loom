@@ -101,9 +101,14 @@ type StreamStartMsg struct {
 	chunks chan llm.StreamChunk
 }
 
-// TaskEventMsg represents task execution events
+// TaskEventMsg represents detailed task execution events
 type TaskEventMsg struct {
 	Event taskPkg.TaskExecutionEvent
+}
+
+// UserTaskEventMsg represents simplified user task events
+type UserTaskEventMsg struct {
+	Event taskPkg.UserTaskEvent
 }
 
 // TaskConfirmationMsg represents a pending task confirmation
@@ -189,6 +194,7 @@ type model struct {
 	currentExecution  *taskPkg.TaskExecution
 	taskHistory       []string
 	taskEventChan     chan taskPkg.TaskExecutionEvent
+	userTaskEventChan chan taskPkg.UserTaskEvent
 
 	// Task confirmation
 	pendingConfirmation *TaskConfirmationMsg
@@ -848,6 +854,9 @@ Ask me anything about your code, architecture, or programming questions!`
 	case TaskEventMsg:
 		return m.handleTaskEvent(msg.Event)
 
+	case UserTaskEventMsg:
+		return m.handleUserTaskEvent(msg.Event)
+
 	case TestPromptMsg:
 		return m.handleTestPrompt(msg)
 
@@ -1148,37 +1157,39 @@ func (m model) renderTodoPanel() string {
 		return ""
 	}
 
-	var sb strings.Builder
-	sb.WriteString("📝 TODO:")
-
-	// Show only first 3 items to keep info panel compact
-	itemsToShow := len(currentList.Items)
-	if itemsToShow > 3 {
-		itemsToShow = 3
+	// Count completed items for progress
+	completed := 0
+	for _, item := range currentList.Items {
+		if item.Checked {
+			completed++
+		}
 	}
 
-	for i := 0; i < itemsToShow; i++ {
+	// Show compact progress format: "📝 TODO: 2/5 ✅⬜🔒..."
+	total := len(currentList.Items)
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("📝 TODO: %d/%d ", completed, total))
+
+	// Show status icons for up to 4 items to keep it compact
+	maxIcons := 4
+	if total < maxIcons {
+		maxIcons = total
+	}
+
+	for i := 0; i < maxIcons; i++ {
 		item := currentList.Items[i]
-		status := "⬜"
 		if item.Checked {
-			status = "✅"
+			sb.WriteString("✅")
 		} else if i > 0 && !currentList.Items[i-1].Checked {
-			status = "🔒" // Locked because previous item not checked
+			sb.WriteString("🔒")
+		} else {
+			sb.WriteString("⬜")
 		}
-
-		// Truncate long titles for compact display
-		title := item.Title
-		if len(title) > 30 {
-			title = title[:27] + "..."
-		}
-
-		sb.WriteString(fmt.Sprintf(" %s %s", status, title))
 	}
 
 	// Show "..." if there are more items
-	if len(currentList.Items) > 3 {
-		remaining := len(currentList.Items) - 3
-		sb.WriteString(fmt.Sprintf(" (+%d more)", remaining))
+	if total > maxIcons {
+		sb.WriteString("...")
 	}
 
 	return sb.String()
@@ -1489,7 +1500,7 @@ func (m *model) handleLLMResponseForTasks(llmResponse string) tea.Cmd {
 
 		// For non-exploration requests, use standard task management
 		if m.taskManager != nil {
-			execution, err := m.taskManager.HandleLLMResponse(llmResponse, m.taskEventChan)
+			execution, err := m.taskManager.HandleLLMResponse(llmResponse, m.userTaskEventChan, m.taskEventChan)
 			if err != nil {
 				return StreamMsg{Error: fmt.Errorf("failed to handle LLM response: %w", err)}
 			}
@@ -1834,7 +1845,18 @@ func (m *model) mentionsFutureWork(response string) bool {
 	return false
 }
 
-// handleTaskEvent processes task execution events
+// handleUserTaskEvent processes simplified user task events
+func (m model) handleUserTaskEvent(event taskPkg.UserTaskEvent) (tea.Model, tea.Cmd) {
+	// Add simplified message to task history
+	if event.Message != "" {
+		m.taskHistory = append(m.taskHistory, event.Message)
+	}
+
+	// No other special handling needed for user events - they're already simplified
+	return m, nil
+}
+
+// handleTaskEvent processes detailed task execution events (for internal LLM processing)
 func (m model) handleTaskEvent(event taskPkg.TaskExecutionEvent) (tea.Model, tea.Cmd) {
 	// Add to task history
 	if event.Message != "" {
@@ -2526,6 +2548,7 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 	var enhancedManager *taskPkg.EnhancedManager
 	var sequentialManager *taskPkg.SequentialTaskManager
 	var taskEventChan chan taskPkg.TaskExecutionEvent
+	var userTaskEventChan chan taskPkg.UserTaskEvent
 
 	if llmAdapter != nil {
 		enhancedManager = taskPkg.NewEnhancedManager(taskExecutor, llmAdapter, chatSession, idx)
@@ -2544,6 +2567,7 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 		sequentialManager.SetContextManager(idx, maxContextTokens)
 
 		taskEventChan = make(chan taskPkg.TaskExecutionEvent, 10)
+		userTaskEventChan = make(chan taskPkg.UserTaskEvent, 10)
 	}
 
 	// -----------------------------------------------------------
@@ -2594,6 +2618,7 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 		taskExecutor:      taskExecutor,
 		todoManager:       todoManager,
 		taskEventChan:     taskEventChan,
+		userTaskEventChan: userTaskEventChan,
 		taskHistory:       make([]string, 0),
 		width:             80, // Default width until window size is received
 		height:            24, // Default height until window size is received
@@ -2635,6 +2660,16 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 			for ev := range taskEventChan {
 				// Forward TaskEventMsg; Send has no return value.
 				p.Send(TaskEventMsg{Event: ev})
+			}
+		}()
+	}
+
+	// Forward user task events for simplified UI display
+	if userTaskEventChan != nil {
+		go func() {
+			for ev := range userTaskEventChan {
+				// Forward UserTaskEventMsg; Send has no return value.
+				p.Send(UserTaskEventMsg{Event: ev})
 			}
 		}()
 	}
@@ -3151,7 +3186,7 @@ func (m *model) executeSlashCommand(cmdStr string) tea.Cmd {
 		userMsg := llm.Message{Role: "user", Content: cmdStr, Timestamp: time.Now()}
 		m.chatSession.AddMessage(userMsg)
 		// Reuse helpContent string from earlier path (simplified call)
-		helpContent := `🤖 **Loom Help**\n\nUse /files, /stats, /tasks, /test, /summary, /rationale, /debug, /help, /quit, /todo` // shorter help here
+		helpContent := `🤖 **Loom Help**\n\nCommands: /files, /stats, /tasks, /todo, /test, /summary, /rationale, /debug, /help, /quit`
 		resp := llm.Message{Role: "assistant", Content: helpContent, Timestamp: time.Now()}
 		m.chatSession.AddMessage(resp)
 		m.messages = m.chatSession.GetDisplayMessages()

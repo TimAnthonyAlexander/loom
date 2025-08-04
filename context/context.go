@@ -379,8 +379,8 @@ func (cm *ContextManager) summarizeOlderMessages(messages []llm.Message) llm.Mes
 			result := taskResults[task]
 			if result != "" {
 				// Summarize long results
-				if len(result) > 200 {
-					result = result[:200] + "... (truncated)"
+				if len(result) > 600 {
+					result = result[:600] + "... (truncated)"
 				}
 				content.WriteString(fmt.Sprintf("- %s\n  Result: %s\n", task, result))
 			} else {

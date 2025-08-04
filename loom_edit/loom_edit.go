@@ -39,12 +39,20 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 	// Parse header line
 	headerLine := lines[0]
 
-	// Base pattern for all commands
+	// Base pattern for all commands - try strict format first
 	basePattern := regexp.MustCompile(`^(?:>>|🔧 )LOOM_EDIT file=([^\s]+) (REPLACE|INSERT_AFTER|INSERT_BEFORE|DELETE|SEARCH_REPLACE|CREATE)`)
 	baseMatches := basePattern.FindStringSubmatch(headerLine)
 
+	// If strict format fails, try without prefix (and warn)
 	if baseMatches == nil {
-		return nil, fmt.Errorf("invalid LOOM_EDIT header format: %s", headerLine)
+		fallbackPattern := regexp.MustCompile(`^LOOM_EDIT file=([^\s]+) (REPLACE|INSERT_AFTER|INSERT_BEFORE|DELETE|SEARCH_REPLACE|CREATE)`)
+		baseMatches = fallbackPattern.FindStringSubmatch(headerLine)
+
+		if baseMatches != nil {
+			fmt.Printf("Warning: LOOM_EDIT command missing >> prefix. Please use: >>LOOM_EDIT ...\n")
+		} else {
+			return nil, fmt.Errorf("invalid LOOM_EDIT header format: %s", headerLine)
+		}
 	}
 
 	filePath := baseMatches[1]
@@ -77,7 +85,7 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 		searchReplacePattern := regexp.MustCompile(`SEARCH_REPLACE\s+"([^"]+)"\s+"([^"]+)"`)
 		srMatches := searchReplacePattern.FindStringSubmatch(headerLine)
 
-		if srMatches != nil && len(srMatches) >= 3 {
+		if len(srMatches) >= 3 {
 			cmd.OldString = srMatches[1]
 			cmd.NewString = srMatches[2]
 		} else {

@@ -609,3 +609,69 @@ func TestCreateOperation(t *testing.T) {
 		t.Errorf("Nested CREATE failed.\nGot:\n%s\nExpected:\n%s", string(resultContent), "# Nested File")
 	}
 }
+
+// TestParseMissingPrefixFallback tests that LOOM_EDIT commands without >> prefix are parsed with a warning
+func TestParseMissingPrefixFallback(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{
+			name: "missing_prefix_insert_after",
+			input: `LOOM_EDIT file=test.txt INSERT_AFTER 5
+This is new content
+<<LOOM_EDIT`,
+			wantErr: false,
+		},
+		{
+			name: "missing_prefix_replace",
+			input: `LOOM_EDIT file=test.txt REPLACE 3-5
+Replacement content
+<<LOOM_EDIT`,
+			wantErr: false,
+		},
+		{
+			name: "correct_prefix_insert_after",
+			input: `>>LOOM_EDIT file=test.txt INSERT_AFTER 5
+This is new content
+<<LOOM_EDIT`,
+			wantErr: false,
+		},
+		{
+			name: "invalid_format",
+			input: `INVALID_EDIT file=test.txt INSERT_AFTER 5
+This is new content
+<<LOOM_EDIT`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd, err := ParseEditCommand(tt.input)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("Expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+				return
+			}
+
+			if cmd == nil {
+				t.Errorf("Expected command but got nil")
+				return
+			}
+
+			// Verify basic parsing worked
+			if cmd.File != "test.txt" {
+				t.Errorf("Expected file 'test.txt', got '%s'", cmd.File)
+			}
+		})
+	}
+}

@@ -141,8 +141,9 @@ export default App;
 <<LOOM_EDIT`
 
 	// Execute through manager
+	userEventChan := make(chan UserTaskEvent, 10)
 	eventChan := make(chan TaskExecutionEvent, 10)
-	execution, err := manager.HandleLLMResponse(llmResponse, eventChan)
+	execution, err := manager.HandleLLMResponse(llmResponse, userEventChan, eventChan)
 	if err != nil {
 		t.Fatalf("Manager failed to handle LLM response: %v", err)
 	}

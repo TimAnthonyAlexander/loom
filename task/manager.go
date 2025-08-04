@@ -6,6 +6,8 @@ import (
 	"loom/llm"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // Manager orchestrates task execution and recursive chat loops
@@ -52,7 +54,9 @@ func NewManager(executor *Executor, llmAdapter llm.LLMAdapter, chatSession ChatS
 }
 
 // HandleLLMResponse processes an LLM response and executes any tasks found
-func (m *Manager) HandleLLMResponse(llmResponse string, eventChan chan<- TaskExecutionEvent) (*TaskExecution, error) {
+// userEventChan receives simplified events for UI display
+// detailedEventChan receives full events for internal LLM processing (can be nil)
+func (m *Manager) HandleLLMResponse(llmResponse string, userEventChan chan<- UserTaskEvent, detailedEventChan chan<- TaskExecutionEvent) (*TaskExecution, error) {
 	// Check if this sets a new objective
 	newObjective := m.completionDetector.ExtractObjective(llmResponse)
 	isNewObjectiveSetting := newObjective != "" && !m.completionDetector.objectiveSet
@@ -87,9 +91,19 @@ func (m *Manager) HandleLLMResponse(llmResponse string, eventChan chan<- TaskExe
 		}
 
 		// Create a special event to notify the UI about objective change and trigger auto-continuation
-		eventChan <- TaskExecutionEvent{
-			Type:    "objective_change_auto_continue",
-			Message: fmt.Sprintf("Objective change detected. Redirecting LLM back to original objective: %s", objectiveValidation.OriginalObjective),
+		userEventChan <- UserTaskEvent{
+			Type:      "failed",
+			Message:   "Objective changed - refocusing on original goal",
+			TaskType:  "objective_management",
+			Timestamp: time.Now(),
+		}
+
+		// Also send detailed event for internal processing if channel exists
+		if detailedEventChan != nil {
+			detailedEventChan <- TaskExecutionEvent{
+				Type:    "objective_change_auto_continue",
+				Message: fmt.Sprintf("Objective change detected. Redirecting LLM back to original objective: %s", objectiveValidation.OriginalObjective),
+			}
 		}
 
 		// Return nil instead of error to allow conversation to continue
@@ -126,13 +140,27 @@ func (m *Manager) HandleLLMResponse(llmResponse string, eventChan chan<- TaskExe
 	for i, task := range execution.Tasks {
 		// Create a copy of the task to avoid loop variable capture issues
 		currentTask := task
+		taskID := uuid.New().String()
 
-		// Send task started event
-		eventChan <- TaskExecutionEvent{
-			Type:      "task_started",
-			Task:      &currentTask,
-			Execution: execution,
-			Message:   fmt.Sprintf("Executing task %d/%d: %s", i+1, len(execution.Tasks), currentTask.Description()),
+		// Send simplified user event
+		userEventChan <- UserTaskEvent{
+			TaskID:      taskID,
+			Type:        "started",
+			Message:     fmt.Sprintf("Executing %s...", m.getSimpleTaskDescription(&currentTask)),
+			TaskType:    string(currentTask.Type),
+			Description: m.getSimpleTaskDescription(&currentTask),
+			Progress:    float64(i) / float64(len(execution.Tasks)),
+			Timestamp:   time.Now(),
+		}
+
+		// Send detailed event for internal processing if channel exists
+		if detailedEventChan != nil {
+			detailedEventChan <- TaskExecutionEvent{
+				Type:      "task_started",
+				Task:      &currentTask,
+				Execution: execution,
+				Message:   fmt.Sprintf("Executing task %d/%d: %s", i+1, len(execution.Tasks), currentTask.Description()),
+			}
 		}
 
 		// Execute the task
@@ -140,19 +168,32 @@ func (m *Manager) HandleLLMResponse(llmResponse string, eventChan chan<- TaskExe
 		execution.Responses = append(execution.Responses, *response)
 
 		if !response.Success {
-			// Task failed
-			eventChan <- TaskExecutionEvent{
-				Type:      "task_failed",
-				Task:      &currentTask,
-				Response:  response,
-				Execution: execution,
-				Message:   fmt.Sprintf("Task failed: %s", response.Error),
+			// Send simplified user event for task failure
+			userEventChan <- UserTaskEvent{
+				TaskID:      taskID,
+				Type:        "failed",
+				Message:     fmt.Sprintf("Failed: %s", m.getSimpleTaskDescription(&currentTask)),
+				TaskType:    string(currentTask.Type),
+				Description: m.getSimpleTaskDescription(&currentTask),
+				Progress:    float64(i+1) / float64(len(execution.Tasks)),
+				Timestamp:   time.Now(),
+			}
+
+			// Send detailed event for internal processing if channel exists
+			if detailedEventChan != nil {
+				detailedEventChan <- TaskExecutionEvent{
+					Type:      "task_failed",
+					Task:      &currentTask,
+					Response:  response,
+					Execution: execution,
+					Message:   fmt.Sprintf("Task failed: %s", response.Error),
+				}
 			}
 
 			// CRITICAL FIX: Add failed task result to chat so LLM can see the error
 			taskResultMessage := llm.Message{
 				Role:      "assistant",
-				Content:   m.formatTaskResult(&currentTask, response),
+				Content:   m.formatTaskResultForLLM(&currentTask, response),
 				Timestamp: time.Now(),
 			}
 
@@ -164,19 +205,32 @@ func (m *Manager) HandleLLMResponse(llmResponse string, eventChan chan<- TaskExe
 			continue
 		}
 
-		// Task completed successfully
-		eventChan <- TaskExecutionEvent{
-			Type:      "task_completed",
-			Task:      &currentTask,
-			Response:  response,
-			Execution: execution,
-			Message:   fmt.Sprintf("Task completed: %s", currentTask.Description()),
+		// Send simplified user event for task completion
+		userEventChan <- UserTaskEvent{
+			TaskID:      taskID,
+			Type:        "completed",
+			Message:     fmt.Sprintf("Completed: %s", m.getSimpleTaskDescription(&currentTask)),
+			TaskType:    string(currentTask.Type),
+			Description: m.getSimpleTaskDescription(&currentTask),
+			Progress:    float64(i+1) / float64(len(execution.Tasks)),
+			Timestamp:   time.Now(),
+		}
+
+		// Send detailed event for internal processing if channel exists
+		if detailedEventChan != nil {
+			detailedEventChan <- TaskExecutionEvent{
+				Type:      "task_completed",
+				Task:      &currentTask,
+				Response:  response,
+				Execution: execution,
+				Message:   fmt.Sprintf("Task completed: %s", currentTask.Description()),
+			}
 		}
 
 		// Add task result to chat context for next LLM iteration
 		taskResultMessage := llm.Message{
 			Role:      "assistant",
-			Content:   m.formatTaskResult(&task, response),
+			Content:   m.formatTaskResultForLLM(&task, response),
 			Timestamp: time.Now(),
 		}
 
@@ -189,10 +243,24 @@ func (m *Manager) HandleLLMResponse(llmResponse string, eventChan chan<- TaskExe
 	execution.EndTime = time.Now()
 	execution.Status = "completed"
 
-	eventChan <- TaskExecutionEvent{
-		Type:      "execution_completed",
-		Execution: execution,
-		Message:   fmt.Sprintf("All tasks completed (%d total)", len(execution.Tasks)),
+	// Send simplified user event for execution completion
+	userEventChan <- UserTaskEvent{
+		TaskID:      uuid.New().String(),
+		Type:        "completed",
+		Message:     fmt.Sprintf("All tasks completed (%d total)", len(execution.Tasks)),
+		TaskType:    "execution_summary",
+		Description: "Task execution finished",
+		Progress:    1.0,
+		Timestamp:   time.Now(),
+	}
+
+	// Send detailed event for internal processing if channel exists
+	if detailedEventChan != nil {
+		detailedEventChan <- TaskExecutionEvent{
+			Type:      "execution_completed",
+			Execution: execution,
+			Message:   fmt.Sprintf("All tasks completed (%d total)", len(execution.Tasks)),
+		}
 	}
 
 	return execution, nil
@@ -347,6 +415,105 @@ func (m *Manager) formatTaskResult(task *Task, response *TaskResponse) string {
 	}
 
 	return result.String()
+}
+
+// formatTaskResultForLLM formats task results for LLM context (includes actual content)
+func (m *Manager) formatTaskResultForLLM(task *Task, response *TaskResponse) string {
+	var content strings.Builder
+
+	content.WriteString(fmt.Sprintf("TASK_RESULT: %s\n", task.Description()))
+
+	if response.Success {
+		content.WriteString("STATUS: Success\n")
+		// Use ActualContent for LLM context (includes full file content, etc.)
+		if response.ActualContent != "" {
+			content.WriteString(fmt.Sprintf("CONTENT:\n%s\n", response.ActualContent))
+		} else if response.Output != "" {
+			content.WriteString(fmt.Sprintf("CONTENT:\n%s\n", response.Output))
+		}
+	} else {
+		content.WriteString("STATUS: Failed\n")
+		if response.Error != "" {
+			content.WriteString(fmt.Sprintf("ERROR: %s\n", response.Error))
+		}
+		// Provide any output or diagnostic content to the LLM even when the
+		// task fails so it can reason about the failure.
+		if response.ActualContent != "" {
+			content.WriteString(fmt.Sprintf("CONTENT:\n%s\n", response.ActualContent))
+		} else if response.Output != "" {
+			content.WriteString(fmt.Sprintf("CONTENT:\n%s\n", response.Output))
+		}
+	}
+
+	return content.String()
+}
+
+// getSimpleTaskDescription returns a simplified, user-friendly description of a task
+func (m *Manager) getSimpleTaskDescription(task *Task) string {
+	switch task.Type {
+	case TaskTypeReadFile:
+		if task.Path != "" {
+			return fmt.Sprintf("reading %s", task.Path)
+		}
+		return "reading file"
+	case TaskTypeEditFile:
+		if task.Path != "" {
+			return fmt.Sprintf("editing %s", task.Path)
+		}
+		return "editing file"
+	case TaskTypeRunShell:
+		if task.Command != "" {
+			// Truncate long commands for user display
+			cmd := task.Command
+			if len(cmd) > 50 {
+				cmd = cmd[:47] + "..."
+			}
+			return fmt.Sprintf("running: %s", cmd)
+		}
+		return "running command"
+	case TaskTypeListDir:
+		if task.Path != "" {
+			return fmt.Sprintf("listing %s", task.Path)
+		}
+		return "listing directory"
+	case TaskTypeSearch:
+		if task.Query != "" {
+			return fmt.Sprintf("searching for: %s", task.Query)
+		}
+		return "searching files"
+	case TaskTypeMemory:
+		switch task.MemoryOperation {
+		case "create":
+			return "creating memory"
+		case "update":
+			return "updating memory"
+		case "delete":
+			return "deleting memory"
+		case "get":
+			return "retrieving memory"
+		case "list":
+			return "listing memories"
+		default:
+			return "managing memory"
+		}
+	case TaskTypeTodo:
+		switch task.TodoOperation {
+		case "create":
+			return "creating todo items"
+		case "check":
+			return "checking todo item"
+		case "uncheck":
+			return "unchecking todo item"
+		case "show":
+			return "showing todo list"
+		case "clear":
+			return "clearing todo list"
+		default:
+			return "managing todo list"
+		}
+	default:
+		return string(task.Type)
+	}
 }
 
 // FormatConfirmationResult formats the result of a task confirmation for LLM feedback

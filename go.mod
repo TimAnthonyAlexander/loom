@@ -8,6 +8,7 @@ require (
 	github.com/charmbracelet/bubbletea v1.3.6
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/fsnotify/fsnotify v1.9.0
+	github.com/google/uuid v1.6.0
 	github.com/sashabaranov/go-openai v1.40.5
 	github.com/sergi/go-diff v1.4.0
 	github.com/spf13/cobra v1.9.1
