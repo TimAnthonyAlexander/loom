@@ -14,13 +14,14 @@ import (
 
 // ChatService handles chat operations and LLM interactions
 type ChatService struct {
-	session      *chat.Session
-	llmAdapter   llm.LLMAdapter
-	eventBus     *events.EventBus
-	streamChan   chan llm.StreamChunk
-	streamCancel context.CancelFunc
-	isStreaming  bool
-	mutex        sync.RWMutex
+	session       *chat.Session
+	llmAdapter    llm.LLMAdapter
+	eventBus      *events.EventBus
+	streamChan    chan llm.StreamChunk
+	streamCancel  context.CancelFunc
+	isStreaming   bool
+	workspacePath string // Store workspace path since session doesn't expose it
+	mutex         sync.RWMutex
 }
 
 // NewChatService creates a new chat service
@@ -28,9 +29,10 @@ func NewChatService(workspacePath string, llmAdapter llm.LLMAdapter, eventBus *e
 	session := chat.NewSession(workspacePath, 50) // Max 50 messages
 
 	return &ChatService{
-		session:    session,
-		llmAdapter: llmAdapter,
-		eventBus:   eventBus,
+		session:       session,
+		llmAdapter:    llmAdapter,
+		eventBus:      eventBus,
+		workspacePath: workspacePath,
 	}
 }
 
@@ -55,7 +57,7 @@ func (cs *ChatService) GetChatState() models.ChatState {
 		Messages:      messages,
 		IsStreaming:   cs.isStreaming,
 		SessionID:     "current-session", // Note: Session struct doesn't expose ID
-		WorkspacePath: cs.session.workspacePath,
+		WorkspacePath: cs.getWorkspacePath(),
 	}
 }
 
@@ -106,13 +108,8 @@ func (cs *ChatService) streamLLMResponse() {
 	go func() {
 		defer close(cs.streamChan)
 
-		// Note: LLMAdapter interface may need to be extended for streaming
-		// For now, use regular completion and simulate streaming
-		response, err := cs.llmAdapter.GenerateCompletion(ctx, messages)
-		if err == nil {
-			// Simulate streaming by sending the full response
-			cs.streamChan <- llm.StreamChunk{Content: response, Done: true}
-		}
+		// Use the Stream method from LLMAdapter
+		err := cs.llmAdapter.Stream(ctx, messages, cs.streamChan)
 		if err != nil {
 			cs.eventBus.Emit(events.ChatError, map[string]string{
 				"error": err.Error(),
@@ -206,11 +203,16 @@ func (cs *ChatService) ClearChat() {
 	defer cs.mutex.Unlock()
 
 	// Create new session to clear messages
-	cs.session = chat.NewSession(cs.session.workspacePath, 50)
+	cs.session = chat.NewSession(cs.getWorkspacePath(), 50)
 }
 
 // GetMessages returns all chat messages
 func (cs *ChatService) GetMessages() []models.Message {
 	state := cs.GetChatState()
 	return state.Messages
+}
+
+// getWorkspacePath returns the workspace path
+func (cs *ChatService) getWorkspacePath() string {
+	return cs.workspacePath
 }

@@ -67,7 +67,7 @@ func (ts *TaskService) ParseTasksFromLLMResponse(llmResponse string) ([]*models.
 	for _, task := range tasks {
 		taskInfo := &models.TaskInfo{
 			ID:          uuid.New().String(),
-			Type:        task.Type,
+			Type:        string(task.Type),
 			Description: ts.generateTaskDescription(task),
 			Status:      "pending",
 			CreatedAt:   time.Now(),
