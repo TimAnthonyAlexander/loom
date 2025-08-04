@@ -23,12 +23,7 @@ help: ## Show this help message
 	@echo "  $(GREEN)make dev-gui-silent$(NC)- Background mode (minimal output)"
 	@echo ""
 	@echo "$(YELLOW)GUI Build Options:$(NC)"
-	@echo "  $(GREEN)make build-gui$(NC)              - Build for current platform"
-	@echo "  $(GREEN)make build-gui-linux$(NC)        - Build for Linux (requires Docker)"
-	@echo "  $(GREEN)make build-gui-all-platforms$(NC) - Build for ALL platforms including Linux"
-	@echo ""
-	@echo "$(YELLOW)Distribution Build Options:$(NC)"
-	@echo "  $(GREEN)make dist$(NC)                   - Build TUI & GUI for all platforms"
+	@echo "  $(GREEN)make dist$(NC)              - Build for all platforms"
 	@echo "  $(GREEN)make dist-macos-arm$(NC)         - Build TUI & GUI for macOS ARM only"
 	@echo "  $(GREEN)make dist-with-linux-gui$(NC)    - Build all platforms including Linux GUI"
 
@@ -50,26 +45,6 @@ build: ## Build the binary
 
 build-embedded: download-ripgrep build ## Build the binary with embedded ripgrep
 	@echo "$(GREEN)✅ Build complete with embedded ripgrep: $(BINARY_PATH)$(NC)"
-
-# GUI build commands
-build-gui: ## Build the GUI application
-	@echo "$(BLUE)🔨 Building GUI application...$(NC)"
-	cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails build
-	@echo "$(GREEN)✅ GUI build complete: gui/build/$(NC)"
-
-build-gui-linux: ## Build GUI for Linux using Docker
-	@echo "$(BLUE)🔨 Building GUI for Linux using Docker...$(NC)"
-	@echo "$(YELLOW)⚠️  This requires Docker to be installed and running$(NC)"
-	cd gui && ./build-linux.sh
-	@echo "$(GREEN)✅ Linux GUI build complete: gui/build/bin/linux/$(NC)"
-
-build-gui-all-platforms: build-gui-linux ## Build GUI for ALL platforms including Linux
-	@echo "$(BLUE)🔨 Building GUI for all platforms (including Linux)...$(NC)"
-	cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails build --platform=darwin/amd64,darwin/arm64,windows/amd64
-	@echo "$(GREEN)✅ All-platform GUI build complete!$(NC)"
-	@echo "$(BLUE)📦 Available GUI builds:$(NC)"
-	@echo "  Linux: gui/build/bin/linux/"
-	@echo "  Other platforms: gui/build/"
 
 dev-gui: ## Start GUI development server
 	@echo "$(BLUE)🚀 Starting GUI development server...$(NC)"
@@ -106,31 +81,6 @@ build-all: download-ripgrep build-frontend ## Build for all platforms with embed
 	@echo "$(GREEN)✅ Non-Linux GUI build complete!$(NC)"
 	@echo "$(YELLOW)⚠️  Linux GUI build requires Docker. Run 'make build-gui-linux' separately.$(NC)"
 
-# Deployment targets
-deploy-gui: build-gui ## Build GUI for current platform and show deployment info
-	@echo "$(GREEN)🎉 GUI Application Built Successfully!$(NC)"
-	@echo "$(BLUE)📦 Executable location: gui/build/gui$(NC)"
-	@echo ""
-	@echo "$(YELLOW)🚀 Ready to Deploy:$(NC)"
-	@echo "  • The executable is self-contained (includes web UI)"
-	@echo "  • No separate web server needed"
-	@echo "  • Double-click to run or use from command line"
-	@echo ""
-	@ls -la gui/build/
-
-deploy-gui-all: build-gui-all-platforms ## Build GUI for all platforms with distribution info
-	@echo "$(GREEN)🎉 Multi-Platform GUI Applications Built!$(NC)"
-	@echo "$(BLUE)📦 GUI Applications:$(NC)"
-	@echo "$(YELLOW)macOS/Windows builds:$(NC)"
-	@ls -la gui/build/ | grep -v "^total" || true
-	@echo "$(YELLOW)Linux builds:$(NC)"
-	@ls -la gui/build/bin/linux/ | grep -v "^total" || true
-	@echo ""
-	@echo "$(YELLOW)🚀 Distribution Ready:$(NC)"
-	@echo "  • Each executable is self-contained"
-	@echo "  • No additional files or servers needed"
-	@echo "  • Ready for distribution to end users"
-
 package-gui: build-gui ## Build and create distribution package
 	@echo "$(BLUE)📦 Creating distribution package...$(NC)"
 	mkdir -p dist
@@ -148,20 +98,17 @@ RIPGREP_DIR=bin
 
 download-ripgrep: ## Download ripgrep binaries for Linux, macOS, and Windows
 	@echo "$(BLUE)⬇️  Downloading ripgrep v$(RIPGREP_VERSION)...$(NC)"
-	# Linux
 	curl -Ls -o /tmp/rg-linux.tar.gz https://github.com/BurntSushi/ripgrep/releases/download/$(RIPGREP_VERSION)/ripgrep-$(RIPGREP_VERSION)-x86_64-unknown-linux-musl.tar.gz
 	mkdir -p $(RIPGREP_DIR)
 	tar -xzf /tmp/rg-linux.tar.gz --strip-components=1 -C $(RIPGREP_DIR) 'ripgrep-$(RIPGREP_VERSION)-x86_64-unknown-linux-musl/rg'
 	mv $(RIPGREP_DIR)/rg $(RIPGREP_DIR)/rg-linux
 	chmod +x $(RIPGREP_DIR)/rg-linux
 
-	# macOS
 	curl -Ls -o /tmp/rg-macos.tar.gz https://github.com/BurntSushi/ripgrep/releases/download/$(RIPGREP_VERSION)/ripgrep-$(RIPGREP_VERSION)-x86_64-apple-darwin.tar.gz
 	tar -xzf /tmp/rg-macos.tar.gz --strip-components=1 -C $(RIPGREP_DIR) 'ripgrep-$(RIPGREP_VERSION)-x86_64-apple-darwin/rg'
 	mv $(RIPGREP_DIR)/rg $(RIPGREP_DIR)/rg-macos
 	chmod +x $(RIPGREP_DIR)/rg-macos
 
-	# Windows
 	curl -Ls -o /tmp/rg-windows.zip https://github.com/BurntSushi/ripgrep/releases/download/$(RIPGREP_VERSION)/ripgrep-$(RIPGREP_VERSION)-x86_64-pc-windows-msvc.zip
 	unzip -j -o /tmp/rg-windows.zip 'ripgrep-$(RIPGREP_VERSION)-x86_64-pc-windows-msvc/rg.exe' -d $(RIPGREP_DIR)
 	mv $(RIPGREP_DIR)/rg.exe $(RIPGREP_DIR)/rg-windows.exe
@@ -306,15 +253,15 @@ dist: download-ripgrep ## Build both TUI and GUI executables for all platforms i
 	GOOS=windows GOARCH=arm64 go build -o dist/loom-tui-windows-arm64.exe .
 	
 	@echo "$(BLUE)Building GUI executables...$(NC)"
-	cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails build --platform=darwin/amd64,darwin/arm64,windows/amd64,windows/arm64
+	cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails build --platform=darwin/amd64,darwin/arm64,windows/amd64,windows/arm64 
 	
 	@echo "$(BLUE)Copying GUI executables to dist/...$(NC)"
 	# macOS .app bundles
-	if [ -d "gui/build/bin/gui-amd64.app" ]; then cp -r gui/build/bin/gui-amd64.app dist/loom-gui-darwin-amd64.app; fi
-	if [ -d "gui/build/bin/gui-arm64.app" ]; then cp -r gui/build/bin/gui-arm64.app dist/loom-gui-darwin-arm64.app; fi
-	# Windows executables  
-	if [ -f "gui/build/bin/gui-amd64.exe" ]; then cp gui/build/bin/gui-amd64.exe dist/loom-gui-windows-amd64.exe; fi
-	if [ -f "gui/build/bin/gui-arm64.exe" ]; then cp gui/build/bin/gui-arm64.exe dist/loom-gui-windows-arm64.exe; fi
+	if [ -d "gui/build/bin/gui-amd64.app" ]; then mv gui/build/bin/gui-amd64.app dist/loom-gui-darwin-amd64.app; fi
+	if [ -d "gui/build/bin/gui-arm64.app" ]; then mv gui/build/bin/gui-arm64.app dist/loom-gui-darwin-arm64.app; fi
+
+	if [ -f "gui/build/bin/gui-amd64.exe" ]; then mv gui/build/bin/gui-amd64.exe dist/loom-gui-windows-amd64.exe; fi
+	if [ -f "gui/build/bin/gui-arm64.exe" ]; then mv gui/build/bin/gui-arm64.exe dist/loom-gui-windows-arm64.exe; fi
 	
 	@echo "$(BLUE)Creating macOS DMG files...$(NC)"
 	# Create DMG for Intel macOS

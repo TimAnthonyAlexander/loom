@@ -152,9 +152,15 @@ func (cs *ChatService) GetChatState() models.ChatState {
 			continue
 		}
 
+		// Apply task result filtering for assistant messages (same as TUI)
+		content := msg.Content
+		if msg.Role == "assistant" {
+			content = cs.session.FilterTaskResultForDisplay(content)
+		}
+
 		messages = append(messages, models.Message{
 			ID:        uuid.New().String(),
-			Content:   msg.Content,
+			Content:   content,
 			IsUser:    msg.Role == "user",
 			Timestamp: time.Now(), // Note: chat.Message doesn't have timestamp, using current time
 			Type:      msg.Role,
@@ -316,10 +322,13 @@ func (cs *ChatService) streamLLMResponseWithTasks() {
 			fmt.Printf("Warning: failed to save assistant message: %v\n", err)
 		}
 
+		// Apply task result filtering for user display (same as TUI)
+		displayContent := cs.session.FilterTaskResultForDisplay(filteredContent)
+
 		// Emit final message event
 		cs.eventBus.EmitChatMessage(models.Message{
 			ID:        uuid.New().String(),
-			Content:   filteredContent,
+			Content:   displayContent,
 			IsUser:    false,
 			Timestamp: time.Now(),
 			Type:      "assistant",

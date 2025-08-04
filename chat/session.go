@@ -324,7 +324,7 @@ func (s *Session) GetDisplayMessages() []string {
 		} else if msg.Role == "assistant" {
 			// Filter out JSON task blocks for assistant messages
 			content := s.filterJSONTaskBlocks(msg.Content)
-			content = s.filterTaskResultForDisplay(content)
+			content = s.FilterTaskResultForDisplay(content)
 			formattedMessage = fmt.Sprintf("Loom: %s", content)
 		} else if msg.Role == "system" {
 			if i == 0 {
@@ -356,8 +356,8 @@ func (s *Session) GetDisplayMessages() []string {
 	return displayMessages
 }
 
-// filterTaskResultForDisplay filters task result messages to show only status messages to users
-func (s *Session) filterTaskResultForDisplay(content string) string {
+// FilterTaskResultForDisplay filters task result messages to show only status messages to users
+func (s *Session) FilterTaskResultForDisplay(content string) string {
 	// First check if this contains JSON task blocks - filter those out
 	content = s.filterJSONTaskBlocks(content)
 

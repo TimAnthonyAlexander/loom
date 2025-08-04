@@ -216,7 +216,7 @@ func TestFilterTaskResultForDisplay(t *testing.T) {
 
 	// Test filtering of task result messages
 	taskResult := "🔧 Task Result: Read file\n✅ Status: Success\n📄 Output: File read successfully"
-	filtered := session.filterTaskResultForDisplay(taskResult)
+	filtered := session.FilterTaskResultForDisplay(taskResult)
 
 	// Check that the filtered result still contains status information
 	if filtered == "" {
