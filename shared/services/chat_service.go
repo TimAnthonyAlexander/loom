@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"loom/chat"
 	"loom/llm"
 	"loom/shared/events"
@@ -66,6 +67,11 @@ func (cs *ChatService) SendMessage(content string) error {
 	cs.mutex.Lock()
 	defer cs.mutex.Unlock()
 
+	// Don't start new streaming if already streaming
+	if cs.isStreaming {
+		return fmt.Errorf("already streaming a response")
+	}
+
 	// Add user message to session
 	userMessage := llm.Message{
 		Role:    "user",
@@ -107,33 +113,21 @@ func (cs *ChatService) streamLLMResponse() {
 	// Channel to signal when streaming goroutine is done
 	streamDone := make(chan bool, 1)
 
-	// Use a once to ensure channel is only closed once
-	var closeOnce sync.Once
-
 	// Start streaming
 	go func() {
 		defer func() {
-			// Signal that streaming is done
+			// Just signal that streaming is done - the LLM adapter closes the channel
 			streamDone <- true
 		}()
 
 		// Use the Stream method from LLMAdapter
+		// Note: The LLM adapter will close the channel when done
 		err := cs.llmAdapter.Stream(ctx, messages, cs.streamChan)
 		if err != nil {
 			cs.eventBus.Emit(events.ChatError, map[string]string{
 				"error": err.Error(),
 			})
 		}
-
-		// Close the channel exactly once when streaming is complete
-		closeOnce.Do(func() {
-			cs.mutex.Lock()
-			if cs.streamChan != nil {
-				close(cs.streamChan)
-				cs.streamChan = nil
-			}
-			cs.mutex.Unlock()
-		})
 	}()
 
 	// Process streaming chunks
@@ -172,15 +166,7 @@ func (cs *ChatService) streamLLMResponse() {
 			}
 		case <-ctx.Done():
 			// Context was cancelled (stop streaming called)
-			// Close the channel if it hasn't been closed yet
-			closeOnce.Do(func() {
-				cs.mutex.Lock()
-				if cs.streamChan != nil {
-					close(cs.streamChan)
-					cs.streamChan = nil
-				}
-				cs.mutex.Unlock()
-			})
+			// The LLM adapter will close the channel when it detects cancellation
 			streamFinished = true
 		}
 	}
@@ -209,7 +195,7 @@ func (cs *ChatService) streamLLMResponse() {
 	cs.mutex.Lock()
 	cs.isStreaming = false
 	cs.streamCancel = nil
-	// Don't set streamChan to nil here - it's already handled by closeOnce
+	cs.streamChan = nil // LLM adapter closed the channel, we just clear our reference
 	cs.mutex.Unlock()
 
 	// Emit stream ended event
