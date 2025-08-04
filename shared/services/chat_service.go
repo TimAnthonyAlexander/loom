@@ -104,9 +104,23 @@ func (cs *ChatService) streamLLMResponse() {
 	// Get messages for LLM
 	messages := cs.session.GetMessages()
 
+	// Channel to signal when streaming goroutine is done
+	streamDone := make(chan bool, 1)
+
 	// Start streaming
 	go func() {
-		defer close(cs.streamChan)
+		defer func() {
+			// Safely close the stream channel
+			cs.mutex.Lock()
+			if cs.streamChan != nil {
+				close(cs.streamChan)
+				cs.streamChan = nil
+			}
+			cs.mutex.Unlock()
+
+			// Signal that streaming is done
+			streamDone <- true
+		}()
 
 		// Use the Stream method from LLMAdapter
 		err := cs.llmAdapter.Stream(ctx, messages, cs.streamChan)
@@ -120,26 +134,46 @@ func (cs *ChatService) streamLLMResponse() {
 
 	// Process streaming chunks
 	var fullResponse string
-	for chunk := range cs.streamChan {
-		if chunk.Error != nil {
-			cs.eventBus.Emit(events.ChatError, map[string]string{
-				"error": chunk.Error.Error(),
+	streamFinished := false
+
+	// Use select to handle both channel reads and cancellation
+	for !streamFinished {
+		select {
+		case chunk, ok := <-cs.streamChan:
+			if !ok {
+				// Channel is closed, streaming is done
+				streamFinished = true
+				continue
+			}
+
+			if chunk.Error != nil {
+				cs.eventBus.Emit(events.ChatError, map[string]string{
+					"error": chunk.Error.Error(),
+				})
+				streamFinished = true
+				continue
+			}
+
+			fullResponse += chunk.Content
+
+			// Emit stream chunk event
+			cs.eventBus.Emit(events.ChatStreamChunk, map[string]string{
+				"content": chunk.Content,
+				"full":    fullResponse,
 			})
-			break
-		}
 
-		fullResponse += chunk.Content
-
-		// Emit stream chunk event
-		cs.eventBus.Emit(events.ChatStreamChunk, map[string]string{
-			"content": chunk.Content,
-			"full":    fullResponse,
-		})
-
-		if chunk.Done {
-			break
+			if chunk.Done {
+				streamFinished = true
+				continue
+			}
+		case <-ctx.Done():
+			// Context was cancelled (stop streaming called)
+			streamFinished = true
 		}
 	}
+
+	// Wait for the streaming goroutine to finish cleanup
+	<-streamDone
 
 	// Add assistant response to session
 	if fullResponse != "" {
@@ -162,6 +196,7 @@ func (cs *ChatService) streamLLMResponse() {
 	cs.mutex.Lock()
 	cs.isStreaming = false
 	cs.streamCancel = nil
+	cs.streamChan = nil
 	cs.mutex.Unlock()
 
 	// Emit stream ended event
@@ -175,9 +210,8 @@ func (cs *ChatService) StopStreaming() {
 
 	if cs.streamCancel != nil {
 		cs.streamCancel()
-		cs.streamCancel = nil
 	}
-	cs.isStreaming = false
+	// Note: Don't set streamCancel to nil here - let streamLLMResponse clean it up
 }
 
 // AddSystemMessage adds a system message to the chat
