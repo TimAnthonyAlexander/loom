@@ -177,7 +177,13 @@ Follow these condensed rules and the project-specific guidelines below.
 %[9]s  
 %[10]s  
 %[11]s  
-%[12]s`,
+%[12]s
+
+
+9. General Rules
+You MUST interprete the user's intent and request, and follow them precisely.
+If the user asks to check something out or search for something execute (write) the appropriate command.
+`,
 		stats.TotalFiles,
 		float64(stats.TotalSize)/1024/1024,
 		pe.index.LastUpdated.Format("15:04:05"),
