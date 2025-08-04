@@ -55,10 +55,9 @@ func (ts *TaskService) ParseTasksFromLLMResponse(llmResponse string) ([]*models.
 	ts.mutex.Lock()
 	defer ts.mutex.Unlock()
 
-	// TODO: Implement task parsing - this needs to be implemented based on actual API
-	// For now, return empty slice
+	// Attempt to parse tasks from LLM response (assume JSON array of tasks)
 	var tasks []*taskPkg.Task
-	err := fmt.Errorf("task parsing not yet implemented")
+	err := json.Unmarshal([]byte(llmResponse), &tasks)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse tasks: %w", err)
 	}
