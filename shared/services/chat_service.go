@@ -137,9 +137,14 @@ func (cs *ChatService) GetChatState() models.ChatState {
 	cs.mutex.RLock()
 	defer cs.mutex.RUnlock()
 
-	// Convert chat session messages to models.Message
+	// Convert chat session messages to models.Message (excluding system messages)
 	var messages []models.Message
 	for _, msg := range cs.session.GetMessages() {
+		// Skip system messages - they're for LLM context, not user display
+		if msg.Role == "system" {
+			continue
+		}
+		
 		messages = append(messages, models.Message{
 			ID:        uuid.New().String(),
 			Content:   msg.Content,
@@ -328,7 +333,7 @@ func (cs *ChatService) StopStreaming() {
 	// Note: Don't set streamCancel to nil here - let streamLLMResponse clean it up
 }
 
-// AddSystemMessage adds a system message to the chat
+// AddSystemMessage adds a system message to the chat (for LLM context only, not displayed to user)
 func (cs *ChatService) AddSystemMessage(content string) {
 	systemMessage := llm.Message{
 		Role:    "system",
@@ -336,13 +341,8 @@ func (cs *ChatService) AddSystemMessage(content string) {
 	}
 	cs.session.AddMessage(systemMessage)
 
-	cs.eventBus.EmitChatMessage(models.Message{
-		ID:        uuid.New().String(),
-		Content:   content,
-		IsUser:    false,
-		Timestamp: time.Now(),
-		Type:      "system",
-	})
+	// Note: Don't emit system messages as chat events - they're for LLM context only
+	// and should not be displayed in the GUI chat interface
 }
 
 // ClearChat clears all messages from the chat session
