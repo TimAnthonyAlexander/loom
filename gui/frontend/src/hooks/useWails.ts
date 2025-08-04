@@ -169,8 +169,8 @@ export function useTasks() {
       App.GetAllTasks(),
       App.GetPendingConfirmations()
     ]).then(([tasks, confirmations]) => {
-      setAllTasks(tasks);
-      setPendingConfirmations(confirmations);
+      setAllTasks(tasks as Record<string, TaskInfo[]>);
+      setPendingConfirmations(confirmations as TaskConfirmation[]);
     });
   }, []);
 
@@ -183,7 +183,7 @@ export function useTasks() {
 
       EventsOn('task:status_changed', (taskInfo: TaskInfo) => {
         // Refresh all tasks when status changes
-        App.GetAllTasks().then(setAllTasks);
+        App.GetAllTasks().then(tasks => setAllTasks(tasks as Record<string, TaskInfo[]>));
       }),
 
       EventsOn('task:completed', () => {
@@ -192,8 +192,8 @@ export function useTasks() {
           App.GetAllTasks(),
           App.GetPendingConfirmations()
         ]).then(([tasks, confirmations]) => {
-          setAllTasks(tasks);
-          setPendingConfirmations(confirmations);
+          setAllTasks(tasks as Record<string, TaskInfo[]>);
+          setPendingConfirmations(confirmations as TaskConfirmation[]);
         });
       })
     ];
@@ -235,7 +235,7 @@ export function useApp() {
   const [systemErrors, setSystemErrors] = useState<string[]>([]);
 
   useEffect(() => {
-    App.GetAppInfo().then(setAppInfo);
+    App.GetAppInfo().then(info => setAppInfo(info as AppInfo));
   }, []);
 
   // Listen to system events

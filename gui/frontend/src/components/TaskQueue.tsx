@@ -12,7 +12,7 @@ export function TaskQueue({ className }: TaskQueueProps) {
   const [selectedTab, setSelectedTab] = useState<'pending' | 'executing' | 'completed'>('pending');
   const [showConfirmations, setShowConfirmations] = useState(true);
 
-  const getStatusIcon = (status: TaskInfo['status']): string => {
+  const getStatusIcon = (status: string): string => {
     switch (status) {
       case 'pending': return '⏳';
       case 'executing': return '⚡';
@@ -33,8 +33,9 @@ export function TaskQueue({ className }: TaskQueueProps) {
     }
   };
 
-  const formatTimestamp = (timestamp: number) => {
-    return new Date(timestamp).toLocaleString([], {
+  const formatTimestamp = (timestamp: any) => {
+    const date = timestamp ? new Date(timestamp) : new Date();
+    return date.toLocaleString([], {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',

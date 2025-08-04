@@ -4,7 +4,7 @@ export interface Message {
   id: string;
   content: string;
   isUser: boolean;
-  timestamp: number; // Unix timestamp in milliseconds
+  timestamp: any; // Matches Wails generated type
   type: string; // "user", "assistant", "system", "debug"
 }
 
@@ -22,7 +22,7 @@ export interface FileInfo {
   size: number;
   isDirectory: boolean;
   language: string;
-  modifiedTime: number; // Unix timestamp in milliseconds
+  modifiedTime: any; // Changed to any to match Wails generated types
 }
 
 export interface ProjectSummary {
@@ -30,16 +30,16 @@ export interface ProjectSummary {
   languages: Record<string, number>; // language -> percentage
   fileCount: number;
   totalLines: number;
-  generatedAt: number; // Unix timestamp in milliseconds
+  generatedAt: any; // Changed to any to match Wails generated types
 }
 
 export interface TaskInfo {
   id: string;
   type: string;
   description: string;
-  status: 'pending' | 'executing' | 'completed' | 'failed';
-  createdAt: number; // Unix timestamp in milliseconds
-  completedAt?: number;
+  status: string; // Changed from union type to string to match Wails
+  createdAt: any; // Changed to any to match Wails generated types
+  completedAt?: any;
   error?: string;
   preview?: string;
   result?: string;

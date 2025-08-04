@@ -41,8 +41,9 @@ export function ChatWindow({ className }: ChatWindowProps) {
     }
   };
 
-  const formatTimestamp = (timestamp: number) => {
-    return new Date(timestamp).toLocaleTimeString([], { 
+  const formatTimestamp = (timestamp: any) => {
+    const date = timestamp ? new Date(timestamp) : new Date();
+    return date.toLocaleTimeString([], { 
       hour: '2-digit', 
       minute: '2-digit' 
     });
