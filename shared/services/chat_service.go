@@ -144,7 +144,7 @@ func (cs *ChatService) GetChatState() models.ChatState {
 		if msg.Role == "system" {
 			continue
 		}
-		
+
 		messages = append(messages, models.Message{
 			ID:        uuid.New().String(),
 			Content:   msg.Content,
@@ -186,6 +186,9 @@ func (cs *ChatService) SendMessage(content string) error {
 		return fmt.Errorf("failed to save user message: %w", err)
 	}
 
+	// Reset completion detection state for new user queries (like TUI)
+	// Reset any previous exploration state
+
 	// Emit user message event (show original content to user, not processed)
 	cs.eventBus.EmitChatMessage(models.Message{
 		ID:        uuid.New().String(),
@@ -194,6 +197,13 @@ func (cs *ChatService) SendMessage(content string) error {
 		Timestamp: time.Now(),
 		Type:      "user",
 	})
+
+	// Check for exploration queries and start objective-driven exploration (like TUI)
+	if cs.sequentialManager != nil && cs.isExplorationQuery(content) {
+		// Start objective exploration
+		cs.sequentialManager.StartObjectiveExploration(content)
+		// Note: The sequential manager will use its own system message during exploration
+	}
 
 	// Start LLM streaming with task execution
 	go cs.streamLLMResponseWithTasks()
@@ -441,7 +451,13 @@ func (cs *ChatService) handleStreamError(err error) {
 
 // handleLLMResponseForTasks processes the LLM response for task execution (key integration from TUI)
 func (cs *ChatService) handleLLMResponseForTasks(llmResponse string) {
-	// This is the core integration - parse and execute tasks from LLM response
+	// Handle objective-driven exploration (like TUI)
+	if cs.sequentialManager != nil && cs.sequentialManager.IsExploring() {
+		cs.handleObjectiveExploration(llmResponse)
+		return
+	}
+
+	// For non-exploration requests, use standard task management
 	if cs.taskManager != nil {
 		execution, err := cs.taskManager.HandleLLMResponse(llmResponse, cs.taskEventChan)
 		if err != nil {
@@ -455,9 +471,63 @@ func (cs *ChatService) handleLLMResponseForTasks(llmResponse string) {
 			cs.mutex.Lock()
 			cs.currentExecution = execution
 			cs.mutex.Unlock()
-			// Tasks were executed - events will be handled by handleTaskEvents
+			// Tasks were executed - continue LLM conversation automatically!
+			cs.continueLLMAfterTasks()
+			return
 		}
 	}
+
+	// No tasks found - check for auto-continuation based on content
+	if !cs.isInformationalResponse(llmResponse) {
+		// This might be a text-only response that should trigger completion checking
+		// Similar to TUI's AutoContinueMsg pattern, but we'll handle it differently in GUI
+	}
+}
+
+// handleObjectiveExploration manages the objective-driven exploration flow (from TUI)
+func (cs *ChatService) handleObjectiveExploration(llmResponse string) {
+	// Check if this is setting a new objective
+	if objective := cs.sequentialManager.ExtractObjective(llmResponse); objective != "" {
+		cs.sequentialManager.SetObjective(objective)
+		// Note: In GUI, we don't show the objective message directly like TUI does
+		// The frontend can display exploration status differently
+	}
+
+	// Check if objective is complete
+	if cs.sequentialManager.IsObjectiveComplete(llmResponse) {
+		cs.sequentialManager.CompleteObjective()
+		// This is the final synthesis - don't continue automatically
+		return
+	}
+
+	// Parse and execute task
+	task, _, err := cs.sequentialManager.ParseSingleTask(llmResponse)
+	if err != nil {
+		cs.eventBus.Emit(events.ChatError, map[string]string{
+			"error": fmt.Sprintf("Failed to parse task: %v", err),
+		})
+		return
+	}
+
+	if task != nil {
+		// Execute the task
+		response := cs.taskExecutor.Execute(task)
+
+		// Add task result to accumulated data
+		cs.sequentialManager.AddTaskResult(*response)
+
+		// Add task result to chat session for LLM to see (hidden from user display)
+		taskResultMsg := cs.formatTaskResultForLLM(task, response)
+		if err := cs.session.AddMessage(taskResultMsg); err != nil {
+			fmt.Printf("Warning: failed to add task result to chat: %v\n", err)
+		}
+
+		// Continue the conversation for next step (key part!)
+		cs.continueLLMAfterTasks()
+		return
+	}
+
+	// No task found - regular response, exploration complete
 }
 
 // handleTaskEvents processes task execution events and forwards them to the frontend
@@ -479,6 +549,23 @@ func (cs *ChatService) handleTaskEvents() {
 			if err := cs.session.AddMessage(taskResultMsg); err != nil {
 				fmt.Printf("Warning: failed to add task result to chat: %v\n", err)
 			}
+		}
+
+		// Handle confirmation requests
+		if event.RequiresInput && event.Task != nil && event.Response != nil {
+			// Emit task confirmation event for frontend to handle
+			cs.eventBus.Emit(events.TaskConfirmationNeeded, map[string]interface{}{
+				"task":     event.Task,
+				"response": event.Response,
+				"preview":  event.Response.Output,
+			})
+		}
+
+		// Automatically continue the LLM conversation once all tasks have finished
+		// and there is no user confirmation required (like TUI)
+		if event.Type == "execution_completed" && !event.RequiresInput {
+			// All tasks in the current execution are done - continue LLM conversation
+			cs.continueLLMAfterTasks()
 		}
 	}
 }
@@ -516,4 +603,110 @@ func (cs *ChatService) formatTaskResultForLLM(task *taskPkg.Task, response *task
 		Content:   content.String(),
 		Timestamp: time.Now(),
 	}
+}
+
+// continueLLMAfterTasks continues LLM conversation after task completion (from TUI)
+func (cs *ChatService) continueLLMAfterTasks() {
+	cs.mutex.Lock()
+	defer cs.mutex.Unlock()
+
+	// Don't start new streaming if already streaming
+	if cs.isStreaming {
+		return
+	}
+
+	// Start a new LLM streaming session automatically
+	go cs.streamLLMResponseWithTasks()
+}
+
+// isInformationalResponse checks if a response is purely informational (from TUI)
+func (cs *ChatService) isInformationalResponse(response string) bool {
+	// Check for common informational patterns
+	informationalPatterns := []string{
+		"I can help you",
+		"Let me explain",
+		"Here's what I found",
+		"Based on my analysis",
+		"To summarize",
+		"In conclusion",
+	}
+
+	lowerResponse := strings.ToLower(response)
+	for _, pattern := range informationalPatterns {
+		if strings.Contains(lowerResponse, strings.ToLower(pattern)) {
+			return true
+		}
+	}
+
+	// Check if response contains any task patterns
+	return cs.isTextOnlyResponse(response)
+}
+
+// isTextOnlyResponse checks if a response contains no tasks or commands (from TUI)
+func (cs *ChatService) isTextOnlyResponse(response string) bool {
+	// Check for common task patterns with emojis
+	taskPatterns := []string{
+		"🔧 READ", "📖 READ",
+		"🔧 LIST", "📂 LIST",
+		"🔧 SEARCH", "🔍 SEARCH",
+		"🔧 RUN",
+		"🔧 MEMORY", "💾 MEMORY",
+		"🔧 TODO", "📝 TODO",
+		">>LOOM_EDIT", "✏️ Edit",
+	}
+
+	for _, pattern := range taskPatterns {
+		if strings.Contains(response, pattern) {
+			return false
+		}
+	}
+
+	// Check for natural language task patterns at the beginning of lines
+	naturalLangPatterns := []string{
+		"READ ",
+		"LIST ",
+		"SEARCH ",
+		"RUN ",
+		"MEMORY ",
+		"TODO ",
+	}
+
+	for _, pattern := range naturalLangPatterns {
+		if regexp.MustCompile(`(?m)^` + pattern).MatchString(response) {
+			return false
+		}
+	}
+
+	// Look for LOOM_EDIT blocks
+	if regexp.MustCompile(`(?s)>>LOOM_EDIT.*?<<LOOM_EDIT`).MatchString(response) {
+		return false
+	}
+
+	return true
+}
+
+// isExplorationQuery determines if a user query should use objective-driven exploration (from TUI)
+func (cs *ChatService) isExplorationQuery(userInput string) bool {
+	// Patterns that suggest the user wants a comprehensive exploration
+	explorationPatterns := []string{
+		"explain this project",
+		"what does this codebase do",
+		"analyze this code",
+		"understand this project",
+		"explore this codebase",
+		"tell me about this project",
+		"how does this work",
+		"what is this project",
+		"analyze the codebase",
+		"explain the architecture",
+	}
+
+	lowerInput := strings.ToLower(userInput)
+	for _, pattern := range explorationPatterns {
+		if strings.Contains(lowerInput, pattern) {
+			return true
+		}
+	}
+
+	return false
 }
