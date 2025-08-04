@@ -333,7 +333,7 @@ func (s *Session) GetDisplayMessages() []string {
 			}
 			// Special treatment for system messages that are task results
 			if strings.HasPrefix(msg.Content, "TASK_RESULT:") {
-				// Skip task result messages meant for LLM
+				// Skip task result messages meant for LLM - these should never be shown to users
 				continue
 			} else if strings.Contains(msg.Content, "TASK_CONFIRMATION:") {
 				// Special display for confirmation messages
@@ -366,7 +366,10 @@ func (s *Session) FilterTaskResultForDisplay(content string) string {
 		return "" // Return empty to hide these interactions
 	}
 
-	// Check if this is a task result message
+	// Note: Don't filter TASK_RESULT: prefix here as it might be part of legitimate assistant responses
+	// The system message filtering in GetDisplayMessages() handles the real TASK_RESULT system messages
+
+	// Check if this is a user-facing task result message
 	if !strings.HasPrefix(content, "🔧 Task Result:") {
 		return content // Not a task result, return as is
 	}

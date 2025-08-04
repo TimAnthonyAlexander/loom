@@ -301,27 +301,27 @@ func (e *Executor) executeReadFile(task *Task) *TaskResponse {
 
 	response.Success = true
 
-	// Enhanced status message for user
+	// User-friendly status message (brief and clean for user display)
 	var statusMsg string
 	if task.StartLine > 0 || task.EndLine > 0 {
-		// Check if requested range exceeded file size
+		// Line range specified
 		if task.EndLine > 0 && task.EndLine > totalLines && response.Output == "" {
-			statusMsg = fmt.Sprintf("Reading file: %s (requested lines %d-%d, actual file has only %d lines, reading lines %d-%d)",
-				task.Path, task.StartLine, task.EndLine, totalLines, startLine, lastLineRead)
+			statusMsg = fmt.Sprintf("📖 Read %s (requested lines %d-%d, file has %d lines)",
+				task.Path, task.StartLine, task.EndLine, totalLines)
 		} else {
-			statusMsg = fmt.Sprintf("Reading file: %s (lines %d-%d, %d lines read, %d total lines)",
-				task.Path, startLine, lastLineRead, linesRead, totalLines)
+			statusMsg = fmt.Sprintf("📖 Read %s (lines %d-%d of %d)",
+				task.Path, startLine, lastLineRead, totalLines)
 		}
 	} else {
-		statusMsg = fmt.Sprintf("Reading file: %s (%d lines read, %d total lines)",
-			task.Path, linesRead, totalLines)
+		statusMsg = fmt.Sprintf("📖 Read %s (%d lines)", task.Path, totalLines)
 	}
 
+	// Add continuation hint if file was truncated
 	if remainingLines > 0 {
-		statusMsg += fmt.Sprintf(", %d more lines available", remainingLines)
+		statusMsg += fmt.Sprintf(" - %d more lines available", remainingLines)
 	}
 
-	// If we already have an output message (warning), keep it
+	// Set user-friendly output message (brief, no content)
 	if response.Output == "" {
 		response.Output = statusMsg
 	} else {

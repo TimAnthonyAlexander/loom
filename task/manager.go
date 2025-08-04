@@ -142,11 +142,18 @@ func (m *Manager) HandleLLMResponse(llmResponse string, userEventChan chan<- Use
 		currentTask := task
 		taskID := uuid.New().String()
 
-		// Send simplified user event
+		// Send simplified user event with task-specific messaging
+		var userMessage string
+		if currentTask.Type == TaskTypeReadFile {
+			userMessage = fmt.Sprintf("📖 Reading %s...", currentTask.Path)
+		} else {
+			userMessage = fmt.Sprintf("Executing %s...", m.getSimpleTaskDescription(&currentTask))
+		}
+
 		userEventChan <- UserTaskEvent{
 			TaskID:      taskID,
 			Type:        "started",
-			Message:     fmt.Sprintf("Executing %s...", m.getSimpleTaskDescription(&currentTask)),
+			Message:     userMessage,
 			TaskType:    string(currentTask.Type),
 			Description: m.getSimpleTaskDescription(&currentTask),
 			Progress:    float64(i) / float64(len(execution.Tasks)),
@@ -205,11 +212,23 @@ func (m *Manager) HandleLLMResponse(llmResponse string, userEventChan chan<- Use
 			continue
 		}
 
-		// Send simplified user event for task completion
+		// Send simplified user event for task completion with task-specific messaging
+		var completionMessage string
+		if currentTask.Type == TaskTypeReadFile && response.Success {
+			// Extract line count from output for user feedback
+			if strings.Contains(response.Output, " lines)") {
+				completionMessage = fmt.Sprintf("✅ Read %s successfully", currentTask.Path)
+			} else {
+				completionMessage = response.Output // Use the formatted output message
+			}
+		} else {
+			completionMessage = fmt.Sprintf("Completed: %s", m.getSimpleTaskDescription(&currentTask))
+		}
+
 		userEventChan <- UserTaskEvent{
 			TaskID:      taskID,
 			Type:        "completed",
-			Message:     fmt.Sprintf("Completed: %s", m.getSimpleTaskDescription(&currentTask)),
+			Message:     completionMessage,
 			TaskType:    string(currentTask.Type),
 			Description: m.getSimpleTaskDescription(&currentTask),
 			Progress:    float64(i+1) / float64(len(execution.Tasks)),
@@ -374,13 +393,28 @@ func (m *Manager) ContinueRecursiveChat(ctx context.Context, execution *TaskExec
 	return nil
 }
 
-// formatTaskResult formats a task result for the chat context
+// formatTaskResult formats a task result for the chat context (user-friendly display)
 func (m *Manager) formatTaskResult(task *Task, response *TaskResponse) string {
 	var result strings.Builder
 
-	result.WriteString(fmt.Sprintf("Task: %s\n", task.Description()))
+	// For ReadFile tasks, show minimal user-friendly messages
+	if task.Type == TaskTypeReadFile {
+		if response.Success {
+			result.WriteString(fmt.Sprintf("✅ %s\n", response.Output))
+		} else {
+			result.WriteString(fmt.Sprintf("❌ Failed to read %s\n", task.Path))
+			if response.Error != "" {
+				result.WriteString(fmt.Sprintf("💥 Error: %s\n", response.Error))
+			}
+		}
+		return result.String()
+	}
+
+	// For other task types, use the existing detailed format
+	result.WriteString(fmt.Sprintf("🔧 Task Result: %s\n", task.Description()))
 
 	if response.Success {
+		result.WriteString("✅ Status: Success\n")
 		if response.Approved {
 			result.WriteString("👍 User approved changes\n")
 		}
@@ -453,9 +487,9 @@ func (m *Manager) getSimpleTaskDescription(task *Task) string {
 	switch task.Type {
 	case TaskTypeReadFile:
 		if task.Path != "" {
-			return fmt.Sprintf("reading %s", task.Path)
+			return fmt.Sprintf("📖 reading %s", task.Path)
 		}
-		return "reading file"
+		return "📖 reading file"
 	case TaskTypeEditFile:
 		if task.Path != "" {
 			return fmt.Sprintf("editing %s", task.Path)
