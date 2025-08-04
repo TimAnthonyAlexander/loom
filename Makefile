@@ -21,6 +21,11 @@ help: ## Show this help message
 	@echo "  $(GREEN)make dev-gui$(NC)       - Full output (good for debugging)"
 	@echo "  $(GREEN)make dev-gui-quiet$(NC) - Clean output (recommended)"
 	@echo "  $(GREEN)make dev-gui-silent$(NC)- Background mode (minimal output)"
+	@echo ""
+	@echo "$(YELLOW)GUI Build Options:$(NC)"
+	@echo "  $(GREEN)make build-gui$(NC)              - Build for current platform"
+	@echo "  $(GREEN)make build-gui-linux$(NC)        - Build for Linux (requires Docker)"
+	@echo "  $(GREEN)make build-gui-all-platforms$(NC) - Build for ALL platforms including Linux"
 
 # Development workflow
 dev-setup: install-tools setup ## Complete development environment setup
@@ -46,6 +51,20 @@ build-gui: ## Build the GUI application
 	@echo "$(BLUE)🔨 Building GUI application...$(NC)"
 	cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails build
 	@echo "$(GREEN)✅ GUI build complete: gui/build/$(NC)"
+
+build-gui-linux: ## Build GUI for Linux using Docker
+	@echo "$(BLUE)🔨 Building GUI for Linux using Docker...$(NC)"
+	@echo "$(YELLOW)⚠️  This requires Docker to be installed and running$(NC)"
+	cd gui && ./build-linux.sh
+	@echo "$(GREEN)✅ Linux GUI build complete: gui/build/bin/linux/$(NC)"
+
+build-gui-all-platforms: build-gui-linux ## Build GUI for ALL platforms including Linux
+	@echo "$(BLUE)🔨 Building GUI for all platforms (including Linux)...$(NC)"
+	cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails build --platform=darwin/amd64,darwin/arm64,windows/amd64
+	@echo "$(GREEN)✅ All-platform GUI build complete!$(NC)"
+	@echo "$(BLUE)📦 Available GUI builds:$(NC)"
+	@echo "  Linux: gui/build/bin/linux/"
+	@echo "  Other platforms: gui/build/"
 
 dev-gui: ## Start GUI development server
 	@echo "$(BLUE)🚀 Starting GUI development server...$(NC)"
@@ -77,9 +96,10 @@ build-all: download-ripgrep build-frontend ## Build for all platforms with embed
 	GOOS=darwin GOARCH=arm64 go build -o build/$(BINARY_NAME)-darwin-arm64 .
 	GOOS=windows GOARCH=amd64 go build -o build/$(BINARY_NAME)-windows-amd64.exe .
 	@echo "$(GREEN)✅ Multi-platform build complete with embedded ripgrep!$(NC)"
-	@echo "$(BLUE)🔨 Building GUI for all platforms...$(NC)"
-	cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails build --platform=linux/amd64,darwin/amd64,darwin/arm64,windows/amd64
-	@echo "$(GREEN)✅ Multi-platform GUI build complete!$(NC)"
+	@echo "$(BLUE)🔨 Building GUI for non-Linux platforms...$(NC)"
+	cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails build --platform=darwin/amd64,darwin/arm64,windows/amd64
+	@echo "$(GREEN)✅ Non-Linux GUI build complete!$(NC)"
+	@echo "$(YELLOW)⚠️  Linux GUI build requires Docker. Run 'make build-gui-linux' separately.$(NC)"
 
 # Deployment targets
 deploy-gui: build-gui ## Build GUI for current platform and show deployment info
@@ -93,10 +113,13 @@ deploy-gui: build-gui ## Build GUI for current platform and show deployment info
 	@echo ""
 	@ls -la gui/build/
 
-deploy-gui-all: build-all ## Build GUI for all platforms with distribution info
+deploy-gui-all: build-gui-all-platforms ## Build GUI for all platforms with distribution info
 	@echo "$(GREEN)🎉 Multi-Platform GUI Applications Built!$(NC)"
 	@echo "$(BLUE)📦 GUI Applications:$(NC)"
-	@ls -la gui/build/ | grep -v "^total"
+	@echo "$(YELLOW)macOS/Windows builds:$(NC)"
+	@ls -la gui/build/ | grep -v "^total" || true
+	@echo "$(YELLOW)Linux builds:$(NC)"
+	@ls -la gui/build/bin/linux/ | grep -v "^total" || true
 	@echo ""
 	@echo "$(YELLOW)🚀 Distribution Ready:$(NC)"
 	@echo "  • Each executable is self-contained"
