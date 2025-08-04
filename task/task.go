@@ -1870,179 +1870,88 @@ func tryFallbackJSONParsing(llmResponse string) *TaskList {
 	return nil
 }
 
-// isConversationalResponse analyzes the beginning of the response to determine if it's
-// conversational text vs. actual task commands. This prevents false positives where
-// the LLM mentions commands as examples in explanatory text.
+// isConversationalResponse analyzes the first few lines to determine if this is
+// conversational text vs. actual task commands. If the first few lines are conversational,
+// treat the ENTIRE response as text-only (no mixed content allowed).
 func isConversationalResponse(llmResponse string) bool {
-	// Analyze first 5-10 lines to determine overall intent
 	lines := strings.Split(strings.TrimSpace(llmResponse), "\n")
 	if len(lines) == 0 {
 		return true // Empty response is conversational
 	}
 
-	// Number of lines to analyze for conversational patterns
-	analysisLines := min(len(lines), 10)
+	// Check first line for conversational patterns FIRST - this takes priority
+	firstLine := strings.ToLower(strings.TrimSpace(lines[0]))
 
-	// Patterns that strongly indicate conversational text
-	conversationalIndicators := []string{
-		// Explanatory phrases
-		"for example", "as an example", "such as", "like this", "you could",
-		"you can", "you might", "you should", "i recommend", "i suggest",
-		"let me explain", "to illustrate", "here's how", "this means",
+	// Only analyze the first 3 lines to determine intent
+	analysisLines := min(len(lines), 3)
 
-		// Past tense descriptions (completed actions)
-		"i've", "i have", "i already", "i just", "i previously",
-		"this was", "that was", "it was", "we did", "i did",
-
-		// Questions and clarifications
-		"do you want", "would you like", "should i", "shall i",
-		"what do you think", "does this", "is this", "are you",
-
-		// Confirmations and status updates
-		"successfully", "completed", "finished", "done", "ready",
-		"all set", "perfect", "great", "excellent", "looks good",
-
-		// Descriptions and explanations
-		"this file", "this code", "this function", "this shows",
-		"the above", "as you can see", "notice that", "note that",
-
-		// Conditional statements
-		"if you", "when you", "after you", "before you", "once you",
+	// Strong conversational starters = definitely conversational
+	conversationalStarters := []string{
+		"for example", "such as", "you could", "you might", "you can",
+		"let me", "let me explain", "to illustrate", "here's how", "this means",
+		"the ", "this ", "here ", "as ", "when ", "if ", "for ",
+		"i've ", "i have ", "i already", "i just", "i previously",
+		"would you like", "should i", "shall i", "do you want",
+		"successfully", "completed", "finished", "done", "perfect",
+		"great", "excellent", "looks good", "all set",
 	}
 
-	// Task command patterns - these indicate actual task intent
-	taskIndicators := []string{
-		"🔧", "📖", "📂", "✏️", "🔍", "💾", "📝", // Emoji prefixes
-		"loom_edit", "```json", // Structured task formats
+	for _, starter := range conversationalStarters {
+		if strings.HasPrefix(firstLine, starter) {
+			debugLog(fmt.Sprintf("DEBUG: First line starts with conversational pattern: '%s' - treating as text-only", starter))
+			return true
+		}
 	}
 
-	// Count conversational vs task indicators in first few lines
-	conversationalCount := 0
-	taskCount := 0
-
+	// Check for the specific bug pattern: commands mentioned as examples in first few lines
 	for i := 0; i < analysisLines; i++ {
 		line := strings.ToLower(strings.TrimSpace(lines[i]))
 		if line == "" {
 			continue
 		}
 
-		// Check for task indicators first
-		for _, indicator := range taskIndicators {
-			if strings.Contains(line, strings.ToLower(indicator)) {
-				taskCount++
-				break
-			}
-		}
-
-		// Check for conversational indicators
-		for _, indicator := range conversationalIndicators {
-			if strings.Contains(line, indicator) {
-				conversationalCount++
-				break
-			}
-		}
-
-		// Special patterns that strongly suggest conversational text
-		if strings.HasPrefix(line, "the ") ||
-			strings.HasPrefix(line, "this ") ||
-			strings.HasPrefix(line, "here ") ||
-			strings.HasPrefix(line, "as ") ||
-			strings.HasPrefix(line, "when ") ||
-			strings.HasPrefix(line, "if ") ||
-			strings.Contains(line, " would ") ||
-			strings.Contains(line, " could ") ||
-			strings.Contains(line, " should ") {
-			conversationalCount++
-		}
-
-		// Check for command-like patterns but in explanatory context
+		// If line contains command words AND explanatory context, it's conversational
 		if (strings.Contains(line, "read ") ||
 			strings.Contains(line, "edit ") ||
 			strings.Contains(line, "run ") ||
 			strings.Contains(line, "list ")) &&
 			(strings.Contains(line, "example") ||
+				strings.Contains(line, "could") ||
+				strings.Contains(line, "might") ||
 				strings.Contains(line, "like") ||
 				strings.Contains(line, "such as") ||
-				strings.Contains(line, "could") ||
-				strings.Contains(line, "would") ||
-				strings.Contains(line, "might")) {
-			conversationalCount += 2 // Weight this heavily as it's the exact bug case
-		}
-	}
-
-	debugLog(fmt.Sprintf("DEBUG: Conversational analysis - Conv: %d, Task: %d in first %d lines",
-		conversationalCount, taskCount, analysisLines))
-
-	// Check for JSON task blocks in the entire response - these are strong task indicators
-	if strings.Contains(llmResponse, "{\"type\":") ||
-		strings.Contains(llmResponse, "```json") ||
-		strings.Contains(llmResponse, "loom_edit") {
-		debugLog("DEBUG: Found JSON/LOOM_EDIT task indicators, allowing task parsing")
-		return false
-	}
-
-	// Strong emoji task indicators override conversational detection
-	if taskCount > 0 {
-		debugLog(fmt.Sprintf("DEBUG: Found %d emoji task indicators, allowing task parsing", taskCount))
-		return false
-	}
-
-	// Only filter if response appears to be primarily conversational
-	if conversationalCount > 0 {
-		firstLine := strings.ToLower(strings.TrimSpace(lines[0]))
-
-		// Strong conversational starters that suggest examples/explanations
-		conversationalStarters := []string{
-			"for example", "such as", "you could", "you might",
-			"to help", "to explain", "to show", "let me explain",
-			"the ", "this ", "i've ", "i have ", // Added common conversational starters
-		}
-
-		for _, starter := range conversationalStarters {
-			if strings.HasPrefix(firstLine, starter) {
-				debugLog(fmt.Sprintf("DEBUG: First line starts with conversational pattern: '%s'", starter))
-				return true
-			}
-		}
-
-		// Special case: if first line starts with "you " and contains explanatory language
-		if strings.HasPrefix(firstLine, "you ") {
-			if strings.Contains(firstLine, "could") ||
-				strings.Contains(firstLine, "might") ||
-				strings.Contains(firstLine, "example") ||
-				strings.Contains(firstLine, "like") ||
-				strings.Contains(firstLine, "should") {
-				debugLog("DEBUG: Explanatory language detected in first line")
-				return true
-			}
-		}
-
-		// Look for the specific bug pattern: mentioning commands as examples
-		for i := 0; i < analysisLines; i++ {
-			line := strings.ToLower(strings.TrimSpace(lines[i]))
-			if (strings.Contains(line, "read ") ||
-				strings.Contains(line, "edit ") ||
-				strings.Contains(line, "run ") ||
-				strings.Contains(line, "list ")) &&
-				(strings.Contains(line, "example") ||
-					strings.Contains(line, "could") ||
-					strings.Contains(line, "might") ||
-					strings.Contains(line, "like") ||
-					strings.Contains(line, "such as") ||
-					strings.Contains(line, "would be")) {
-				debugLog("DEBUG: Found command mentioned as example - filtering as conversational")
-				return true
-			}
-		}
-
-		// If the response has multiple conversational indicators and no clear task structure,
-		// it's likely conversational
-		if conversationalCount >= 2 {
-			debugLog("DEBUG: Multiple conversational indicators found - filtering as conversational")
+				strings.Contains(line, "would be") ||
+				strings.Contains(line, "you can")) {
+			debugLog("DEBUG: Found command mentioned as example in first few lines - treating as conversational")
 			return true
 		}
 	}
 
+	// Only if first line is NOT conversational, check for task indicators
+	for i := 0; i < analysisLines; i++ {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+
+		lowerLine := strings.ToLower(line)
+
+		// Strong task indicators in first few lines = definitely tasks
+		if strings.HasPrefix(line, "🔧 ") ||
+			strings.HasPrefix(line, "📖 ") ||
+			strings.HasPrefix(line, "📂 ") ||
+			strings.HasPrefix(line, "✏️ ") ||
+			strings.HasPrefix(line, "🔍 ") ||
+			strings.HasPrefix(line, "💾 ") ||
+			strings.HasPrefix(line, "📝 ") ||
+			strings.Contains(lowerLine, "loom_edit") ||
+			strings.Contains(lowerLine, "```json") {
+			debugLog("DEBUG: Found clear task indicator in first few lines, allowing task parsing")
+			return false
+		}
+	}
+
+	// If no clear conversational or task patterns detected, default to allowing task parsing
 	return false
 }
 
