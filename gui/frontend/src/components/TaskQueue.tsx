@@ -9,6 +9,10 @@ interface TaskQueueProps {
 
 export function TaskQueue({ className }: TaskQueueProps) {
   const { allTasks, pendingConfirmations, approveTask, rejectTask } = useTasks();
+  
+  // Ensure allTasks has a safe structure
+  const safeAllTasks = allTasks || {};
+  const safePendingConfirmations = pendingConfirmations || [];
   const [selectedTab, setSelectedTab] = useState<'pending' | 'executing' | 'completed'>('pending');
   const [showConfirmations, setShowConfirmations] = useState(true);
 
@@ -173,7 +177,7 @@ export function TaskQueue({ className }: TaskQueueProps) {
 
       {/* Task List */}
       <div className="task-list">
-        {currentTasks.length > 0 ? (
+        {(currentTasks && currentTasks.length > 0) ? (
           currentTasks.map(renderTaskItem)
         ) : (
           <div className="empty-state">

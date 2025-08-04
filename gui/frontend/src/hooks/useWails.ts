@@ -19,7 +19,25 @@ export function useChat() {
 
   // Load initial chat state
   useEffect(() => {
-    App.GetChatState().then(setChatState);
+    App.GetChatState()
+      .then(state => {
+        // Ensure messages array exists
+        if (state && !state.messages) {
+          state.messages = [];
+        }
+        setChatState(state);
+      })
+      .catch(err => {
+        console.error('Failed to load chat state:', err);
+        // Set a default empty state
+        setChatState({
+          messages: [],
+          streamingContent: '',
+          isStreaming: false,
+          workspacePath: '',
+          sessionId: ''
+        });
+      });
   }, []);
 
   // Listen to real-time chat events
@@ -47,7 +65,12 @@ export function useChat() {
           isStreaming: false
         } : null);
         // Refresh chat state to get the final message
-        App.GetChatState().then(setChatState);
+        App.GetChatState().then(state => {
+          if (state && !state.messages) {
+            state.messages = [];
+          }
+          setChatState(state);
+        });
       })
     ];
 

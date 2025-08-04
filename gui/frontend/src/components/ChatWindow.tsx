@@ -88,7 +88,28 @@ export function ChatWindow({ className }: ChatWindowProps) {
 
       {/* Messages */}
       <div className="chat-messages">
-        {chatState?.messages.map(renderMessage)}
+        {/* Show loading state */}
+        {!chatState && (
+          <div className="message system">
+            <div className="message-content">
+              <div className="message-text">Loading chat...</div>
+            </div>
+          </div>
+        )}
+        
+        {/* Show empty state */}
+        {chatState && (!chatState.messages || chatState.messages.length === 0) && (
+          <div className="message system">
+            <div className="message-content">
+              <div className="message-text">
+                👋 Welcome to Loom! Start a conversation to get help with your code.
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Render messages safely */}
+        {chatState?.messages?.map(renderMessage)}
         
         {/* Streaming message */}
         {chatState?.isStreaming && chatState.streamingContent && (

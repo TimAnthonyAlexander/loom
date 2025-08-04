@@ -10,6 +10,9 @@ interface FileExplorerProps {
 
 export function FileExplorer({ className, onFileSelect }: FileExplorerProps) {
   const { fileTree, projectSummary, searchFiles } = useFiles();
+  
+  // Ensure fileTree is safe to use
+  const safeFileTree = fileTree || [];
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<FileInfo[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
@@ -37,9 +40,9 @@ export function FileExplorer({ className, onFileSelect }: FileExplorerProps) {
     };
 
     // Get root level files and directories
-    const rootFiles = fileTree.filter(file => !file.path.includes('/'));
+    const rootFiles = safeFileTree.filter(file => !file.path.includes('/'));
     return buildTree(rootFiles);
-  }, [fileTree, expandedFolders]);
+  }, [safeFileTree, expandedFolders]);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
