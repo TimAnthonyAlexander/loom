@@ -1157,37 +1157,39 @@ func (m model) renderTodoPanel() string {
 		return ""
 	}
 
-	var sb strings.Builder
-	sb.WriteString("📝 TODO:")
-
-	// Show only first 3 items to keep info panel compact
-	itemsToShow := len(currentList.Items)
-	if itemsToShow > 3 {
-		itemsToShow = 3
+	// Count completed items for progress
+	completed := 0
+	for _, item := range currentList.Items {
+		if item.Checked {
+			completed++
+		}
 	}
 
-	for i := 0; i < itemsToShow; i++ {
+	// Show compact progress format: "📝 TODO: 2/5 ✅⬜🔒..."
+	total := len(currentList.Items)
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("📝 TODO: %d/%d ", completed, total))
+
+	// Show status icons for up to 4 items to keep it compact
+	maxIcons := 4
+	if total < maxIcons {
+		maxIcons = total
+	}
+
+	for i := 0; i < maxIcons; i++ {
 		item := currentList.Items[i]
-		status := "⬜"
 		if item.Checked {
-			status = "✅"
+			sb.WriteString("✅")
 		} else if i > 0 && !currentList.Items[i-1].Checked {
-			status = "🔒" // Locked because previous item not checked
+			sb.WriteString("🔒")
+		} else {
+			sb.WriteString("⬜")
 		}
-
-		// Truncate long titles for compact display
-		title := item.Title
-		if len(title) > 30 {
-			title = title[:27] + "..."
-		}
-
-		sb.WriteString(fmt.Sprintf(" %s %s", status, title))
 	}
 
 	// Show "..." if there are more items
-	if len(currentList.Items) > 3 {
-		remaining := len(currentList.Items) - 3
-		sb.WriteString(fmt.Sprintf(" (+%d more)", remaining))
+	if total > maxIcons {
+		sb.WriteString("...")
 	}
 
 	return sb.String()
@@ -3184,7 +3186,7 @@ func (m *model) executeSlashCommand(cmdStr string) tea.Cmd {
 		userMsg := llm.Message{Role: "user", Content: cmdStr, Timestamp: time.Now()}
 		m.chatSession.AddMessage(userMsg)
 		// Reuse helpContent string from earlier path (simplified call)
-		helpContent := `🤖 **Loom Help**\n\nUse /files, /stats, /tasks, /test, /summary, /rationale, /debug, /help, /quit, /todo` // shorter help here
+		helpContent := `🤖 **Loom Help**\n\nCommands: /files, /stats, /tasks, /todo, /test, /summary, /rationale, /debug, /help, /quit`
 		resp := llm.Message{Role: "assistant", Content: helpContent, Timestamp: time.Now()}
 		m.chatSession.AddMessage(resp)
 		m.messages = m.chatSession.GetDisplayMessages()
