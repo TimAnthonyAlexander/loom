@@ -107,17 +107,12 @@ func (cs *ChatService) streamLLMResponse() {
 	// Channel to signal when streaming goroutine is done
 	streamDone := make(chan bool, 1)
 
+	// Use a once to ensure channel is only closed once
+	var closeOnce sync.Once
+
 	// Start streaming
 	go func() {
 		defer func() {
-			// Safely close the stream channel
-			cs.mutex.Lock()
-			if cs.streamChan != nil {
-				close(cs.streamChan)
-				cs.streamChan = nil
-			}
-			cs.mutex.Unlock()
-
 			// Signal that streaming is done
 			streamDone <- true
 		}()
@@ -128,8 +123,17 @@ func (cs *ChatService) streamLLMResponse() {
 			cs.eventBus.Emit(events.ChatError, map[string]string{
 				"error": err.Error(),
 			})
-			return
 		}
+
+		// Close the channel exactly once when streaming is complete
+		closeOnce.Do(func() {
+			cs.mutex.Lock()
+			if cs.streamChan != nil {
+				close(cs.streamChan)
+				cs.streamChan = nil
+			}
+			cs.mutex.Unlock()
+		})
 	}()
 
 	// Process streaming chunks
@@ -168,6 +172,15 @@ func (cs *ChatService) streamLLMResponse() {
 			}
 		case <-ctx.Done():
 			// Context was cancelled (stop streaming called)
+			// Close the channel if it hasn't been closed yet
+			closeOnce.Do(func() {
+				cs.mutex.Lock()
+				if cs.streamChan != nil {
+					close(cs.streamChan)
+					cs.streamChan = nil
+				}
+				cs.mutex.Unlock()
+			})
 			streamFinished = true
 		}
 	}
@@ -196,7 +209,7 @@ func (cs *ChatService) streamLLMResponse() {
 	cs.mutex.Lock()
 	cs.isStreaming = false
 	cs.streamCancel = nil
-	cs.streamChan = nil
+	// Don't set streamChan to nil here - it's already handled by closeOnce
 	cs.mutex.Unlock()
 
 	// Emit stream ended event
