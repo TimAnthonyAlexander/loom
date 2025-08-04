@@ -101,9 +101,14 @@ type StreamStartMsg struct {
 	chunks chan llm.StreamChunk
 }
 
-// TaskEventMsg represents task execution events
+// TaskEventMsg represents detailed task execution events
 type TaskEventMsg struct {
 	Event taskPkg.TaskExecutionEvent
+}
+
+// UserTaskEventMsg represents simplified user task events
+type UserTaskEventMsg struct {
+	Event taskPkg.UserTaskEvent
 }
 
 // TaskConfirmationMsg represents a pending task confirmation
@@ -848,6 +853,9 @@ Ask me anything about your code, architecture, or programming questions!`
 
 	case TaskEventMsg:
 		return m.handleTaskEvent(msg.Event)
+
+	case UserTaskEventMsg:
+		return m.handleUserTaskEvent(msg.Event)
 
 	case TestPromptMsg:
 		return m.handleTestPrompt(msg)
@@ -1835,7 +1843,18 @@ func (m *model) mentionsFutureWork(response string) bool {
 	return false
 }
 
-// handleTaskEvent processes task execution events
+// handleUserTaskEvent processes simplified user task events
+func (m model) handleUserTaskEvent(event taskPkg.UserTaskEvent) (tea.Model, tea.Cmd) {
+	// Add simplified message to task history
+	if event.Message != "" {
+		m.taskHistory = append(m.taskHistory, event.Message)
+	}
+
+	// No other special handling needed for user events - they're already simplified
+	return m, nil
+}
+
+// handleTaskEvent processes detailed task execution events (for internal LLM processing)
 func (m model) handleTaskEvent(event taskPkg.TaskExecutionEvent) (tea.Model, tea.Cmd) {
 	// Add to task history
 	if event.Message != "" {
@@ -2639,6 +2658,16 @@ func StartTUI(workspacePath string, cfg *config.Config, idx *indexer.Index, opti
 			for ev := range taskEventChan {
 				// Forward TaskEventMsg; Send has no return value.
 				p.Send(TaskEventMsg{Event: ev})
+			}
+		}()
+	}
+
+	// Forward user task events for simplified UI display
+	if userTaskEventChan != nil {
+		go func() {
+			for ev := range userTaskEventChan {
+				// Forward UserTaskEventMsg; Send has no return value.
+				p.Send(UserTaskEventMsg{Event: ev})
 			}
 		}()
 	}

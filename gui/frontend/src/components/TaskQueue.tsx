@@ -52,7 +52,6 @@ export function TaskQueue({ className }: TaskQueueProps) {
       <div className="task-header">
         <div className="task-info">
           <span className="task-icon">{getTaskTypeIcon(task.type)}</span>
-          <span className="task-type">{task.type}</span>
           <span className="task-status">
             {getStatusIcon(task.status)} {task.status}
           </span>
@@ -61,26 +60,6 @@ export function TaskQueue({ className }: TaskQueueProps) {
       </div>
       
       <div className="task-description">{task.description}</div>
-      
-      {task.preview && (
-        <details className="task-preview">
-          <summary>Preview</summary>
-          <pre className="preview-content">{task.preview}</pre>
-        </details>
-      )}
-      
-      {task.result && (
-        <details className="task-result">
-          <summary>Result</summary>
-          <pre className="result-content">{task.result}</pre>
-        </details>
-      )}
-      
-      {task.error && (
-        <div className="task-error">
-          <strong>Error:</strong> {task.error}
-        </div>
-      )}
       
       {task.completedAt && (
         <div className="task-completion">
