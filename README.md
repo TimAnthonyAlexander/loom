@@ -2,6 +2,7 @@
 
 <p align="center">
   <img src="screenshot.png" alt="Loom TUI screenshot" width="720">
+  <img src="screenshot-tui.png" alt="Loom TUI screenshot" width="720">
 </p>
 
 > **Loom** brings an AI pair-programmer to your terminal. It combines lightning-fast code indexing, intelligent file editing with progressive validation, and streaming LLM integration to read, edit, and even run your code – always under your control.
