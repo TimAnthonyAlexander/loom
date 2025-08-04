@@ -44,11 +44,12 @@ func TestEditTaskConfirmationBug(t *testing.T) {
 </html>
 <<LOOM_EDIT`
 
-	// Create event channel to capture events
+	// Create event channels to capture events
+	userEventChan := make(chan UserTaskEvent, 10)
 	eventChan := make(chan TaskExecutionEvent, 10)
 
 	// Execute the LLM response
-	execution, err := manager.HandleLLMResponse(llmResponse, eventChan)
+	execution, err := manager.HandleLLMResponse(llmResponse, userEventChan, eventChan)
 	if err != nil {
 		t.Fatalf("Failed to handle LLM response: %v", err)
 	}

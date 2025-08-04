@@ -193,7 +193,7 @@ func (m *Manager) HandleLLMResponse(llmResponse string, userEventChan chan<- Use
 			// CRITICAL FIX: Add failed task result to chat so LLM can see the error
 			taskResultMessage := llm.Message{
 				Role:      "assistant",
-				Content:   m.formatTaskResult(&currentTask, response),
+				Content:   m.formatTaskResultForLLM(&currentTask, response),
 				Timestamp: time.Now(),
 			}
 
@@ -230,7 +230,7 @@ func (m *Manager) HandleLLMResponse(llmResponse string, userEventChan chan<- Use
 		// Add task result to chat context for next LLM iteration
 		taskResultMessage := llm.Message{
 			Role:      "assistant",
-			Content:   m.formatTaskResult(&task, response),
+			Content:   m.formatTaskResultForLLM(&task, response),
 			Timestamp: time.Now(),
 		}
 
@@ -415,6 +415,37 @@ func (m *Manager) formatTaskResult(task *Task, response *TaskResponse) string {
 	}
 
 	return result.String()
+}
+
+// formatTaskResultForLLM formats task results for LLM context (includes actual content)
+func (m *Manager) formatTaskResultForLLM(task *Task, response *TaskResponse) string {
+	var content strings.Builder
+
+	content.WriteString(fmt.Sprintf("TASK_RESULT: %s\n", task.Description()))
+
+	if response.Success {
+		content.WriteString("STATUS: Success\n")
+		// Use ActualContent for LLM context (includes full file content, etc.)
+		if response.ActualContent != "" {
+			content.WriteString(fmt.Sprintf("CONTENT:\n%s\n", response.ActualContent))
+		} else if response.Output != "" {
+			content.WriteString(fmt.Sprintf("CONTENT:\n%s\n", response.Output))
+		}
+	} else {
+		content.WriteString("STATUS: Failed\n")
+		if response.Error != "" {
+			content.WriteString(fmt.Sprintf("ERROR: %s\n", response.Error))
+		}
+		// Provide any output or diagnostic content to the LLM even when the
+		// task fails so it can reason about the failure.
+		if response.ActualContent != "" {
+			content.WriteString(fmt.Sprintf("CONTENT:\n%s\n", response.ActualContent))
+		} else if response.Output != "" {
+			content.WriteString(fmt.Sprintf("CONTENT:\n%s\n", response.Output))
+		}
+	}
+
+	return content.String()
 }
 
 // getSimpleTaskDescription returns a simplified, user-friendly description of a task

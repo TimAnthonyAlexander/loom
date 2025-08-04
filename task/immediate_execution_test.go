@@ -41,8 +41,9 @@ export default App;
 <<LOOM_EDIT`
 
 	// Execute the LLM response
+	userEventChan := make(chan UserTaskEvent, 10)
 	eventChan := make(chan TaskExecutionEvent, 10)
-	execution, err := manager.HandleLLMResponse(llmResponse, eventChan)
+	execution, err := manager.HandleLLMResponse(llmResponse, userEventChan, eventChan)
 	if err != nil {
 		t.Fatalf("Failed to handle LLM response: %v", err)
 	}
@@ -150,11 +151,12 @@ root.render(
 	for i, input := range inputs {
 		t.Logf("Processing file %d: %s", i+1, fileNames[i])
 
-		// Create event channel for each task
+		// Create event channels for each task
+		userEventChan := make(chan UserTaskEvent, 10)
 		eventChan := make(chan TaskExecutionEvent, 10)
 
 		// Execute the LLM response
-		execution, err := manager.HandleLLMResponse(input, eventChan)
+		execution, err := manager.HandleLLMResponse(input, userEventChan, eventChan)
 		if err != nil {
 			t.Fatalf("Failed to handle LLM response %d: %v", i+1, err)
 		}
@@ -259,11 +261,12 @@ root.render(
 </html>
 <<LOOM_EDIT`
 
-	// Create event channel for all tasks
+	// Create event channels for all tasks
+	userEventChan := make(chan UserTaskEvent, 10)
 	eventChan := make(chan TaskExecutionEvent, 10)
 
 	// Execute the LLM response
-	execution, err := manager.HandleLLMResponse(llmResponse, eventChan)
+	execution, err := manager.HandleLLMResponse(llmResponse, userEventChan, eventChan)
 	if err != nil {
 		t.Fatalf("Failed to handle LLM response: %v", err)
 	}
