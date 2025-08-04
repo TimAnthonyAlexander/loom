@@ -6,6 +6,10 @@ export function ApproveTask(arg1) {
   return window['go']['main']['App']['ApproveTask'](arg1);
 }
 
+export function ChangeWorkspace(arg1) {
+  return window['go']['main']['App']['ChangeWorkspace'](arg1);
+}
+
 export function ClearChat() {
   return window['go']['main']['App']['ClearChat']();
 }

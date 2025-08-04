@@ -237,11 +237,39 @@ func (a *App) GetAppInfo() map[string]interface{} {
 	}
 }
 
+// ChangeWorkspace changes the current workspace to a new one
+func (a *App) ChangeWorkspace(workspacePath string) error {
+	// Stop file watching for the current workspace if initialized
+	if a.workspaceInitialized && a.index != nil {
+		a.index.StopWatching()
+	}
+
+	// Reset workspace state
+	a.workspaceInitialized = false
+	a.workspacePath = ""
+	a.config = nil
+	a.index = nil
+	a.chatService = nil
+	a.taskService = nil
+	a.fileService = nil
+
+	log.Printf("Workspace reset, initializing new workspace: %s", workspacePath)
+
+	// Initialize the new workspace
+	return a.selectWorkspaceInternal(workspacePath)
+}
+
 // SelectWorkspace initializes the workspace and all services
 func (a *App) SelectWorkspace(workspacePath string) error {
 	if a.workspaceInitialized {
 		return fmt.Errorf("workspace already initialized")
 	}
+
+	return a.selectWorkspaceInternal(workspacePath)
+}
+
+// selectWorkspaceInternal contains the shared workspace initialization logic
+func (a *App) selectWorkspaceInternal(workspacePath string) error {
 
 	// Validate the workspace path
 	if workspacePath == "" {

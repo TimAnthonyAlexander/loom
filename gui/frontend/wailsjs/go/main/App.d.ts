@@ -4,6 +4,8 @@ import {models} from '../models';
 
 export function ApproveTask(arg1:string):Promise<void>;
 
+export function ChangeWorkspace(arg1:string):Promise<void>;
+
 export function ClearChat():Promise<void>;
 
 export function GetAllTasks():Promise<Record<string, Array<models.TaskInfo>>>;

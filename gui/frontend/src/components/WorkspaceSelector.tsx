@@ -5,11 +5,12 @@ import './WorkspaceSelector.css';
 interface WorkspaceSelectorProps {
   onWorkspaceSelected: (workspacePath: string) => void;
   autoTryLastWorkspace?: boolean;
+  isChangingWorkspace?: boolean;
 }
 
 const LAST_WORKSPACE_KEY = 'loom_last_workspace';
 
-export function WorkspaceSelector({ onWorkspaceSelected, autoTryLastWorkspace = false }: WorkspaceSelectorProps) {
+export function WorkspaceSelector({ onWorkspaceSelected, autoTryLastWorkspace = false, isChangingWorkspace = false }: WorkspaceSelectorProps) {
   const [selectedPath, setSelectedPath] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
@@ -65,7 +66,11 @@ export function WorkspaceSelector({ onWorkspaceSelected, autoTryLastWorkspace = 
     setError('');
 
     try {
-      await App.SelectWorkspace(selectedPath);
+      if (isChangingWorkspace) {
+        await App.ChangeWorkspace(selectedPath);
+      } else {
+        await App.SelectWorkspace(selectedPath);
+      }
       // Save to localStorage on successful workspace selection
       localStorage.setItem(LAST_WORKSPACE_KEY, selectedPath);
       onWorkspaceSelected(selectedPath);

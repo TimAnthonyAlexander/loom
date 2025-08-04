@@ -135,6 +135,7 @@ function App() {
         <WorkspaceSelector 
           onWorkspaceSelected={handleWorkspaceSelected}
           autoTryLastWorkspace={!showWorkspaceSelector} // Only auto-try on first load, not when manually changing
+          isChangingWorkspace={showWorkspaceSelector} // Use ChangeWorkspace method when manually changing
         />
       </div>
     );
