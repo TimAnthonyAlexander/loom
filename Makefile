@@ -15,7 +15,12 @@ NC=\033[0m # No Color
 
 help: ## Show this help message
 	@echo "$(BLUE)Available commands:$(NC)"
-	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ { printf "  $(GREEN)%-15s$(NC) %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ { printf "  $(GREEN)%-18s$(NC) %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+	@echo ""
+	@echo "$(YELLOW)GUI Development Options:$(NC)"
+	@echo "  $(GREEN)make dev-gui$(NC)       - Full output (good for debugging)"
+	@echo "  $(GREEN)make dev-gui-quiet$(NC) - Clean output (recommended)"
+	@echo "  $(GREEN)make dev-gui-silent$(NC)- Background mode (minimal output)"
 
 # Development workflow
 dev-setup: install-tools setup ## Complete development environment setup
@@ -49,11 +54,16 @@ dev-gui: ## Start GUI development server
 	@echo ""
 	cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails dev
 
-dev-gui-quiet: ## Start GUI development server with reduced output
+dev-gui-quiet: ## Start GUI development server with minimal output
 	@echo "$(BLUE)🚀 Starting GUI development server (quiet mode)...$(NC)"
-	@echo "$(GREEN)✨ Open your browser to: http://localhost:34115$(NC)"
+	@echo "$(GREEN)✨ GUI will be available at: http://localhost:34115$(NC)"
+	@echo "$(YELLOW)💡 Use 'make dev-gui' for full output if you need to debug$(NC)"
 	@echo ""
-	cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails dev 2>/dev/null || wails dev
+	cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails dev -v 0 -loglevel Error
+
+dev-gui-silent: ## Start GUI development server with almost no output
+	@echo "$(BLUE)🚀 Starting GUI (silent mode)... $(GREEN)http://localhost:34115$(NC)"
+	@cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails dev -v 0 -loglevel Error > /dev/null 2>&1 &
 
 build-frontend: ## Build only the frontend
 	@echo "$(BLUE)🔨 Building frontend...$(NC)"
