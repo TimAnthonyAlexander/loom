@@ -18,6 +18,7 @@ function App() {
   });
   const [selectedFile, setSelectedFile] = useState<FileInfo | null>(null);
   const [workspaceSelected, setWorkspaceSelected] = useState<boolean>(false);
+  const [showWorkspaceSelector, setShowWorkspaceSelector] = useState<boolean>(false);
 
   const handleFileSelect = (file: FileInfo) => {
     setSelectedFile(file);
@@ -27,7 +28,12 @@ function App() {
 
   const handleWorkspaceSelected = (workspacePath: string) => {
     setWorkspaceSelected(true);
+    setShowWorkspaceSelector(false);
     console.log('Workspace selected:', workspacePath);
+  };
+
+  const handleChangeWorkspace = () => {
+    setShowWorkspaceSelector(true);
   };
 
   const toggleDarkMode = () => {
@@ -107,6 +113,9 @@ function App() {
         )}
       </div>
       <div className="header-right">
+        <button onClick={handleChangeWorkspace} className="btn btn-secondary">
+          Change Workspace
+        </button>
         <button onClick={toggleDarkMode} className="btn btn-ghost">
           {viewState.darkMode ? '☀️' : '🌙'}
         </button>
@@ -117,13 +126,16 @@ function App() {
     </div>
   );
 
-  // Show workspace selector if workspace hasn't been initialized
+  // Show workspace selector if workspace hasn't been initialized or user wants to change workspace
   const isWorkspaceInitialized = appInfo?.workspaceInitialized || workspaceSelected;
   
-  if (!isWorkspaceInitialized) {
+  if (!isWorkspaceInitialized || showWorkspaceSelector) {
     return (
       <div className="app" data-theme={viewState.darkMode ? 'dark' : 'light'}>
-        <WorkspaceSelector onWorkspaceSelected={handleWorkspaceSelected} />
+        <WorkspaceSelector 
+          onWorkspaceSelected={handleWorkspaceSelected}
+          autoTryLastWorkspace={!showWorkspaceSelector} // Only auto-try on first load, not when manually changing
+        />
       </div>
     );
   }

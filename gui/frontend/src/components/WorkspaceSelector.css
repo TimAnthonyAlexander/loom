@@ -92,7 +92,7 @@
 
 .workspace-selector-input:focus {
   outline: none;
-  border-color: var(--primary-color);
+  border-color: var(--color-accent);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
@@ -147,7 +147,7 @@
 }
 
 .workspace-selector-primary-btn {
-  background: var(--primary-color);
+  background: var(--color-accent);
   color: white;
   border: none;
   padding: 0.875rem 2rem;
@@ -160,7 +160,7 @@
 }
 
 .workspace-selector-primary-btn:hover:not(:disabled) {
-  background: var(--primary-color-hover);
+  background: var(--color-accent-hover);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
@@ -205,7 +205,7 @@
   content: '→';
   position: absolute;
   left: 0;
-  color: var(--primary-color);
+  color: var(--color-accent);
   font-weight: 600;
 }
 
