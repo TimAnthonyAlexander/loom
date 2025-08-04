@@ -26,6 +26,11 @@ help: ## Show this help message
 	@echo "  $(GREEN)make build-gui$(NC)              - Build for current platform"
 	@echo "  $(GREEN)make build-gui-linux$(NC)        - Build for Linux (requires Docker)"
 	@echo "  $(GREEN)make build-gui-all-platforms$(NC) - Build for ALL platforms including Linux"
+	@echo ""
+	@echo "$(YELLOW)Distribution Build Options:$(NC)"
+	@echo "  $(GREEN)make dist$(NC)                   - Build TUI & GUI for all platforms"
+	@echo "  $(GREEN)make dist-macos-arm$(NC)         - Build TUI & GUI for macOS ARM only"
+	@echo "  $(GREEN)make dist-with-linux-gui$(NC)    - Build all platforms including Linux GUI"
 
 # Development workflow
 dev-setup: install-tools setup ## Complete development environment setup
@@ -338,6 +343,32 @@ dist-with-linux-gui: dist ## Build all executables including Linux GUI (requires
 		echo "$(RED)❌ Docker not found. Linux GUI build requires Docker.$(NC)"; \
 	fi
 	@echo "$(BLUE)📦 Final contents:$(NC)"
+	@ls -la dist/
+
+dist-macos-arm: download-ripgrep ## Build both TUI and GUI executables for macOS ARM only
+	@echo "$(BLUE)🔨 Building TUI and GUI executables for macOS ARM (Apple Silicon)...$(NC)"
+	rm -rf dist/
+	mkdir -p dist/
+	
+	@echo "$(BLUE)Building TUI executable for macOS ARM...$(NC)"
+	GOOS=darwin GOARCH=arm64 go build -o dist/loom-tui-darwin-arm64 .
+	
+	@echo "$(BLUE)Building GUI executable for macOS ARM...$(NC)"
+	cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails build --platform=darwin/arm64
+	
+	@echo "$(BLUE)Copying GUI executable to dist/...$(NC)"
+	# macOS .app bundle for ARM
+	if [ -d "gui/build/bin/gui-arm64.app" ]; then cp -r gui/build/bin/gui-arm64.app dist/loom-gui-darwin-arm64.app; fi
+	
+	@echo "$(BLUE)Creating macOS ARM DMG file...$(NC)"
+	# Create DMG for Apple Silicon macOS
+	if [ -d "dist/loom-gui-darwin-arm64.app" ]; then \
+		hdiutil create -volname "Loom GUI (Apple Silicon)" -srcfolder "dist/loom-gui-darwin-arm64.app" -ov -format UDZO "dist/loom-gui-darwin-arm64.dmg"; \
+		echo "$(GREEN)✅ Created dist/loom-gui-darwin-arm64.dmg$(NC)"; \
+	fi
+	
+	@echo "$(GREEN)✅ macOS ARM executables built and placed in dist/!$(NC)"
+	@echo "$(BLUE)📦 Contents:$(NC)"
 	@ls -la dist/
 
 # Release helpers
