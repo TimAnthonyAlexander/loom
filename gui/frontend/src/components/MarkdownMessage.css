@@ -141,10 +141,90 @@
   color: var(--color-text-secondary);
 }
 
-/* Code blocks - handled by SyntaxHighlighter but we can add container styling */
-.markdown-content pre {
+/* Code blocks with highlight.js styling */
+.markdown-content .hljs-code-block {
   margin: var(--spacing-lg) 0;
   border-radius: var(--border-radius);
   overflow: hidden;
+  background-color: #1e1e1e;
+  padding: var(--spacing-md);
+}
+
+.markdown-content .hljs-code-block code {
+  background: none;
+  padding: 0;
+  font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  color: #d4d4d4;
+}
+
+/* Highlight.js theme - VS Code Dark theme colors */
+.hljs {
+  color: #d4d4d4;
+  background: #1e1e1e;
+}
+
+.hljs-keyword,
+.hljs-operator,
+.hljs-pattern-match {
+  color: #569cd6;
+}
+
+.hljs-function,
+.hljs-class,
+.hljs-title {
+  color: #dcdcaa;
+}
+
+.hljs-string,
+.hljs-built_in,
+.hljs-symbol,
+.hljs-template-tag,
+.hljs-template-variable,
+.hljs-addition {
+  color: #ce9178;
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: #6a9955;
+  font-style: italic;
+}
+
+.hljs-number,
+.hljs-literal {
+  color: #b5cea8;
+}
+
+.hljs-type,
+.hljs-params {
+  color: #4ec9b0;
+}
+
+.hljs-variable,
+.hljs-property,
+.hljs-attr {
+  color: #9cdcfe;
+}
+
+.hljs-punctuation,
+.hljs-tag {
+  color: #808080;
+}
+
+.hljs-deletion {
+  color: #f44747;
+}
+
+.hljs-selector-tag,
+.hljs-selector-id,
+.hljs-selector-class {
+  color: #d7ba7d;
+}
+
+.hljs-doctag,
+.hljs-title.class_ {
+  color: #4ec9b0;
 }
 
