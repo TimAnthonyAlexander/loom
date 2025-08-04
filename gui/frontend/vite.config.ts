@@ -15,6 +15,12 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    rollupOptions: {
+      external: ['#minpath', '#minproc', '#minurl']
+    },
+  },
+  optimizeDeps: {
+    exclude: ['#minpath', '#minproc', '#minurl']
   },
   envPrefix: ['VITE_', 'TAURI_PLATFORM', 'TAURI_ARCH', 'TAURI_FAMILY', 'TAURI_PLATFORM_VERSION', 'TAURI_PLATFORM_TYPE'],
 })

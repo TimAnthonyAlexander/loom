@@ -867,6 +867,117 @@ func TestParseReadWithLineNumbers(t *testing.T) {
 	}
 }
 
+// Test the new flexible READ command formats
+func TestParseReadFlexibleFormats(t *testing.T) {
+	tests := []struct {
+		name              string
+		llmResponse       string
+		expectedPath      string
+		expectedStartLine int
+		expectedEndLine   int
+		expectedMaxLines  int
+	}{
+		{
+			name:              "Parenthetical format with lines keyword (original working format)",
+			llmResponse:       "🔧 READ README.md (lines 1-50)",
+			expectedPath:      "README.md",
+			expectedStartLine: 1,
+			expectedEndLine:   50,
+		},
+		{
+			name:              "Space-separated with lines keyword",
+			llmResponse:       "🔧 READ README.md lines 1-50",
+			expectedPath:      "README.md",
+			expectedStartLine: 1,
+			expectedEndLine:   50,
+		},
+		{
+			name:              "Space-separated without lines keyword (problematic case)",
+			llmResponse:       "🔧 READ README.md 1-50",
+			expectedPath:      "README.md",
+			expectedStartLine: 1,
+			expectedEndLine:   50,
+		},
+		{
+			name:              "Simple READ without emoji",
+			llmResponse:       "READ main.go 10-20",
+			expectedPath:      "main.go",
+			expectedStartLine: 10,
+			expectedEndLine:   20,
+		},
+		{
+			name:              "Single line with lines keyword",
+			llmResponse:       "🔧 READ config.go lines 42",
+			expectedPath:      "config.go",
+			expectedStartLine: 42,
+			expectedEndLine:   42,
+		},
+		{
+			name:              "Single line without lines keyword",
+			llmResponse:       "🔧 READ config.go 42",
+			expectedPath:      "config.go",
+			expectedStartLine: 42,
+			expectedEndLine:   42,
+		},
+		{
+			name:              "Colon notation (using existing parsePathWithLines logic)",
+			llmResponse:       "🔧 READ server.go:100-200",
+			expectedPath:      "server.go",
+			expectedStartLine: 100,
+			expectedEndLine:   200,
+		},
+		{
+			name:              "Single line colon notation",
+			llmResponse:       "🔧 READ utils.go:75",
+			expectedPath:      "utils.go",
+			expectedStartLine: 75,
+			expectedEndLine:   75,
+		},
+		{
+			name:              "Plain file path (no line range)",
+			llmResponse:       "🔧 READ package.json",
+			expectedPath:      "package.json",
+			expectedStartLine: 0,
+			expectedEndLine:   0,
+			expectedMaxLines:  DefaultMaxLines,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			taskList, err := ParseTasks(tt.llmResponse)
+			if err != nil {
+				t.Fatalf("Expected no error, got: %v", err)
+			}
+
+			if taskList == nil {
+				t.Fatal("Expected task list, got nil")
+			}
+
+			if len(taskList.Tasks) != 1 {
+				t.Fatalf("Expected 1 task, got %d", len(taskList.Tasks))
+			}
+
+			task := taskList.Tasks[0]
+			if task.Type != TaskTypeReadFile {
+				t.Errorf("Expected ReadFile, got %s", task.Type)
+			}
+			if task.Path != tt.expectedPath {
+				t.Errorf("Expected path %s, got %s", tt.expectedPath, task.Path)
+			}
+			if task.StartLine != tt.expectedStartLine {
+				t.Errorf("Expected StartLine %d, got %d", tt.expectedStartLine, task.StartLine)
+			}
+			if task.EndLine != tt.expectedEndLine {
+				t.Errorf("Expected EndLine %d, got %d", tt.expectedEndLine, task.EndLine)
+			}
+			if tt.expectedMaxLines > 0 && task.MaxLines != tt.expectedMaxLines {
+				t.Errorf("Expected MaxLines %d, got %d", tt.expectedMaxLines, task.MaxLines)
+			}
+		})
+	}
+}
+
 // TestParseEditTaskWithDirectContent - Removing this test since EDIT is forbidden
 
 // TestParseEditTaskWithCodeBlockContent - Removing this test since EDIT is forbidden

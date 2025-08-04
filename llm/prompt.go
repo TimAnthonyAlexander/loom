@@ -132,6 +132,8 @@ func (pe *PromptEnhancer) CreateEnhancedSystemPrompt(enableShell bool) Message {
 
 3 . Command Reference (use exactly one per turn)
 READ  file.go (lines 40-80)           – view code with line numbers
+READ  file.go 40-80                   – also works (flexible format)
+READ  file.go lines 40-80             – also works (flexible format)
 LIST  dir/                            – list contents
 SEARCH "pattern" type:go context:3    – grep-like search (prefer over RUN grep)
 RUN   go test                         – shell execution

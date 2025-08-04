@@ -233,13 +233,13 @@ func TestFilterTaskResultForDisplay(t *testing.T) {
 
 	// Test filtering of completion detector interactions
 	completionCheck := "COMPLETION_CHECK: Is this task complete?"
-	filtered = session.filterTaskResultForDisplay(completionCheck)
+	filtered = session.FilterTaskResultForDisplay(completionCheck)
 	if filtered != "" {
 		t.Errorf("Expected empty filtered result for completion check, got '%s'", filtered)
 	}
 
 	completionResponse := "Yes, the task is complete"
-	filtered = session.filterTaskResultForDisplay(completionResponse)
+	filtered = session.FilterTaskResultForDisplay(completionResponse)
 	if filtered != "" {
 		t.Errorf("Expected empty filtered result for completion response, got '%s'", filtered)
 	}

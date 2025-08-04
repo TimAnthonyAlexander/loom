@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useChat } from '../hooks/useWails';
 import type { Message } from '../types';
+import { MarkdownMessage } from './MarkdownMessage';
 import './ChatWindow.css';
+import './MarkdownMessage.css';
 
 interface ChatWindowProps {
   className?: string;
@@ -53,7 +55,11 @@ export function ChatWindow({ className }: ChatWindowProps) {
     <div key={message.id} className={`message ${message.isUser ? 'user' : 'assistant'} ${message.type}`}>
       <div className="message-content">
         <div className="message-text">
-          {message.content}
+          {!message.isUser && (message.type === 'assistant' || message.type === 'system') ? (
+            <MarkdownMessage content={message.content} />
+          ) : (
+            message.content
+          )}
         </div>
         <div className="message-timestamp">
           {formatTimestamp(message.timestamp)}
@@ -116,7 +122,7 @@ export function ChatWindow({ className }: ChatWindowProps) {
           <div className="message assistant streaming">
             <div className="message-content">
               <div className="message-text">
-                {chatState.streamingContent}
+                <MarkdownMessage content={chatState.streamingContent} />
                 <span className="typing-indicator">|</span>
               </div>
             </div>

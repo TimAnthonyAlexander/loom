@@ -550,8 +550,20 @@ func parseReadTask(args string) *Task {
 	// - "main.go (lines 50-100)"
 	// - "config.go (first 200 lines)"
 	// - "main.go (lines: 1-200)"
+	// - "main.go lines 1-50" (flexible format)
+	// - "main.go 1-50" (flexible format without "lines" keyword)
 
-	// Look for parenthetical options
+	// First, check for line numbers request in simple format like "file.go with line numbers"
+	if strings.Contains(strings.ToLower(args), " with line numbers") ||
+		strings.Contains(strings.ToLower(args), " with numbers") ||
+		strings.Contains(strings.ToLower(args), " numbered") {
+		task.ShowLineNumbers = true
+		// Remove the line numbers request from the path
+		args = regexp.MustCompile(`\s+with\s+(?:line\s+)?numbers?`).ReplaceAllString(args, "")
+		args = regexp.MustCompile(`\s+numbered`).ReplaceAllString(args, "")
+	}
+
+	// Look for parenthetical options first
 	optionsPattern := regexp.MustCompile(`^(.+?)\s*\((.+)\)$`)
 	matches := optionsPattern.FindStringSubmatch(args)
 
@@ -599,17 +611,83 @@ func parseReadTask(args string) *Task {
 			task.ShowLineNumbers = true
 		}
 	} else {
-		// Check for line numbers request in simple format like "file.go with line numbers"
-		if strings.Contains(strings.ToLower(args), " with line numbers") ||
-			strings.Contains(strings.ToLower(args), " with numbers") ||
-			strings.Contains(strings.ToLower(args), " numbered") {
-			task.ShowLineNumbers = true
-			// Remove the line numbers request from the path
-			args = regexp.MustCompile(`\s+with\s+(?:line\s+)?numbers?`).ReplaceAllString(args, "")
-			args = regexp.MustCompile(`\s+numbered`).ReplaceAllString(args, "")
+		// Handle flexible formats without parentheses
+		// Try to parse line ranges in multiple formats:
+		// 1. "file.go lines 1-50" (with "lines" keyword)
+		// 2. "file.go 1-50" (without "lines" keyword)
+		// 3. "file.go:1-50" (colon notation - delegate to parsePathWithLines)
+
+		// Check for colon notation first (e.g., "file.go:1-50")
+		if strings.Contains(args, ":") && regexp.MustCompile(`:\d+(-\d+)?$`).MatchString(args) {
+			parsePathWithLines(task, args)
+			// For READ tasks, we need to map TargetStartLine/TargetEndLine to StartLine/EndLine
+			if task.TargetStartLine > 0 {
+				task.StartLine = task.TargetStartLine
+				task.EndLine = task.TargetEndLine
+				// Clear the target fields as they're used for EDIT tasks
+				task.TargetStartLine = 0
+				task.TargetEndLine = 0
+			}
+			if task.TargetLine > 0 {
+				// Single line target, convert to range
+				task.StartLine = task.TargetLine
+				task.EndLine = task.TargetLine
+				task.TargetLine = 0
+			}
+			return task
 		}
 
-		// Simple path without options
+		// Pattern 1: "file.go lines 1-50" (with "lines" keyword)
+		linesPattern := regexp.MustCompile(`^(.+?)\s+lines\s+(\d+)-(\d+)$`)
+		if matches := linesPattern.FindStringSubmatch(args); len(matches) == 4 {
+			task.Path = strings.TrimSpace(matches[1])
+			if startLine, err := strconv.Atoi(matches[2]); err == nil {
+				if endLine, err := strconv.Atoi(matches[3]); err == nil {
+					task.StartLine = startLine
+					task.EndLine = endLine
+				}
+			}
+			return task
+		}
+
+		// Pattern 2: "file.go 1-50" (without "lines" keyword - the problematic case)
+		directRangePattern := regexp.MustCompile(`^(.+?)\s+(\d+)-(\d+)$`)
+		if matches := directRangePattern.FindStringSubmatch(args); len(matches) == 4 {
+			task.Path = strings.TrimSpace(matches[1])
+			if startLine, err := strconv.Atoi(matches[2]); err == nil {
+				if endLine, err := strconv.Atoi(matches[3]); err == nil {
+					task.StartLine = startLine
+					task.EndLine = endLine
+				}
+			}
+			return task
+		}
+
+		// Pattern 3: "file.go lines 50" (single line with "lines" keyword)
+		singleLinePattern := regexp.MustCompile(`^(.+?)\s+lines?\s+(\d+)$`)
+		if matches := singleLinePattern.FindStringSubmatch(args); len(matches) == 3 {
+			task.Path = strings.TrimSpace(matches[1])
+			if lineNum, err := strconv.Atoi(matches[2]); err == nil {
+				task.StartLine = lineNum
+				task.EndLine = lineNum
+			}
+			return task
+		}
+
+		// Pattern 4: "file.go 50" (single line without "lines" keyword)
+		// Be more careful here to avoid false positives
+		singleNumPattern := regexp.MustCompile(`^(.+?)\s+(\d+)$`)
+		if matches := singleNumPattern.FindStringSubmatch(args); len(matches) == 3 {
+			// Only treat as line number if the number is reasonable (not likely to be part of filename)
+			if lineNum, err := strconv.Atoi(matches[2]); err == nil && lineNum > 0 && lineNum < 10000 {
+				task.Path = strings.TrimSpace(matches[1])
+				task.StartLine = lineNum
+				task.EndLine = lineNum
+				return task
+			}
+		}
+
+		// No special patterns matched, treat as simple path
 		task.Path = strings.TrimSpace(args)
 	}
 
