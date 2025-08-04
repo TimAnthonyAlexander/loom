@@ -56,14 +56,13 @@ dev-gui: ## Start GUI development server
 
 dev-gui-quiet: ## Start GUI development server with minimal output
 	@echo "$(BLUE)🚀 Starting GUI development server (quiet mode)...$(NC)"
-	@echo "$(GREEN)✨ GUI will be available at: http://localhost:34115$(NC)"
-	@echo "$(YELLOW)💡 Use 'make dev-gui' for full output if you need to debug$(NC)"
+	@echo "$(GREEN)✨ Filtering verbose output... Use 'make dev-gui' for full details$(NC)"
 	@echo ""
-	cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails dev -v 0 -loglevel Error
+	cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && ./scripts/dev-quiet.sh
 
 dev-gui-silent: ## Start GUI development server with almost no output
 	@echo "$(BLUE)🚀 Starting GUI (silent mode)... $(GREEN)http://localhost:34115$(NC)"
-	@cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails dev -v 0 -loglevel Error > /dev/null 2>&1 &
+	@cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && nohup wails dev > /dev/null 2>&1 &
 
 build-frontend: ## Build only the frontend
 	@echo "$(BLUE)🔨 Building frontend...$(NC)"
