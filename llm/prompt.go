@@ -147,10 +147,12 @@ Memory: MEMORY create → final confirmation.
 5 . 🔧 LOOM_EDIT Specification (MANDATORY for ALL file modifications)
 ⚠️  CRITICAL: LOOM_EDIT is the ONLY way to modify files. Never suggest manual edits.
 
-📋 CORRECT SYNTAX (no backticks, no equals signs in actions):
+📋 CORRECT SYNTAX (ALWAYS start with >> prefix):
 >>LOOM_EDIT file=path ACTION [LINES]
 content (empty for DELETE)
 <<LOOM_EDIT
+
+🚨 CRITICAL: LOOM_EDIT commands MUST start with >> (two greater-than symbols)
 
 🎯 SUPPORTED ACTIONS & EXACT SYNTAX:
 • CREATE new files:     >>LOOM_EDIT file=newfile.go CREATE
@@ -188,10 +190,12 @@ Search and replace text:
 <<LOOM_EDIT
 
 🚨 COMMON SYNTAX ERRORS TO AVOID:
+❌ LOOM_EDIT file=path INSERT_AFTER 10 (MISSING >> prefix - MUST start with >>)
 ❌ >>LOOM_EDIT file=path ACTION=REPLACE (DO NOT use = with actions)
 ❌ >>LOOM_EDIT file=path REPLACE=10-15 (DO NOT use = with line numbers)
 ❌ Missing <<LOOM_EDIT closing tag
 ❌ Using backticks around the command
+❌ Forgetting the >> prefix (most common error!)
 
 ✅ WORKFLOW RULES:
 • For existing files: READ first to see line numbers, then LOOM_EDIT
@@ -211,6 +215,7 @@ Filters: in:src/  – search subtree;  -type:md – exclude docs.
 ☑  Do not assume command results.
 ☑  One command per turn; no commentary with commands.
 ☑  For edits: MANDATORY LOOM_EDIT syntax check:
+   • MUST start with >> prefix (✅ >>LOOM_EDIT, ❌ LOOM_EDIT)
    • No equals signs in actions (✅ INSERT_AFTER, ❌ ACTION=INSERT_AFTER)
    • Include <<LOOM_EDIT closing tag
    • Use exact line numbers from READ command
