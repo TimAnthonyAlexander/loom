@@ -1080,7 +1080,7 @@ func (e *Executor) executeSearch(task *Task) *TaskResponse {
 			noMatchesMsg := fmt.Sprintf("Search completed: '%s' - No matches found\n\nSearch parameters:\n- Path: %s\n- Options: %s",
 				task.Query, task.Path, e.formatSearchOptions(task))
 			response.Output = noMatchesMsg
-			response.ActualContent = noMatchesMsg
+			response.ActualContent = response.Output
 			return response
 		}
 
