@@ -1870,25 +1870,57 @@ func tryFallbackJSONParsing(llmResponse string) *TaskList {
 	return nil
 }
 
-// isConversationalResponse analyzes the first few lines to determine if this is
-// conversational text vs. actual task commands. If the first few lines are conversational,
-// treat the ENTIRE response as text-only (no mixed content allowed).
+// isConversationalResponse analyzes if this is a conversational text response that shouldn't be parsed for tasks.
+// IMPORTANT RULE: If the message does not contain a task within the first 3 lines, it should and
+// MUST NOT be considered a taskful message. It is then a text-only message that coincidentally
+// contains something that looks like a task.
 func isConversationalResponse(llmResponse string) bool {
 	lines := strings.Split(strings.TrimSpace(llmResponse), "\n")
 	if len(lines) == 0 {
 		return true // Empty response is conversational
 	}
 
-	// Check first line for conversational patterns FIRST - this takes priority
-	firstLine := strings.ToLower(strings.TrimSpace(lines[0]))
-
 	// Only analyze the first 3 lines to determine intent
 	analysisLines := min(len(lines), 3)
+
+	// FIRST: Check for clear task indicators in the first 3 lines
+	for i := 0; i < analysisLines; i++ {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+
+		lowerLine := strings.ToLower(line)
+
+		// Strong task indicators in first few lines = definitely tasks
+		if strings.HasPrefix(line, "🔧 ") ||
+			strings.HasPrefix(line, "📖 ") ||
+			strings.HasPrefix(line, "📂 ") ||
+			strings.HasPrefix(line, "✏️ ") ||
+			strings.HasPrefix(line, "🔍 ") ||
+			strings.HasPrefix(line, "💾 ") ||
+			strings.HasPrefix(line, "📝 ") ||
+			strings.Contains(lowerLine, "loom_edit") ||
+			strings.Contains(lowerLine, "```json") ||
+			strings.HasPrefix(lowerLine, "read ") ||
+			strings.HasPrefix(lowerLine, "edit ") ||
+			strings.HasPrefix(lowerLine, "run ") ||
+			strings.HasPrefix(lowerLine, "list ") ||
+			strings.HasPrefix(lowerLine, "search ") ||
+			strings.HasPrefix(lowerLine, "memory ") ||
+			(strings.HasPrefix(strings.TrimSpace(line), "{") && strings.Contains(lowerLine, "\"type\":")) {
+			debugLog("DEBUG: Found clear task indicator in first few lines, allowing task parsing")
+			return false
+		}
+	}
+
+	// SECOND: If no tasks found in first 3 lines, check for conversational patterns
+	firstLine := strings.ToLower(strings.TrimSpace(lines[0]))
 
 	// Strong conversational starters = definitely conversational
 	conversationalStarters := []string{
 		"for example", "such as", "you could", "you might", "you can",
-		"let me", "let me explain", "to illustrate", "here's how", "this means",
+		"to illustrate", "here's how", "this means",
 		"the ", "this ", "here ", "as ", "when ", "if ", "for ",
 		"i've ", "i have ", "i already", "i just", "i previously",
 		"would you like", "should i", "shall i", "do you want",
@@ -1898,12 +1930,12 @@ func isConversationalResponse(llmResponse string) bool {
 
 	for _, starter := range conversationalStarters {
 		if strings.HasPrefix(firstLine, starter) {
-			debugLog(fmt.Sprintf("DEBUG: First line starts with conversational pattern: '%s' - treating as text-only", starter))
+			debugLog(fmt.Sprintf("DEBUG: No tasks in first 3 lines and first line starts with conversational pattern: '%s' - treating as text-only", starter))
 			return true
 		}
 	}
 
-	// Check for the specific bug pattern: commands mentioned as examples in first few lines
+	// Check for commands mentioned as examples in first few lines
 	for i := 0; i < analysisLines; i++ {
 		line := strings.ToLower(strings.TrimSpace(lines[i]))
 		if line == "" {
@@ -1927,32 +1959,9 @@ func isConversationalResponse(llmResponse string) bool {
 		}
 	}
 
-	// Only if first line is NOT conversational, check for task indicators
-	for i := 0; i < analysisLines; i++ {
-		line := strings.TrimSpace(lines[i])
-		if line == "" {
-			continue
-		}
-
-		lowerLine := strings.ToLower(line)
-
-		// Strong task indicators in first few lines = definitely tasks
-		if strings.HasPrefix(line, "🔧 ") ||
-			strings.HasPrefix(line, "📖 ") ||
-			strings.HasPrefix(line, "📂 ") ||
-			strings.HasPrefix(line, "✏️ ") ||
-			strings.HasPrefix(line, "🔍 ") ||
-			strings.HasPrefix(line, "💾 ") ||
-			strings.HasPrefix(line, "📝 ") ||
-			strings.Contains(lowerLine, "loom_edit") ||
-			strings.Contains(lowerLine, "```json") {
-			debugLog("DEBUG: Found clear task indicator in first few lines, allowing task parsing")
-			return false
-		}
-	}
-
-	// If no clear conversational or task patterns detected, default to allowing task parsing
-	return false
+	// If no clear conversational patterns detected and no tasks in first 3 lines, default to conversational
+	debugLog("DEBUG: No tasks found in first 3 lines and no clear conversational patterns - treating as conversational")
+	return true
 }
 
 // ParseTasks extracts and parses tasks from LLM response (tries LOOM_EDIT first, then natural language, then JSON)

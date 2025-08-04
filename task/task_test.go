@@ -11,7 +11,7 @@ func TestParseTasks(t *testing.T) {
 		"```json\n" +
 		"{\n" +
 		"  \"tasks\": [\n" +
-		"    {\"type\": \"ReadFile\", \"path\": \"main.go\", \"max_lines\": 100},\n" +
+		"    {\"type\": \"ReadFile\", \"path\": \"main.go\", \"max_lines\": 100}\n" +
 		"  ]\n" +
 		"}\n" +
 		"```\n\n" +
@@ -93,7 +93,6 @@ func TestParseTasksFallbackRawJSON(t *testing.T) {
 func TestParseTasksFallbackRawJSONMultiple(t *testing.T) {
 	// Test multiple raw JSON lines (should pick the first valid one)
 	llmResponse := "OBJECTIVE: Understand the project structure\n\n" +
-		"This is some explanatory text.\n" +
 		"{\"type\": \"ListDir\", \"path\": \".\", \"recursive\": false}\n" +
 		"Some more text.\n" +
 		"{\"type\": \"ReadFile\", \"path\": \"README.md\", \"max_lines\": 100}\n" +
