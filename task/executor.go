@@ -1077,9 +1077,10 @@ func (e *Executor) executeSearch(task *Task) *TaskResponse {
 		if strings.Contains(err.Error(), "exit status 1") {
 			// No matches found is not an error, just empty results
 			response.Success = true
-			response.Output = fmt.Sprintf("Search completed: '%s' - No matches found", task.Query)
-			response.ActualContent = fmt.Sprintf("No matches found for search query: '%s'\n\nSearch parameters:\n- Path: %s\n- Options: %s",
+			noMatchesMsg := fmt.Sprintf("Search completed: '%s' - No matches found\n\nSearch parameters:\n- Path: %s\n- Options: %s",
 				task.Query, task.Path, e.formatSearchOptions(task))
+			response.Output = noMatchesMsg
+			response.ActualContent = noMatchesMsg
 			return response
 		}
 
@@ -1095,9 +1096,10 @@ func (e *Executor) executeSearch(task *Task) *TaskResponse {
 	if len(lines) == 1 && lines[0] == "" {
 		// Empty output
 		response.Success = true
-		response.Output = fmt.Sprintf("Search completed: '%s' - No matches found", task.Query)
-		response.ActualContent = fmt.Sprintf("No matches found for search query: '%s'\n\nSearch parameters:\n- Path: %s\n- Options: %s",
+		noMatchesMsg := fmt.Sprintf("Search completed: '%s' - No matches found\n\nSearch parameters:\n- Path: %s\n- Options: %s",
 			task.Query, task.Path, e.formatSearchOptions(task))
+		response.Output = noMatchesMsg
+		response.ActualContent = noMatchesMsg
 
 		return response
 	}
@@ -1156,20 +1158,12 @@ func (e *Executor) executeSearch(task *Task) *TaskResponse {
 		// Format search results with intelligent truncation
 		formattedOutput := e.formatSearchResults(outputStr, task, matchCount, fileCount)
 
-		// Store actual search results for LLM
+		// Store actual search results for both user display and LLM context
 		response.ActualContent = formattedOutput
+		response.Output = formattedOutput
 	}
 
 	response.Success = true
-
-	// Create concise user status message
-	if task.FilenamesOnly {
-		response.Output = fmt.Sprintf("Search completed: '%s' - Found %d files with matches", task.Query, fileCount)
-	} else if task.CountMatches {
-		response.Output = fmt.Sprintf("Search completed: '%s' - Found %d total matches", task.Query, matchCount)
-	} else {
-		response.Output = fmt.Sprintf("Search completed: '%s' - Found %d matches in %d files", task.Query, matchCount, fileCount)
-	}
 
 	return response
 }
