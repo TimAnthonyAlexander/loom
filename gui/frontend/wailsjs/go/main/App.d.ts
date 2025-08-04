@@ -22,11 +22,15 @@ export function GetProjectSummary():Promise<models.ProjectSummary>;
 
 export function Greet(arg1:string):Promise<string>;
 
+export function OpenDirectoryDialog():Promise<string>;
+
 export function ReadFile(arg1:string):Promise<string>;
 
 export function RejectTask(arg1:string):Promise<void>;
 
 export function SearchFiles(arg1:string):Promise<Array<models.FileInfo>>;
+
+export function SelectWorkspace(arg1:string):Promise<void>;
 
 export function SendMessage(arg1:string):Promise<void>;
 

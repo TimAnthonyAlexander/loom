@@ -3,6 +3,7 @@ import { Layout } from './components/Layout';
 import { ChatWindow } from './components/ChatWindow';
 import { FileExplorer } from './components/FileExplorer';
 import { TaskQueue } from './components/TaskQueue';
+import { WorkspaceSelector } from './components/WorkspaceSelector';
 import { useApp } from './hooks/useWails';
 import type { FileInfo, ViewState } from './types';
 import './styles/globals.css';
@@ -16,11 +17,17 @@ function App() {
     darkMode: false
   });
   const [selectedFile, setSelectedFile] = useState<FileInfo | null>(null);
+  const [workspaceSelected, setWorkspaceSelected] = useState<boolean>(false);
 
   const handleFileSelect = (file: FileInfo) => {
     setSelectedFile(file);
     // TODO: Implement file preview/editing
     console.log('Selected file:', file);
+  };
+
+  const handleWorkspaceSelected = (workspacePath: string) => {
+    setWorkspaceSelected(true);
+    console.log('Workspace selected:', workspacePath);
   };
 
   const toggleDarkMode = () => {
@@ -109,6 +116,17 @@ function App() {
       </div>
     </div>
   );
+
+  // Show workspace selector if workspace hasn't been initialized
+  const isWorkspaceInitialized = appInfo?.workspaceInitialized || workspaceSelected;
+  
+  if (!isWorkspaceInitialized) {
+    return (
+      <div className="app" data-theme={viewState.darkMode ? 'dark' : 'light'}>
+        <WorkspaceSelector onWorkspaceSelected={handleWorkspaceSelected} />
+      </div>
+    );
+  }
 
   return (
     <div className="app" data-theme={viewState.darkMode ? 'dark' : 'light'}>

@@ -55,6 +55,7 @@ export interface AppInfo {
   workspacePath: string;
   version: string;
   hasLLM: boolean;
+  workspaceInitialized: boolean;
 }
 
 // Event types for real-time updates

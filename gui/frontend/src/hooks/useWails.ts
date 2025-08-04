@@ -19,25 +19,36 @@ export function useChat() {
 
   // Load initial chat state
   useEffect(() => {
-    App.GetChatState()
-      .then(state => {
-        // Ensure messages array exists
-        if (state && !state.messages) {
-          state.messages = [];
-        }
-        setChatState(state);
-      })
-      .catch(err => {
-        console.error('Failed to load chat state:', err);
-        // Set a default empty state
-        setChatState({
-          messages: [],
-          streamingContent: '',
-          isStreaming: false,
-          workspacePath: '',
-          sessionId: ''
+    const loadChatState = () => {
+      App.GetChatState()
+        .then(state => {
+          // Ensure messages array exists
+          if (state && !state.messages) {
+            state.messages = [];
+          }
+          setChatState(state);
+        })
+        .catch(err => {
+          console.error('Failed to load chat state:', err);
+          // Set a default empty state
+          setChatState({
+            messages: [],
+            streamingContent: '',
+            isStreaming: false,
+            workspacePath: '',
+            sessionId: ''
+          });
         });
-      });
+    };
+
+    loadChatState();
+
+    // Listen for workspace initialization
+    const workspaceInitUnsubscriber = EventsOn('workspace:initialized', () => {
+      loadChatState();
+    });
+
+    return () => workspaceInitUnsubscriber();
   }, []);
 
   // Listen to real-time chat events
@@ -122,13 +133,29 @@ export function useFiles() {
 
   // Load initial data
   useEffect(() => {
-    Promise.all([
-      App.GetFileTree(),
-      App.GetProjectSummary()
-    ]).then(([files, summary]) => {
-      setFileTree(files);
-      setProjectSummary(summary);
+    const loadFileData = () => {
+      Promise.all([
+        App.GetFileTree(),
+        App.GetProjectSummary()
+      ]).then(([files, summary]) => {
+        setFileTree(files);
+        setProjectSummary(summary);
+      }).catch(err => {
+        console.error('Failed to load file data:', err);
+        // Set empty defaults
+        setFileTree([]);
+        setProjectSummary(null);
+      });
+    };
+
+    loadFileData();
+
+    // Listen for workspace initialization
+    const workspaceInitUnsubscriber = EventsOn('workspace:initialized', () => {
+      loadFileData();
     });
+
+    return () => workspaceInitUnsubscriber();
   }, []);
 
   // Listen to file tree updates
@@ -188,13 +215,29 @@ export function useTasks() {
 
   // Load initial data
   useEffect(() => {
-    Promise.all([
-      App.GetAllTasks(),
-      App.GetPendingConfirmations()
-    ]).then(([tasks, confirmations]) => {
-      setAllTasks(tasks as Record<string, TaskInfo[]>);
-      setPendingConfirmations(confirmations as TaskConfirmation[]);
+    const loadTaskData = () => {
+      Promise.all([
+        App.GetAllTasks(),
+        App.GetPendingConfirmations()
+      ]).then(([tasks, confirmations]) => {
+        setAllTasks(tasks as Record<string, TaskInfo[]>);
+        setPendingConfirmations(confirmations as TaskConfirmation[]);
+      }).catch(err => {
+        console.error('Failed to load task data:', err);
+        // Set empty defaults
+        setAllTasks({});
+        setPendingConfirmations([]);
+      });
+    };
+
+    loadTaskData();
+
+    // Listen for workspace initialization
+    const workspaceInitUnsubscriber = EventsOn('workspace:initialized', () => {
+      loadTaskData();
     });
+
+    return () => workspaceInitUnsubscriber();
   }, []);
 
   // Listen to task events
@@ -258,7 +301,18 @@ export function useApp() {
   const [systemErrors, setSystemErrors] = useState<string[]>([]);
 
   useEffect(() => {
-    App.GetAppInfo().then(info => setAppInfo(info as AppInfo));
+    const loadAppInfo = () => {
+      App.GetAppInfo().then(info => setAppInfo(info as AppInfo));
+    };
+
+    loadAppInfo();
+
+    // Listen for workspace initialization to refresh app info
+    const workspaceInitUnsubscriber = EventsOn('workspace:initialized', () => {
+      loadAppInfo();
+    });
+
+    return () => workspaceInitUnsubscriber();
   }, []);
 
   // Listen to system events

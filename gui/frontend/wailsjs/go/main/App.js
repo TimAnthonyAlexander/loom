@@ -42,6 +42,10 @@ export function Greet(arg1) {
   return window['go']['main']['App']['Greet'](arg1);
 }
 
+export function OpenDirectoryDialog() {
+  return window['go']['main']['App']['OpenDirectoryDialog']();
+}
+
 export function ReadFile(arg1) {
   return window['go']['main']['App']['ReadFile'](arg1);
 }
@@ -52,6 +56,10 @@ export function RejectTask(arg1) {
 
 export function SearchFiles(arg1) {
   return window['go']['main']['App']['SearchFiles'](arg1);
+}
+
+export function SelectWorkspace(arg1) {
+  return window['go']['main']['App']['SelectWorkspace'](arg1);
 }
 
 export function SendMessage(arg1) {
