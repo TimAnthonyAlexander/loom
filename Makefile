@@ -36,7 +36,22 @@ build: ## Build the binary
 build-embedded: download-ripgrep build ## Build the binary with embedded ripgrep
 	@echo "$(GREEN)✅ Build complete with embedded ripgrep: $(BINARY_PATH)$(NC)"
 
-build-all: download-ripgrep ## Build for all platforms with embedded ripgrep
+# GUI build commands
+build-gui: ## Build the GUI application
+	@echo "$(BLUE)🔨 Building GUI application...$(NC)"
+	cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails build
+	@echo "$(GREEN)✅ GUI build complete: gui/build/$(NC)"
+
+dev-gui: ## Start GUI development server
+	@echo "$(BLUE)🚀 Starting GUI development server...$(NC)"
+	cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails dev
+
+build-frontend: ## Build only the frontend
+	@echo "$(BLUE)🔨 Building frontend...$(NC)"
+	cd gui/frontend && npm install && npm run build
+	@echo "$(GREEN)✅ Frontend build complete!$(NC)"
+
+build-all: download-ripgrep build-frontend ## Build for all platforms with embedded ripgrep and GUI
 	@echo "$(BLUE)🔨 Building for all platforms with embedded ripgrep...$(NC)"
 	mkdir -p build
 	GOOS=linux GOARCH=amd64 go build -o build/$(BINARY_NAME)-linux-amd64 .
@@ -44,6 +59,9 @@ build-all: download-ripgrep ## Build for all platforms with embedded ripgrep
 	GOOS=darwin GOARCH=arm64 go build -o build/$(BINARY_NAME)-darwin-arm64 .
 	GOOS=windows GOARCH=amd64 go build -o build/$(BINARY_NAME)-windows-amd64.exe .
 	@echo "$(GREEN)✅ Multi-platform build complete with embedded ripgrep!$(NC)"
+	@echo "$(BLUE)🔨 Building GUI for all platforms...$(NC)"
+	cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails build --platform=linux/amd64,darwin/amd64,darwin/arm64,windows/amd64
+	@echo "$(GREEN)✅ Multi-platform GUI build complete!$(NC)"
 
 RIPGREP_VERSION=14.1.0
 RIPGREP_DIR=bin
@@ -181,6 +199,8 @@ clean: ## Clean build artifacts
 	rm -f $(BINARY_PATH)
 	rm -rf build/
 	rm -f coverage.out coverage.html
+	cd gui && rm -rf build/ dist/
+	cd gui/frontend && rm -rf dist/ node_modules/
 	@echo "$(GREEN)✅ Clean complete!$(NC)"
 
 # Git workflow helpers

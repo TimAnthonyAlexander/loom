@@ -14,6 +14,8 @@ import (
 var (
 	continueSession bool
 	sessionID       string
+	useGUI          bool
+	guiPort         int
 )
 
 var rootCmd = &cobra.Command{
@@ -65,7 +67,14 @@ interface to modify and extend their codebase.`,
 		}
 		defer idx.StopWatching()
 
-		// Start TUI with session options
+		// Choose between GUI and TUI
+		if useGUI {
+			// TODO: Start GUI
+			fmt.Println("GUI mode is not yet fully implemented. Starting TUI instead.")
+			fmt.Println("Run 'cd gui && wails dev' to start the GUI in development mode.")
+		}
+
+		// Start TUI with session options (default mode)
 		sessionOptions := tui.SessionOptions{
 			ContinueLatest: continueSession,
 			SessionID:      sessionID,
@@ -87,6 +96,8 @@ func init() {
 	// Configure command line flags
 	rootCmd.Flags().BoolVarP(&continueSession, "continue", "c", false, "Continue from the latest chat session")
 	rootCmd.Flags().StringVarP(&sessionID, "session", "s", "", "Continue from a specific session ID")
+	rootCmd.Flags().BoolVar(&useGUI, "gui", false, "Launch graphical user interface instead of TUI")
+	rootCmd.Flags().IntVar(&guiPort, "port", 8080, "Port for GUI server (unused, kept for compatibility)")
 
 	// Add subcommands
 	rootCmd.AddCommand(configCmd)
