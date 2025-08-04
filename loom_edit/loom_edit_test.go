@@ -650,24 +650,24 @@ This is new content
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cmd, err := ParseEditCommand(tt.input)
-			
+
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("Expected error but got none")
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Errorf("Unexpected error: %v", err)
 				return
 			}
-			
+
 			if cmd == nil {
 				t.Errorf("Expected command but got nil")
 				return
 			}
-			
+
 			// Verify basic parsing worked
 			if cmd.File != "test.txt" {
 				t.Errorf("Expected file 'test.txt', got '%s'", cmd.File)
