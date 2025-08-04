@@ -47,7 +47,7 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 	if baseMatches == nil {
 		fallbackPattern := regexp.MustCompile(`^LOOM_EDIT file=([^\s]+) (REPLACE|INSERT_AFTER|INSERT_BEFORE|DELETE|SEARCH_REPLACE|CREATE)`)
 		baseMatches = fallbackPattern.FindStringSubmatch(headerLine)
-		
+
 		if baseMatches != nil {
 			fmt.Printf("Warning: LOOM_EDIT command missing >> prefix. Please use: >>LOOM_EDIT ...\n")
 		} else {
@@ -85,7 +85,7 @@ func ParseEditCommand(input string) (*EditCommand, error) {
 		searchReplacePattern := regexp.MustCompile(`SEARCH_REPLACE\s+"([^"]+)"\s+"([^"]+)"`)
 		srMatches := searchReplacePattern.FindStringSubmatch(headerLine)
 
-		if srMatches != nil && len(srMatches) >= 3 {
+		if len(srMatches) >= 3 {
 			cmd.OldString = srMatches[1]
 			cmd.NewString = srMatches[2]
 		} else {
