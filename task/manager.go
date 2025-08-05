@@ -116,189 +116,14 @@ func (m *Manager) HandleLLMResponse(llmResponse string, userEventChan chan<- Use
 		m.completionDetector.lastCompletionCheckSent = false
 	}
 
-	// STEP 2: Parse tasks from LLM response (original logic)
+	// STEP 2: Parse tasks from LLM response
 	taskList, err := ParseTasks(llmResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse tasks: %w", err)
 	}
 
-	// If no tasks found, this is a regular chat response
-	if taskList == nil || len(taskList.Tasks) == 0 {
-		// STEP 2A: Handle YES/NO completion check responses
-		if m.completionDetector.IsYesNoCompletionResponse(llmResponse) {
-			isComplete, shouldContinue := m.completionDetector.ParseYesNoResponse(llmResponse)
-
-			if isComplete {
-				// LLM said YES - objective complete, hand control to user
-				if userEventChan != nil {
-					userEventChan <- UserTaskEvent{
-						Type:      "completed",
-						Message:   "Objective completed",
-						TaskType:  "completion_check",
-						Timestamp: time.Now(),
-					}
-				}
-				return nil, nil
-			} else if shouldContinue {
-				// LLM said NO - send continuation prompt
-				continuationPrompt := m.completionDetector.GenerateContinuationPrompt()
-
-				continuationMessage := llm.Message{
-					Role:      "user",
-					Content:   continuationPrompt,
-					Timestamp: time.Now(),
-				}
-
-				if err := m.chatSession.AddMessage(continuationMessage); err != nil {
-					return nil, fmt.Errorf("failed to add continuation message: %w", err)
-				}
-
-				if userEventChan != nil {
-					userEventChan <- UserTaskEvent{
-						Type:      "started",
-						Message:   "Continuing with objective...",
-						TaskType:  "completion_check",
-						Timestamp: time.Now(),
-					}
-				}
-
-				// Trigger auto-continuation by creating a special event
-				if detailedEventChan != nil {
-					detailedEventChan <- TaskExecutionEvent{
-						Type:    "auto_continue_after_no",
-						Message: "LLM indicated more work needed, continuing automatically",
-					}
-				}
-
-				return nil, nil
-			}
-
-			// STEP 2A.5: Handle mixed message responses (YES/NO to mixed message warning)
-			if m.completionDetector.IsMixedMessageResponse(llmResponse) {
-				shouldContinue, isValidResponse := m.completionDetector.ParseMixedMessageResponse(llmResponse)
-
-				if isValidResponse {
-					if shouldContinue {
-						// LLM said YES to continue after mixed message warning
-						continuationPrompt := "Please continue with properly formatted commands or pure text messages."
-
-						continuationMessage := llm.Message{
-							Role:      "user",
-							Content:   continuationPrompt,
-							Timestamp: time.Now(),
-						}
-
-						if err := m.chatSession.AddMessage(continuationMessage); err != nil {
-							return nil, fmt.Errorf("failed to add continuation message after mixed warning: %w", err)
-						}
-
-						if userEventChan != nil {
-							userEventChan <- UserTaskEvent{
-								Type:      "started",
-								Message:   "Continuing after mixed message correction...",
-								TaskType:  "mixed_message_warning",
-								Timestamp: time.Now(),
-							}
-						}
-
-						// Trigger auto-continuation
-						if detailedEventChan != nil {
-							detailedEventChan <- TaskExecutionEvent{
-								Type:    "auto_continue_after_mixed_message",
-								Message: "LLM confirmed continuation after mixed message warning",
-							}
-						}
-
-						return nil, nil
-					} else {
-						// LLM said NO - they don't want to continue
-						if userEventChan != nil {
-							userEventChan <- UserTaskEvent{
-								Type:      "completed",
-								Message:   "Session ended by user request",
-								TaskType:  "mixed_message_warning",
-								Timestamp: time.Now(),
-							}
-						}
-						return nil, nil
-					}
-				}
-			}
-
-			// STEP 2A.6: Check if this is a mixed message (text + task content)
-			if m.completionDetector.DetectMixedMessage(llmResponse) && m.completionDetector.ShouldSendMixedMessageWarning() {
-				mixedWarning := m.completionDetector.GenerateMixedMessageWarning()
-				m.completionDetector.SendMixedMessageWarning()
-
-				warningMessage := llm.Message{
-					Role:      "user",
-					Content:   mixedWarning,
-					Timestamp: time.Now(),
-				}
-
-				if err := m.chatSession.AddMessage(warningMessage); err != nil {
-					return nil, fmt.Errorf("failed to add mixed message warning: %w", err)
-				}
-
-				if userEventChan != nil {
-					userEventChan <- UserTaskEvent{
-						Type:      "started",
-						Message:   "Warning sent about mixed message format...",
-						TaskType:  "mixed_message_warning",
-						Timestamp: time.Now(),
-					}
-				}
-
-				// Trigger auto-continuation to get LLM response to warning
-				if detailedEventChan != nil {
-					detailedEventChan <- TaskExecutionEvent{
-						Type:    "auto_continue_mixed_message_warning",
-						Message: "Sent mixed message warning, awaiting LLM response",
-					}
-				}
-
-				return nil, nil
-			}
-
-			// STEP 2B: Check if we should send a YES/NO completion check
-			if m.completionDetector.ShouldSendYesNoCheck() {
-				yesNoPrompt := m.completionDetector.GenerateYesNoCompletionCheckPrompt()
-
-				yesNoMessage := llm.Message{
-					Role:      "user",
-					Content:   yesNoPrompt,
-					Timestamp: time.Now(),
-				}
-
-				if err := m.chatSession.AddMessage(yesNoMessage); err != nil {
-					return nil, fmt.Errorf("failed to add YES/NO completion check: %w", err)
-				}
-
-				if userEventChan != nil {
-					userEventChan <- UserTaskEvent{
-						Type:      "started",
-						Message:   "Checking if objective is complete...",
-						TaskType:  "completion_check",
-						Timestamp: time.Now(),
-					}
-				}
-
-				// Trigger auto-continuation by creating a special event
-				if detailedEventChan != nil {
-					detailedEventChan <- TaskExecutionEvent{
-						Type:    "auto_continue_completion_check",
-						Message: "Sent YES/NO completion check, awaiting LLM response",
-					}
-				}
-
-				return nil, nil
-			}
-
-			// No completion check needed - regular text response, hand control to user
-			return nil, nil
-		}
-
-		// STEP 3: Execute tasks (original logic continues...)
+	// STEP 3: If tasks found, execute them
+	if taskList != nil && len(taskList.Tasks) > 0 {
 		// Create execution session
 		execution := &TaskExecution{
 			Tasks:     taskList.Tasks,
@@ -456,6 +281,178 @@ func (m *Manager) HandleLLMResponse(llmResponse string, userEventChan chan<- Use
 		return execution, nil
 	}
 
+	// STEP 4: Handle completion checks and other special responses when no tasks are found
+	if m.completionDetector.IsYesNoCompletionResponse(llmResponse) {
+		isComplete, shouldContinue := m.completionDetector.ParseYesNoResponse(llmResponse)
+
+		if isComplete {
+			// LLM said YES - objective complete, hand control to user
+			if userEventChan != nil {
+				userEventChan <- UserTaskEvent{
+					Type:      "completed",
+					Message:   "Objective completed",
+					TaskType:  "completion_check",
+					Timestamp: time.Now(),
+				}
+			}
+			return nil, nil
+		} else if shouldContinue {
+			// LLM said NO - send continuation prompt
+			continuationPrompt := m.completionDetector.GenerateContinuationPrompt()
+
+			continuationMessage := llm.Message{
+				Role:      "user",
+				Content:   continuationPrompt,
+				Timestamp: time.Now(),
+			}
+
+			if err := m.chatSession.AddMessage(continuationMessage); err != nil {
+				return nil, fmt.Errorf("failed to add continuation message: %w", err)
+			}
+
+			if userEventChan != nil {
+				userEventChan <- UserTaskEvent{
+					Type:      "started",
+					Message:   "Continuing with objective...",
+					TaskType:  "completion_check",
+					Timestamp: time.Now(),
+				}
+			}
+
+			// Trigger auto-continuation by creating a special event
+			if detailedEventChan != nil {
+				detailedEventChan <- TaskExecutionEvent{
+					Type:    "auto_continue_after_no",
+					Message: "LLM indicated more work needed, continuing automatically",
+				}
+			}
+
+			return nil, nil
+		}
+	}
+
+	// Handle mixed message responses (YES/NO to mixed message warning)
+	if m.completionDetector.IsMixedMessageResponse(llmResponse) {
+		shouldContinue, isValidResponse := m.completionDetector.ParseMixedMessageResponse(llmResponse)
+
+		if isValidResponse {
+			if shouldContinue {
+				// LLM said YES to continue after mixed message warning
+				continuationPrompt := "Please continue with properly formatted commands or pure text messages."
+
+				continuationMessage := llm.Message{
+					Role:      "user",
+					Content:   continuationPrompt,
+					Timestamp: time.Now(),
+				}
+
+				if err := m.chatSession.AddMessage(continuationMessage); err != nil {
+					return nil, fmt.Errorf("failed to add continuation message after mixed warning: %w", err)
+				}
+
+				if userEventChan != nil {
+					userEventChan <- UserTaskEvent{
+						Type:      "started",
+						Message:   "Continuing after mixed message correction...",
+						TaskType:  "mixed_message_warning",
+						Timestamp: time.Now(),
+					}
+				}
+
+				// Trigger auto-continuation
+				if detailedEventChan != nil {
+					detailedEventChan <- TaskExecutionEvent{
+						Type:    "auto_continue_after_mixed_message",
+						Message: "LLM confirmed continuation after mixed message warning",
+					}
+				}
+
+				return nil, nil
+			} else {
+				// LLM said NO - they don't want to continue
+				if userEventChan != nil {
+					userEventChan <- UserTaskEvent{
+						Type:      "completed",
+						Message:   "Session ended by user request",
+						TaskType:  "mixed_message_warning",
+						Timestamp: time.Now(),
+					}
+				}
+				return nil, nil
+			}
+		}
+	}
+
+	// Check if this is a mixed message (text + task content)
+	if m.completionDetector.DetectMixedMessage(llmResponse) && m.completionDetector.ShouldSendMixedMessageWarning() {
+		mixedWarning := m.completionDetector.GenerateMixedMessageWarning()
+		m.completionDetector.SendMixedMessageWarning()
+
+		warningMessage := llm.Message{
+			Role:      "user",
+			Content:   mixedWarning,
+			Timestamp: time.Now(),
+		}
+
+		if err := m.chatSession.AddMessage(warningMessage); err != nil {
+			return nil, fmt.Errorf("failed to add mixed message warning: %w", err)
+		}
+
+		if userEventChan != nil {
+			userEventChan <- UserTaskEvent{
+				Type:      "started",
+				Message:   "Warning sent about mixed message format...",
+				TaskType:  "mixed_message_warning",
+				Timestamp: time.Now(),
+			}
+		}
+
+		// Trigger auto-continuation to get LLM response to warning
+		if detailedEventChan != nil {
+			detailedEventChan <- TaskExecutionEvent{
+				Type:    "auto_continue_mixed_message_warning",
+				Message: "Sent mixed message warning, awaiting LLM response",
+			}
+		}
+
+		return nil, nil
+	}
+
+	// Check if we should send a YES/NO completion check
+	if m.completionDetector.ShouldSendYesNoCheck() {
+		yesNoPrompt := m.completionDetector.GenerateYesNoCompletionCheckPrompt()
+
+		yesNoMessage := llm.Message{
+			Role:      "user",
+			Content:   yesNoPrompt,
+			Timestamp: time.Now(),
+		}
+
+		if err := m.chatSession.AddMessage(yesNoMessage); err != nil {
+			return nil, fmt.Errorf("failed to add YES/NO completion check: %w", err)
+		}
+
+		if userEventChan != nil {
+			userEventChan <- UserTaskEvent{
+				Type:      "started",
+				Message:   "Checking if objective is complete...",
+				TaskType:  "completion_check",
+				Timestamp: time.Now(),
+			}
+		}
+
+		// Trigger auto-continuation by creating a special event
+		if detailedEventChan != nil {
+			detailedEventChan <- TaskExecutionEvent{
+				Type:    "auto_continue_completion_check",
+				Message: "Sent YES/NO completion check, awaiting LLM response",
+			}
+		}
+
+		return nil, nil
+	}
+
+	// No tasks and no special handling needed - just return nil
 	return nil, nil
 }
 

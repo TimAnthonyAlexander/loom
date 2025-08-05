@@ -352,7 +352,8 @@ type UserTaskEvent struct {
 func tryLoomEditParsing(llmResponse string) *TaskList {
 	debugLog("DEBUG: Attempting LOOM_EDIT parsing...")
 
-	// Look for LOOM_EDIT command blocks - support both >>LOOM_EDIT and 🔧 LOOM_EDIT formats
+	// Look for LOOM_EDIT command blocks - support various formats of LOOM_EDIT
+	// Using (?s) flag for dot to match newlines, and making the pattern more flexible
 	re := regexp.MustCompile(`(?s)(?:>>|🔧 )LOOM_EDIT.*?<<LOOM_EDIT`)
 	matches := re.FindAllString(llmResponse, -1)
 
@@ -1880,10 +1881,19 @@ func isConversationalResponse(llmResponse string) bool {
 		return true // Empty response is conversational
 	}
 
-	// Only analyze the first 3 lines to determine intent
+	// For LOOM_EDIT commands, we need to search the entire message since they could be preceded by text
+	// For all other task types, we only check the first few lines
+
+	// First, check the entire message specifically for LOOM_EDIT format
+	if strings.Contains(llmResponse, ">>LOOM_EDIT") && strings.Contains(llmResponse, "<<LOOM_EDIT") {
+		debugLog("DEBUG: Found LOOM_EDIT command in message, allowing task parsing")
+		return false
+	}
+
+	// For other task types, only analyze the first few lines to determine intent
 	analysisLines := min(len(lines), 3)
 
-	// FIRST: Check for clear task indicators in the first 3 lines
+	// Check for clear task indicators in the first few lines
 	for i := 0; i < analysisLines; i++ {
 		line := strings.TrimSpace(lines[i])
 		if line == "" {
