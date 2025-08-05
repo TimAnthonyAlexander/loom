@@ -1889,6 +1889,28 @@ func (m model) handleTaskEvent(event taskPkg.TaskExecutionEvent) (tea.Model, tea
 		return m, nil
 	}
 
+	// Handle auto-continuation after NO response
+	if event.Type == "auto_continue_after_no" {
+		// Automatically continue the LLM conversation
+		if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
+			return m, func() tea.Msg {
+				return ContinueLLMMsg{}
+			}
+		}
+		return m, nil
+	}
+
+	// Handle auto-continuation after sending completion check
+	if event.Type == "auto_continue_completion_check" {
+		// Automatically continue the LLM conversation
+		if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
+			return m, func() tea.Msg {
+				return ContinueLLMMsg{}
+			}
+		}
+		return m, nil
+	}
+
 	// Handle confirmation requests
 	if event.RequiresInput && event.Task != nil && event.Response != nil {
 		return m, func() tea.Msg {

@@ -612,6 +612,14 @@ func (cs *ChatService) handleTaskEvents() {
 			})
 		}
 
+		// Handle auto-continuation events (like TUI)
+		if event.Type == "objective_change_auto_continue" ||
+			event.Type == "auto_continue_after_no" ||
+			event.Type == "auto_continue_completion_check" {
+			// Automatically continue the LLM conversation
+			cs.continueLLMAfterTasks()
+		}
+
 		// Automatically continue the LLM conversation once all tasks have finished
 		// and there is no user confirmation required (like TUI)
 		if event.Type == "execution_completed" && !event.RequiresInput {

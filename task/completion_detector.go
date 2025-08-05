@@ -18,6 +18,11 @@ type CompletionDetector struct {
 	// Context tracking to detect responses to completion checks
 	lastCompletionCheckSent bool
 	lastPromptWasCheck      bool
+	// YES/NO completion check tracking
+	yesNoCheckSent       bool
+	lastResponseWasYesNo bool
+	yesNoCheckCount      int
+	maxYesNoChecks       int
 }
 
 // ObjectiveValidationResult represents the result of objective validation
@@ -79,6 +84,7 @@ func NewCompletionDetector() *CompletionDetector {
 	return &CompletionDetector{
 		completionPatterns: completionPatterns,
 		incompletePatterns: incompletePatterns,
+		maxYesNoChecks:     3, // Limit YES/NO checks to prevent loops
 	}
 }
 
@@ -289,6 +295,83 @@ func (cd *CompletionDetector) GenerateCompletionCheckPrompt(userObjective string
 	return "Continue. If you have completed all necessary tasks, please provide a final text-only summary of what you've done and what you've found. Otherwise, please continue with the next task."
 }
 
+// GenerateYesNoCompletionCheckPrompt creates a direct YES/NO question for completion checking
+func (cd *CompletionDetector) GenerateYesNoCompletionCheckPrompt() string {
+	cd.yesNoCheckSent = true
+	cd.yesNoCheckCount++
+	return "YES or NO, has the objective at hand been completed?"
+}
+
+// IsYesNoCompletionResponse checks if this response is answering our YES/NO completion question
+func (cd *CompletionDetector) IsYesNoCompletionResponse(response string) bool {
+	if !cd.yesNoCheckSent {
+		return false
+	}
+
+	// Check if response starts with YES or NO
+	trimmed := strings.TrimSpace(response)
+	upper := strings.ToUpper(trimmed)
+
+	return strings.HasPrefix(upper, "YES") || strings.HasPrefix(upper, "NO")
+}
+
+// ParseYesNoResponse extracts YES or NO from the response and returns appropriate action
+func (cd *CompletionDetector) ParseYesNoResponse(response string) (isComplete bool, shouldContinue bool) {
+	if !cd.IsYesNoCompletionResponse(response) {
+		return false, false
+	}
+
+	trimmed := strings.TrimSpace(response)
+	upper := strings.ToUpper(trimmed)
+
+	cd.lastResponseWasYesNo = true
+	cd.yesNoCheckSent = false // Reset flag after getting response
+
+	if strings.HasPrefix(upper, "YES") {
+		completionDebugLog("YES response received - objective complete")
+		return true, false // Complete, don't continue
+	} else if strings.HasPrefix(upper, "NO") {
+		completionDebugLog("NO response received - objective not complete")
+		return false, true // Not complete, should continue
+	}
+
+	return false, false
+}
+
+// ShouldSendYesNoCheck determines if we should send a YES/NO completion check
+func (cd *CompletionDetector) ShouldSendYesNoCheck() bool {
+	// Don't send if we've already sent one recently
+	if cd.yesNoCheckSent {
+		return false
+	}
+
+	// Don't send if we've reached max checks
+	if cd.yesNoCheckCount >= cd.maxYesNoChecks {
+		completionDebugLog(fmt.Sprintf("Maximum YES/NO checks reached (%d), not sending more", cd.maxYesNoChecks))
+		return false
+	}
+
+	// Don't send if last response was already a YES/NO
+	if cd.lastResponseWasYesNo {
+		cd.lastResponseWasYesNo = false // Reset for next time
+		return false
+	}
+
+	return true
+}
+
+// GenerateContinuationPrompt creates a prompt to encourage the LLM to continue working
+func (cd *CompletionDetector) GenerateContinuationPrompt() string {
+	return "You may continue with the OBJECTIVE at hand."
+}
+
+// ResetYesNoState resets the YES/NO completion check state (for new conversations)
+func (cd *CompletionDetector) ResetYesNoState() {
+	cd.yesNoCheckSent = false
+	cd.lastResponseWasYesNo = false
+	cd.yesNoCheckCount = 0
+}
+
 // ExtractObjective attempts to extract the objective from a response
 func (cd *CompletionDetector) ExtractObjective(response string) string {
 	// Look for OBJECTIVE: pattern
@@ -453,6 +536,7 @@ func (cd *CompletionDetector) ResetObjective() {
 func (cd *CompletionDetector) ResetContext() {
 	cd.lastCompletionCheckSent = false
 	cd.lastPromptWasCheck = false
+	cd.ResetYesNoState()
 	completionDebugLog("🔄 Context tracking reset")
 }
 

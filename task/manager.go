@@ -124,6 +124,91 @@ func (m *Manager) HandleLLMResponse(llmResponse string, userEventChan chan<- Use
 
 	// If no tasks found, this is a regular chat response
 	if taskList == nil || len(taskList.Tasks) == 0 {
+		// STEP 2A: Handle YES/NO completion check responses
+		if m.completionDetector.IsYesNoCompletionResponse(llmResponse) {
+			isComplete, shouldContinue := m.completionDetector.ParseYesNoResponse(llmResponse)
+
+			if isComplete {
+				// LLM said YES - objective complete, hand control to user
+				if userEventChan != nil {
+					userEventChan <- UserTaskEvent{
+						Type:      "completed",
+						Message:   "Objective completed",
+						TaskType:  "completion_check",
+						Timestamp: time.Now(),
+					}
+				}
+				return nil, nil
+			} else if shouldContinue {
+				// LLM said NO - send continuation prompt
+				continuationPrompt := m.completionDetector.GenerateContinuationPrompt()
+
+				continuationMessage := llm.Message{
+					Role:      "user",
+					Content:   continuationPrompt,
+					Timestamp: time.Now(),
+				}
+
+				if err := m.chatSession.AddMessage(continuationMessage); err != nil {
+					return nil, fmt.Errorf("failed to add continuation message: %w", err)
+				}
+
+				if userEventChan != nil {
+					userEventChan <- UserTaskEvent{
+						Type:      "started",
+						Message:   "Continuing with objective...",
+						TaskType:  "completion_check",
+						Timestamp: time.Now(),
+					}
+				}
+
+				// Trigger auto-continuation by creating a special event
+				if detailedEventChan != nil {
+					detailedEventChan <- TaskExecutionEvent{
+						Type:    "auto_continue_after_no",
+						Message: "LLM indicated more work needed, continuing automatically",
+					}
+				}
+
+				return nil, nil
+			}
+		}
+
+		// STEP 2B: Check if we should send a YES/NO completion check
+		if m.completionDetector.ShouldSendYesNoCheck() {
+			yesNoPrompt := m.completionDetector.GenerateYesNoCompletionCheckPrompt()
+
+			yesNoMessage := llm.Message{
+				Role:      "user",
+				Content:   yesNoPrompt,
+				Timestamp: time.Now(),
+			}
+
+			if err := m.chatSession.AddMessage(yesNoMessage); err != nil {
+				return nil, fmt.Errorf("failed to add YES/NO completion check: %w", err)
+			}
+
+			if userEventChan != nil {
+				userEventChan <- UserTaskEvent{
+					Type:      "started",
+					Message:   "Checking if objective is complete...",
+					TaskType:  "completion_check",
+					Timestamp: time.Now(),
+				}
+			}
+
+			// Trigger auto-continuation by creating a special event
+			if detailedEventChan != nil {
+				detailedEventChan <- TaskExecutionEvent{
+					Type:    "auto_continue_completion_check",
+					Message: "Sent YES/NO completion check, awaiting LLM response",
+				}
+			}
+
+			return nil, nil
+		}
+
+		// No completion check needed - regular text response, hand control to user
 		return nil, nil
 	}
 
