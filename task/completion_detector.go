@@ -23,6 +23,10 @@ type CompletionDetector struct {
 	lastResponseWasYesNo bool
 	yesNoCheckCount      int
 	maxYesNoChecks       int
+	// Mixed message tracking
+	mixedMessageWarningSent  bool
+	mixedMessageWarningCount int
+	maxMixedMessageWarnings  int
 }
 
 // ObjectiveValidationResult represents the result of objective validation
@@ -82,9 +86,10 @@ func NewCompletionDetector() *CompletionDetector {
 	}
 
 	return &CompletionDetector{
-		completionPatterns: completionPatterns,
-		incompletePatterns: incompletePatterns,
-		maxYesNoChecks:     3, // Limit YES/NO checks to prevent loops
+		completionPatterns:      completionPatterns,
+		incompletePatterns:      incompletePatterns,
+		maxYesNoChecks:          3, // Limit YES/NO checks to prevent loops
+		maxMixedMessageWarnings: 2, // Limit mixed message warnings to prevent loops
 	}
 }
 
@@ -372,6 +377,137 @@ func (cd *CompletionDetector) ResetYesNoState() {
 	cd.yesNoCheckCount = 0
 }
 
+// DetectMixedMessage checks if a text message contains task-like content that wasn't parsed
+func (cd *CompletionDetector) DetectMixedMessage(response string) bool {
+	lowerResponse := strings.ToLower(response)
+
+	// Action words that suggest the LLM is trying to perform tasks
+	actionWords := []string{
+		"reading file", "📖", "🔧", "creating", "editing", "modifying",
+		"create", "edit", "file", "license", "i'll", "i will", "let me",
+		"executing", "running", "applying", "writing to", "updating",
+		"implementing", "adding", "removing", "deleting", "changing",
+		"let's", "we should", "first i'll", "next i'll", "now i'll",
+		"i need to", "i'm going to", "i will now", "let me now",
+	}
+
+	// Task-related phrases that suggest commands
+	taskPhrases := []string{
+		"read the", "edit the", "create a", "update the", "modify the",
+		"list the", "search for", "run the", "execute the", "check the",
+		"look at", "examine the", "analyze the", "review the",
+	}
+
+	foundActions := []string{}
+
+	// Check for action words
+	for _, word := range actionWords {
+		if strings.Contains(lowerResponse, word) {
+			foundActions = append(foundActions, word)
+		}
+	}
+
+	// Check for task phrases
+	for _, phrase := range taskPhrases {
+		if strings.Contains(lowerResponse, phrase) {
+			foundActions = append(foundActions, phrase)
+		}
+	}
+
+	// If we found action indicators, this might be a mixed message
+	if len(foundActions) > 0 {
+		completionDebugLog(fmt.Sprintf("Mixed message detected - found action indicators: %v", foundActions))
+		return true
+	}
+
+	return false
+}
+
+// GenerateMixedMessageWarning creates a warning for mixed text/task messages
+func (cd *CompletionDetector) GenerateMixedMessageWarning() string {
+	return `🚨 MIXED MESSAGE DETECTED
+
+You are not allowed to mix text and task messages. Please follow these rules:
+
+1. EITHER send a text-only message (no tasks)
+2. OR send task commands using proper format:
+   - 🔧 READ file.txt
+   - 🔧 EDIT file.txt
+   - 🔧 RUN command
+   - etc.
+
+Your message appears to contain both text and task-like content mixed together.
+
+Please respond with either:
+- A pure text message, OR  
+- Properly formatted task commands
+
+Do you want to continue with your objective? (YES/NO)`
+}
+
+// ShouldSendMixedMessageWarning determines if we should send a mixed message warning
+func (cd *CompletionDetector) ShouldSendMixedMessageWarning() bool {
+	// Don't send if we've already sent one recently
+	if cd.mixedMessageWarningSent {
+		return false
+	}
+
+	// Don't send if we've reached max warnings
+	if cd.mixedMessageWarningCount >= cd.maxMixedMessageWarnings {
+		completionDebugLog(fmt.Sprintf("Maximum mixed message warnings reached (%d), not sending more", cd.maxMixedMessageWarnings))
+		return false
+	}
+
+	return true
+}
+
+// SendMixedMessageWarning marks that a mixed message warning has been sent
+func (cd *CompletionDetector) SendMixedMessageWarning() {
+	cd.mixedMessageWarningSent = true
+	cd.mixedMessageWarningCount++
+}
+
+// IsMixedMessageResponse checks if this response is answering our mixed message warning
+func (cd *CompletionDetector) IsMixedMessageResponse(response string) bool {
+	if !cd.mixedMessageWarningSent {
+		return false
+	}
+
+	// Check if response starts with YES or NO (same as completion check)
+	trimmed := strings.TrimSpace(response)
+	upper := strings.ToUpper(trimmed)
+
+	return strings.HasPrefix(upper, "YES") || strings.HasPrefix(upper, "NO")
+}
+
+// ParseMixedMessageResponse extracts YES or NO from mixed message response
+func (cd *CompletionDetector) ParseMixedMessageResponse(response string) (shouldContinue bool, isValidResponse bool) {
+	if !cd.IsMixedMessageResponse(response) {
+		return false, false
+	}
+
+	trimmed := strings.TrimSpace(response)
+	upper := strings.ToUpper(trimmed)
+
+	cd.mixedMessageWarningSent = false // Reset flag after getting response
+
+	if strings.HasPrefix(upper, "YES") {
+		completionDebugLog("YES response to mixed message warning - should continue")
+		return true, true
+	} else if strings.HasPrefix(upper, "NO") {
+		completionDebugLog("NO response to mixed message warning - should not continue")
+		return false, true
+	}
+
+	return false, false
+}
+
+// ResetMixedMessageState resets mixed message warning state
+func (cd *CompletionDetector) ResetMixedMessageState() {
+	cd.mixedMessageWarningSent = false
+	cd.mixedMessageWarningCount = 0
+}
+
 // ExtractObjective attempts to extract the objective from a response
 func (cd *CompletionDetector) ExtractObjective(response string) string {
 	// Look for OBJECTIVE: pattern
@@ -537,6 +673,7 @@ func (cd *CompletionDetector) ResetContext() {
 	cd.lastCompletionCheckSent = false
 	cd.lastPromptWasCheck = false
 	cd.ResetYesNoState()
+	cd.ResetMixedMessageState()
 	completionDebugLog("🔄 Context tracking reset")
 }
 

@@ -615,7 +615,9 @@ func (cs *ChatService) handleTaskEvents() {
 		// Handle auto-continuation events (like TUI)
 		if event.Type == "objective_change_auto_continue" ||
 			event.Type == "auto_continue_after_no" ||
-			event.Type == "auto_continue_completion_check" {
+			event.Type == "auto_continue_completion_check" ||
+			event.Type == "auto_continue_after_mixed_message" ||
+			event.Type == "auto_continue_mixed_message_warning" {
 			// Automatically continue the LLM conversation
 			cs.continueLLMAfterTasks()
 		}

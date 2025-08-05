@@ -1911,6 +1911,28 @@ func (m model) handleTaskEvent(event taskPkg.TaskExecutionEvent) (tea.Model, tea
 		return m, nil
 	}
 
+	// Handle auto-continuation after mixed message warning
+	if event.Type == "auto_continue_after_mixed_message" {
+		// Automatically continue the LLM conversation
+		if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
+			return m, func() tea.Msg {
+				return ContinueLLMMsg{}
+			}
+		}
+		return m, nil
+	}
+
+	// Handle auto-continuation after sending mixed message warning
+	if event.Type == "auto_continue_mixed_message_warning" {
+		// Automatically continue the LLM conversation
+		if m.llmAdapter != nil && m.llmAdapter.IsAvailable() {
+			return m, func() tea.Msg {
+				return ContinueLLMMsg{}
+			}
+		}
+		return m, nil
+	}
+
 	// Handle confirmation requests
 	if event.RequiresInput && event.Task != nil && event.Response != nil {
 		return m, func() tea.Msg {
