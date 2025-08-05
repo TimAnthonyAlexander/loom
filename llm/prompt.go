@@ -134,7 +134,7 @@ func (pe *PromptEnhancer) CreateEnhancedSystemPrompt(enableShell bool) Message {
 READ  file.go (lines 40-80)           – view code with line numbers
 READ  file.go 40-80                   – also works (flexible format)
 READ  file.go lines 40-80             – also works (flexible format)
-LIST  dir/                            – list contents
+LIST  dir/                            – list contents (at least one argument, for example .)
 SEARCH "pattern" type:go context:3    – grep-like search (prefer over RUN grep)
 RUN   go test                         – shell execution
 MEMORY create key content:"…"         – persistent notes
@@ -245,9 +245,13 @@ If the user asks to check something out or search for something execute (write) 
 At the end (final text-only message), give a very detailed and overly explanatory summary of what you did, what you found, and any next steps.
 If the user asked you to look at something, explain it to the user in great detail, including the context and why it matters.
 If you want you can always continue reading by reading more lines after receiving the first chunk of a file, to better understand files such as READMEs or complex files.
+When asked to check out a repository or project, list the directory, look at the README and maybe 1-2 other files (composer.json, routes.json) and then summarize the project from this.
+Try to use little to no Markdown formatting in your final message, as it is not supported in the current system.
 
 Be careful not to accidentally write a READ command when having read a file and then trying to summarize it. It will trigger a READ command again.
 The final message shouldn't be longer than 3 paragraphs. If you must expand, use bullet points to summarize key findings and actions taken.
+Start your final message with a "Perfect!" or "I found the issue" if you successfully completed the task such as commands for bug finding or file editing.
+Start your final message with "Here is what I found" if you are summarizing findings without a specific task completion.
 `,
 		stats.TotalFiles,
 		float64(stats.TotalSize)/1024/1024,
