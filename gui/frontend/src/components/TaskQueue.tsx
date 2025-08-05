@@ -131,19 +131,19 @@ export function TaskQueue({ className }: TaskQueueProps) {
             )}
 
             {/* Pending Confirmations - only show when we have tasks */}
-            {hasAnyTasks && pendingConfirmations.length > 0 && (
+            {hasAnyTasks && pendingConfirmations?.length > 0 && (
                 <div className="confirmations-section">
                     <div
                         className="section-header clickable"
                         onClick={() => setShowConfirmations(!showConfirmations)}
                     >
                         <h4>
-                            Pending Confirmations ({pendingConfirmations.length})
+                            Pending Confirmations ({pendingConfirmations?.length || 0})
                             <span className="expand-icon">{showConfirmations ? '▼' : '▶'}</span>
                         </h4>
                     </div>
 
-                    {showConfirmations && (
+                    {showConfirmations && pendingConfirmations && (
                         <div className="confirmations-list">
                             {pendingConfirmations.map(renderConfirmationItem)}
                         </div>
