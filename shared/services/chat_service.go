@@ -509,7 +509,7 @@ func (cs *ChatService) handleLLMResponseForTasks(llmResponse string) {
 	}
 
 	// For non-exploration requests, use standard task management
-	if cs.taskManager != nil {
+	if cs.taskManager != nil && cs.llmAdapter != nil {
 		execution, err := cs.taskManager.HandleLLMResponse(llmResponse, cs.userTaskEventChan, cs.taskEventChan)
 		if err != nil {
 			cs.eventBus.Emit(events.ChatError, map[string]string{
@@ -526,6 +526,12 @@ func (cs *ChatService) handleLLMResponseForTasks(llmResponse string) {
 			cs.continueLLMAfterTasks()
 			return
 		}
+	} else if cs.taskManager != nil && cs.llmAdapter == nil {
+		// If taskManager exists but llmAdapter is nil, emit an error
+		cs.eventBus.Emit(events.ChatError, map[string]string{
+			"error": "Cannot process tasks: LLM adapter is not available",
+		})
+		return
 	}
 
 	// No tasks found - check for auto-continuation based on content
@@ -537,6 +543,14 @@ func (cs *ChatService) handleLLMResponseForTasks(llmResponse string) {
 
 // handleObjectiveExploration manages the objective-driven exploration flow (from TUI)
 func (cs *ChatService) handleObjectiveExploration(llmResponse string) {
+	// Safety check - make sure we have required components
+	if cs.sequentialManager == nil || cs.llmAdapter == nil || cs.taskExecutor == nil {
+		cs.eventBus.Emit(events.ChatError, map[string]string{
+			"error": "Cannot handle exploration: required components are not available",
+		})
+		return
+	}
+
 	// Check if this is setting a new objective
 	if objective := cs.sequentialManager.ExtractObjective(llmResponse); objective != "" {
 		cs.sequentialManager.SetObjective(objective)
@@ -679,8 +693,8 @@ func (cs *ChatService) continueLLMAfterTasks() {
 	cs.mutex.Lock()
 	defer cs.mutex.Unlock()
 
-	// Don't start new streaming if already streaming
-	if cs.isStreaming {
+	// Don't start new streaming if already streaming or required components are missing
+	if cs.isStreaming || cs.llmAdapter == nil {
 		return
 	}
 
