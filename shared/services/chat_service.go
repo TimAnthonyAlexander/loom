@@ -378,6 +378,14 @@ func (cs *ChatService) ClearChat() {
 
 	// Create new session to clear messages
 	cs.session = chat.NewSession(cs.getWorkspacePath(), 50)
+
+	// Re-add system prompt to the new session
+	if cs.promptEnhancer != nil {
+		systemPrompt := cs.promptEnhancer.CreateEnhancedSystemPrompt(cs.config.EnableShell)
+		if err := cs.session.AddMessage(systemPrompt); err != nil {
+			fmt.Printf("Warning: failed to add system prompt after clearing chat: %v\n", err)
+		}
+	}
 }
 
 // UpdateLLMAdapter updates the LLM adapter and reinitializes dependent components
