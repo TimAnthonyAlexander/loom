@@ -41,6 +41,8 @@ type SequentialTaskManager struct {
 	isExploring        bool
 	initialUserQuery   string
 	completionSignals  []string
+	cancelFunc         context.CancelFunc // Added to track and cancel ongoing exploration
+	cancelCtx          context.Context    // Added to track cancellation context
 
 	// Objective-driven exploration
 	currentObjective *ObjectiveExploration
@@ -81,9 +83,29 @@ func (stm *SequentialTaskManager) SetContextManager(index *indexer.Index, maxCon
 	stm.contextManager = contextMgr.NewContextManager(index, maxContextTokens)
 }
 
+// StopExploration cancels any ongoing exploration
+func (stm *SequentialTaskManager) StopExploration() {
+	if stm.cancelFunc != nil {
+		stm.cancelFunc()
+		stm.cancelFunc = nil
+	}
+	stm.isExploring = false
+	stm.currentObjective = nil
+}
+
 // HandleExplorationRequest starts a sequential exploration based on user query
 func (stm *SequentialTaskManager) HandleExplorationRequest(userQuery string) (*ExplorationResult, error) {
 	startTime := time.Now()
+
+	// Cancel any existing exploration
+	if stm.cancelFunc != nil {
+		stm.cancelFunc()
+	}
+
+	// Create a new cancellable context
+	ctx, cancel := context.WithCancel(context.Background())
+	stm.cancelCtx = ctx
+	stm.cancelFunc = cancel
 
 	// Reset state for new exploration
 	stm.explorationContext = make([]llm.Message, 0)
@@ -98,9 +120,19 @@ func (stm *SequentialTaskManager) HandleExplorationRequest(userQuery string) (*E
 		Timestamp: time.Now(),
 	})
 
-	// Execute exploration loop
-	result, err := stm.executeExplorationLoop()
+	// Execute exploration loop with cancellation context
+	result, err := stm.executeExplorationLoop(ctx)
 	if err != nil {
+		// Check if it was cancelled
+		if ctx.Err() == context.Canceled {
+			return &ExplorationResult{
+				Success:          false,
+				TasksExecuted:    stm.currentIteration,
+				Duration:         time.Since(startTime),
+				CompletionReason: "Exploration cancelled by user",
+			}, nil
+		}
+
 		return &ExplorationResult{
 			Success:          false,
 			TasksExecuted:    stm.currentIteration,
@@ -114,17 +146,37 @@ func (stm *SequentialTaskManager) HandleExplorationRequest(userQuery string) (*E
 }
 
 // executeExplorationLoop runs the iterative exploration process
-func (stm *SequentialTaskManager) executeExplorationLoop() (*ExplorationResult, error) {
+func (stm *SequentialTaskManager) executeExplorationLoop(ctx context.Context) (*ExplorationResult, error) {
 	for stm.currentIteration < stm.maxIterations {
+		// Check for cancellation first
+		select {
+		case <-ctx.Done():
+			return &ExplorationResult{
+				Success:          false,
+				TasksExecuted:    stm.currentIteration,
+				CompletionReason: "Exploration cancelled by user",
+			}, nil
+		default:
+			// Continue with exploration
+		}
+
 		// Get current context for LLM (system + exploration context)
 		messages := stm.buildLLMContext()
 
-		// Send to LLM
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		response, err := stm.llmAdapter.Send(ctx, messages)
-		cancel()
+		// Send to LLM with parent cancellation context
+		llmCtx, llmCancel := context.WithTimeout(ctx, 60*time.Second)
+		response, err := stm.llmAdapter.Send(llmCtx, messages)
+		llmCancel()
 
 		if err != nil {
+			// Check if it was cancelled
+			if ctx.Err() == context.Canceled {
+				return &ExplorationResult{
+					Success:          false,
+					TasksExecuted:    stm.currentIteration,
+					CompletionReason: "Exploration cancelled by user",
+				}, nil
+			}
 			return nil, fmt.Errorf("LLM request failed at iteration %d: %w", stm.currentIteration, err)
 		}
 
@@ -148,6 +200,18 @@ func (stm *SequentialTaskManager) executeExplorationLoop() (*ExplorationResult, 
 			continue
 		}
 
+		// Check for cancellation before executing task
+		select {
+		case <-ctx.Done():
+			return &ExplorationResult{
+				Success:          false,
+				TasksExecuted:    stm.currentIteration,
+				CompletionReason: "Exploration cancelled by user",
+			}, nil
+		default:
+			// Continue with task execution
+		}
+
 		// Execute the task
 		taskResponse := stm.executor.Execute(task)
 
@@ -163,7 +227,7 @@ func (stm *SequentialTaskManager) executeExplorationLoop() (*ExplorationResult, 
 		// If there was additional exploration content, add it too
 		if strings.TrimSpace(explorationContent) != "" {
 			stm.addToExplorationContext(llm.Message{
-				Role:      "assistant",
+				Role:      "user",
 				Content:   explorationContent,
 				Timestamp: time.Now(),
 			})
@@ -345,7 +409,7 @@ func (stm *SequentialTaskManager) finalizeSynthesis(synthesis string) (*Explorat
 
 	// Add final synthesis to chat session for user display
 	finalMessage := llm.Message{
-		Role:      "assistant",
+		Role:      "user",
 		Content:   cleanSynthesis,
 		Timestamp: time.Now(),
 	}
@@ -408,7 +472,7 @@ func (stm *SequentialTaskManager) formatTaskResultForExploration(task *Task, res
 	}
 
 	return llm.Message{
-		Role:      "assistant",
+		Role:      "user",
 		Content:   content.String(),
 		Timestamp: time.Now(),
 	}
@@ -445,6 +509,16 @@ func (stm *SequentialTaskManager) GetCurrentIteration() int {
 
 // StartObjectiveExploration initiates objective-driven exploration
 func (stm *SequentialTaskManager) StartObjectiveExploration(userQuery string) {
+	// Cancel any existing exploration
+	if stm.cancelFunc != nil {
+		stm.cancelFunc()
+	}
+
+	// Create new cancellable context
+	ctx, cancel := context.WithCancel(context.Background())
+	stm.cancelCtx = ctx
+	stm.cancelFunc = cancel
+
 	stm.currentObjective = &ObjectiveExploration{
 		Phase:           PhaseObjectiveSetting,
 		TasksExecuted:   0,
@@ -540,6 +614,13 @@ func (stm *SequentialTaskManager) GetCurrentPhase() ExplorationPhase {
 
 // CompleteObjective completes the current objective and resets state
 func (stm *SequentialTaskManager) CompleteObjective() {
+	// Cancel any ongoing context
+	if stm.cancelFunc != nil {
+		stm.cancelFunc()
+		stm.cancelFunc = nil
+		stm.cancelCtx = nil
+	}
+
 	stm.currentObjective = nil
 	stm.isExploring = false
 	stm.currentIteration = 0

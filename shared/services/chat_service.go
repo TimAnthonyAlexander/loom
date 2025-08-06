@@ -156,7 +156,7 @@ func (cs *ChatService) GetChatState() models.ChatState {
 
 		// Apply task result filtering for assistant messages (same as TUI)
 		content := msg.Content
-		if msg.Role == "assistant" {
+		if msg.Role == "user" {
 			content = cs.session.FilterTaskResultForDisplay(content)
 		}
 
@@ -355,14 +355,24 @@ func (cs *ChatService) streamLLMResponseWithTasks() {
 	cs.eventBus.Emit(events.ChatStreamEnded, nil)
 }
 
-// StopStreaming cancels the current streaming operation
+// StopStreaming cancels the current streaming operation and any background exploration
 func (cs *ChatService) StopStreaming() {
 	cs.mutex.Lock()
 	defer cs.mutex.Unlock()
 
+	// Cancel the streaming operation
 	if cs.streamCancel != nil {
 		cs.streamCancel()
 	}
+
+	// Also stop any ongoing sequential exploration
+	if cs.sequentialManager != nil && cs.sequentialManager.IsExploring() {
+		cs.sequentialManager.StopExploration()
+	}
+
+	// Reset exploration state
+	cs.isStreaming = false
+
 	// Note: Don't set streamCancel to nil here - let streamLLMResponse clean it up
 }
 
@@ -518,6 +528,16 @@ func (cs *ChatService) handleStreamError(err error) {
 
 // handleLLMResponseForTasks processes the LLM response for task execution (key integration from TUI)
 func (cs *ChatService) handleLLMResponseForTasks(llmResponse string) {
+	// First check if we should abort - user might have cancelled during processing
+	cs.mutex.RLock()
+	isStreaming := cs.isStreaming
+	cs.mutex.RUnlock()
+
+	if !isStreaming {
+		// User has cancelled, don't proceed with any more tasks or explorations
+		return
+	}
+
 	// Handle objective-driven exploration (like TUI)
 	if cs.sequentialManager != nil && cs.sequentialManager.IsExploring() {
 		cs.handleObjectiveExploration(llmResponse)
@@ -559,6 +579,16 @@ func (cs *ChatService) handleLLMResponseForTasks(llmResponse string) {
 
 // handleObjectiveExploration manages the objective-driven exploration flow (from TUI)
 func (cs *ChatService) handleObjectiveExploration(llmResponse string) {
+	// Check if we should abort - user might have cancelled during processing
+	cs.mutex.RLock()
+	isStreaming := cs.isStreaming
+	cs.mutex.RUnlock()
+
+	if !isStreaming {
+		// User has cancelled, don't proceed with any more tasks or explorations
+		return
+	}
+
 	// Safety check - make sure we have required components
 	if cs.sequentialManager == nil || cs.llmAdapter == nil || cs.taskExecutor == nil {
 		cs.eventBus.Emit(events.ChatError, map[string]string{
@@ -712,6 +742,11 @@ func (cs *ChatService) continueLLMAfterTasks() {
 
 	// Don't start new streaming if already streaming or required components are missing
 	if cs.isStreaming || cs.llmAdapter == nil {
+		return
+	}
+
+	// Don't auto-continue if we're no longer exploring
+	if cs.sequentialManager != nil && !cs.sequentialManager.IsExploring() {
 		return
 	}
 

@@ -197,7 +197,7 @@ func (m *Manager) HandleLLMResponse(llmResponse string, userEventChan chan<- Use
 
 				// CRITICAL FIX: Add failed task result to chat so LLM can see the error
 				taskResultMessage := llm.Message{
-					Role:      "assistant",
+					Role:      "user",
 					Content:   m.formatTaskResultForLLM(&currentTask, response),
 					Timestamp: time.Now(),
 					Visible:   false, // Hidden from UI as it's a system task result
@@ -247,7 +247,7 @@ func (m *Manager) HandleLLMResponse(llmResponse string, userEventChan chan<- Use
 
 			// Add task result to chat context for next LLM iteration
 			taskResultMessage := llm.Message{
-				Role:      "assistant",
+				Role:      "user",
 				Content:   m.formatTaskResultForLLM(&task, response),
 				Timestamp: time.Now(),
 				Visible:   false, // Hidden from UI as it's a system task result
@@ -478,7 +478,7 @@ func (m *Manager) ConfirmTask(task *Task, taskResponse *TaskResponse, approve bo
 	if !approve {
 		// Send cancellation feedback to LLM
 		cancelMessage := llm.Message{
-			Role:      "assistant",
+			Role:      "user",
 			Content:   m.FormatConfirmationResult(task, false, nil),
 			Timestamp: time.Now(),
 			Visible:   false, // Hidden from UI as it's a system confirmation result
@@ -508,7 +508,7 @@ func (m *Manager) ConfirmTask(task *Task, taskResponse *TaskResponse, approve bo
 
 	// Send enhanced confirmation result to LLM with EditSummary data
 	confirmationMessage := llm.Message{
-		Role:      "assistant",
+		Role:      "user",
 		Content:   m.FormatConfirmationResultEnhanced(task, taskResponse, approve, applyError),
 		Timestamp: time.Now(),
 		Visible:   true, // Visible to UI as users should see confirmation results
@@ -542,7 +542,7 @@ func (m *Manager) ContinueRecursiveChat(ctx context.Context, execution *TaskExec
 
 	// Add summary to chat
 	summaryMessage := llm.Message{
-		Role:      "assistant",
+		Role:      "user",
 		Content:   summary,
 		Timestamp: time.Now(),
 		Visible:   true, // Visible to UI as users should see task summaries

@@ -117,11 +117,7 @@ func (c *ClaudeAdapter) Send(ctx context.Context, messages []Message) (*Message,
 	claudeMessages := make([]ClaudeMessage, 0, len(messages))
 	for _, msg := range messages {
 		if msg.Role == "system" {
-			if systemPrompt == "" {
-				systemPrompt = msg.Content
-			} else {
-				systemPrompt += "\n" + msg.Content
-			}
+			msg.Role = "user"
 			continue
 		}
 		content := trimAssistantContent(msg.Content)

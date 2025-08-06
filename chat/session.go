@@ -321,10 +321,10 @@ func (s *Session) GetDisplayMessages() []string {
 		var formattedMessage string
 		if msg.Role == "user" {
 			formattedMessage = fmt.Sprintf("You: %s", msg.Content)
+			formattedMessage = s.FilterTaskResultForDisplay(formattedMessage)
 		} else if msg.Role == "assistant" {
 			// Filter out JSON task blocks for assistant messages
 			content := s.filterJSONTaskBlocks(msg.Content)
-			content = s.FilterTaskResultForDisplay(content)
 			formattedMessage = fmt.Sprintf("Loom: %s", content)
 		} else if msg.Role == "system" {
 			if i == 0 {

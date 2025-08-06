@@ -370,7 +370,7 @@ func (m *Manager) HandleLLMResponse(llmResponse string, userEventChan chan<- Use
 
 			// CRITICAL FIX: Add failed task result to chat so LLM can see the error
 			taskResultMessage := llm.Message{
-				Role:      "assistant",
+				Role:      "user",
 				Content:   m.formatTaskResultForLLM(&currentTask, response),
 				Timestamp: time.Now(),
 			}
@@ -419,7 +419,7 @@ func (m *Manager) HandleLLMResponse(llmResponse string, userEventChan chan<- Use
 
 		// Add task result to chat context for next LLM iteration
 		taskResultMessage := llm.Message{
-			Role:      "assistant",
+			Role:      "user",
 			Content:   m.formatTaskResultForLLM(&task, response),
 			Timestamp: time.Now(),
 		}
@@ -469,7 +469,7 @@ func (m *Manager) HandleLLMResponse(llmResponse string, userEventChan chan<- Use
 func (m *Manager) ConfirmTask(task *Task, taskResponse *TaskResponse, approve bool) error {
 		// Send cancellation feedback to LLM
 		cancelMessage := llm.Message{
-			Role:      "assistant",
+			Role:      "user",
 			Content:   m.FormatConfirmationResult(task, false, nil),
 			Timestamp: time.Now(),
 		}
@@ -498,7 +498,7 @@ func (m *Manager) ConfirmTask(task *Task, taskResponse *TaskResponse, approve bo
 
 	// Send enhanced confirmation result to LLM with EditSummary data
 	confirmationMessage := llm.Message{
-		Role:      "assistant",
+		Role:      "user",
 		Content:   m.FormatConfirmationResultEnhanced(task, taskResponse, approve, applyError),
 		Timestamp: time.Now(),
 	}
@@ -531,7 +531,7 @@ func (m *Manager) ContinueRecursiveChat(ctx context.Context, execution *TaskExec
 
 	// Add summary to chat
 	summaryMessage := llm.Message{
-		Role:      "assistant",
+		Role:      "user",
 		Content:   summary,
 		Timestamp: time.Now(),
 	}
