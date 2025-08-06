@@ -123,6 +123,8 @@ func NewChatService(workspacePath string, llmAdapter llm.LLMAdapter, eventBus *e
 	// Add enhanced system prompt if this is a new session (no previous messages)
 	if len(session.GetMessages()) == 0 {
 		systemPrompt := promptEnhancer.CreateEnhancedSystemPrompt(cfg.EnableShell)
+		// Make sure system prompt is marked as not visible
+		systemPrompt.Visible = false
 		if err := session.AddMessage(systemPrompt); err != nil {
 			fmt.Printf("Warning: failed to add system prompt: %v\n", err)
 		}
@@ -144,11 +146,11 @@ func (cs *ChatService) GetChatState() models.ChatState {
 	cs.mutex.RLock()
 	defer cs.mutex.RUnlock()
 
-	// Convert chat session messages to models.Message (excluding system messages)
+	// Convert chat session messages to models.Message (using Visible flag)
 	var messages []models.Message
 	for _, msg := range cs.session.GetMessages() {
-		// Skip system messages - they're for LLM context, not user display
-		if msg.Role == "system" {
+		// Skip messages marked as not visible
+		if !msg.Visible {
 			continue
 		}
 
@@ -162,8 +164,9 @@ func (cs *ChatService) GetChatState() models.ChatState {
 			ID:        uuid.New().String(),
 			Content:   content,
 			IsUser:    msg.Role == "user",
-			Timestamp: time.Now(), // Note: chat.Message doesn't have timestamp, using current time
+			Timestamp: msg.Timestamp, // Use the actual timestamp from the message
 			Type:      msg.Role,
+			Visible:   true, // This message is visible (we already filtered invisible ones)
 		})
 	}
 
@@ -193,6 +196,7 @@ func (cs *ChatService) SendMessage(content string) error {
 		Role:      "user",
 		Content:   processedInput,
 		Timestamp: time.Now(),
+		Visible:   true, // User messages should always be visible
 	}
 
 	if err := cs.session.AddMessage(userMessage); err != nil {
@@ -209,6 +213,7 @@ func (cs *ChatService) SendMessage(content string) error {
 		IsUser:    true,
 		Timestamp: time.Now(),
 		Type:      "user",
+		Visible:   true, // User messages are always visible
 	})
 
 	// Check for exploration queries and start objective-driven exploration (like TUI)
@@ -317,6 +322,7 @@ func (cs *ChatService) streamLLMResponseWithTasks() {
 			Role:      "assistant",
 			Content:   filteredContent,
 			Timestamp: time.Now(),
+			Visible:   true, // Assistant messages should be visible
 		}
 		if err := cs.session.AddMessage(assistantMessage); err != nil {
 			fmt.Printf("Warning: failed to save assistant message: %v\n", err)
@@ -332,6 +338,7 @@ func (cs *ChatService) streamLLMResponseWithTasks() {
 			IsUser:    false,
 			Timestamp: time.Now(),
 			Type:      "assistant",
+			Visible:   true, // Assistant messages should be visible
 		})
 
 		// Process LLM response for tasks (like TUI - this is the key integration!)
@@ -364,6 +371,7 @@ func (cs *ChatService) AddSystemMessage(content string) {
 	systemMessage := llm.Message{
 		Role:    "system",
 		Content: content,
+		Visible: false, // System messages should not be visible by default
 	}
 	cs.session.AddMessage(systemMessage)
 
@@ -693,6 +701,7 @@ func (cs *ChatService) formatTaskResultForLLM(task *taskPkg.Task, response *task
 		Role:      "system",
 		Content:   content.String(),
 		Timestamp: time.Now(),
+		Visible:   false, // Hidden from UI as it's a system task result
 	}
 }
 

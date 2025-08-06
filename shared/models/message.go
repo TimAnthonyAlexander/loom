@@ -10,7 +10,8 @@ type Message struct {
 	Content   string    `json:"content"`
 	IsUser    bool      `json:"isUser"`
 	Timestamp time.Time `json:"timestamp"`
-	Type      string    `json:"type"` // "user", "assistant", "system", "debug"
+	Type      string    `json:"type"`    // "user", "assistant", "system", "debug"
+	Visible   bool      `json:"visible"` // Whether the message should be displayed in the UI
 }
 
 // ChatState represents the current state of the chat session

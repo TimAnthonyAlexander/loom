@@ -149,11 +149,7 @@ export function MarkdownMessage({ content, className }: MarkdownMessageProps) {
 marked.setOptions({
     renderer,
     gfm: true,
-    breaks: true,
-    mangle: false,      // Disable mangling to reduce complexity
-    headerIds: false,   // Disable header ID generation to improve performance
-    smartLists: true,   // Use smarter list behavior
-    smartypants: false  // Disable smartypants to reduce processing
+    breaks: true
 });
     }, []); // Only run once on mount
 
@@ -169,9 +165,7 @@ marked.setOptions({
                         if (content.length > 10000 || codeBlockCount > 10) {
                             // For large content or content with many code blocks, use more conservative approach
                             const html = marked.parse(content, {
-                                async: false,  // Force synchronous processing for large content
-                                silent: false,  // Don't silence errors
-                                walkTokens: (token) => {
+                                walkTokens: (token: any) => {
                                     // Limit recursion for nested tokens if needed
                                     if (token.type === 'list' && token.items && token.items.length > 100) {
                                         // Truncate extremely large lists to prevent stack issues
@@ -192,10 +186,7 @@ marked.setOptions({
                             // Try with minimal options as a fallback
                             const html = marked.parse(content, {
                                 gfm: false,  // Disable GitHub Flavored Markdown
-                                breaks: true, // Keep line breaks
-                                smartLists: false,
-                                smartypants: false,
-                                headerIds: false
+                                breaks: true  // Keep line breaks
                             });
                             contentRef.current.innerHTML = typeof html === 'string' ? html : '';
                         } catch (fallbackErr) {

@@ -51,22 +51,29 @@ export function ChatWindow({ className }: ChatWindowProps) {
     });
   };
 
-  const renderMessage = (message: Message) => (
-    <div key={message.id} className={`message ${message.isUser ? 'user' : 'assistant'} ${message.type}`}>
-      <div className="message-content">
-        <div className="message-text">
-          {!message.isUser && (message.type === 'assistant' || message.type === 'system') ? (
-            <MarkdownMessage content={message.content} />
-          ) : (
-            message.content
-          )}
-        </div>
-        <div className="message-timestamp">
-          {formatTimestamp(message.timestamp)}
+  const renderMessage = (message: Message) => {
+    // Skip messages marked as not visible
+    if (message.visible === false) {
+      return null;
+    }
+    
+    return (
+      <div key={message.id} className={`message ${message.isUser ? 'user' : 'assistant'} ${message.type}`}>
+        <div className="message-content">
+          <div className="message-text">
+            {!message.isUser && (message.type === 'assistant' || message.type === 'system') ? (
+              <MarkdownMessage content={message.content} />
+            ) : (
+              message.content
+            )}
+          </div>
+          <div className="message-timestamp">
+            {formatTimestamp(message.timestamp)}
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className={`chat-window ${className || ''}`}>

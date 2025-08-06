@@ -10,6 +10,7 @@ type Message struct {
 	Role      string    `json:"role"`      // "system", "user", "assistant"
 	Content   string    `json:"content"`   // The message content
 	Timestamp time.Time `json:"timestamp"` // When the message was created
+	Visible   bool      `json:"visible"`   // Whether the message should be displayed in the UI
 }
 
 // StreamChunk represents a chunk of streaming response

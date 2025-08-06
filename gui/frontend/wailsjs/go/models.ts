@@ -7,6 +7,7 @@ export namespace models {
 	    // Go type: time
 	    timestamp: any;
 	    type: string;
+	    visible: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Message(source);
@@ -19,6 +20,7 @@ export namespace models {
 	        this.isUser = source["isUser"];
 	        this.timestamp = this.convertValues(source["timestamp"], null);
 	        this.type = source["type"];
+	        this.visible = source["visible"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

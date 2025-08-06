@@ -6,6 +6,7 @@ export interface Message {
   isUser: boolean;
   timestamp: any; // Matches Wails generated type
   type: string; // "user", "assistant", "system", "debug"
+  visible?: boolean; // Whether the message should be displayed in the UI
 }
 
 export interface ChatState {

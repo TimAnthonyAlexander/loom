@@ -73,6 +73,7 @@ func (m *Manager) HandleLLMResponse(llmResponse string, userEventChan chan<- Use
 			Role:      "system",
 			Content:   warningMessage,
 			Timestamp: time.Now(),
+			Visible:   false, // Hidden from UI as it's a system correction
 		}
 
 		if err := m.chatSession.AddMessage(correctionMessage); err != nil {
@@ -84,6 +85,7 @@ func (m *Manager) HandleLLMResponse(llmResponse string, userEventChan chan<- Use
 			Role:      "user",
 			Content:   fmt.Sprintf("Please continue working on your original objective: \"%s\". Focus on completing this objective rather than expanding the scope.", objectiveValidation.OriginalObjective),
 			Timestamp: time.Now(),
+			Visible:   false, // Hidden from UI as it's a system continuation
 		}
 
 		if err := m.chatSession.AddMessage(continuationMessage); err != nil {
@@ -198,6 +200,7 @@ func (m *Manager) HandleLLMResponse(llmResponse string, userEventChan chan<- Use
 					Role:      "assistant",
 					Content:   m.formatTaskResultForLLM(&currentTask, response),
 					Timestamp: time.Now(),
+					Visible:   false, // Hidden from UI as it's a system task result
 				}
 
 				if err := m.chatSession.AddMessage(taskResultMessage); err != nil {
@@ -247,6 +250,7 @@ func (m *Manager) HandleLLMResponse(llmResponse string, userEventChan chan<- Use
 				Role:      "assistant",
 				Content:   m.formatTaskResultForLLM(&task, response),
 				Timestamp: time.Now(),
+				Visible:   false, // Hidden from UI as it's a system task result
 			}
 
 			if err := m.chatSession.AddMessage(taskResultMessage); err != nil {
@@ -304,6 +308,7 @@ func (m *Manager) HandleLLMResponse(llmResponse string, userEventChan chan<- Use
 				Role:      "user",
 				Content:   continuationPrompt,
 				Timestamp: time.Now(),
+				Visible:   false, // Hidden from UI as it's a system continuation
 			}
 
 			if err := m.chatSession.AddMessage(continuationMessage); err != nil {
@@ -344,6 +349,7 @@ func (m *Manager) HandleLLMResponse(llmResponse string, userEventChan chan<- Use
 					Role:      "user",
 					Content:   continuationPrompt,
 					Timestamp: time.Now(),
+					Visible:   false, // Hidden from UI as it's a system continuation
 				}
 
 				if err := m.chatSession.AddMessage(continuationMessage); err != nil {
@@ -392,6 +398,7 @@ func (m *Manager) HandleLLMResponse(llmResponse string, userEventChan chan<- Use
 			Role:      "user",
 			Content:   mixedWarning,
 			Timestamp: time.Now(),
+			Visible:   false, // Hidden from UI as it's a system warning
 		}
 
 		if err := m.chatSession.AddMessage(warningMessage); err != nil {
@@ -426,6 +433,7 @@ func (m *Manager) HandleLLMResponse(llmResponse string, userEventChan chan<- Use
 			Role:      "user",
 			Content:   yesNoPrompt,
 			Timestamp: time.Now(),
+			Visible:   false, // Hidden from UI as it's a system prompt
 		}
 
 		if err := m.chatSession.AddMessage(yesNoMessage); err != nil {
@@ -473,6 +481,7 @@ func (m *Manager) ConfirmTask(task *Task, taskResponse *TaskResponse, approve bo
 			Role:      "assistant",
 			Content:   m.FormatConfirmationResult(task, false, nil),
 			Timestamp: time.Now(),
+			Visible:   false, // Hidden from UI as it's a system confirmation result
 		}
 		if err := m.chatSession.AddMessage(cancelMessage); err != nil {
 			fmt.Printf("Warning: failed to add cancellation message to chat: %v\n", err)
@@ -502,6 +511,7 @@ func (m *Manager) ConfirmTask(task *Task, taskResponse *TaskResponse, approve bo
 		Role:      "assistant",
 		Content:   m.FormatConfirmationResultEnhanced(task, taskResponse, approve, applyError),
 		Timestamp: time.Now(),
+		Visible:   true, // Visible to UI as users should see confirmation results
 	}
 
 	if err := m.chatSession.AddMessage(confirmationMessage); err != nil {
@@ -535,6 +545,7 @@ func (m *Manager) ContinueRecursiveChat(ctx context.Context, execution *TaskExec
 		Role:      "assistant",
 		Content:   summary,
 		Timestamp: time.Now(),
+		Visible:   true, // Visible to UI as users should see task summaries
 	}
 
 	if err := m.chatSession.AddMessage(summaryMessage); err != nil {
