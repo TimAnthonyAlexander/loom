@@ -103,3 +103,8 @@ func RunRipgrepWithArgs(args ...string) ([]byte, error) {
 	cmd := exec.Command(rgBinary, args...)
 	return cmd.CombinedOutput()
 }
+
+func RunRipgrep(pattern, path string) ([]byte, error) {
+	// Use the default ripgrep binary with the provided pattern and path
+	return RunRipgrepWithArgs(pattern, path)
+}

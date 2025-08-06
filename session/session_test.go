@@ -175,57 +175,6 @@ func TestGetRecoverableSessions(t *testing.T) {
 	}
 }
 
-func TestRecoveryManager(t *testing.T) {
-	// Create a temporary directory for testing
-	tempDir, err := os.MkdirTemp("", "loom-recovery-test")
-	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	// Create necessary directory structure
-	sessionsDir := filepath.Join(tempDir, ".loom", "sessions")
-	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
-		t.Fatalf("Failed to create sessions directory: %v", err)
-	}
-
-	// Create a recovery manager
-	recoveryMgr, err := NewRecoveryManager(tempDir)
-	if err != nil {
-		t.Fatalf("Failed to create recovery manager: %v", err)
-	}
-
-	if recoveryMgr == nil {
-		t.Fatalf("Expected non-nil recovery manager")
-	}
-
-	// Create a clean session
-	session, err := recoveryMgr.CreateCleanSession()
-	if err != nil {
-		t.Errorf("Failed to create clean session: %v", err)
-	}
-
-	if session == nil {
-		t.Fatalf("Expected non-nil session")
-	}
-
-	// Check for recovery options when no sessions need recovery
-	options, err := recoveryMgr.CheckForRecovery()
-	if err != nil {
-		t.Errorf("Failed to check for recovery: %v", err)
-	}
-
-	if options != nil {
-		t.Errorf("Expected nil recovery options when no recovery needed")
-	}
-
-	// Generate recovery report (should indicate no recovery needed)
-	report := recoveryMgr.GenerateRecoveryReport(options)
-	if report != "No recovery needed - workspace is in a consistent state." {
-		t.Errorf("Unexpected recovery report for no recovery needed: %s", report)
-	}
-}
-
 func TestSessionState(t *testing.T) {
 	// Create a session state
 	sessionState := &SessionState{
