@@ -1,0 +1,58 @@
+.llm-status-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  transition: all 0.2s ease;
+}
+
+.llm-status-indicator.idle {
+  color: var(--color-text-secondary);
+}
+
+.llm-status-indicator.thinking {
+  color: var(--color-warning);
+  background-color: var(--color-warning-light);
+}
+
+.llm-status-indicator.streaming {
+  color: var(--color-success);
+  background-color: var(--color-success-light);
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  position: relative;
+}
+
+.llm-status-indicator.thinking .pulse-dot {
+  background-color: var(--color-warning);
+  animation: pulse 1.5s ease infinite;
+}
+
+.llm-status-indicator.streaming .pulse-dot {
+  background-color: var(--color-success);
+  animation: pulse 1s ease infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(255, 177, 0, 0.4);
+  }
+  
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(255, 177, 0, 0);
+  }
+  
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(255, 177, 0, 0);
+  }
+}

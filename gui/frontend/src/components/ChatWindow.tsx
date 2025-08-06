@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useChat } from '../hooks/useWails';
 import type { Message } from '../types';
 import { MarkdownMessage } from './MarkdownMessage';
+import { LLMStatusIndicator } from './LLMStatusIndicator';
 import './ChatWindow.css';
 import './MarkdownMessage.css';
 
@@ -81,12 +82,13 @@ export function ChatWindow({ className }: ChatWindowProps) {
       <div className="chat-header">
         <div className="chat-title">
           <h2>Chat</h2>
-          {chatState && (
-            <span className="chat-status">
-              {chatState.isStreaming ? 'AI is typing...' : 'Ready'}
-            </span>
-          )}
         </div>
+        {chatState && (
+          <LLMStatusIndicator 
+            isStreaming={chatState.isStreaming} 
+            isLoading={isLoading} 
+          />
+        )}
         <div className="chat-actions">
           {chatState?.isStreaming && (
             <button onClick={stopStreaming} className="btn btn-secondary btn-sm">
@@ -130,7 +132,7 @@ export function ChatWindow({ className }: ChatWindowProps) {
             <div className="message-content">
               <div className="message-text">
                 <MarkdownMessage content={chatState.streamingContent} />
-                <span className="typing-indicator">|</span>
+                <span className="typing-cursor"></span>
               </div>
             </div>
           </div>

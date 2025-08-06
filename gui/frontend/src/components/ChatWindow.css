@@ -8,10 +8,18 @@
 .chat-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: var(--spacing-md);
   background-color: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
+  gap: var(--spacing-md);
+}
+
+.chat-title {
+  flex-shrink: 0;
+}
+
+.chat-actions {
+  margin-left: auto;
 }
 
 .chat-title h2 {
@@ -20,11 +28,7 @@
   font-weight: var(--font-weight-semibold);
 }
 
-.chat-status {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  margin-left: var(--spacing-sm);
-}
+/* Replaced by LLMStatusIndicator */
 
 .chat-actions {
   display: flex;
@@ -162,9 +166,15 @@
   padding: 0;
 }
 
-.typing-indicator {
-  animation: blink 1s infinite;
-  font-weight: bold;
+.typing-cursor {
+  display: inline-block;
+  width: 3px;
+  height: 1.2em;
+  background-color: var(--color-accent);
+  margin-left: 4px;
+  vertical-align: text-bottom;
+  animation: blink 0.8s infinite;
+  border-radius: 1px;
 }
 
 .chat-input {
@@ -229,8 +239,10 @@
 }
 
 @keyframes blink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
+  0% { opacity: 1; }
+  40% { opacity: 1; }
+  60% { opacity: 0; }
+  100% { opacity: 0; }
 }
 
 /* Scrollbar for chat messages */
