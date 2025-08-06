@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { marked } from 'marked';
 import hljs from 'highlight.js';
 
@@ -7,9 +7,30 @@ interface MarkdownMessageProps {
     className?: string;
 }
 
+// Simple debounce function to limit render frequency for streaming content
+function useDebounce<T>(value: T, delay: number): T {
+    const [debouncedValue, setDebouncedValue] = useState<T>(value);
+    
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedValue(value);
+        }, delay);
+        
+        return () => {
+            clearTimeout(handler);
+        };
+    }, [value, delay]);
+    
+    return debouncedValue;
+}
+
 export function MarkdownMessage({ content, className }: MarkdownMessageProps) {
     const contentRef = useRef<HTMLDivElement>(null);
     const rendererRef = useRef<any>(null);
+    
+    // For large streaming content, debounce the rendering (50ms)
+    // This improves performance during rapid updates
+    const debouncedContent = useDebounce(content, content.length > 5000 ? 50 : 0);
 
     // Set up the renderer only once
     useEffect(() => {
@@ -125,32 +146,69 @@ export function MarkdownMessage({ content, className }: MarkdownMessageProps) {
         rendererRef.current = renderer;
 
         // Configure marked options
-        marked.setOptions({
-            renderer,
-            gfm: true,
-            breaks: true,
-        });
+marked.setOptions({
+    renderer,
+    gfm: true,
+    breaks: true,
+    mangle: false,      // Disable mangling to reduce complexity
+    headerIds: false,   // Disable header ID generation to improve performance
+    smartLists: true,   // Use smarter list behavior
+    smartypants: false  // Disable smartypants to reduce processing
+});
     }, []); // Only run once on mount
 
-    // Parse and render content whenever it changes
+    // Parse and render content whenever it changes with improved error handling and chunking for large content
     useEffect(() => {
         if (contentRef.current && rendererRef.current) {
             // Use requestAnimationFrame to ensure smooth rendering during streaming
             const frameId = requestAnimationFrame(() => {
                 if (contentRef.current) {
                     try {
-                        const html = marked.parse(content);
-                        contentRef.current.innerHTML = typeof html === 'string' ? html : '';
+                        // Check if content is very large (> 10000 chars) or contains many code blocks 
+                        const codeBlockCount = (content.match(/```/g) || []).length / 2;
+                        if (content.length > 10000 || codeBlockCount > 10) {
+                            // For large content or content with many code blocks, use more conservative approach
+                            const html = marked.parse(content, {
+                                async: false,  // Force synchronous processing for large content
+                                silent: false,  // Don't silence errors
+                                walkTokens: (token) => {
+                                    // Limit recursion for nested tokens if needed
+                                    if (token.type === 'list' && token.items && token.items.length > 100) {
+                                        // Truncate extremely large lists to prevent stack issues
+                                        token.items = token.items.slice(0, 100);
+                                    }
+                                }
+                            });
+                            contentRef.current.innerHTML = typeof html === 'string' ? html : '';
+                        } else {
+                            // Normal processing for regular content
+                            const html = marked.parse(content);
+                            contentRef.current.innerHTML = typeof html === 'string' ? html : '';
+                        }
                     } catch (err) {
                         console.error('Markdown parsing failed:', err);
-                        contentRef.current.textContent = content; // Fallback to plain text
+                        // More graceful fallback - try to render with minimal processing
+                        try {
+                            // Try with minimal options as a fallback
+                            const html = marked.parse(content, {
+                                gfm: false,  // Disable GitHub Flavored Markdown
+                                breaks: true, // Keep line breaks
+                                smartLists: false,
+                                smartypants: false,
+                                headerIds: false
+                            });
+                            contentRef.current.innerHTML = typeof html === 'string' ? html : '';
+                        } catch (fallbackErr) {
+                            console.error('Fallback rendering failed:', fallbackErr);
+                            contentRef.current.textContent = content; // Last resort: plain text
+                        }
                     }
                 }
             });
 
             return () => cancelAnimationFrame(frameId);
         }
-    }, [content]);
+    }, [debouncedContent]);
 
     return (
         <div

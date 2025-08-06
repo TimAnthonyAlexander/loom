@@ -13,6 +13,8 @@ const AVAILABLE_MODELS = [
     'openai:o4-mini',
     'openai:o3',
     'ollama:llama3.1:8b',
+    'ollama:llama3:8b',
+    'ollama:gpt-oss:20b',
     'ollama:qwen3:8b',
     'ollama:gemma3:12b',
     'ollama:mistral:7b',

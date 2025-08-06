@@ -245,6 +245,64 @@ func TestFilterTaskResultForDisplay(t *testing.T) {
 	}
 }
 
+func TestSpecialSystemMessagesFiltering(t *testing.T) {
+	// Create a temporary session
+	session := &Session{}
+
+	// Test the YES/NO completion check message
+	yesNoMessage := "YES or NO, has the objective at hand been completed?"
+	if !session.isCompletionDetectorInteraction(yesNoMessage) {
+		t.Errorf("YES/NO completion check message should be detected as completion detector interaction")
+	}
+
+	// Test the mixed message warning
+	mixedMessage := "🚨 MIXED MESSAGE DETECTED\n\nYou are not allowed to mix text and task messages."
+	if !session.isCompletionDetectorInteraction(mixedMessage) {
+		t.Errorf("Mixed message warning should be detected as completion detector interaction")
+	}
+
+	// Test the continuation prompt
+	continuationPrompt := "You may continue with the OBJECTIVE at hand."
+	if !session.isCompletionDetectorInteraction(continuationPrompt) {
+		t.Errorf("Continuation prompt should be detected as completion detector interaction")
+	}
+
+	// Test YES/NO response filtering
+	yesResponse := "YES, I have completed the task."
+	if !session.isCompletionDetectorInteraction(yesResponse) {
+		t.Errorf("Short YES response should be detected as completion detector interaction")
+	}
+
+	noResponse := "NO, I still need to implement the feature."
+	if !session.isCompletionDetectorInteraction(noResponse) {
+		t.Errorf("Short NO response should be detected as completion detector interaction")
+	}
+
+	// Test that other messages are not affected
+	normalMessage := "I have implemented the feature as requested and written the tests."
+	if session.isCompletionDetectorInteraction(normalMessage) {
+		t.Errorf("Normal message should not be detected as completion detector interaction")
+	}
+
+	// Ensure debug messages are displayed
+	debugMessage := "🔍 **DEBUG**: Task execution started"
+	if session.isCompletionDetectorInteraction(debugMessage) {
+		t.Errorf("Debug message should not be detected as completion detector interaction")
+	}
+
+	// Ensure file contents are not filtered even if they start with YES/NO
+	fileContent := "File: path/to/file.txt\nLines: 100\n\n1: YES, this line starts with YES but should not be filtered"
+	if session.isCompletionDetectorInteraction(fileContent) {
+		t.Errorf("File content starting with YES should not be filtered")
+	}
+
+	// Ensure task results are not filtered
+	taskResult := "🔧 Task Result: READ file.txt\n✅ Status: Success\n📄 Output: YES this is the content"
+	if session.isCompletionDetectorInteraction(taskResult) {
+		t.Errorf("Task result with Output starting with YES should not be filtered")
+	}
+}
+
 func TestFilterJSONTaskBlocks(t *testing.T) {
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "loom-chat-test")

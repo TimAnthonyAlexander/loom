@@ -661,6 +661,34 @@ func (s *Session) isCompletionDetectorInteraction(content string) bool {
 		return false
 	}
 
+	// ALWAYS hide these specific system messages and their responses
+	// The exact special system messages we don't want to display
+	if content == "YES or NO, has the objective at hand been completed?" {
+		return true
+	}
+
+	if strings.HasPrefix(content, "🚨 MIXED MESSAGE DETECTED") {
+		return true
+	}
+
+	if content == "You may continue with the OBJECTIVE at hand." {
+		return true
+	}
+
+	// Check for YES/NO responses to the above questions
+	trimmedContent := strings.TrimSpace(content)
+	// Make sure we're not filtering out file contents or task results that might start with YES/NO
+	if !strings.Contains(content, "File:") &&
+		!strings.Contains(content, "Lines:") &&
+		!strings.Contains(content, "📄 Output:") &&
+		!strings.Contains(content, "🔧 Task Result:") &&
+		(strings.HasPrefix(trimmedContent, "YES") || strings.HasPrefix(trimmedContent, "NO")) {
+		// Short YES/NO responses are likely responses to our system messages
+		if len(trimmedContent) < 50 {
+			return true
+		}
+	}
+
 	// Check for explicit completion check prefix
 	if strings.HasPrefix(content, "COMPLETION_CHECK:") {
 		return true
