@@ -292,29 +292,36 @@ dist-with-linux-gui: dist ## Build all executables including Linux GUI (requires
 	@echo "$(BLUE)📦 Final contents:$(NC)"
 	@ls -la dist/
 
-dist-macos-arm: download-ripgrep ## Build both TUI and GUI executables for macOS ARM only
-	@echo "$(BLUE)🔨 Building TUI and GUI executables for macOS ARM (Apple Silicon)...$(NC)"
+dist-macos: download-ripgrep ## Build both TUI and GUI executables for all platforms in dist/
+	@echo "$(BLUE)🔨 Building TUI and GUI executables for all platforms...$(NC)"
 	rm -rf dist/
 	mkdir -p dist/
 	
-	@echo "$(BLUE)Building TUI executable for macOS ARM...$(NC)"
+	@echo "$(BLUE)Building TUI executables...$(NC)"
+	GOOS=darwin GOARCH=amd64 go build -o dist/loom-tui-darwin-amd64 .
 	GOOS=darwin GOARCH=arm64 go build -o dist/loom-tui-darwin-arm64 .
 	
-	@echo "$(BLUE)Building GUI executable for macOS ARM...$(NC)"
-	cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails build --platform=darwin/arm64
+	@echo "$(BLUE)Building GUI executables...$(NC)"
+	cd gui && export PATH=$$PATH:$(shell go env GOPATH)/bin && wails build --platform=darwin/amd64,darwin/arm64 
 	
-	@echo "$(BLUE)Copying GUI executable to dist/...$(NC)"
-	# macOS .app bundle for ARM
-	if [ -d "gui/build/bin/gui-arm64.app" ]; then cp -r gui/build/bin/gui-arm64.app dist/loom-gui-darwin-arm64.app; fi
+	@echo "$(BLUE)Copying GUI executables to dist/...$(NC)"
+	# macOS .app bundles
+	if [ -d "gui/build/bin/gui-amd64.app" ]; then mv gui/build/bin/gui-amd64.app dist/loom-gui-darwin-amd64.app; fi
+	if [ -d "gui/build/bin/gui-arm64.app" ]; then mv gui/build/bin/gui-arm64.app dist/loom-gui-darwin-arm64.app; fi
 	
-	@echo "$(BLUE)Creating macOS ARM DMG file...$(NC)"
+	@echo "$(BLUE)Creating macOS DMG files...$(NC)"
+	# Create DMG for Intel macOS
+	if [ -d "dist/loom-gui-darwin-amd64.app" ]; then \
+		hdiutil create -volname "Loom GUI (Intel)" -srcfolder "dist/loom-gui-darwin-amd64.app" -ov -format UDZO "dist/loom-gui-darwin-amd64.dmg"; \
+		echo "$(GREEN)✅ Created dist/loom-gui-darwin-amd64.dmg$(NC)"; \
+	fi
 	# Create DMG for Apple Silicon macOS
 	if [ -d "dist/loom-gui-darwin-arm64.app" ]; then \
 		hdiutil create -volname "Loom GUI (Apple Silicon)" -srcfolder "dist/loom-gui-darwin-arm64.app" -ov -format UDZO "dist/loom-gui-darwin-arm64.dmg"; \
 		echo "$(GREEN)✅ Created dist/loom-gui-darwin-arm64.dmg$(NC)"; \
 	fi
 	
-	@echo "$(GREEN)✅ macOS ARM executables built and placed in dist/!$(NC)"
+	@echo "$(GREEN)✅ All MACOS built and placed in dist/!$(NC)"
 	@echo "$(BLUE)📦 Contents:$(NC)"
 	@ls -la dist/
 
