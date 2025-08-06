@@ -1772,21 +1772,6 @@ func (m model) renderFileAutocomplete() string {
 }
 
 // detectsActionWithoutTasks checks if the LLM indicated an action but didn't provide tasks (simplified)
-func (m *model) detectsActionWithoutTasks(response string) bool {
-	lowerResponse := strings.ToLower(response)
-
-	// Simple check for common action phrases
-	actionPhrases := []string{"let me read", "i'll read", "reading file"}
-
-	for _, phrase := range actionPhrases {
-		if strings.Contains(lowerResponse, phrase) {
-			// Check if there are actual JSON tasks
-			return !strings.Contains(response, "```json")
-		}
-	}
-
-	return false
-}
 
 // filterMisleadingStatusMessages filters out misleading status messages (simplified)
 func (m *model) filterMisleadingStatusMessages(content string) string {
@@ -1796,54 +1781,8 @@ func (m *model) filterMisleadingStatusMessages(content string) string {
 }
 
 // isInformationalResponse checks if the response is answering a question vs. indicating work to do
-func (m *model) isInformationalResponse(response string) bool {
-	lowerResponse := strings.ToLower(response)
-
-	// Signs this is an informational/Q&A response
-	qaPatterns := []string{
-		"the license", "this project uses", "according to", "based on",
-		"the answer is", "to answer your question", "in response to",
-		"the file shows", "the code shows", "looking at", "from what i can see",
-		"the current", "this appears to be", "it looks like", "it seems",
-		"the project", "the workspace", "the repository", "this codebase",
-		"currently configured", "currently set up", "currently using",
-		"here's what", "here are the", "the status is", "the configuration",
-	}
-
-	for _, pattern := range qaPatterns {
-		if strings.Contains(lowerResponse, pattern) {
-			return true
-		}
-	}
-
-	// If response is short and doesn't mention future work, it's likely complete
-	wordCount := len(strings.Fields(response))
-	if wordCount < 50 && !m.mentionsFutureWork(response) {
-		return true
-	}
-
-	return false
-}
 
 // mentionsFutureWork checks if the response indicates more work to be done
-func (m *model) mentionsFutureWork(response string) bool {
-	lowerResponse := strings.ToLower(response)
-
-	futureWorkPatterns := []string{
-		"next", "then", "after", "should", "would", "could", "let me",
-		"i'll", "i will", "going to", "plan to", "need to", "want to",
-		"we should", "we could", "we need", "might want", "may want",
-		"let's", "continuing", "proceeding", "moving forward",
-	}
-
-	for _, pattern := range futureWorkPatterns {
-		if strings.Contains(lowerResponse, pattern) {
-			return true
-		}
-	}
-
-	return false
-}
 
 // handleUserTaskEvent processes simplified user task events
 func (m model) handleUserTaskEvent(event taskPkg.UserTaskEvent) (tea.Model, tea.Cmd) {
@@ -2219,17 +2158,6 @@ func isTextOnlyResponse(response string) bool {
 }
 
 // addSystemMessage helper method to add system messages to chat
-func (m *model) addSystemMessage(message string) {
-	systemMsg := llm.Message{
-		Role:      "system",
-		Content:   message,
-		Timestamp: time.Now(),
-	}
-
-	m.chatSession.AddMessage(systemMsg)
-	m.messages = m.chatSession.GetDisplayMessages()
-	m.updateWrappedMessages()
-}
 
 // addDebugMessage helper method to add debug messages to chat when debug mode is enabled
 func (m *model) addDebugMessage(message string) {
@@ -2991,22 +2919,6 @@ func (m *model) isExplorationQuery(userInput string) bool {
 }
 
 // extractUserQuery extracts the most recent user query from chat history
-func (m *model) extractUserQuery() string {
-	messages := m.chatSession.GetMessages()
-
-	// Look for the most recent user message (not system messages)
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == "user" {
-			// Skip common commands
-			content := strings.TrimSpace(messages[i].Content)
-			if !strings.HasPrefix(content, "/") {
-				return content
-			}
-		}
-	}
-
-	return ""
-}
 
 // formatTaskResultForLLM formats task results for LLM context (hidden from user display)
 func (m *model) formatTaskResultForLLM(task *taskPkg.Task, response *taskPkg.TaskResponse) llm.Message {
@@ -3044,21 +2956,6 @@ func (m *model) formatTaskResultForLLM(task *taskPkg.Task, response *taskPkg.Tas
 }
 
 // selectCommandAutocomplete selects the highlighted command suggestion
-func (m *model) selectCommandAutocomplete() {
-	if len(m.commandAutocompleteCandidates) == 0 {
-		m.commandAutocompleteActive = false
-		return
-	}
-
-	selected := m.commandAutocompleteCandidates[m.commandAutocompleteSelectedIndex]
-
-	beforeSlash := m.input[:m.commandAutocompleteStartPos]
-	afterQuery := m.input[m.commandAutocompleteStartPos+1+len(m.commandAutocompleteQuery):]
-
-	// Insert the full selected command (which already includes the leading '/')
-	m.input = beforeSlash + selected + " " + afterQuery
-	m.commandAutocompleteActive = false
-}
 
 // getCommandCandidates returns commands matching the query prefix (case-insensitive)
 func (m *model) getCommandCandidates(query string) []string {

@@ -1,88 +1,132 @@
-context/summarization.go:306:22: unreachable func: Summarizer.IsAvailable
-debug/debug.go:11:6: unreachable func: DumpAndDie
-git/git.go:59:22: unreachable func: Repository.checkGitRepo
-git/git.go:73:22: unreachable func: Repository.loadRepositoryInfo
-git/git.go:94:22: unreachable func: Repository.GetStatus
-git/git.go:173:22: unreachable func: Repository.getAheadBehindCount
-git/git.go:201:22: unreachable func: Repository.StageFiles
-git/git.go:222:22: unreachable func: Repository.UnstageFiles
-git/git.go:243:22: unreachable func: Repository.Commit
-git/git.go:265:22: unreachable func: Repository.GetLastCommit
-git/git.go:313:22: unreachable func: Repository.IsFileIgnored
-git/git.go:331:22: unreachable func: Repository.ValidatePreConditions
-git/git.go:365:22: unreachable func: Repository.GetDiff
-git/git.go:392:22: unreachable func: Repository.GetFileAtCommit
-git/git.go:409:22: unreachable func: Repository.GetBranches
-git/git.go:435:22: unreachable func: Repository.IsGitRepository
-git/git.go:440:22: unreachable func: Repository.GetCurrentBranch
-git/git.go:445:22: unreachable func: Repository.GetRemoteURL
-git/git.go:485:6: unreachable func: NewRepository
-indexer/ripgrep.go:107:6: unreachable func: RunRipgrep
-llm/prompt.go:777:27: unreachable func: PromptEnhancer.GetConventions
-security/secrets.go:43:27: unreachable func: SecretDetector.addDefaultPatterns
-security/secrets.go:105:27: unreachable func: SecretDetector.addPattern
-security/secrets.go:116:27: unreachable func: SecretDetector.DetectAndRedact
-security/secrets.go:153:27: unreachable func: SecretDetector.getContext
-security/secrets.go:168:27: unreachable func: SecretDetector.DetectOnly
-security/secrets.go:195:27: unreachable func: SecretDetector.GetPatternCount
-security/secrets.go:200:27: unreachable func: SecretDetector.GetPatterns
-security/secrets.go:205:27: unreachable func: SecretDetector.GetPatternsByCategory
-security/secrets.go:216:27: unreachable func: SecretDetector.GetCategories
-security/secrets.go:230:32: unreachable func: RedactionResult.FormatRedactionSummary
-session/persistence.go:108:27: unreachable func: SessionManager.CreateSession
-session/persistence.go:269:27: unreachable func: SessionManager.GetLatestSession
-session/persistence.go:283:27: unreachable func: SessionManager.UpdateSessionState
-session/persistence.go:290:27: unreachable func: SessionManager.AddMessage
-session/persistence.go:305:27: unreachable func: SessionManager.SetActionPlan
-session/persistence.go:317:27: unreachable func: SessionManager.AddUndoAction
-session/persistence.go:333:27: unreachable func: SessionManager.UpdateGitStatus
-session/persistence.go:344:27: unreachable func: SessionManager.GetCurrentSession
-session/persistence.go:349:27: unreachable func: SessionManager.CleanupOldSessions
-session/persistence.go:379:27: unreachable func: SessionManager.EnableAutoSave
-session/persistence.go:384:27: unreachable func: SessionManager.SetSaveInterval
-session/persistence.go:389:27: unreachable func: SessionManager.StartAutoSave
-session/persistence.go:407:27: unreachable func: SessionManager.ExportSession
-session/persistence.go:431:27: unreachable func: SessionManager.ImportSession
-session/persistence.go:459:27: unreachable func: SessionManager.GetSessionSummary
-session/recovery.go:128:28: unreachable func: RecoveryManager.RecoverSession
-session/recovery.go:133:28: unreachable func: RecoveryManager.CreateCleanSession
-session/recovery.go:145:28: unreachable func: RecoveryManager.backupExistingSessions
-session/recovery.go:272:28: unreachable func: RecoveryManager.CleanupOldBackups
-session/recovery.go:305:28: unreachable func: RecoveryManager.GetSessionManager
-task/action_plan.go:62:30: unreachable func: ActionPlanParser.ParseActionPlan
-task/action_plan.go:105:30: unreachable func: ActionPlanParser.inferPlanDescription
-task/action_plan.go:168:30: unreachable func: ActionPlanParser.ValidateActionPlan
-task/action_plan.go:334:6: unreachable func: generatePlanID
-task/completion_detector.go:347:31: unreachable func: CompletionDetector.isObjectiveEquivalent
-task/completion_detector.go:367:31: unreachable func: CompletionDetector.normalizeObjective
-task/completion_detector.go:397:31: unreachable func: CompletionDetector.calculateObjectiveSimilarity
-task/executor.go:482:20: unreachable func: Executor.applyLineBasedEdit
-task/executor.go:593:20: unreachable func: Executor.performLineBasedEdit
-task/executor.go:1272:20: unreachable func: Executor.looksIncomplete
-task/executor.go:1336:20: unreachable func: Executor.applyTargetedEdit
-task/executor.go:1390:20: unreachable func: Executor.performTargetedEdit
-task/executor.go:1534:20: unreachable func: Executor.matchesContext
-task/executor.go:1577:20: unreachable func: Executor.applyDiffFormattedContent
-task/executor.go:1631:20: unreachable func: Executor.parseDiffFormattedContent
-task/executor.go:1954:20: unreachable func: Executor.preprocessDiffOperations
-task/sequential_manager.go:234:35: unreachable func: SequentialTaskManager.createObjectiveSettingPrompt
-task/sequential_manager.go:306:35: unreachable func: SequentialTaskManager.createSuppressedExplorationPrompt
-task/sequential_manager.go:323:35: unreachable func: SequentialTaskManager.createSynthesisPrompt
-task/staged_executor.go:30:27: unreachable func: StagedExecutor.PrepareActionPlan
-task/staged_executor.go:82:27: unreachable func: StagedExecutor.stageEdit
-task/staged_executor.go:157:27: unreachable func: StagedExecutor.ApplyActionPlan
-task/staged_executor.go:190:27: unreachable func: StagedExecutor.applyStagedEdit
-task/staged_executor.go:224:27: unreachable func: StagedExecutor.GetStagingPreview
-task/staged_executor.go:264:27: unreachable func: StagedExecutor.UndoActionPlan
-task/staged_executor.go:281:27: unreachable func: StagedExecutor.restoreFromBackup
-task/staged_executor.go:307:27: unreachable func: StagedExecutor.CleanupActionPlan
-task/staged_executor.go:319:27: unreachable func: StagedExecutor.calculateContentHash
-task/staged_executor.go:325:27: unreachable func: StagedExecutor.createBackupPath
-task/staged_executor.go:337:27: unreachable func: StagedExecutor.ValidateStagedEdits
-task/staged_executor.go:362:27: unreachable func: StagedExecutor.GetActionPlanSummary
-tui/tui.go:1700:17: unreachable func: model.detectsActionWithoutTasks
-tui/tui.go:1724:17: unreachable func: model.isInformationalResponse
-tui/tui.go:1754:17: unreachable func: model.mentionsFutureWork
-tui/tui.go:2090:17: unreachable func: model.addSystemMessage
-tui/tui.go:2838:17: unreachable func: model.extractUserQuery
-tui/tui.go:2891:17: unreachable func: model.selectCommandAutocomplete
+debug/debug.go:11
+debug/debug.go:21
+git/git.go:59
+git/git.go:73
+git/git.go:94
+git/git.go:173
+git/git.go:201
+git/git.go:222
+git/git.go:243
+git/git.go:265
+git/git.go:313
+git/git.go:331
+git/git.go:365
+git/git.go:392
+git/git.go:409
+git/git.go:435
+git/git.go:440
+git/git.go:445
+git/git.go:485
+indexer/ripgrep.go:107
+llm/prompt.go:668
+session/persistence.go:112
+session/persistence.go:273
+session/persistence.go:287
+session/persistence.go:294
+session/persistence.go:309
+session/persistence.go:321
+session/persistence.go:337
+session/persistence.go:348
+session/persistence.go:353
+session/persistence.go:383
+session/persistence.go:388
+session/persistence.go:393
+session/persistence.go:411
+session/persistence.go:435
+session/persistence.go:463
+session/recovery.go:128
+session/recovery.go:133
+session/recovery.go:145
+session/recovery.go:272
+session/recovery.go:305
+shared/events/event_bus.go:66
+shared/events/event_bus.go:76
+shared/events/event_bus.go:84
+shared/events/event_bus.go:92
+shared/events/event_bus.go:117
+shared/events/event_bus.go:124
+shared/events/event_bus.go:129
+shared/events/event_bus.go:134
+shared/events/event_bus.go:139
+shared/events/event_bus.go:144
+shared/events/event_bus.go:151
+shared/services/chat_service.go:57
+shared/services/chat_service.go:145
+shared/services/chat_service.go:182
+shared/services/chat_service.go:233
+shared/services/chat_service.go:359
+shared/services/chat_service.go:370
+shared/services/chat_service.go:383
+shared/services/chat_service.go:400
+shared/services/chat_service.go:435
+shared/services/chat_service.go:441
+shared/services/chat_service.go:446
+shared/services/chat_service.go:465
+shared/services/chat_service.go:489
+shared/services/chat_service.go:507
+shared/services/chat_service.go:520
+shared/services/chat_service.go:561
+shared/services/chat_service.go:615
+shared/services/chat_service.go:665
+shared/services/chat_service.go:673
+shared/services/chat_service.go:709
+shared/services/chat_service.go:723
+shared/services/chat_service.go:746
+shared/services/chat_service.go:789
+shared/services/file_service.go:24
+shared/services/file_service.go:33
+shared/services/file_service.go:94
+shared/services/file_service.go:119
+shared/services/file_service.go:138
+shared/services/file_service.go:158
+shared/services/file_service.go:185
+shared/services/file_service.go:209
+shared/services/file_service.go:233
+shared/services/task_service.go:34
+shared/services/task_service.go:55
+shared/services/task_service.go:89
+shared/services/task_service.go:120
+shared/services/task_service.go:148
+shared/services/task_service.go:160
+shared/services/task_service.go:199
+shared/services/task_service.go:229
+shared/services/task_service.go:243
+shared/services/task_service.go:275
+task/action_plan.go:62
+task/action_plan.go:105
+task/action_plan.go:168
+task/action_plan.go:334
+task/completion_detector.go:566
+task/completion_detector.go:586
+task/completion_detector.go:616
+task/executor.go:582
+task/executor.go:693
+task/executor.go:1366
+task/executor.go:1430
+task/executor.go:1484
+task/executor.go:1628
+task/executor.go:1671
+task/executor.go:1725
+task/executor.go:2235
+task/manager.go:579
+task/sequential_manager.go:234
+task/sequential_manager.go:308
+task/sequential_manager.go:325
+task/staged_executor.go:30
+task/staged_executor.go:82
+task/staged_executor.go:157
+task/staged_executor.go:190
+task/staged_executor.go:224
+task/staged_executor.go:264
+task/staged_executor.go:281
+task/staged_executor.go:307
+task/staged_executor.go:319
+task/staged_executor.go:325
+task/staged_executor.go:337
+task/staged_executor.go:362
+tui/tui.go:1775
+tui/tui.go:1799
+tui/tui.go:1829
+tui/tui.go:2222
+tui/tui.go:2994
+tui/tui.go:3047

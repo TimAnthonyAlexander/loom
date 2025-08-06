@@ -563,95 +563,10 @@ func (cd *CompletionDetector) ValidateObjectiveConsistency(response string) *Obj
 }
 
 // isObjectiveEquivalent checks if two objectives are semantically equivalent
-func (cd *CompletionDetector) isObjectiveEquivalent(original, new string) bool {
-	// Normalize objectives for comparison
-	orig := cd.normalizeObjective(original)
-	newObj := cd.normalizeObjective(new)
-
-	// Exact match
-	if orig == newObj {
-		return true
-	}
-
-	// Check if new objective is just a minor rewording of the original
-	// Calculate similarity based on shared keywords
-	similarity := cd.calculateObjectiveSimilarity(orig, newObj)
-
-	// Consider objectives equivalent if they're 80% similar
-	// This allows for minor rewording but catches scope changes
-	return similarity >= 0.8
-}
 
 // normalizeObjective normalizes an objective for comparison
-func (cd *CompletionDetector) normalizeObjective(objective string) string {
-	// Convert to lowercase and remove common variations
-	normalized := strings.ToLower(strings.TrimSpace(objective))
-
-	// Remove common prefixes that don't change meaning
-	prefixesToRemove := []string{
-		"to ", "i will ", "i'll ", "let me ", "first, ", "now ", "currently ", "next, ",
-	}
-
-	for _, prefix := range prefixesToRemove {
-		if strings.HasPrefix(normalized, prefix) {
-			normalized = strings.TrimSpace(normalized[len(prefix):])
-		}
-	}
-
-	// Remove common suffixes
-	suffixesToRemove := []string{
-		" completely", " thoroughly", " carefully", " properly", " correctly",
-	}
-
-	for _, suffix := range suffixesToRemove {
-		if strings.HasSuffix(normalized, suffix) {
-			normalized = strings.TrimSpace(normalized[:len(normalized)-len(suffix)])
-		}
-	}
-
-	return normalized
-}
 
 // calculateObjectiveSimilarity calculates similarity between two objectives (0.0 to 1.0)
-func (cd *CompletionDetector) calculateObjectiveSimilarity(obj1, obj2 string) float64 {
-	words1 := strings.Fields(obj1)
-	words2 := strings.Fields(obj2)
-
-	if len(words1) == 0 && len(words2) == 0 {
-		return 1.0
-	}
-
-	if len(words1) == 0 || len(words2) == 0 {
-		return 0.0
-	}
-
-	// Count shared words
-	wordSet1 := make(map[string]bool)
-	for _, word := range words1 {
-		wordSet1[word] = true
-	}
-
-	sharedWords := 0
-	for _, word := range words2 {
-		if wordSet1[word] {
-			sharedWords++
-		}
-	}
-
-	// Calculate Jaccard similarity
-	totalUniqueWords := len(wordSet1)
-	for _, word := range words2 {
-		if !wordSet1[word] {
-			totalUniqueWords++
-		}
-	}
-
-	if totalUniqueWords == 0 {
-		return 1.0
-	}
-
-	return float64(sharedWords) / float64(totalUniqueWords)
-}
 
 // GetObjectiveStatus returns the current objective tracking status
 func (cd *CompletionDetector) GetObjectiveStatus() (string, bool, int) {

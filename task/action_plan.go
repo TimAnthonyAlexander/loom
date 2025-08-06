@@ -1,7 +1,6 @@
 package task
 
 import (
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -59,151 +58,10 @@ type ActionPlanParser struct {
 // NewActionPlanParser creates a new action plan parser
 
 // ParseActionPlan extracts an action plan from LLM response text
-func (app *ActionPlanParser) ParseActionPlan(text string) (*ActionPlan, error) {
-	// First check for explicit action plan blocks
-	matches := app.planRegex.FindAllStringSubmatch(text, -1)
-	if len(matches) > 0 {
-		var plan ActionPlan
-		if err := json.Unmarshal([]byte(matches[0][1]), &plan); err != nil {
-			return nil, fmt.Errorf("failed to parse action plan JSON: %w", err)
-		}
-
-		// Set defaults
-		if plan.ID == "" {
-			plan.ID = generatePlanID()
-		}
-		if plan.CreatedAt.IsZero() {
-			plan.CreatedAt = time.Now()
-		}
-		if plan.Status == "" {
-			plan.Status = "planned"
-		}
-
-		return &plan, nil
-	}
-
-	// Fallback: Parse regular task blocks and auto-create an action plan
-	taskList, err := ParseTasks(text)
-	if err != nil || taskList == nil || len(taskList.Tasks) < 2 {
-		return nil, nil // Not an action plan, just regular tasks or single task
-	}
-
-	// Create an implicit action plan from multiple tasks
-	plan := &ActionPlan{
-		ID:          generatePlanID(),
-		Title:       "Multi-file Operation",
-		Description: app.inferPlanDescription(taskList.Tasks),
-		Tasks:       taskList.Tasks,
-		CreatedAt:   time.Now(),
-		Status:      "planned",
-	}
-
-	return plan, nil
-}
 
 // inferPlanDescription creates a description based on the tasks in the plan
-func (app *ActionPlanParser) inferPlanDescription(tasks []Task) string {
-	editCount := 0
-	readCount := 0
-	shellCount := 0
-	files := make(map[string]bool)
-
-	for _, task := range tasks {
-		switch task.Type {
-		case TaskTypeEditFile:
-			editCount++
-			files[task.Path] = true
-		case TaskTypeReadFile:
-			readCount++
-		case TaskTypeRunShell:
-			shellCount++
-		}
-	}
-
-	var desc strings.Builder
-
-	if editCount > 0 {
-		if editCount == 1 {
-			desc.WriteString("Edit 1 file")
-		} else {
-			desc.WriteString(fmt.Sprintf("Edit %d files", editCount))
-		}
-
-		if len(files) > 0 {
-			fileList := make([]string, 0, len(files))
-			for file := range files {
-				fileList = append(fileList, file)
-			}
-			if len(fileList) <= 3 {
-				desc.WriteString(fmt.Sprintf(": %s", strings.Join(fileList, ", ")))
-			} else {
-				desc.WriteString(fmt.Sprintf(": %s and %d more",
-					strings.Join(fileList[:3], ", "), len(fileList)-3))
-			}
-		}
-	}
-
-	if readCount > 0 {
-		if desc.Len() > 0 {
-			desc.WriteString("; ")
-		}
-		desc.WriteString(fmt.Sprintf("read %d files", readCount))
-	}
-
-	if shellCount > 0 {
-		if desc.Len() > 0 {
-			desc.WriteString("; ")
-		}
-		desc.WriteString(fmt.Sprintf("run %d commands", shellCount))
-	}
-
-	if desc.Len() == 0 {
-		return "Multi-file operation"
-	}
-
-	return desc.String()
-}
 
 // ValidateActionPlan validates an action plan for consistency and safety
-func (app *ActionPlanParser) ValidateActionPlan(plan *ActionPlan) error {
-	if plan.ID == "" {
-		return fmt.Errorf("action plan missing ID")
-	}
-
-	if len(plan.Tasks) == 0 {
-		return fmt.Errorf("action plan has no tasks")
-	}
-
-	// Validate individual tasks
-	for i, task := range plan.Tasks {
-		if err := validateTask(&task); err != nil {
-			return fmt.Errorf("task %d invalid: %w", i, err)
-		}
-	}
-
-	// Check for conflicting file operations
-	fileOps := make(map[string][]TaskType)
-	for _, task := range plan.Tasks {
-		if task.Path != "" {
-			fileOps[task.Path] = append(fileOps[task.Path], task.Type)
-		}
-	}
-
-	for file, ops := range fileOps {
-		editCount := 0
-		for _, op := range ops {
-			if op == TaskTypeEditFile {
-				editCount++
-			}
-		}
-
-		if editCount > 1 {
-			return fmt.Errorf("multiple edit operations on file %s not supported in single action plan", file)
-		}
-	}
-
-	return nil
-}
 
 // RequiresApproval checks if the action plan requires user approval
 func (plan *ActionPlan) RequiresApproval() bool {
@@ -329,8 +187,4 @@ func (plan *ActionPlan) GetImplementationTasks() []Task {
 	}
 
 	return implTasks
-}
-
-func generatePlanID() string {
-	return fmt.Sprintf("plan_%d", time.Now().UnixNano())
 }

@@ -576,62 +576,6 @@ func (m *Manager) ContinueRecursiveChat(ctx context.Context, execution *TaskExec
 }
 
 // formatTaskResult formats a task result for the chat context (user-friendly display)
-func (m *Manager) formatTaskResult(task *Task, response *TaskResponse) string {
-	var result strings.Builder
-
-	// For ReadFile tasks, show minimal user-friendly messages
-	if task.Type == TaskTypeReadFile {
-		if response.Success {
-			result.WriteString(fmt.Sprintf("✅ %s\n", response.Output))
-		} else {
-			result.WriteString(fmt.Sprintf("❌ Failed to read %s\n", task.Path))
-			if response.Error != "" {
-				result.WriteString(fmt.Sprintf("💥 Error: %s\n", response.Error))
-			}
-		}
-		return result.String()
-	}
-
-	// For other task types, use the existing detailed format
-	result.WriteString(fmt.Sprintf("🔧 Task Result: %s\n", task.Description()))
-
-	if response.Success {
-		result.WriteString("✅ Status: Success\n")
-		if response.Approved {
-			result.WriteString("👍 User approved changes\n")
-		}
-		// Show command or operation output (trimmed to avoid flooding chat)
-		if response.Output != "" {
-			trimmed := response.Output
-			const maxLen = 500
-			if len(trimmed) > maxLen {
-				trimmed = trimmed[:maxLen] + "… (truncated)"
-			}
-			result.WriteString("📄 Output:\n")
-			result.WriteString(trimmed + "\n")
-		}
-		// Add verification text for edit operations
-		if response.VerificationText != "" {
-			result.WriteString(response.VerificationText + "\n")
-		}
-	} else {
-		result.WriteString("❌ Status: Failed\n")
-		if response.Error != "" {
-			result.WriteString(fmt.Sprintf("💥 Error: %s\n", response.Error))
-		}
-		if response.Output != "" {
-			trimmed := response.Output
-			const maxLen = 500
-			if len(trimmed) > maxLen {
-				trimmed = trimmed[:maxLen] + "… (truncated)"
-			}
-			result.WriteString("📄 Output (partial):\n")
-			result.WriteString(trimmed + "\n")
-		}
-	}
-
-	return result.String()
-}
 
 // formatTaskResultForLLM formats task results for LLM context (includes actual content)
 func (m *Manager) formatTaskResultForLLM(task *Task, response *TaskResponse) string {

@@ -109,28 +109,6 @@ func NewSessionManager(workspacePath string) (*SessionManager, error) {
 }
 
 // CreateSession creates a new session
-func (sm *SessionManager) CreateSession() *SessionState {
-	sessionID := fmt.Sprintf("session_%d", time.Now().UnixNano())
-
-	session := &SessionState{
-		SessionID:        sessionID,
-		WorkspacePath:    sm.workspacePath,
-		CreatedAt:        time.Now(),
-		LastSaved:        time.Now(),
-		Version:          "5.0.0", // Milestone 5
-		Messages:         make([]llm.Message, 0),
-		CurrentView:      "chat",
-		TaskHistory:      make([]string, 0),
-		UndoActions:      make([]*undo.UndoAction, 0),
-		EnableShell:      false,
-		MaxFileSize:      512000,
-		MaxContextTokens: 6000,
-		EnableTestFirst:  false,
-	}
-
-	sm.currentSession = session
-	return session
-}
 
 // LoadSession loads a session from disk
 func (sm *SessionManager) LoadSession(sessionID string) (*SessionState, error) {
@@ -270,219 +248,32 @@ func (sm *SessionManager) GetRecoverableSessions() ([]RecoveryInfo, error) {
 }
 
 // GetLatestSession returns the most recently saved session
-func (sm *SessionManager) GetLatestSession() (*SessionState, error) {
-	recoverable, err := sm.GetRecoverableSessions()
-	if err != nil {
-		return nil, err
-	}
-
-	if len(recoverable) == 0 {
-		return nil, fmt.Errorf("no recoverable sessions found")
-	}
-
-	return sm.LoadSession(recoverable[0].SessionID)
-}
 
 // UpdateSessionState updates the current session state
-func (sm *SessionManager) UpdateSessionState(updates func(*SessionState)) {
-	if sm.currentSession != nil {
-		updates(sm.currentSession)
-	}
-}
 
 // AddMessage adds a message to the current session
-func (sm *SessionManager) AddMessage(message llm.Message) {
-	if sm.currentSession != nil {
-		sm.currentSession.Messages = append(sm.currentSession.Messages, message)
-
-		// Auto-save if enabled
-		if sm.autoSaveEnabled {
-			go func() {
-				time.Sleep(1 * time.Second) // Debounce saves
-				sm.SaveSession()
-			}()
-		}
-	}
-}
 
 // SetActionPlan sets the current action plan in the session
-func (sm *SessionManager) SetActionPlan(plan *task.ActionPlan, execution *task.ActionPlanExecution) {
-	if sm.currentSession != nil {
-		sm.currentSession.CurrentActionPlan = plan
-		sm.currentSession.PlanExecution = execution
-
-		if sm.autoSaveEnabled {
-			go sm.SaveSession()
-		}
-	}
-}
 
 // AddUndoAction adds an undo action to the session
-func (sm *SessionManager) AddUndoAction(action *undo.UndoAction) {
-	if sm.currentSession != nil {
-		sm.currentSession.UndoActions = append(sm.currentSession.UndoActions, action)
-
-		// Keep only the last 50 undo actions
-		if len(sm.currentSession.UndoActions) > 50 {
-			sm.currentSession.UndoActions = sm.currentSession.UndoActions[len(sm.currentSession.UndoActions)-50:]
-		}
-
-		if sm.autoSaveEnabled {
-			go sm.SaveSession()
-		}
-	}
-}
 
 // UpdateGitStatus updates the Git status in the session
-func (sm *SessionManager) UpdateGitStatus(status *git.RepositoryStatus) {
-	if sm.currentSession != nil {
-		sm.currentSession.GitStatus = status
-
-		if sm.autoSaveEnabled {
-			go sm.SaveSession()
-		}
-	}
-}
 
 // GetCurrentSession returns the current session state
-func (sm *SessionManager) GetCurrentSession() *SessionState {
-	return sm.currentSession
-}
 
 // CleanupOldSessions removes sessions older than the specified duration
-func (sm *SessionManager) CleanupOldSessions(maxAge time.Duration) error {
-	files, err := os.ReadDir(sm.projectPaths.SessionsDir())
-	if err != nil {
-		return fmt.Errorf("failed to read session directory: %w", err)
-	}
-
-	cutoff := time.Now().Add(-maxAge)
-
-	for _, file := range files {
-		if !file.IsDir() && filepath.Ext(file.Name()) == ".json" {
-			info, err := file.Info()
-			if err != nil {
-				continue
-			}
-
-			if info.ModTime().Before(cutoff) {
-				sessionFile := filepath.Join(sm.projectPaths.SessionsDir(), file.Name())
-				os.Remove(sessionFile) // Ignore errors
-
-				// Also remove safe version
-				safeFile := strings.Replace(sessionFile, ".json", ".safe.json", 1)
-				os.Remove(safeFile) // Ignore errors
-			}
-		}
-	}
-
-	return nil
-}
 
 // EnableAutoSave enables or disables automatic session saving
-func (sm *SessionManager) EnableAutoSave(enabled bool) {
-	sm.autoSaveEnabled = enabled
-}
 
 // SetSaveInterval sets the auto-save interval
-func (sm *SessionManager) SetSaveInterval(interval time.Duration) {
-	sm.saveInterval = interval
-}
 
 // StartAutoSave starts the auto-save routine
-func (sm *SessionManager) StartAutoSave() {
-	if !sm.autoSaveEnabled {
-		return
-	}
-
-	go func() {
-		ticker := time.NewTicker(sm.saveInterval)
-		defer ticker.Stop()
-
-		for range ticker.C {
-			if sm.currentSession != nil {
-				sm.SaveSession() // Ignore errors in background save
-			}
-		}
-	}()
-}
 
 // ExportSession exports a session to a file for backup or sharing
-func (sm *SessionManager) ExportSession(sessionID, exportPath string) error {
-	session, err := sm.LoadSession(sessionID)
-	if err != nil {
-		return fmt.Errorf("failed to load session: %w", err)
-	}
-
-	// Create a sanitized export version
-	exportSession := *session
-	exportSession.APIKey = ""        // Remove API key for security
-	exportSession.WorkspacePath = "" // Remove workspace path for portability
-
-	data, err := json.MarshalIndent(&exportSession, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal export session: %w", err)
-	}
-
-	if err := os.WriteFile(exportPath, data, 0644); err != nil {
-		return fmt.Errorf("failed to write export file: %w", err)
-	}
-
-	return nil
-}
 
 // ImportSession imports a session from an exported file
-func (sm *SessionManager) ImportSession(importPath string) (*SessionState, error) {
-	data, err := os.ReadFile(importPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read import file: %w", err)
-	}
-
-	var session SessionState
-	if err := json.Unmarshal(data, &session); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal import session: %w", err)
-	}
-
-	// Update session for current workspace
-	session.SessionID = fmt.Sprintf("imported_%d", time.Now().UnixNano())
-	session.WorkspacePath = sm.workspacePath
-	session.CreatedAt = time.Now()
-	session.LastSaved = time.Now()
-
-	sm.currentSession = &session
-
-	// Save the imported session
-	if err := sm.SaveSession(); err != nil {
-		return nil, fmt.Errorf("failed to save imported session: %w", err)
-	}
-
-	return &session, nil
-}
 
 // GetSessionSummary returns a summary of the current session
-func (sm *SessionManager) GetSessionSummary() string {
-	if sm.currentSession == nil {
-		return "No active session"
-	}
-
-	session := sm.currentSession
-
-	summary := fmt.Sprintf("Session: %s\n", session.SessionID)
-	summary += fmt.Sprintf("Created: %s\n", session.CreatedAt.Format("2006-01-02 15:04:05"))
-	summary += fmt.Sprintf("Last Saved: %s\n", session.LastSaved.Format("2006-01-02 15:04:05"))
-	summary += fmt.Sprintf("Messages: %d\n", len(session.Messages))
-	summary += fmt.Sprintf("Undo Actions: %d\n", len(session.UndoActions))
-
-	if session.CurrentActionPlan != nil {
-		summary += fmt.Sprintf("Active Plan: %s\n", session.CurrentActionPlan.Title)
-	}
-
-	if session.GitStatus != nil {
-		summary += fmt.Sprintf("Git Status: %s\n", session.GitStatus.FormatStatus())
-	}
-
-	return summary
-}
 
 // DetectIncompleteSession checks if a session has incomplete operations
 func (sm *SessionManager) DetectIncompleteSession(sessionID string) (*RecoveryState, error) {

@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"loom/llm"
 	"loom/paths"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -125,50 +123,10 @@ func (rm *RecoveryManager) AutoRecover() (*SessionState, error) {
 }
 
 // RecoverSession manually recovers a specific session
-func (rm *RecoveryManager) RecoverSession(sessionID string) (*SessionState, error) {
-	return rm.sessionMgr.RecoverSession(sessionID)
-}
 
 // CreateCleanSession creates a new session after backing up any existing sessions
-func (rm *RecoveryManager) CreateCleanSession() (*SessionState, error) {
-	// Backup any existing sessions first
-	if err := rm.backupExistingSessions(); err != nil {
-		// Log warning but don't fail
-		fmt.Printf("Warning: failed to backup existing sessions: %v\n", err)
-	}
-
-	// Create new session
-	return rm.sessionMgr.CreateSession(), nil
-}
 
 // backupExistingSessions creates backups of existing sessions
-func (rm *RecoveryManager) backupExistingSessions() error {
-	recoverable, err := rm.sessionMgr.GetRecoverableSessions()
-	if err != nil {
-		return err
-	}
-
-	// Ensure backup directory exists
-	if err := os.MkdirAll(rm.projectPaths.BackupsDir(), 0755); err != nil {
-		return fmt.Errorf("failed to create backup directory: %w", err)
-	}
-
-	timestamp := time.Now().Format("20060102_150405")
-
-	for _, sessionInfo := range recoverable {
-		// Only backup recent sessions (last 7 days)
-		if time.Since(sessionInfo.LastSaved) > 7*24*time.Hour {
-			continue
-		}
-
-		backupPath := filepath.Join(rm.projectPaths.BackupsDir(), fmt.Sprintf("%s_%s.backup", sessionInfo.SessionID, timestamp))
-		if err := rm.sessionMgr.ExportSession(sessionInfo.SessionID, backupPath); err != nil {
-			fmt.Printf("Warning: failed to backup session %s: %v\n", sessionInfo.SessionID, err)
-		}
-	}
-
-	return nil
-}
 
 // GenerateRecoveryReport creates a human-readable recovery report
 func (rm *RecoveryManager) GenerateRecoveryReport(options *RecoveryOptions) string {
@@ -269,39 +227,5 @@ func (rm *RecoveryManager) AddRecoveryMessage(session *SessionState, recoveryTyp
 }
 
 // CleanupOldBackups removes old backup files
-func (rm *RecoveryManager) CleanupOldBackups(olderThan time.Duration) error {
-	backupDir := rm.projectPaths.BackupsDir()
-
-	files, err := os.ReadDir(backupDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil // No backup directory exists
-		}
-		return fmt.Errorf("failed to read backup directory: %w", err)
-	}
-
-	cutoff := time.Now().Add(-olderThan)
-
-	for _, file := range files {
-		if !file.IsDir() && strings.HasSuffix(file.Name(), ".backup") {
-			info, err := file.Info()
-			if err != nil {
-				continue
-			}
-
-			if info.ModTime().Before(cutoff) {
-				backupPath := filepath.Join(backupDir, file.Name())
-				if err := os.Remove(backupPath); err != nil {
-					fmt.Printf("Warning: failed to remove old backup %s: %v\n", file.Name(), err)
-				}
-			}
-		}
-	}
-
-	return nil
-}
 
 // GetSessionManager returns the underlying session manager
-func (rm *RecoveryManager) GetSessionManager() *SessionManager {
-	return rm.sessionMgr
-}

@@ -665,6 +665,3 @@ func (pe *PromptEnhancer) readFileContent(filePath string) string {
 }
 
 // GetConventions returns the detected project conventions
-func (pe *PromptEnhancer) GetConventions() *ProjectConventions {
-	return pe.conventions
-}
