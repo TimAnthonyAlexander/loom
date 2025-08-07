@@ -100,7 +100,8 @@ func New(config Config) (engine.LLM, error) {
 		if config.APIKey == "" {
 			return nil, errors.New("Anthropic API key not set. Set the ANTHROPIC_API_KEY environment variable")
 		}
-		fmt.Printf("DEBUG: Creating Anthropic client with key: %s...\n", safeSubstring(config.APIKey, 10))
+		fmt.Printf("DEBUG: Creating Anthropic client with key: %s... and model: %s\n",
+			safeSubstring(config.APIKey, 10), config.Model)
 		return anthropic.New(config.APIKey, config.Model), nil
 
 	case ProviderOllama:

@@ -36,14 +36,14 @@ type ToolUse struct {
 // New creates a new Anthropic Claude client.
 func New(apiKey string, model string) *Client {
 	if model == "" {
-		model = "claude:claude-sonnet-4-20250514" // Default model
+		model = "claude-sonnet-4-20250514" // Default model
 	}
 
 	return &Client{
 		apiKey:     apiKey,
 		model:      model,
 		endpoint:   "https://api.anthropic.com/v1/messages",
-		apiVersion: "2025-06-01",
+		apiVersion: "", // No API version needed for Anthropic
 		httpClient: &http.Client{
 			Timeout: 120 * time.Second,
 		},
@@ -81,6 +81,8 @@ func (c *Client) Chat(
 	claudeTools := convertTools(tools)
 
 	// Prepare the request body
+	// Use the model ID as is, without any provider prefix
+	// Anthropic expects model IDs like "claude-opus-4-20250514"
 	requestBody := map[string]interface{}{
 		"model":       c.model,
 		"messages":    claudeMessages,
@@ -116,7 +118,11 @@ func (c *Client) Chat(
 		fmt.Printf("DEBUG: Using Anthropic API key: %s...\n", c.apiKey[:min(10, len(c.apiKey))])
 		// Anthropic requires 'x-api-key' header, not 'Authorization'
 		req.Header.Set("x-api-key", c.apiKey)
-		req.Header.Set("anthropic-version", c.apiVersion)
+
+		// Only set API version if specified
+		if c.apiVersion != "" {
+			req.Header.Set("anthropic-version", c.apiVersion)
+		}
 
 		// Make the request
 		resp, err := c.httpClient.Do(req)
@@ -131,7 +137,7 @@ func (c *Client) Chat(
 			// Log or handle non-200 status with improved error message
 			errorResponse, _ := io.ReadAll(resp.Body)
 			fmt.Printf("Anthropic API error (status %d): %s\n", resp.StatusCode, errorResponse)
-			fmt.Printf("Debug: Request sent to: %s with API version: %s\n", c.endpoint, c.apiVersion)
+			fmt.Printf("Debug: Request sent to: %s with model: %s\n", c.endpoint, c.model)
 			return
 		}
 
