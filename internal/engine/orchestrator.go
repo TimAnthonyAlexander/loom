@@ -174,10 +174,29 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 		return errors.New("tool registry not initialized")
 	}
 
-	convo := e.memory.StartConversation() // load history & summaries
-	convo.AddUser(userMsg)                // add latest user message
+	// Fetch tool schemas for prompt generation and tool calling
+	toolSchemas := e.tools.Schemas()
 
-	tools := e.tools.Schemas() // get all tool specs
+	// Start or load conversation
+	convo := e.memory.StartConversation() // load history & summaries
+
+	// Inject a system prompt once at the beginning of the conversation
+	hasSystem := false
+	for _, msg := range convo.History() {
+		if msg.Role == "system" && msg.Content != "" {
+			hasSystem = true
+			break
+		}
+	}
+	if !hasSystem {
+		convo.AddSystem(GenerateSystemPrompt(toolSchemas))
+	}
+
+	// Add latest user message
+	convo.AddUser(userMsg)
+
+	// Prepare tool schemas for the adapter
+	tools := toolSchemas // get all tool specs
 
 	// Set up the adapter (LLM)
 	adapter := e.llm

@@ -47,7 +47,7 @@ func (c *Client) WithEndpoint(endpoint string) *Client {
 
 // isReasoningModel checks if the model is an o-series reasoning model (o3, o3-mini, o4-mini)
 func isReasoningModel(model string) bool {
-	reasoningModels := []string{"o3", "o3-mini", "o4-mini"}
+	reasoningModels := []string{"o3", "o3-mini", "o4-mini", "gpt-5"}
 	for _, m := range reasoningModels {
 		if model == m || strings.HasPrefix(model, m+"-") {
 			return true
