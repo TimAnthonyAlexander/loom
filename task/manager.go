@@ -136,7 +136,7 @@ func (m *Manager) HandleLLMResponse(llmResponse string, userEventChan chan<- Use
 		fmt.Printf("DEBUG TASK: No tasks found to execute\n")
 		return nil, nil
 	}
-	
+
 	// Create execution session
 	execution := &TaskExecution{
 		Tasks:     taskList.Tasks,
@@ -152,93 +152,43 @@ func (m *Manager) HandleLLMResponse(llmResponse string, userEventChan chan<- Use
 		taskID := uuid.New().String()
 
 		// Send simplified user event with task-specific messaging
-			var userMessage string
-			if currentTask.Type == TaskTypeReadFile {
-				userMessage = fmt.Sprintf("📖 Reading %s...", currentTask.Path)
-			} else {
-				userMessage = fmt.Sprintf("Executing %s...", m.getSimpleTaskDescription(&currentTask))
-			}
+		var userMessage string
+		if currentTask.Type == TaskTypeReadFile {
+			userMessage = fmt.Sprintf("📖 Reading %s...", currentTask.Path)
+		} else {
+			userMessage = fmt.Sprintf("Executing %s...", m.getSimpleTaskDescription(&currentTask))
+		}
 
+		userEventChan <- UserTaskEvent{
+			TaskID:      taskID,
+			Type:        "started",
+			Message:     userMessage,
+			TaskType:    string(currentTask.Type),
+			Description: m.getSimpleTaskDescription(&currentTask),
+			Progress:    float64(i) / float64(len(execution.Tasks)),
+			Timestamp:   time.Now(),
+		}
+
+		// Send detailed event for internal processing if channel exists
+		if detailedEventChan != nil {
+			detailedEventChan <- TaskExecutionEvent{
+				Type:      "task_started",
+				Task:      &currentTask,
+				Execution: execution,
+				Message:   fmt.Sprintf("Executing task %d/%d: %s", i+1, len(execution.Tasks), currentTask.Description()),
+			}
+		}
+
+		// Execute the task
+		response := m.executor.Execute(&currentTask)
+		execution.Responses = append(execution.Responses, *response)
+
+		if !response.Success {
+			// Send simplified user event for task failure
 			userEventChan <- UserTaskEvent{
 				TaskID:      taskID,
-				Type:        "started",
-				Message:     userMessage,
-				TaskType:    string(currentTask.Type),
-				Description: m.getSimpleTaskDescription(&currentTask),
-				Progress:    float64(i) / float64(len(execution.Tasks)),
-				Timestamp:   time.Now(),
-			}
-
-			// Send detailed event for internal processing if channel exists
-			if detailedEventChan != nil {
-				detailedEventChan <- TaskExecutionEvent{
-					Type:      "task_started",
-					Task:      &currentTask,
-					Execution: execution,
-					Message:   fmt.Sprintf("Executing task %d/%d: %s", i+1, len(execution.Tasks), currentTask.Description()),
-				}
-			}
-
-			// Execute the task
-			response := m.executor.Execute(&currentTask)
-			execution.Responses = append(execution.Responses, *response)
-
-			if !response.Success {
-				// Send simplified user event for task failure
-				userEventChan <- UserTaskEvent{
-					TaskID:      taskID,
-					Type:        "failed",
-					Message:     fmt.Sprintf("Failed: %s", m.getSimpleTaskDescription(&currentTask)),
-					TaskType:    string(currentTask.Type),
-					Description: m.getSimpleTaskDescription(&currentTask),
-					Progress:    float64(i+1) / float64(len(execution.Tasks)),
-					Timestamp:   time.Now(),
-				}
-
-				// Send detailed event for internal processing if channel exists
-				if detailedEventChan != nil {
-					detailedEventChan <- TaskExecutionEvent{
-						Type:      "task_failed",
-						Task:      &currentTask,
-						Response:  response,
-						Execution: execution,
-						Message:   fmt.Sprintf("Task failed: %s", response.Error),
-					}
-				}
-
-				// CRITICAL FIX: Add failed task result to chat so LLM can see the error
-				taskResultMessage := llm.Message{
-					Role:      "user",
-					Content:   m.formatTaskResultForLLM(&currentTask, response),
-					Timestamp: time.Now(),
-					Visible:   false, // Hidden from UI as it's a system task result
-				}
-
-				if err := m.chatSession.AddMessage(taskResultMessage); err != nil {
-					fmt.Printf("Warning: failed to add failed task result to chat: %v\n", err)
-				}
-
-				// Continue with other tasks or stop based on configuration
-				continue
-			}
-
-			// Send simplified user event for task completion with task-specific messaging
-			var completionMessage string
-			if currentTask.Type == TaskTypeReadFile && response.Success {
-				// Extract line count from output for user feedback
-				if strings.Contains(response.Output, " lines)") {
-					completionMessage = fmt.Sprintf("✅ Read %s successfully", currentTask.Path)
-				} else {
-					completionMessage = response.Output // Use the formatted output message
-				}
-			} else {
-				completionMessage = fmt.Sprintf("Completed: %s", m.getSimpleTaskDescription(&currentTask))
-			}
-
-			userEventChan <- UserTaskEvent{
-				TaskID:      taskID,
-				Type:        "completed",
-				Message:     completionMessage,
+				Type:        "failed",
+				Message:     fmt.Sprintf("Failed: %s", m.getSimpleTaskDescription(&currentTask)),
 				TaskType:    string(currentTask.Type),
 				Description: m.getSimpleTaskDescription(&currentTask),
 				Progress:    float64(i+1) / float64(len(execution.Tasks)),
@@ -248,231 +198,102 @@ func (m *Manager) HandleLLMResponse(llmResponse string, userEventChan chan<- Use
 			// Send detailed event for internal processing if channel exists
 			if detailedEventChan != nil {
 				detailedEventChan <- TaskExecutionEvent{
-					Type:      "task_completed",
+					Type:      "task_failed",
 					Task:      &currentTask,
 					Response:  response,
 					Execution: execution,
-					Message:   fmt.Sprintf("Task completed: %s", currentTask.Description()),
+					Message:   fmt.Sprintf("Task failed: %s", response.Error),
 				}
 			}
 
-			// Add task result to chat context for next LLM iteration
+			// CRITICAL FIX: Add failed task result to chat so LLM can see the error
 			taskResultMessage := llm.Message{
 				Role:      "user",
-				Content:   m.formatTaskResultForLLM(&task, response),
+				Content:   m.formatTaskResultForLLM(&currentTask, response),
 				Timestamp: time.Now(),
 				Visible:   false, // Hidden from UI as it's a system task result
 			}
 
 			if err := m.chatSession.AddMessage(taskResultMessage); err != nil {
-				fmt.Printf("Warning: failed to add task result to chat: %v\n", err)
+				fmt.Printf("Warning: failed to add failed task result to chat: %v\n", err)
 			}
+
+			// Continue with other tasks or stop based on configuration
+			continue
 		}
 
-		// All tasks completed
-		execution.EndTime = time.Now()
-		execution.Status = "completed"
+		// Send simplified user event for task completion with task-specific messaging
+		var completionMessage string
+		if currentTask.Type == TaskTypeReadFile && response.Success {
+			// Extract line count from output for user feedback
+			if strings.Contains(response.Output, " lines)") {
+				completionMessage = fmt.Sprintf("✅ Read %s successfully", currentTask.Path)
+			} else {
+				completionMessage = response.Output // Use the formatted output message
+			}
+		} else {
+			completionMessage = fmt.Sprintf("Completed: %s", m.getSimpleTaskDescription(&currentTask))
+		}
 
-		// Send simplified user event for execution completion
 		userEventChan <- UserTaskEvent{
-			TaskID:      uuid.New().String(),
+			TaskID:      taskID,
 			Type:        "completed",
-			Message:     fmt.Sprintf("All tasks completed (%d total)", len(execution.Tasks)),
-			TaskType:    "execution_summary",
-			Description: "Task execution finished",
-			Progress:    1.0,
+			Message:     completionMessage,
+			TaskType:    string(currentTask.Type),
+			Description: m.getSimpleTaskDescription(&currentTask),
+			Progress:    float64(i+1) / float64(len(execution.Tasks)),
 			Timestamp:   time.Now(),
 		}
 
 		// Send detailed event for internal processing if channel exists
 		if detailedEventChan != nil {
 			detailedEventChan <- TaskExecutionEvent{
-				Type:      "execution_completed",
+				Type:      "task_completed",
+				Task:      &currentTask,
+				Response:  response,
 				Execution: execution,
-				Message:   fmt.Sprintf("All tasks completed (%d total)", len(execution.Tasks)),
+				Message:   fmt.Sprintf("Task completed: %s", currentTask.Description()),
 			}
 		}
 
-		return execution, nil
-	}
-
-	// STEP 4: Handle completion checks and other special responses when no tasks are found
-	if m.completionDetector.IsYesNoCompletionResponse(llmResponse) {
-		isComplete, shouldContinue := m.completionDetector.ParseYesNoResponse(llmResponse)
-
-		if isComplete {
-			// LLM said YES - objective complete, hand control to user
-			if userEventChan != nil {
-				userEventChan <- UserTaskEvent{
-					Type:      "completed",
-					Message:   "Objective completed",
-					TaskType:  "completion_check",
-					Timestamp: time.Now(),
-				}
-			}
-			return nil, nil
-		} else if shouldContinue {
-			// LLM said NO - send continuation prompt
-			continuationPrompt := m.completionDetector.GenerateContinuationPrompt()
-
-			continuationMessage := llm.Message{
-				Role:      "user",
-				Content:   continuationPrompt,
-				Timestamp: time.Now(),
-				Visible:   false, // Hidden from UI as it's a system continuation
-			}
-
-			if err := m.chatSession.AddMessage(continuationMessage); err != nil {
-				return nil, fmt.Errorf("failed to add continuation message: %w", err)
-			}
-
-			if userEventChan != nil {
-				userEventChan <- UserTaskEvent{
-					Type:      "started",
-					Message:   "Continuing with objective...",
-					TaskType:  "completion_check",
-					Timestamp: time.Now(),
-				}
-			}
-
-			// Trigger auto-continuation by creating a special event
-			if detailedEventChan != nil {
-				detailedEventChan <- TaskExecutionEvent{
-					Type:    "auto_continue_after_no",
-					Message: "LLM indicated more work needed, continuing automatically",
-				}
-			}
-
-			return nil, nil
-		}
-	}
-
-	// Handle mixed message responses (YES/NO to mixed message warning)
-	if m.completionDetector.IsMixedMessageResponse(llmResponse) {
-		shouldContinue, isValidResponse := m.completionDetector.ParseMixedMessageResponse(llmResponse)
-
-		if isValidResponse {
-			if shouldContinue {
-				// LLM said YES to continue after mixed message warning
-				continuationPrompt := "Please continue with properly formatted commands or pure text messages."
-
-				continuationMessage := llm.Message{
-					Role:      "user",
-					Content:   continuationPrompt,
-					Timestamp: time.Now(),
-					Visible:   false, // Hidden from UI as it's a system continuation
-				}
-
-				if err := m.chatSession.AddMessage(continuationMessage); err != nil {
-					return nil, fmt.Errorf("failed to add continuation message after mixed warning: %w", err)
-				}
-
-				if userEventChan != nil {
-					userEventChan <- UserTaskEvent{
-						Type:      "started",
-						Message:   "Continuing after mixed message correction...",
-						TaskType:  "mixed_message_warning",
-						Timestamp: time.Now(),
-					}
-				}
-
-				// Trigger auto-continuation
-				if detailedEventChan != nil {
-					detailedEventChan <- TaskExecutionEvent{
-						Type:    "auto_continue_after_mixed_message",
-						Message: "LLM confirmed continuation after mixed message warning",
-					}
-				}
-
-				return nil, nil
-			} else {
-				// LLM said NO - they don't want to continue
-				if userEventChan != nil {
-					userEventChan <- UserTaskEvent{
-						Type:      "completed",
-						Message:   "Session ended by user request",
-						TaskType:  "mixed_message_warning",
-						Timestamp: time.Now(),
-					}
-				}
-				return nil, nil
-			}
-		}
-	}
-
-	// Check if this is a mixed message (text + task content)
-	if m.completionDetector.DetectMixedMessage(llmResponse) && m.completionDetector.ShouldSendMixedMessageWarning() {
-		mixedWarning := m.completionDetector.GenerateMixedMessageWarning()
-		m.completionDetector.SendMixedMessageWarning()
-
-		warningMessage := llm.Message{
+		// Add task result to chat context for next LLM iteration
+		taskResultMessage := llm.Message{
 			Role:      "user",
-			Content:   mixedWarning,
+			Content:   m.formatTaskResultForLLM(&task, response),
 			Timestamp: time.Now(),
-			Visible:   false, // Hidden from UI as it's a system warning
+			Visible:   false, // Hidden from UI as it's a system task result
 		}
 
-		if err := m.chatSession.AddMessage(warningMessage); err != nil {
-			return nil, fmt.Errorf("failed to add mixed message warning: %w", err)
+		if err := m.chatSession.AddMessage(taskResultMessage); err != nil {
+			fmt.Printf("Warning: failed to add task result to chat: %v\n", err)
 		}
-
-		if userEventChan != nil {
-			userEventChan <- UserTaskEvent{
-				Type:      "started",
-				Message:   "Warning sent about mixed message format...",
-				TaskType:  "mixed_message_warning",
-				Timestamp: time.Now(),
-			}
-		}
-
-		// Trigger auto-continuation to get LLM response to warning
-		if detailedEventChan != nil {
-			detailedEventChan <- TaskExecutionEvent{
-				Type:    "auto_continue_mixed_message_warning",
-				Message: "Sent mixed message warning, awaiting LLM response",
-			}
-		}
-
-		return nil, nil
 	}
 
-	// Check if we should send a YES/NO completion check
-	if m.completionDetector.ShouldSendYesNoCheck() {
-		yesNoPrompt := m.completionDetector.GenerateYesNoCompletionCheckPrompt()
+	// All tasks completed
+	execution.EndTime = time.Now()
+	execution.Status = "completed"
 
-		yesNoMessage := llm.Message{
-			Role:      "user",
-			Content:   yesNoPrompt,
-			Timestamp: time.Now(),
-			Visible:   false, // Hidden from UI as it's a system prompt
-		}
-
-		if err := m.chatSession.AddMessage(yesNoMessage); err != nil {
-			return nil, fmt.Errorf("failed to add YES/NO completion check: %w", err)
-		}
-
-		if userEventChan != nil {
-			userEventChan <- UserTaskEvent{
-				Type:      "started",
-				Message:   "Checking if objective is complete...",
-				TaskType:  "completion_check",
-				Timestamp: time.Now(),
-			}
-		}
-
-		// Trigger auto-continuation by creating a special event
-		if detailedEventChan != nil {
-			detailedEventChan <- TaskExecutionEvent{
-				Type:    "auto_continue_completion_check",
-				Message: "Sent YES/NO completion check, awaiting LLM response",
-			}
-		}
-
-		return nil, nil
+	// Send simplified user event for execution completion
+	userEventChan <- UserTaskEvent{
+		TaskID:      uuid.New().String(),
+		Type:        "completed",
+		Message:     fmt.Sprintf("All tasks completed (%d total)", len(execution.Tasks)),
+		TaskType:    "execution_summary",
+		Description: "Task execution finished",
+		Progress:    1.0,
+		Timestamp:   time.Now(),
 	}
 
-	// No tasks and no special handling needed - just return nil
-	return nil, nil
+	// Send detailed event for internal processing if channel exists
+	if detailedEventChan != nil {
+		detailedEventChan <- TaskExecutionEvent{
+			Type:      "execution_completed",
+			Execution: execution,
+			Message:   fmt.Sprintf("All tasks completed (%d total)", len(execution.Tasks)),
+		}
+	}
+
+	return execution, nil
 }
 
 // ConfirmTask applies a confirmed destructive task and sends enhanced feedback to LLM

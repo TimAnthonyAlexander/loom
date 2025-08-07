@@ -430,37 +430,36 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 		} else {
 			fmt.Printf("DEBUG NATURAL LANG: No emoji pattern match\n")
 		}
-			taskType := strings.ToUpper(matches[1])
-			taskArgs := strings.TrimSpace(matches[2])
+		taskType := strings.ToUpper(matches[1])
+		taskArgs := strings.TrimSpace(matches[2])
 
-			task := parseNaturalLanguageTask(taskType, taskArgs)
-			if task != nil {
-				// For EDIT tasks, look for content in subsequent code blocks or direct content
-				if task.Type == TaskTypeEditFile && task.Content == "" {
-					if content := extractContentFromCodeBlock(lines, i+1); content != "" {
-						task.Content = content
-						debugLog("DEBUG: Found content in code block for edit task")
-					} else if content := extractDirectContent(lines, i+1); content != "" {
-						task.Content = content
-						debugLog("DEBUG: Found direct content for edit task")
-					}
+		task := parseNaturalLanguageTask(taskType, taskArgs)
+		if task != nil {
+			// For EDIT tasks, look for content in subsequent code blocks or direct content
+			if task.Type == TaskTypeEditFile && task.Content == "" {
+				if content := extractContentFromCodeBlock(lines, i+1); content != "" {
+					task.Content = content
+					debugLog("DEBUG: Found content in code block for edit task")
+				} else if content := extractDirectContent(lines, i+1); content != "" {
+					task.Content = content
+					debugLog("DEBUG: Found direct content for edit task")
 				}
+			}
 
-				// For MEMORY tasks, look for content on subsequent lines if not already set
-				if task.Type == TaskTypeMemory && task.MemoryContent == "" {
-					if content := extractMemoryContent(lines, i+1); content != "" {
-						task.MemoryContent = content
-						debugLog("DEBUG: Found memory content on subsequent lines")
-					}
+			// For MEMORY tasks, look for content on subsequent lines if not already set
+			if task.Type == TaskTypeMemory && task.MemoryContent == "" {
+				if content := extractMemoryContent(lines, i+1); content != "" {
+					task.MemoryContent = content
+					debugLog("DEBUG: Found memory content on subsequent lines")
 				}
+			}
 
-				// Create unique key for duplicate detection
-				taskKey := fmt.Sprintf("%s:%s", task.Type, task.Path)
-				if !seenTasks[taskKey] {
-					seenTasks[taskKey] = true
-					tasks = append(tasks, *task)
-					debugLog(fmt.Sprintf("DEBUG: Parsed natural language task - Type: %s, Path: %s\n", task.Type, task.Path))
-				}
+			// Create unique key for duplicate detection
+			taskKey := fmt.Sprintf("%s:%s", task.Type, task.Path)
+			if !seenTasks[taskKey] {
+				seenTasks[taskKey] = true
+				tasks = append(tasks, *task)
+				debugLog(fmt.Sprintf("DEBUG: Parsed natural language task - Type: %s, Path: %s\n", task.Type, task.Path))
 			}
 		}
 	}
@@ -480,42 +479,41 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 			fmt.Printf("DEBUG NATURAL LANG: No simple pattern match\n")
 			continue
 		}
-			taskType := strings.ToUpper(matches[1])
-			taskArgs := strings.TrimSpace(matches[2])
+		taskType := strings.ToUpper(matches[1])
+		taskArgs := strings.TrimSpace(matches[2])
 
-			// Skip lines that look like conversational text rather than commands
-			if isConversationalText(line, taskType, taskArgs) {
-				continue
-			}
+		// Skip lines that look like conversational text rather than commands
+		if isConversationalText(line, taskType, taskArgs) {
+			continue
+		}
 
-			task := parseNaturalLanguageTask(taskType, taskArgs)
-			if task != nil {
-				// Create unique key for duplicate detection
-				taskKey := fmt.Sprintf("%s:%s", task.Type, task.Path)
-				if !seenTasks[taskKey] {
-					// For EDIT tasks, look for content in subsequent code blocks or direct content
-					if task.Type == TaskTypeEditFile && task.Content == "" {
-						if content := extractContentFromCodeBlock(lines, i+1); content != "" {
-							task.Content = content
-							debugLog("DEBUG: Found content in code block for simple edit task")
-						} else if content := extractDirectContent(lines, i+1); content != "" {
-							task.Content = content
-							debugLog("DEBUG: Found direct content for simple edit task")
-						}
+		task := parseNaturalLanguageTask(taskType, taskArgs)
+		if task != nil {
+			// Create unique key for duplicate detection
+			taskKey := fmt.Sprintf("%s:%s", task.Type, task.Path)
+			if !seenTasks[taskKey] {
+				// For EDIT tasks, look for content in subsequent code blocks or direct content
+				if task.Type == TaskTypeEditFile && task.Content == "" {
+					if content := extractContentFromCodeBlock(lines, i+1); content != "" {
+						task.Content = content
+						debugLog("DEBUG: Found content in code block for simple edit task")
+					} else if content := extractDirectContent(lines, i+1); content != "" {
+						task.Content = content
+						debugLog("DEBUG: Found direct content for simple edit task")
 					}
-
-					// For MEMORY tasks, look for content on subsequent lines if not already set
-					if task.Type == TaskTypeMemory && task.MemoryContent == "" {
-						if content := extractMemoryContent(lines, i+1); content != "" {
-							task.MemoryContent = content
-							debugLog("DEBUG: Found memory content on subsequent lines (simple pattern)")
-						}
-					}
-
-					seenTasks[taskKey] = true
-					tasks = append(tasks, *task)
-					debugLog(fmt.Sprintf("DEBUG: Parsed simple natural language task - Type: %s, Path: %s\n", task.Type, task.Path))
 				}
+
+				// For MEMORY tasks, look for content on subsequent lines if not already set
+				if task.Type == TaskTypeMemory && task.MemoryContent == "" {
+					if content := extractMemoryContent(lines, i+1); content != "" {
+						task.MemoryContent = content
+						debugLog("DEBUG: Found memory content on subsequent lines (simple pattern)")
+					}
+				}
+
+				seenTasks[taskKey] = true
+				tasks = append(tasks, *task)
+				debugLog(fmt.Sprintf("DEBUG: Parsed simple natural language task - Type: %s, Path: %s\n", task.Type, task.Path))
 			}
 		}
 	}
@@ -1897,7 +1895,7 @@ func isConversationalResponse(llmResponse string) bool {
 		fmt.Printf("DEBUG SPECIAL CASE: Found exact LIST . command, treating as task\n")
 		return false
 	}
-	
+
 	lines := strings.Split(strings.TrimSpace(llmResponse), "\n")
 	if len(lines) == 0 {
 		return true // Empty response is conversational
@@ -2014,7 +2012,7 @@ func ParseTasks(llmResponse string) (*TaskList, error) {
 		debugLog("DEBUG: Response detected as conversational text, skipping task parsing")
 		return nil, nil
 	}
-	
+
 	fmt.Printf("DEBUG TASK PARSER: Response is not conversational, continuing with task parsing\n")
 
 	// First, try LOOM_EDIT parsing
