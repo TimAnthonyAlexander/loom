@@ -150,7 +150,7 @@ func (e *Engine) processLoop(ctx context.Context) {
 
 			if item.ToolCall != nil {
 				// Handle tool call
-				result, err := e.handleToolCall(ctx, item.ToolCall)
+				_, _ = e.handleToolCall(ctx, item.ToolCall)
 
 				// Continue stream with tool result
 				// TODO: Implement tool result handling

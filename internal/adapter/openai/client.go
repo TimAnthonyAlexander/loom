@@ -129,7 +129,8 @@ func mockResponse(ctx context.Context, ch chan<- engine.TokenOrToolCall) {
 	}
 
 	// Simulate a tool call
-	toolCallJSON := `{
+	// Sample JSON structure for a tool call (for reference only)
+	_ = `{
 		"name": "read_file",
 		"arguments": {
 			"path": "README.md"
