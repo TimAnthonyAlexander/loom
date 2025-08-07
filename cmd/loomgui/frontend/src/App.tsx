@@ -41,8 +41,13 @@ const App: React.FC = () => {
     });
 
     // Get available tools
-    GetTools().then((fetchedTools: Tool[]) => {
-      setTools(fetchedTools);
+    GetTools().then((fetchedTools: Record<string, any>[]) => {
+      const typedTools: Tool[] = fetchedTools.map(tool => ({
+        name: tool.name || '',
+        description: tool.description || '',
+        safe: Boolean(tool.safe)
+      }));
+      setTools(typedTools);
     });
   }, []);
 
