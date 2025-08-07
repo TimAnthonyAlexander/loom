@@ -113,6 +113,8 @@ func (c *Client) Chat(
 
 		// Set headers
 		req.Header.Set("Content-Type", "application/json")
+		fmt.Printf("DEBUG: Using Anthropic API key: %s...\n", c.apiKey[:min(10, len(c.apiKey))])
+		// Anthropic requires 'x-api-key' header, not 'Authorization'
 		req.Header.Set("x-api-key", c.apiKey)
 		req.Header.Set("anthropic-version", c.apiVersion)
 
@@ -126,9 +128,10 @@ func (c *Client) Chat(
 
 		// Check response status
 		if resp.StatusCode != http.StatusOK {
-			// Log or handle non-200 status
+			// Log or handle non-200 status with improved error message
 			errorResponse, _ := io.ReadAll(resp.Body)
-			fmt.Printf("Anthropic API error: %s", errorResponse)
+			fmt.Printf("Anthropic API error (status %d): %s\n", resp.StatusCode, errorResponse)
+			fmt.Printf("Debug: Request sent to: %s with API version: %s\n", c.endpoint, c.apiVersion)
 			return
 		}
 
@@ -438,4 +441,12 @@ func mockResponse(ctx context.Context, ch chan<- engine.TokenOrToolCall) {
 	}:
 		// Successfully sent tool call
 	}
+}
+
+// min returns the smaller of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
