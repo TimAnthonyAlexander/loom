@@ -1,0 +1,19 @@
+{
+  "name": "Loom",
+  "outputfilename": "Loom",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "Loom Team",
+    "email": "info@loom.ai"
+  },
+  "info": {
+    "companyName": "Loom AI",
+    "productName": "Loom",
+    "productVersion": "2.0.0",
+    "copyright": "© 2023 Loom AI",
+    "comments": "AI coding companion"
+  }
+}
