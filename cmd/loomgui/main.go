@@ -92,7 +92,8 @@ func main() {
 		Height:           800,
 		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 255},
 		OnStartup: func(ctx context.Context) {
-			// No context needed for app
+			// Set the Wails context in the app
+			app.WithContext(ctx)
 		},
 		Bind: []interface{}{
 			app,

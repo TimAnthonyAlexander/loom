@@ -2,7 +2,6 @@ package bridge
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"os"
 	"runtime/debug"
@@ -10,6 +9,7 @@ import (
 	"github.com/loom/loom/internal/adapter"
 	"github.com/loom/loom/internal/engine"
 	"github.com/loom/loom/internal/tool"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App is the main structure for the wails UI bridge.
@@ -17,6 +17,7 @@ type App struct {
 	engine *engine.Engine
 	tools  *tool.Registry
 	config adapter.Config
+	ctx    context.Context
 }
 
 // NewApp creates a new App application struct.
@@ -39,6 +40,12 @@ func (a *App) WithTools(tools *tool.Registry) *App {
 // WithConfig sets the configuration for the UI bridge.
 func (a *App) WithConfig(config adapter.Config) *App {
 	a.config = config
+	return a
+}
+
+// WithContext sets the Wails context for the UI bridge.
+func (a *App) WithContext(ctx context.Context) *App {
+	a.ctx = ctx
 	return a
 }
 
@@ -145,14 +152,20 @@ func (a *App) SendChat(role, text string) {
 		"content": text,
 	}
 
-	// Convert to JSON
-	jsonData, _ := json.Marshal(message)
-	runtime.EventsEmit(context.Background(), "chat:new", string(jsonData))
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "chat:new", message)
+	} else {
+		log.Println("Warning: Wails context not initialized in SendChat")
+	}
 }
 
 // EmitAssistant sends partial assistant tokens to the UI.
 func (a *App) EmitAssistant(text string) {
-	runtime.EventsEmit(context.Background(), "assistant-msg", text)
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "assistant-msg", text)
+	} else {
+		log.Println("Warning: Wails context not initialized in EmitAssistant")
+	}
 }
 
 // PromptApproval asks the user for approval of an action.
@@ -165,15 +178,14 @@ func (a *App) PromptApproval(actionID, summary, diff string) bool {
 	}
 
 	// Send the request to the UI
-	runtime.EventsEmit(context.Background(), "task:prompt", request)
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "task:prompt", request)
+	} else {
+		log.Println("Warning: Wails context not initialized in PromptApproval")
+	}
 
 	// The actual approval will come back via the Approve method
 	return false // Placeholder return, actual approval handled asynchronously
-}
-
-// We need to declare this to satisfy the interface
-var runtime struct {
-	EventsEmit func(ctx context.Context, eventName string, data ...interface{})
 }
 
 // min returns the smaller of a and b

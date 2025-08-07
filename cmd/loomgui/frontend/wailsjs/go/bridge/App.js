@@ -34,6 +34,10 @@ export function WithConfig(arg1) {
   return window['go']['bridge']['App']['WithConfig'](arg1);
 }
 
+export function WithContext(arg1) {
+  return window['go']['bridge']['App']['WithContext'](arg1);
+}
+
 export function WithEngine(arg1) {
   return window['go']['bridge']['App']['WithEngine'](arg1);
 }
