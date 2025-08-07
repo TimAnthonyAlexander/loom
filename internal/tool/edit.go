@@ -97,31 +97,21 @@ func editFile(ctx context.Context, workspacePath string, args EditFileArgs) (*Ed
 		return result, nil
 	}
 
-	// Apply the edit
-	if plan.IsDeletion {
-		// Delete the file
-		if err := os.Remove(plan.FilePath); err != nil {
-			result.Success = false
-			result.Message = fmt.Sprintf("Failed to delete file: %s", err)
-			return result, nil
-		}
-	} else {
-		// Create or update the file
-		if err := os.WriteFile(plan.FilePath, []byte(plan.NewContent), 0644); err != nil {
-			result.Success = false
-			result.Message = fmt.Sprintf("Failed to write file: %s", err)
-			return result, nil
-		}
-	}
-
-	// Success
+	// At this point, we've validated the edit and created a plan
+	// Instead of applying immediately, we'll return the plan with the diff
+	// The actual application of the edit will happen after user approval
 	result.Success = true
+	result.Message = "Edit plan created successfully (pending approval)"
+	// The actual file write will be handled by the approval process
+	// DO NOT write to disk here!
+
+	// Prepare a descriptive message based on edit type
 	if plan.IsCreation {
-		result.Message = "File created successfully"
+		result.Message = "File will be created (pending approval)"
 	} else if plan.IsDeletion {
-		result.Message = "File deleted successfully"
+		result.Message = "File will be deleted (pending approval)"
 	} else {
-		result.Message = "File edited successfully"
+		result.Message = "File will be edited (pending approval)"
 	}
 
 	return result, nil

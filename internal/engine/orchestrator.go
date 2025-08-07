@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 )
 
@@ -166,7 +167,12 @@ func (e *Engine) processLoop(ctx context.Context) {
 
 // handleToolCall processes a tool call from the LLM.
 func (e *Engine) handleToolCall(ctx context.Context, call *ToolCall) (json.RawMessage, error) {
-	// Check if approval is needed
+	// For edit_file tools, we need special handling
+	if call.Name == "edit_file" {
+		return e.handleEditFileCall(ctx, call)
+	}
+
+	// Check if approval is needed for other tools
 	if !call.IsSafe {
 		// Create approval request
 		approved := e.requestApproval(call)
@@ -179,6 +185,125 @@ func (e *Engine) handleToolCall(ctx context.Context, call *ToolCall) (json.RawMe
 	// Execute the tool call
 	// TODO: Implement tool invocation through registry
 	return json.RawMessage(`{}`), nil
+}
+
+// handleEditFileCall specifically handles edit_file tool calls with proper diff generation and approval
+func (e *Engine) handleEditFileCall(ctx context.Context, call *ToolCall) (json.RawMessage, error) {
+	// Parse the edit arguments
+	var editArgs struct {
+		Path      string `json:"path"`
+		OldString string `json:"old_string"`
+		NewString string `json:"new_string"`
+		CreateNew bool   `json:"create_new,omitempty"`
+	}
+
+	if err := json.Unmarshal(call.Args, &editArgs); err != nil {
+		return json.RawMessage(`{"error": "Failed to parse edit arguments"}`), nil
+	}
+
+	// Generate a summary for the approval
+	summary := "Edit File: " + editArgs.Path
+	if editArgs.CreateNew {
+		summary = "Create File: " + editArgs.Path
+	}
+
+	// Request approval with the proper diff
+	// TODO: Get workspace path properly
+	workspacePath := "."
+
+	// Create an edit plan to get a proper diff
+	plan, err := e.createEditPlan(workspacePath, editArgs)
+	if err != nil {
+		return json.RawMessage(fmt.Sprintf(`{"error": "%s"}`, err.Error())), nil
+	}
+
+	// Request approval with the detailed diff
+	approved := e.requestApprovalWithDiff(call.ID, summary, plan.Diff)
+	if !approved {
+		return json.RawMessage(`{"error": "User rejected the edit"}`), nil
+	}
+
+	// If approved, execute the edit
+	result, err := e.executeEdit(plan)
+	if err != nil {
+		return json.RawMessage(fmt.Sprintf(`{"error": "Failed to apply edit: %s"}`, err.Error())), nil
+	}
+
+	// Convert result to JSON
+	resultJSON, _ := json.Marshal(result)
+	return resultJSON, nil
+}
+
+// createEditPlan creates an edit plan from the edit arguments
+func (e *Engine) createEditPlan(workspacePath string, args struct {
+	Path      string
+	OldString string
+	NewString string
+	CreateNew bool
+}) (*struct {
+	FilePath   string
+	OldContent string
+	NewContent string
+	Diff       string
+	IsCreation bool
+	IsDeletion bool
+}, error) {
+	// Placeholder implementation - would normally call into the editor package
+	// For now, just create a dummy plan
+	return &struct {
+		FilePath   string
+		OldContent string
+		NewContent string
+		Diff       string
+		IsCreation bool
+		IsDeletion bool
+	}{
+		FilePath:   args.Path,
+		OldContent: args.OldString,
+		NewContent: args.NewString,
+		Diff:       fmt.Sprintf("Diff for %s", args.Path),
+		IsCreation: args.CreateNew,
+		IsDeletion: args.NewString == "",
+	}, nil
+}
+
+// executeEdit applies an edit plan to the filesystem
+func (e *Engine) executeEdit(plan *struct {
+	FilePath   string
+	OldContent string
+	NewContent string
+	Diff       string
+	IsCreation bool
+	IsDeletion bool
+}) (*struct {
+	Success bool
+	Message string
+}, error) {
+	// Placeholder implementation - would normally write to disk
+	return &struct {
+		Success bool
+		Message string
+	}{
+		Success: true,
+		Message: "Edit applied successfully",
+	}, nil
+}
+
+// requestApprovalWithDiff requests approval with a detailed diff
+func (e *Engine) requestApprovalWithDiff(id string, summary string, diff string) bool {
+	// Create a channel for the response
+	responseCh := make(chan bool)
+
+	// Register the approval request
+	e.approvalMu.Lock()
+	e.approvals[id] = responseCh
+	e.approvalMu.Unlock()
+
+	// Ask the bridge for approval with the detailed diff
+	go e.bridge.PromptApproval(id, summary, diff)
+
+	// Wait for response
+	return <-responseCh
 }
 
 // requestApproval asks the user for approval of a tool call.

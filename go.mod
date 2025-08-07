@@ -2,7 +2,10 @@ module github.com/loom/loom
 
 go 1.23.11
 
-require github.com/wailsapp/wails/v2 v2.10.2
+require (
+	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3
+	github.com/wailsapp/wails/v2 v2.10.2
+)
 
 require (
 	github.com/bep/debounce v1.2.1 // indirect

@@ -5,16 +5,25 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/sergi/go-diff/diffmatchpatch"
 )
+
+// LineRange represents a range of lines in a file.
+type LineRange struct {
+	StartLine int
+	EndLine   int
+}
 
 // EditPlan represents a planned file edit.
 type EditPlan struct {
-	FilePath   string
-	OldContent string
-	NewContent string
-	Diff       string
-	IsCreation bool
-	IsDeletion bool
+	FilePath     string
+	OldContent   string
+	NewContent   string
+	Diff         string
+	IsCreation   bool
+	IsDeletion   bool
+	ChangedLines LineRange
 }
 
 // ValidationError represents an error during edit validation.
@@ -73,12 +82,17 @@ func ProposeEdit(
 		}
 
 		// Create a new file edit plan
+		lineCount := 1 + strings.Count(newString, "\n")
 		return &EditPlan{
 			FilePath:   absPath,
 			OldContent: "",
 			NewContent: newString,
 			Diff:       generateDiff("", newString, filepath.Base(absPath)),
 			IsCreation: true,
+			ChangedLines: LineRange{
+				StartLine: 1,
+				EndLine:   lineCount,
+			},
 		}, nil
 	}
 
@@ -95,12 +109,17 @@ func ProposeEdit(
 
 	// Handle file deletion
 	if newString == "" && oldString == "" {
+		lineCount := 1 + strings.Count(oldContentStr, "\n")
 		return &EditPlan{
 			FilePath:   absPath,
 			OldContent: oldContentStr,
 			NewContent: "",
 			Diff:       generateDiff(oldContentStr, "", filepath.Base(absPath)),
 			IsDeletion: true,
+			ChangedLines: LineRange{
+				StartLine: 1,
+				EndLine:   lineCount,
+			},
 		}, nil
 	}
 
@@ -132,11 +151,21 @@ func ProposeEdit(
 	// Create new content by replacing the string
 	newContent := strings.Replace(oldContentStr, oldString, newString, 1)
 
+	// Calculate line range affected by the change
+	lineRange, err := calculateLineRange(oldContentStr, oldString, newString)
+	if err != nil {
+		return nil, ValidationError{
+			Message: fmt.Sprintf("Failed to calculate line range: %v", err),
+			Code:    "LINE_RANGE_ERROR",
+		}
+	}
+
 	return &EditPlan{
-		FilePath:   absPath,
-		OldContent: oldContentStr,
-		NewContent: newContent,
-		Diff:       generateDiff(oldContentStr, newContent, filepath.Base(absPath)),
+		FilePath:     absPath,
+		OldContent:   oldContentStr,
+		NewContent:   newContent,
+		Diff:         generateDiff(oldContentStr, newContent, filepath.Base(absPath)),
+		ChangedLines: lineRange,
 	}, nil
 }
 
@@ -166,8 +195,7 @@ func validatePath(workspacePath string, filePath string) (string, error) {
 
 // generateDiff creates a unified diff between old and new content.
 func generateDiff(oldContent, newContent, fileName string) string {
-	// Simple diff implementation for now
-	// In a real implementation, this would use a proper diff library
+	// Handle special cases
 	if oldContent == "" {
 		return fmt.Sprintf("Creating new file: %s\n\n%s", fileName, newContent)
 	}
@@ -176,6 +204,100 @@ func generateDiff(oldContent, newContent, fileName string) string {
 		return fmt.Sprintf("Deleting file: %s\n\n%s", fileName, oldContent)
 	}
 
-	return fmt.Sprintf("--- %s (before)\n+++ %s (after)\n\nOld content:\n%s\n\nNew content:\n%s",
-		fileName, fileName, oldContent, newContent)
+	// Use a proper diff library
+	dmp := diffmatchpatch.New()
+	diffs := dmp.DiffMain(oldContent, newContent, false)
+
+	// Convert to a user-friendly format with line numbers
+	oldLines := strings.Split(oldContent, "\n")
+
+	diffText := fmt.Sprintf("--- %s (before)\n+++ %s (after)\n\n", fileName, fileName)
+
+	// Generate line-by-line diff
+	oldLineNum := 1
+	newLineNum := 1
+
+	// Track differences by line
+	changedLines := make(map[int]bool)
+	for _, diff := range diffs {
+		diffLines := strings.Split(diff.Text, "\n")
+
+		for i, line := range diffLines {
+			// Skip empty last element from the split
+			if i == len(diffLines)-1 && line == "" && len(diffLines) > 1 {
+				continue
+			}
+
+			switch diff.Type {
+			case diffmatchpatch.DiffDelete:
+				diffText += fmt.Sprintf("-%4d: %s\n", oldLineNum, line)
+				changedLines[oldLineNum] = true
+				oldLineNum++
+			case diffmatchpatch.DiffInsert:
+				diffText += fmt.Sprintf("+%4d: %s\n", newLineNum, line)
+				changedLines[newLineNum] = true
+				newLineNum++
+			case diffmatchpatch.DiffEqual:
+				// Show context lines (3 before and after changes)
+				shouldShowContext := false
+				for i := -3; i <= 3; i++ {
+					if changedLines[oldLineNum+i] {
+						shouldShowContext = true
+						break
+					}
+				}
+
+				if shouldShowContext || oldLineNum <= 3 || oldLineNum > len(oldLines)-3 {
+					diffText += fmt.Sprintf(" %4d: %s\n", oldLineNum, line)
+				} else if oldLineNum == 4 || oldLineNum == len(oldLines)-3 {
+					diffText += "  ...\n"
+				}
+
+				oldLineNum++
+				newLineNum++
+			}
+		}
+	}
+
+	// Add a summary of changes
+	totalChanges := len(changedLines)
+	diffText += fmt.Sprintf("\n%d line(s) changed\n", totalChanges)
+
+	return diffText
+}
+
+// calculateLineRange determines which lines are affected by an edit.
+func calculateLineRange(content, oldString, newString string) (LineRange, error) {
+	// Find the offset of the old string in the content
+	offset := strings.Index(content, oldString)
+	if offset == -1 {
+		return LineRange{}, fmt.Errorf("could not locate the string to replace")
+	}
+
+	// Calculate line numbers
+	beforeOffset := content[:offset]
+	startLine := 1 + strings.Count(beforeOffset, "\n")
+
+	// Find end line of the old string
+	endLine := startLine + strings.Count(oldString, "\n")
+
+	// Note: We've calculated the affected lines based on the string positions
+
+	// Create a buffer zone of context
+	const contextLines = 3
+	startLineWithContext := startLine - contextLines
+	if startLineWithContext < 1 {
+		startLineWithContext = 1
+	}
+
+	endLineWithContext := endLine + contextLines
+	totalLines := strings.Count(content, "\n") + 1
+	if endLineWithContext > totalLines {
+		endLineWithContext = totalLines
+	}
+
+	return LineRange{
+		StartLine: startLineWithContext,
+		EndLine:   endLineWithContext,
+	}, nil
 }
