@@ -7,6 +7,85 @@ import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight as oneLightStyle } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import './App.css';
 
+// Custom table components to handle the inTable error
+const CustomTable = ({ children, ...props }: any) => {
+  try {
+    return (
+      <table className="markdown-table" {...props}>
+        {children}
+      </table>
+    );
+  } catch (error) {
+    console.error('Table rendering error:', error);
+    return <div className="table-error">Table rendering failed</div>;
+  }
+};
+
+const CustomTableRow = ({ children, ...props }: any) => {
+  try {
+    return <tr {...props}>{children}</tr>;
+  } catch (error) {
+    console.error('Table row rendering error:', error);
+    return <div className="table-row-error">Row rendering failed</div>;
+  }
+};
+
+const CustomTableCell = ({ children, ...props }: any) => {
+  try {
+    return <td {...props}>{children}</td>;
+  } catch (error) {
+    console.error('Table cell rendering error:', error);
+    return <span className="table-cell-error">Cell rendering failed</span>;
+  }
+};
+
+const CustomTableHeader = ({ children, ...props }: any) => {
+  try {
+    return <th {...props}>{children}</th>;
+  } catch (error) {
+    console.error('Table header rendering error:', error);
+    return <span className="table-header-error">Header rendering failed</span>;
+  }
+};
+
+// Error boundary for ReactMarkdown
+class MarkdownErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error?: Error }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Markdown rendering error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="markdown-error">
+          <p>Failed to render markdown content:</p>
+          <pre>{this.state.error?.message}</pre>
+          <details>
+            <summary>Raw content</summary>
+            <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.8em' }}>
+              {typeof this.props.children === 'string' ? this.props.children : 'Content not available'}
+            </pre>
+          </details>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 // Helper function to format diff output with syntax highlighting
 const formatDiff = (diff: string): ReactElement => {
   if (!diff) return <pre>No changes</pre>;
@@ -202,30 +281,35 @@ const App: React.FC = () => {
             <div key={index} className={`message ${msg.role}`}>
               <div className="role">{msg.role}</div>
               <div className="content">
-                <ReactMarkdown 
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    code({node, inline, className, children, ...props}) {
-                      const match = /language-(\w+)/.exec(className || '')
-                      return !inline && match ? (
-                        <SyntaxHighlighter
-                          style={oneLightStyle as any}
-                          language={match[1]}
-                          PreTag="div"
-                          {...props}
-                        >
-                          {String(children).replace(/\n$/, '')}
-                        </SyntaxHighlighter>
-                      ) : (
-                        <code className={className} {...props}>
-                          {children}
-                        </code>
-                      )
-                    }
-                  }}
-                >
-                  {msg.content}
-                </ReactMarkdown>
+                <MarkdownErrorBoundary>
+                  <ReactMarkdown 
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      code({node, inline, className, children, ...props}: any) {
+                        const match = /language-(\w+)/.exec(className || '')
+                        return !inline && match ? (
+                          <SyntaxHighlighter
+                            style={oneLightStyle as any}
+                            language={match[1]}
+                            PreTag="div"
+                          >
+                            {String(children).replace(/\n$/, '')}
+                          </SyntaxHighlighter>
+                        ) : (
+                          <code className={className} {...props}>
+                            {children}
+                          </code>
+                        )
+                      },
+                      table: CustomTable,
+                      tr: CustomTableRow,
+                      td: CustomTableCell,
+                      th: CustomTableHeader
+                    }}
+                  >
+                    {msg.content}
+                  </ReactMarkdown>
+                </MarkdownErrorBoundary>
               </div>
             </div>
           ))}

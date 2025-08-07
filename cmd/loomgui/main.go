@@ -16,12 +16,17 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/mac"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 )
 
 //go:embed frontend/dist
 var assets embed.FS
 
 func main() {
+	// Set up logging to show all levels
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
 	// Get current working directory as default workspace path
 	workspacePath, err := os.Getwd()
 	if err != nil {
@@ -85,6 +90,13 @@ func main() {
 		},
 		AssetServer: &assetserver.Options{
 			Assets: assets,
+		},
+		// Platform-specific options
+		Mac: &mac.Options{
+			TitleBar: mac.TitleBarHiddenInset(),
+		},
+		Windows: &windows.Options{
+			WebviewIsTransparent: false,
 		},
 	}); err != nil {
 		log.Fatal(err)

@@ -46,6 +46,12 @@ dev:
 	@echo "Starting development server..."
 	cd $(APP_DIR) && $(WAILS) dev
 
+# Run in debug mode with Chrome DevTools
+.PHONY: debug
+debug:
+	@echo "Starting development server with debug mode..."
+	cd $(APP_DIR) && $(WAILS) dev -debug
+
 # Build for current platform
 .PHONY: build
 build:
@@ -104,6 +110,7 @@ help:
 	@echo "  deps-frontend   - Install frontend dependencies"
 	@echo "  deps-tools      - Install required tools (ripgrep)"
 	@echo "  dev             - Run in development mode"
+	@echo "  debug           - Run in debug mode with Chrome DevTools"
 	@echo "  build           - Build for current platform"
 	@echo "  build-macos     - Build for macOS (universal)"
 	@echo "  build-windows   - Build for Windows (amd64)"

@@ -187,6 +187,76 @@ body {
   margin-bottom: 0;
 }
 
+/* Table error styles */
+.table-error,
+.table-row-error,
+.table-cell-error,
+.table-header-error {
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 0.5rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  margin: 0.25rem 0;
+}
+
+.markdown-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.markdown-table th,
+.markdown-table td {
+  border: 1px solid #dfe2e5;
+  padding: 6px 13px;
+}
+
+.markdown-table th {
+  background-color: #f6f8fa;
+}
+
+/* Markdown error boundary styles */
+.markdown-error {
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 1rem;
+  margin: 0.5rem 0;
+}
+
+.markdown-error p {
+  margin: 0 0 0.5rem 0;
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.markdown-error pre {
+  background-color: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  padding: 0.5rem;
+  margin: 0.5rem 0;
+  font-size: 0.875rem;
+  overflow-x: auto;
+}
+
+.markdown-error details {
+  margin-top: 0.5rem;
+}
+
+.markdown-error summary {
+  cursor: pointer;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.markdown-error summary:hover {
+  color: #374151;
+}
+
 .message.user {
   align-self: flex-end;
   background-color: var(--user-message-bg);
