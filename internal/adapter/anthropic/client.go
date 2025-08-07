@@ -109,7 +109,8 @@ func (c *Client) Chat(
 		"messages":    claudeMessages,
 		"max_tokens":  c.maxTokens, // Required parameter for Anthropic API
 		"temperature": 0.2,
-		"stream":      stream,
+		// Temporarily disable streaming for reliability until SSE parser is hardened
+		"stream": false,
 	}
 	if systemPrompt != "" {
 		requestBody["system"] = systemPrompt
@@ -156,10 +157,13 @@ func (c *Client) Chat(
 		req.Header.Set("anthropic-version", c.apiVersion)
 		fmt.Printf("DEBUG: Using anthropic-version: %s\n", c.apiVersion)
 
+		// Log request basics
+		fmt.Printf("Anthropic: POST %s | model=%s | stream=false | messages=%d | tools=%d\n", c.endpoint, modelID, len(claudeMessages), len(claudeTools))
 		// Make the request
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
 			// Handle request error
+			fmt.Printf("Anthropic HTTP error: %v\n", err)
 			return
 		}
 		defer resp.Body.Close()
@@ -174,13 +178,9 @@ func (c *Client) Chat(
 			return
 		}
 
-		// Handle streaming response
-		if stream {
-			c.handleStreamingResponse(ctx, resp.Body, resultCh)
-		} else {
-			// Handle non-streaming response
-			c.handleNonStreamingResponse(ctx, resp.Body, resultCh)
-		}
+		fmt.Printf("Anthropic: status=%d content-type=%s\n", resp.StatusCode, resp.Header.Get("Content-Type"))
+		// Handle response (non-streaming for now)
+		c.handleNonStreamingResponse(ctx, resp.Body, resultCh)
 	}()
 
 	return resultCh, nil
@@ -394,6 +394,11 @@ func convertMessages(messages []engine.Message) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(messages))
 
 	for _, msg := range messages {
+		// Skip system messages here; included via top-level system field
+		if strings.ToLower(msg.Role) == "system" {
+			continue
+		}
+
 		claudeMsg := map[string]interface{}{
 			"role": convertRole(msg.Role),
 		}
@@ -409,7 +414,12 @@ func convertMessages(messages []engine.Message) []map[string]interface{} {
 				},
 			}
 		default:
-			claudeMsg["content"] = msg.Content
+			claudeMsg["content"] = []map[string]interface{}{
+				{
+					"type": "text",
+					"text": msg.Content,
+				},
+			}
 		}
 
 		result = append(result, claudeMsg)
