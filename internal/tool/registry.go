@@ -124,6 +124,11 @@ func (r *Registry) Invoke(ctx context.Context, name string, args json.RawMessage
 		return nil, fmt.Errorf("unknown tool %q", name)
 	}
 
+	// Default empty args to an empty JSON object for tools that accept optional params
+	if len(args) == 0 {
+		args = json.RawMessage([]byte("{}"))
+	}
+
 	return def.Handler(ctx, args)
 }
 

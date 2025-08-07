@@ -317,9 +317,15 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 			}
 
 			if chosen != nil {
+				// Default empty arguments to an empty object
+				argsStr := strings.TrimSpace(chosen.args)
+				if argsStr == "" {
+					argsStr = "{}"
+				}
+
 				// Try to parse accumulated args once at finish
 				var argsMap map[string]interface{}
-				if err := json.Unmarshal([]byte(chosen.args), &argsMap); err == nil {
+				if err := json.Unmarshal([]byte(argsStr), &argsMap); err == nil {
 					if args, err := json.Marshal(argsMap); err == nil {
 						call := &engine.ToolCall{ID: chosen.id, Name: chosen.name, Args: args}
 						select {
@@ -330,8 +336,8 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 						}
 					}
 				}
-				// If parsing failed, emit the raw args string as-is to surface the issue
-				call := &engine.ToolCall{ID: chosen.id, Name: chosen.name, Args: json.RawMessage([]byte(chosen.args))}
+				// If parsing failed, emit the raw args string (still defaults to `{}` when empty)
+				call := &engine.ToolCall{ID: chosen.id, Name: chosen.name, Args: json.RawMessage([]byte(argsStr))}
 				select {
 				case <-ctx.Done():
 					return
@@ -351,8 +357,12 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 			}
 		}
 		if chosen != nil {
+			argsStr := strings.TrimSpace(chosen.args)
+			if argsStr == "" {
+				argsStr = "{}"
+			}
 			var argsMap map[string]interface{}
-			if err := json.Unmarshal([]byte(chosen.args), &argsMap); err == nil {
+			if err := json.Unmarshal([]byte(argsStr), &argsMap); err == nil {
 				if args, err := json.Marshal(argsMap); err == nil {
 					call := &engine.ToolCall{ID: chosen.id, Name: chosen.name, Args: args}
 					select {
@@ -363,7 +373,7 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 					}
 				}
 			}
-			call := &engine.ToolCall{ID: chosen.id, Name: chosen.name, Args: json.RawMessage([]byte(chosen.args))}
+			call := &engine.ToolCall{ID: chosen.id, Name: chosen.name, Args: json.RawMessage([]byte(argsStr))}
 			select {
 			case <-ctx.Done():
 				return
@@ -417,9 +427,13 @@ func (c *Client) handleNonStreamingResponse(ctx context.Context, body io.Reader,
 				Name: tc.Function.Name,
 			}
 
-			// Parse the arguments
+			// Parse the arguments (default empty to {})
+			argsStr := strings.TrimSpace(tc.Function.Arguments)
+			if argsStr == "" {
+				argsStr = "{}"
+			}
 			var argsMap map[string]interface{}
-			if err := json.Unmarshal([]byte(tc.Function.Arguments), &argsMap); err == nil {
+			if err := json.Unmarshal([]byte(argsStr), &argsMap); err == nil {
 				// Convert to raw JSON
 				if args, err := json.Marshal(argsMap); err == nil {
 					toolCall.Args = args
@@ -433,6 +447,14 @@ func (c *Client) handleNonStreamingResponse(ctx context.Context, body io.Reader,
 						return
 					}
 				}
+			}
+			// If JSON still invalid, pass through raw string
+			toolCall.Args = json.RawMessage([]byte(argsStr))
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- engine.TokenOrToolCall{ToolCall: toolCall}:
+				return
 			}
 		} else if message.Content != "" {
 			// If no tool calls, send the content token by token for consistency
