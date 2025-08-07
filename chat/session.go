@@ -310,10 +310,11 @@ func (s *Session) GetDisplayMessages() []string {
 			}
 		}
 
-		// Hide "Continue." messages - these are just auto-continuation prompts
+		// Hide "Continue." messages and user task result messages
 		if msg.Role == "user" && (msg.Content == "Continue." ||
 			strings.HasPrefix(msg.Content, "Continue with the next step") ||
-			msg.Content == "Please continue working on this task.") {
+			msg.Content == "Please continue working on this task." ||
+			strings.HasPrefix(msg.Content, "TASK_RESULT:")) {
 			continue
 		}
 

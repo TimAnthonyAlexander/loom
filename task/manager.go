@@ -119,28 +119,39 @@ func (m *Manager) HandleLLMResponse(llmResponse string, userEventChan chan<- Use
 	}
 
 	// STEP 2: Parse tasks from LLM response
+	fmt.Printf("DEBUG TASK: Parsing LLM response for tasks: %s\n", llmResponse)
 	taskList, err := ParseTasks(llmResponse)
 	if err != nil {
+		fmt.Printf("DEBUG TASK: Error parsing tasks: %v\n", err)
 		return nil, fmt.Errorf("failed to parse tasks: %w", err)
 	}
 
 	// STEP 3: If tasks found, execute them
 	if taskList != nil && len(taskList.Tasks) > 0 {
-		// Create execution session
-		execution := &TaskExecution{
-			Tasks:     taskList.Tasks,
-			Responses: make([]TaskResponse, 0, len(taskList.Tasks)),
-			StartTime: time.Now(),
-			Status:    "running",
+		fmt.Printf("DEBUG TASK: Found %d tasks to execute\n", len(taskList.Tasks))
+		for i, t := range taskList.Tasks {
+			fmt.Printf("DEBUG TASK: Task %d: Type=%s, Path=%s\n", i, t.Type, t.Path)
 		}
+	} else {
+		fmt.Printf("DEBUG TASK: No tasks found to execute\n")
+		return nil, nil
+	}
+	
+	// Create execution session
+	execution := &TaskExecution{
+		Tasks:     taskList.Tasks,
+		Responses: make([]TaskResponse, 0, len(taskList.Tasks)),
+		StartTime: time.Now(),
+		Status:    "running",
+	}
 
-		// Execute tasks sequentially
-		for i, task := range execution.Tasks {
-			// Create a copy of the task to avoid loop variable capture issues
-			currentTask := task
-			taskID := uuid.New().String()
+	// Execute tasks sequentially
+	for i, task := range execution.Tasks {
+		// Create a copy of the task to avoid loop variable capture issues
+		currentTask := task
+		taskID := uuid.New().String()
 
-			// Send simplified user event with task-specific messaging
+		// Send simplified user event with task-specific messaging
 			var userMessage string
 			if currentTask.Type == TaskTypeReadFile {
 				userMessage = fmt.Sprintf("📖 Reading %s...", currentTask.Path)

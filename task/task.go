@@ -17,8 +17,8 @@ const (
 	DefaultTimeout  = 30  // Default timeout in seconds for shell commands
 )
 
-// Global debug flag for task parsing - can be enabled with environment variable
-var debugTaskParsing = os.Getenv("LOOM_DEBUG_TASKS") == "1"
+// Global debug flag for task parsing - can be enabled with environment variable or explicitly set
+var debugTaskParsing = true // Force enable for debugging
 
 // DebugHandler is a function type for handling debug messages
 type DebugHandler func(message string)
@@ -402,12 +402,15 @@ func tryLoomEditParsing(llmResponse string) *TaskList {
 // tryNaturalLanguageParsing attempts to parse natural language task commands
 func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 	debugLog("DEBUG: Attempting natural language task parsing...")
+	fmt.Printf("DEBUG NATURAL LANG: Attempting to parse natural language commands from: %s\n", llmResponse)
 
 	// Preprocess escaped content - handle cases where LLM sends escaped newlines and quotes
 	processedResponse := strings.ReplaceAll(llmResponse, "\\n", "\n")
 	processedResponse = strings.ReplaceAll(processedResponse, "\\\"", "\"")
+	fmt.Printf("DEBUG NATURAL LANG: Processed response: %s\n", processedResponse)
 
 	lines := strings.Split(processedResponse, "\n")
+	fmt.Printf("DEBUG NATURAL LANG: Split into %d lines\n", len(lines))
 	var tasks []Task
 	// Use map for O(1) duplicate detection instead of O(n) linear search
 	seenTasks := make(map[string]bool)
@@ -415,12 +418,18 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 	// Look for task indicators with emoji prefixes
 	// Updated to match both "🔧 READ" and "📖 READ" patterns
 	taskPattern := regexp.MustCompile(`^(?:🔧|📖|📂|✏️|🔍|💾|📝)\s+(READ|LIST|RUN|SEARCH|MEMORY|TODO)\s+(.+)`)
+	fmt.Printf("DEBUG NATURAL LANG: Using emoji task pattern: %s\n", taskPattern.String())
 
 	for i, line := range lines {
 		line = strings.TrimSpace(line)
+		fmt.Printf("DEBUG NATURAL LANG: Processing line %d: '%s'\n", i, line)
 		matches := taskPattern.FindStringSubmatch(line)
 
 		if len(matches) == 3 {
+			fmt.Printf("DEBUG NATURAL LANG: Matched emoji pattern! Type: %s, Args: %s\n", matches[1], matches[2])
+		} else {
+			fmt.Printf("DEBUG NATURAL LANG: No emoji pattern match\n")
+		}
 			taskType := strings.ToUpper(matches[1])
 			taskArgs := strings.TrimSpace(matches[2])
 
@@ -458,12 +467,19 @@ func tryNaturalLanguageParsing(llmResponse string) *TaskList {
 
 	// Also look for simpler patterns without emoji, but be more restrictive to avoid conversational text
 	simplePattern := regexp.MustCompile(`(?i)^(read|edit|list|run|search|memory)\s+(.+)`)
+	fmt.Printf("DEBUG NATURAL LANG: Using simple task pattern: %s\n", simplePattern.String())
 
 	for i, line := range lines {
 		line = strings.TrimSpace(line)
+		fmt.Printf("DEBUG NATURAL LANG: Processing line %d for simple pattern: '%s'\n", i, line)
 		matches := simplePattern.FindStringSubmatch(line)
 
 		if len(matches) == 3 {
+			fmt.Printf("DEBUG NATURAL LANG: Matched simple pattern! Type: %s, Args: %s\n", matches[1], matches[2])
+		} else {
+			fmt.Printf("DEBUG NATURAL LANG: No simple pattern match\n")
+			continue
+		}
 			taskType := strings.ToUpper(matches[1])
 			taskArgs := strings.TrimSpace(matches[2])
 
@@ -1876,6 +1892,12 @@ func tryFallbackJSONParsing(llmResponse string) *TaskList {
 // MUST NOT be considered a taskful message. It is then a text-only message that coincidentally
 // contains something that looks like a task.
 func isConversationalResponse(llmResponse string) bool {
+	// Special case for LIST . command
+	if llmResponse == "LIST ." {
+		fmt.Printf("DEBUG SPECIAL CASE: Found exact LIST . command, treating as task\n")
+		return false
+	}
+	
 	lines := strings.Split(strings.TrimSpace(llmResponse), "\n")
 	if len(lines) == 0 {
 		return true // Empty response is conversational
@@ -1916,6 +1938,13 @@ func isConversationalResponse(llmResponse string) bool {
 			strings.HasPrefix(lowerLine, "edit ") ||
 			strings.HasPrefix(lowerLine, "run ") ||
 			strings.HasPrefix(lowerLine, "list ") ||
+			// Check for capitalized command formats without spaces too (like "LIST .")
+			strings.HasPrefix(line, "READ") ||
+			strings.HasPrefix(line, "EDIT") ||
+			strings.HasPrefix(line, "RUN") ||
+			strings.HasPrefix(line, "LIST") ||
+			strings.HasPrefix(line, "SEARCH") ||
+			strings.HasPrefix(line, "MEMORY") ||
 			strings.HasPrefix(lowerLine, "search ") ||
 			strings.HasPrefix(lowerLine, "memory ") ||
 			(strings.HasPrefix(strings.TrimSpace(line), "{") && strings.Contains(lowerLine, "\"type\":")) {
@@ -1976,22 +2005,35 @@ func isConversationalResponse(llmResponse string) bool {
 
 // ParseTasks extracts and parses tasks from LLM response (tries LOOM_EDIT first, then natural language, then JSON)
 func ParseTasks(llmResponse string) (*TaskList, error) {
+	// Enhanced debugging for task parsing
+	fmt.Printf("DEBUG TASK PARSER: Starting to parse tasks from response: %s\n", llmResponse)
+
 	// Early check: if this appears to be conversational text, don't parse for tasks
 	if isConversationalResponse(llmResponse) {
+		fmt.Printf("DEBUG TASK PARSER: Response detected as conversational, not a task command\n")
 		debugLog("DEBUG: Response detected as conversational text, skipping task parsing")
 		return nil, nil
 	}
+	
+	fmt.Printf("DEBUG TASK PARSER: Response is not conversational, continuing with task parsing\n")
 
 	// First, try LOOM_EDIT parsing
 	if result := tryLoomEditParsing(llmResponse); result != nil {
+		fmt.Printf("DEBUG TASK PARSER: Successfully parsed %d LOOM_EDIT tasks\n", len(result.Tasks))
 		debugLog(fmt.Sprintf("DEBUG: Successfully parsed %d LOOM_EDIT tasks\n", len(result.Tasks)))
 		return result, nil
+	} else {
+		fmt.Printf("DEBUG TASK PARSER: LOOM_EDIT parsing did not find any tasks\n")
 	}
 
 	// Second, try natural language parsing
+	fmt.Printf("DEBUG TASK PARSER: Trying natural language parsing\n")
 	if result := tryNaturalLanguageParsing(llmResponse); result != nil {
+		fmt.Printf("DEBUG TASK PARSER: Successfully parsed %d tasks using natural language parsing\n", len(result.Tasks))
 		debugLog(fmt.Sprintf("DEBUG: Successfully parsed %d tasks using natural language parsing\n", len(result.Tasks)))
 		return result, nil
+	} else {
+		fmt.Printf("DEBUG TASK PARSER: Natural language parsing did not find any tasks\n")
 	}
 
 	// Fall back to JSON parsing

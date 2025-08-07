@@ -703,7 +703,9 @@ func (cs *ChatService) handleUserTaskEvents() {
 func (cs *ChatService) formatTaskResultForLLM(task *taskPkg.Task, response *taskPkg.TaskResponse) llm.Message {
 	var content strings.Builder
 
-	content.WriteString(fmt.Sprintf("TASK_RESULT: %s\n", task.Description()))
+	// Use getSimpleTaskDescription to format the task
+	description := cs.getSimpleTaskDescription(task)
+	content.WriteString(fmt.Sprintf("TASK_RESULT: %s\n", description))
 
 	if response.Success {
 		content.WriteString("STATUS: Success\n")
@@ -728,7 +730,7 @@ func (cs *ChatService) formatTaskResultForLLM(task *taskPkg.Task, response *task
 	}
 
 	return llm.Message{
-		Role:      "system",
+		Role:      "user",
 		Content:   content.String(),
 		Timestamp: time.Now(),
 		Visible:   false, // Hidden from UI as it's a system task result
@@ -818,6 +820,43 @@ func (cs *ChatService) isTextOnlyResponse(response string) bool {
 	}
 
 	return true
+}
+
+// getSimpleTaskDescription returns a simple description of a task
+func (cs *ChatService) getSimpleTaskDescription(task *taskPkg.Task) string {
+	switch task.Type {
+	case taskPkg.TaskTypeReadFile:
+		if task.Path != "" {
+			return fmt.Sprintf("Read file: %s", task.Path)
+		}
+		return "Read file"
+	case taskPkg.TaskTypeListDir:
+		if task.Path != "" {
+			return fmt.Sprintf("List directory: %s", task.Path)
+		}
+		return "List directory"
+	case taskPkg.TaskTypeSearch:
+		if task.Query != "" {
+			return fmt.Sprintf("Search for: %s", task.Query)
+		}
+		return "Search"
+	case taskPkg.TaskTypeRunShell:
+		if task.Command != "" {
+			return fmt.Sprintf("Run command: %s", task.Command)
+		}
+		return "Run command"
+	case taskPkg.TaskTypeEditFile:
+		if task.Path != "" {
+			return fmt.Sprintf("Edit file: %s", task.Path)
+		}
+		return "Edit file"
+	case taskPkg.TaskTypeMemory:
+		return fmt.Sprintf("Memory operation: %s", task.MemoryOperation)
+	case taskPkg.TaskTypeTodo:
+		return fmt.Sprintf("Todo operation: %s", task.TodoOperation)
+	default:
+		return fmt.Sprintf("Task: %s", task.Type)
+	}
 }
 
 // isExplorationQuery determines if a user query should use objective-driven exploration (from TUI)

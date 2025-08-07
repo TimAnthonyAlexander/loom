@@ -283,9 +283,10 @@ func (cm *ContextManager) summarizeOlderMessages(messages []llm.Message) llm.Mes
 	taskResults := make(map[string]string) // Key: task description, Value: summarized result
 
 	for _, msg := range messages {
-		if msg.Role == "assistant" {
-			// Extract objectives
-			if strings.Contains(msg.Content, "OBJECTIVE:") {
+		// Process both assistant messages and user messages that contain task results
+		if msg.Role == "assistant" || (msg.Role == "user" && strings.Contains(msg.Content, "TASK_RESULT:")) {
+			// Extract objectives (only from assistant messages)
+			if msg.Role == "assistant" && strings.Contains(msg.Content, "OBJECTIVE:") {
 				lines := strings.Split(msg.Content, "\n")
 				for _, line := range lines {
 					if strings.Contains(line, "OBJECTIVE:") {
@@ -326,13 +327,15 @@ func (cm *ContextManager) summarizeOlderMessages(messages []llm.Message) llm.Mes
 				taskResults[currentTask] = strings.TrimSpace(currentResult.String())
 			}
 
-			// Extract general actions for context
-			if len(msg.Content) > 200 {
-				// Get a summarized action
-				action := msg.Content[:100] + "..."
-				assistantActions = append(assistantActions, action)
-			} else {
-				assistantActions = append(assistantActions, msg.Content)
+			// Extract general actions for context (only from assistant messages)
+			if msg.Role == "assistant" {
+				if len(msg.Content) > 200 {
+					// Get a summarized action
+					action := msg.Content[:100] + "..."
+					assistantActions = append(assistantActions, action)
+				} else {
+					assistantActions = append(assistantActions, msg.Content)
+				}
 			}
 		}
 	}
