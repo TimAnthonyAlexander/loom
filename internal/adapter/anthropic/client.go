@@ -1,17 +1,27 @@
 package anthropic
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"time"
 
 	"github.com/loom/loom/internal/engine"
 )
 
 // Client handles interaction with Anthropic Claude APIs.
 type Client struct {
-	apiKey string
-	model  string
+	apiKey     string
+	model      string
+	endpoint   string
+	apiVersion string
+	httpClient *http.Client
 }
 
 // ToolUse represents a tool use request from Claude.
@@ -30,9 +40,26 @@ func New(apiKey string, model string) *Client {
 	}
 
 	return &Client{
-		apiKey: apiKey,
-		model:  model,
+		apiKey:     apiKey,
+		model:      model,
+		endpoint:   "https://api.anthropic.com/v1/messages",
+		apiVersion: "2025-06-01",
+		httpClient: &http.Client{
+			Timeout: 120 * time.Second,
+		},
 	}
+}
+
+// WithEndpoint sets a custom endpoint for the Anthropic API.
+func (c *Client) WithEndpoint(endpoint string) *Client {
+	c.endpoint = endpoint
+	return c
+}
+
+// WithAPIVersion sets a custom API version for the Anthropic API.
+func (c *Client) WithAPIVersion(version string) *Client {
+	c.apiVersion = version
+	return c
 }
 
 // Chat implements the engine.LLM interface for Anthropic Claude.
@@ -70,14 +97,247 @@ func (c *Client) Chat(
 	go func() {
 		defer close(resultCh)
 
-		// TODO: Implement the actual API call to Anthropic
-		// This is just a placeholder - real implementation would use the Anthropic API
+		// Prepare request body
+		reqBody, err := json.Marshal(requestBody)
+		if err != nil {
+			// Handle marshal error - can't do much but close the channel
+			return
+		}
 
-		// Mock response for now
-		mockResponse(ctx, resultCh)
+		// Create request
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(reqBody))
+		if err != nil {
+			// Handle request creation error
+			return
+		}
+
+		// Set headers
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("x-api-key", c.apiKey)
+		req.Header.Set("anthropic-version", c.apiVersion)
+
+		// Make the request
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			// Handle request error
+			return
+		}
+		defer resp.Body.Close()
+
+		// Check response status
+		if resp.StatusCode != http.StatusOK {
+			// Log or handle non-200 status
+			errorResponse, _ := io.ReadAll(resp.Body)
+			fmt.Printf("Anthropic API error: %s", errorResponse)
+			return
+		}
+
+		// Handle streaming response
+		if stream {
+			c.handleStreamingResponse(ctx, resp.Body, resultCh)
+		} else {
+			// Handle non-streaming response
+			c.handleNonStreamingResponse(ctx, resp.Body, resultCh)
+		}
 	}()
 
 	return resultCh, nil
+}
+
+// handleStreamingResponse processes a streaming response from the Anthropic API.
+func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch chan<- engine.TokenOrToolCall) {
+	scanner := bufio.NewScanner(body)
+
+	// Keep track of the current assistant response
+	var currentContent string
+	var toolCallID string
+	var toolCallName string
+	var toolCallInput json.RawMessage
+
+	// Process each line in the stream
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// Skip empty lines
+		if line == "" {
+			continue
+		}
+
+		// Lines from the stream start with "data: "
+		if !strings.HasPrefix(line, "event: ") && !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+
+		// Check for event type
+		if strings.HasPrefix(line, "event: ") {
+			// Event might indicate content_block_start, content_block_delta, etc.
+			continue
+		}
+
+		// Extract the data part
+		data := strings.TrimPrefix(line, "data: ")
+
+		// Parse the JSON
+		var streamResp struct {
+			Type       string `json:"type"`
+			StopReason string `json:"stop_reason"`
+			Delta      struct {
+				Type    string `json:"type"`
+				Text    string `json:"text"`
+				ToolUse *struct {
+					ID    string          `json:"id"`
+					Name  string          `json:"name"`
+					Type  string          `json:"type"`
+					Input json.RawMessage `json:"input"`
+				} `json:"tool_use"`
+			} `json:"delta"`
+			Message struct {
+				Content []struct {
+					Type    string `json:"type"`
+					Text    string `json:"text"`
+					ToolUse *struct {
+						ID    string          `json:"id"`
+						Name  string          `json:"name"`
+						Type  string          `json:"type"`
+						Input json.RawMessage `json:"input"`
+					} `json:"tool_use"`
+				} `json:"content"`
+			} `json:"message"`
+		}
+
+		if err := json.Unmarshal([]byte(data), &streamResp); err != nil {
+			// Skip malformed JSON
+			continue
+		}
+
+		// Handle tool use
+		if streamResp.StopReason == "tool_use" {
+			// Find the tool use block in the message
+			for _, content := range streamResp.Message.Content {
+				if content.ToolUse != nil {
+					toolCall := &engine.ToolCall{
+						ID:   content.ToolUse.ID,
+						Name: content.ToolUse.Name,
+						Args: content.ToolUse.Input,
+					}
+
+					select {
+					case <-ctx.Done():
+						return
+					case ch <- engine.TokenOrToolCall{ToolCall: toolCall}:
+						// Successfully sent tool call
+						return
+					}
+				}
+			}
+		}
+
+		// Handle content deltas
+		if streamResp.Type == "content_block_delta" && streamResp.Delta.Type == "text" && streamResp.Delta.Text != "" {
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- engine.TokenOrToolCall{Token: streamResp.Delta.Text}:
+				// Successfully sent token
+				currentContent += streamResp.Delta.Text
+			}
+		}
+
+		// Handle tool use deltas
+		if streamResp.Delta.ToolUse != nil {
+			if streamResp.Delta.ToolUse.ID != "" {
+				toolCallID = streamResp.Delta.ToolUse.ID
+			}
+			if streamResp.Delta.ToolUse.Name != "" {
+				toolCallName = streamResp.Delta.ToolUse.Name
+			}
+			if streamResp.Delta.ToolUse.Input != nil {
+				toolCallInput = streamResp.Delta.ToolUse.Input
+			}
+
+			// If we have all the components of a tool call, send it
+			if toolCallID != "" && toolCallName != "" && toolCallInput != nil {
+				toolCall := &engine.ToolCall{
+					ID:   toolCallID,
+					Name: toolCallName,
+					Args: toolCallInput,
+				}
+
+				select {
+				case <-ctx.Done():
+					return
+				case ch <- engine.TokenOrToolCall{ToolCall: toolCall}:
+					// Successfully sent tool call
+					return
+				}
+			}
+		}
+	}
+}
+
+// handleNonStreamingResponse processes a non-streaming response from the Anthropic API.
+func (c *Client) handleNonStreamingResponse(ctx context.Context, body io.Reader, ch chan<- engine.TokenOrToolCall) {
+	// Read the entire response
+	respBody, err := io.ReadAll(body)
+	if err != nil {
+		return
+	}
+
+	// Parse the response
+	var resp struct {
+		Type       string `json:"type"`
+		StopReason string `json:"stop_reason"`
+		Content    []struct {
+			Type    string `json:"type"`
+			Text    string `json:"text"`
+			ToolUse *struct {
+				ID    string          `json:"id"`
+				Name  string          `json:"name"`
+				Type  string          `json:"type"`
+				Input json.RawMessage `json:"input"`
+			} `json:"tool_use"`
+		} `json:"content"`
+	}
+
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return
+	}
+
+	// Check for tool use
+	if resp.StopReason == "tool_use" {
+		for _, content := range resp.Content {
+			if content.ToolUse != nil {
+				toolCall := &engine.ToolCall{
+					ID:   content.ToolUse.ID,
+					Name: content.ToolUse.Name,
+					Args: content.ToolUse.Input,
+				}
+
+				select {
+				case <-ctx.Done():
+					return
+				case ch <- engine.TokenOrToolCall{ToolCall: toolCall}:
+					// Successfully sent tool call
+					return
+				}
+			}
+		}
+	}
+
+	// If no tool use, send the text content
+	for _, content := range resp.Content {
+		if content.Type == "text" && content.Text != "" {
+			// Send the content character by character for consistency
+			for _, char := range content.Text {
+				select {
+				case <-ctx.Done():
+					return
+				case ch <- engine.TokenOrToolCall{Token: string(char)}:
+					// Successfully sent token
+				}
+			}
+		}
+	}
 }
 
 // convertMessages transforms engine messages to Anthropic Claude format.

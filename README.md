@@ -16,39 +16,6 @@ Loom consists of a Go backend that orchestrates the interaction between the user
 - **Memory**: Persistent storage for conversations and settings
 - **Bridge**: Connects Go backend with React frontend
 
-## Project Structure
-
-```
-loom/
-├── go.mod
-├── cmd/
-│   ├── loom/          # CLI entry-point (headless REPL or agent tests)
-│   └── loomgui/       # Wails desktop app
-│       ├── main.go    # Main application entry point
-│       ├── wails.json # Wails configuration file
-│       └── frontend/  # React (Vite) frontend
-├── internal/          # Non-public implementation
-│   ├── engine/        # Orchestrator + task loop
-│   ├── adapter/       # LLM back-ends
-│   │   ├── openai/
-│   │   ├── anthropic/
-│   │   └── ollama/
-│   ├── tool/          # Tool registry & implementations
-│   ├── editor/        # Safe file-editing & validation pipeline
-│   ├── indexer/       # ripgrep wrappers, language stats
-│   ├── memory/        # ~/.loom/* persistence
-│   ├── bridge/        # Go⇆Wails JS bindings & event helpers
-│   └── security/      # workspace jail, secret scrubbing
-```
-
-## Available Tools
-
-Loom currently includes these core tools:
-
-1. **read_file**: Read contents of files in the workspace
-2. **search_code**: Search the codebase for patterns using ripgrep
-3. **edit_file**: Make changes to files with approval
-
 ## Development
 
 ### Prerequisites
@@ -61,48 +28,16 @@ Loom currently includes these core tools:
 ### Setup
 
 ```bash
-# Install required tools
-brew install ripgrep
-go install github.com/wailsapp/wails/v2/cmd/wails@latest
+make
+make build
 
 # Make sure the wails binary is in your PATH
 export PATH=$PATH:$HOME/go/bin
-
-# Install Go dependencies
-go mod tidy
 
 # Install frontend dependencies
 cd cmd/loomgui/frontend && npm install
 cd ../..
 ```
-
-### Running in Development Mode
-
-```bash
-# Start the development server
-cd cmd/loomgui 
-wails dev
-
-# If wails is not in your PATH
-~/go/bin/wails dev
-```
-
-This will start the development server and open the application in a window. You can also view the application in your browser by navigating to http://localhost:34115.
-
-### Building for Production
-
-```bash
-# Build the application for your current platform
-cd cmd/loomgui
-wails build
-
-# For specific platforms (examples)
-wails build -platform=darwin/universal
-wails build -platform=windows/amd64
-wails build -platform=linux/amd64
-```
-
-The built application will be available in the `cmd/loomgui/build/bin` directory.
 
 ## Configuration
 

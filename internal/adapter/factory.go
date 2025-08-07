@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/loom/loom/internal/adapter/anthropic"
+	"github.com/loom/loom/internal/adapter/ollama"
 	"github.com/loom/loom/internal/adapter/openai"
 	"github.com/loom/loom/internal/engine"
 )
@@ -87,8 +88,11 @@ func New(config Config) (engine.LLM, error) {
 		return anthropic.New(config.APIKey, config.Model), nil
 
 	case ProviderOllama:
-		// TODO: Implement Ollama adapter
-		return nil, errors.New("Ollama adapter not yet implemented")
+		baseURL := config.Endpoint
+		if baseURL == "" {
+			baseURL = "http://localhost:11434/v1/chat/completions"
+		}
+		return ollama.New(baseURL, config.Model), nil
 
 	default:
 		return nil, errors.New("unknown LLM provider")

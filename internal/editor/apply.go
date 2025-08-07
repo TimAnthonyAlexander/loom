@@ -8,6 +8,25 @@ import (
 	"strings"
 )
 
+// Summary generates a short summary of an edit plan.
+func Summary(plan *EditPlan) string {
+	if plan.IsCreation {
+		return fmt.Sprintf("Create File: %s", filepath.Base(plan.FilePath))
+	} else if plan.IsDeletion {
+		return fmt.Sprintf("Delete File: %s", filepath.Base(plan.FilePath))
+	} else {
+		lineCount := plan.ChangedLines.EndLine - plan.ChangedLines.StartLine + 1
+		return fmt.Sprintf("Edit File: %s (Lines %d-%d, %d lines affected)", 
+			filepath.Base(plan.FilePath), plan.ChangedLines.StartLine, 
+			plan.ChangedLines.EndLine, lineCount)
+	}
+}
+
+// Diff generates a human-readable diff from an edit plan.
+func Diff(plan *EditPlan) string {
+	return plan.Diff
+}
+
 // ApplyEdit applies an edit plan to the filesystem.
 func ApplyEdit(plan *EditPlan) error {
 	// Create the directory structure if needed

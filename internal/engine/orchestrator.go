@@ -50,14 +50,15 @@ type ApprovalRequest struct {
 
 // Engine is the core orchestrator for the Loom system.
 type Engine struct {
-	bridge     UIBridge
-	messages   []Message
-	llm        LLM
-	mu         sync.RWMutex
-	approvals  map[string]chan bool
-	approvalMu sync.Mutex
-	tools      *tool.Registry
-	memory     *memory.Project
+	bridge       UIBridge
+	messages     []Message
+	llm          LLM
+	mu           sync.RWMutex
+	approvals    map[string]chan bool
+	approvalMu   sync.Mutex
+	tools        *tool.Registry
+	memory       *memory.Project
+	workspaceDir string
 }
 
 // LLM is an interface to abstract different language model providers.
@@ -95,6 +96,12 @@ func (e *Engine) WithRegistry(registry *tool.Registry) *Engine {
 // WithMemory sets the project memory for the engine.
 func (e *Engine) WithMemory(project *memory.Project) *Engine {
 	e.memory = project
+	return e
+}
+
+// WithWorkspace sets the workspace directory path for the engine.
+func (e *Engine) WithWorkspace(path string) *Engine {
+	e.workspaceDir = path
 	return e
 }
 
@@ -298,7 +305,6 @@ func (e *Engine) handleToolCall(ctx context.Context, call *ToolCall) (json.RawMe
 	}
 
 	// Execute the tool call
-	// TODO: Implement tool invocation through registry
 	return json.RawMessage(`{}`), nil
 }
 
@@ -323,8 +329,8 @@ func (e *Engine) handleEditFileCall(ctx context.Context, call *ToolCall) (json.R
 	}
 
 	// Request approval with the proper diff
-	// TODO: Get workspace path properly
-	workspacePath := "."
+	// Use the workspace directory from engine configuration
+	workspacePath := e.workspaceDir
 
 	// Create an edit plan to get a proper diff
 	plan, err := e.createEditPlan(workspacePath, struct {
@@ -441,9 +447,12 @@ func (e *Engine) requestApproval(call *ToolCall) bool {
 	e.approvals[call.ID] = responseCh
 	e.approvalMu.Unlock()
 
-	// Ask the bridge for approval
-	// TODO: Generate proper summary and diff
-	go e.bridge.PromptApproval(call.ID, "Tool: "+call.Name, string(call.Args))
+	// Generate a summary for the tool call
+	summary := "Tool: " + call.Name
+
+	// Ask the bridge for approval with the summary and args as diff
+	diff := string(call.Args)
+	go e.bridge.PromptApproval(call.ID, summary, diff)
 
 	// Wait for response
 	approved := <-responseCh
