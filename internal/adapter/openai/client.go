@@ -17,9 +17,9 @@ import (
 
 // Client handles interaction with OpenAI APIs.
 type Client struct {
-	apiKey   string
-	model    string
-	endpoint string
+	apiKey     string
+	model      string
+	endpoint   string
 	httpClient *http.Client
 }
 
@@ -30,9 +30,9 @@ func New(apiKey string, model string) *Client {
 	}
 
 	return &Client{
-		apiKey:    apiKey,
-		model:     model,
-		endpoint:  "https://api.openai.com/v1/chat/completions",
+		apiKey:   apiKey,
+		model:    model,
+		endpoint: "https://api.openai.com/v1/chat/completions",
 		httpClient: &http.Client{
 			Timeout: 120 * time.Second,
 		},
@@ -130,39 +130,39 @@ func (c *Client) Chat(
 // handleStreamingResponse processes a streaming response from the OpenAI API.
 func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch chan<- engine.TokenOrToolCall) {
 	scanner := bufio.NewScanner(body)
-	
+
 	// Keep track of the current assistant response
 	var currentContent string
 	var toolCall *engine.ToolCall
-	
+
 	// Process each line in the stream
 	for scanner.Scan() {
 		line := scanner.Text()
-		
+
 		// Skip empty lines
 		if line == "" {
 			continue
 		}
-		
+
 		// Lines from the stream start with "data: "
 		if !strings.HasPrefix(line, "data: ") {
 			continue
 		}
-		
+
 		// Extract the data part
 		data := line[6:] // Skip "data: "
-		
+
 		// The stream can contain a "[DONE]" message to indicate the end
 		if data == "[DONE]" {
 			break
 		}
-		
+
 		// Parse the JSON delta
 		var streamResp struct {
 			Choices []struct {
 				Delta struct {
-					Content    string `json:"content"`
-					ToolCalls  []struct {
+					Content   string `json:"content"`
+					ToolCalls []struct {
 						Index    int    `json:"index"`
 						ID       string `json:"id"`
 						Type     string `json:"type"` // "function"
@@ -174,20 +174,20 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 				} `json:"delta"`
 			} `json:"choices"`
 		}
-		
+
 		if err := json.Unmarshal([]byte(data), &streamResp); err != nil {
 			// Skip malformed JSON
 			continue
 		}
-		
+
 		// Process the deltas
 		if len(streamResp.Choices) > 0 {
 			delta := streamResp.Choices[0].Delta
-			
+
 			// Handle text content
 			if delta.Content != "" {
 				currentContent += delta.Content
-				
+
 				select {
 				case <-ctx.Done():
 					return
@@ -195,11 +195,11 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 					// Successfully sent token
 				}
 			}
-			
+
 			// Handle tool calls
 			if len(delta.ToolCalls) > 0 {
 				tc := delta.ToolCalls[0]
-				
+
 				// If we have a tool call ID, this is the start of a new tool call
 				if tc.ID != "" {
 					toolCall = &engine.ToolCall{
@@ -207,7 +207,7 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 						Name: tc.Function.Name,
 					}
 				}
-				
+
 				// If we have arguments and a tool call, append them
 				if tc.Function.Arguments != "" && toolCall != nil {
 					// Parse the arguments
@@ -216,7 +216,7 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 						// Convert to raw JSON
 						if args, err := json.Marshal(argsMap); err == nil {
 							toolCall.Args = args
-							
+
 							// Send the tool call
 							select {
 							case <-ctx.Done():
@@ -242,13 +242,13 @@ func (c *Client) handleNonStreamingResponse(ctx context.Context, body io.Reader,
 	if err != nil {
 		return
 	}
-	
+
 	// Parse the response
 	var resp struct {
 		Choices []struct {
 			Message struct {
-				Content    string `json:"content"`
-				ToolCalls  []struct {
+				Content   string `json:"content"`
+				ToolCalls []struct {
 					ID       string `json:"id"`
 					Type     string `json:"type"` // "function"
 					Function struct {
@@ -259,32 +259,32 @@ func (c *Client) handleNonStreamingResponse(ctx context.Context, body io.Reader,
 			} `json:"message"`
 		} `json:"choices"`
 	}
-	
+
 	if err := json.Unmarshal(respBody, &resp); err != nil {
 		return
 	}
-	
+
 	// Process the choices
 	if len(resp.Choices) > 0 {
 		message := resp.Choices[0].Message
-		
+
 		// Check for tool calls first
 		if len(message.ToolCalls) > 0 {
 			tc := message.ToolCalls[0]
-			
+
 			// Create a tool call
 			toolCall := &engine.ToolCall{
 				ID:   tc.ID,
 				Name: tc.Function.Name,
 			}
-			
+
 			// Parse the arguments
 			var argsMap map[string]interface{}
 			if err := json.Unmarshal([]byte(tc.Function.Arguments), &argsMap); err == nil {
 				// Convert to raw JSON
 				if args, err := json.Marshal(argsMap); err == nil {
 					toolCall.Args = args
-					
+
 					// Send the tool call
 					select {
 					case <-ctx.Done():
@@ -314,17 +314,32 @@ func convertMessages(messages []engine.Message) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(messages))
 
 	for _, msg := range messages {
-		openaiMsg := map[string]interface{}{
-			"role":    msg.Role,
-			"content": msg.Content,
+		// OpenAI API expects specific format for tool responses
+		if msg.Role == "tool" {
+			openaiMsg := map[string]interface{}{
+				"role":         "tool",
+				"content":      msg.Content,
+				"tool_call_id": msg.ToolID,
+				"name":         msg.Name,
+			}
+			result = append(result, openaiMsg)
+		} else if msg.Role == "function" {
+			// Legacy function messages - convert to tool format for OpenAI
+			openaiMsg := map[string]interface{}{
+				"role":         "tool",
+				"content":      msg.Content,
+				"tool_call_id": msg.ToolID,
+				"name":         msg.Name,
+			}
+			result = append(result, openaiMsg)
+		} else {
+			// Standard message types (user, assistant, system)
+			openaiMsg := map[string]interface{}{
+				"role":    msg.Role,
+				"content": msg.Content,
+			}
+			result = append(result, openaiMsg)
 		}
-
-		// Add function name for function messages
-		if msg.Role == "function" && msg.Name != "" {
-			openaiMsg["name"] = msg.Name
-		}
-
-		result = append(result, openaiMsg)
 	}
 
 	return result
