@@ -84,7 +84,18 @@ func (c *Client) Chat(
 	// Create output channel for tokens/tool calls
 	resultCh := make(chan engine.TokenOrToolCall)
 
-	// Convert messages and tools to Claude format
+	// Extract system prompt and convert messages (Anthropic expects system at top-level)
+	var systemPrompt string
+	for _, m := range messages {
+		if strings.ToLower(m.Role) == "system" && m.Content != "" {
+			if systemPrompt != "" {
+				systemPrompt += "\n\n"
+			}
+			systemPrompt += m.Content
+		}
+	}
+
+	// Convert messages and tools to Claude format (excluding system messages)
 	claudeMessages := convertMessages(messages)
 	claudeTools := convertTools(tools)
 
@@ -99,6 +110,9 @@ func (c *Client) Chat(
 		"max_tokens":  c.maxTokens, // Required parameter for Anthropic API
 		"temperature": 0.2,
 		"stream":      stream,
+	}
+	if systemPrompt != "" {
+		requestBody["system"] = systemPrompt
 	}
 
 	fmt.Printf("DEBUG: Using Anthropic model: %s (max_tokens: %d)\n", modelID, c.maxTokens)
@@ -128,6 +142,12 @@ func (c *Client) Chat(
 
 		// Set headers
 		req.Header.Set("Content-Type", "application/json")
+		// Streaming responses are delivered via Server-Sent Events
+		if stream {
+			req.Header.Set("Accept", "text/event-stream")
+			req.Header.Set("Cache-Control", "no-cache")
+			req.Header.Set("Connection", "keep-alive")
+		}
 		fmt.Printf("DEBUG: Using Anthropic API key: %s...\n", c.apiKey[:min(10, len(c.apiKey))])
 		// Anthropic requires 'x-api-key' header, not 'Authorization'
 		req.Header.Set("x-api-key", c.apiKey)
@@ -169,6 +189,9 @@ func (c *Client) Chat(
 // handleStreamingResponse processes a streaming response from the Anthropic API.
 func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch chan<- engine.TokenOrToolCall) {
 	scanner := bufio.NewScanner(body)
+	// Increase buffer for large SSE lines
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 1024*1024)
 
 	// Keep track of the current assistant response
 	var currentContent string
@@ -229,6 +252,7 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 
 		if err := json.Unmarshal([]byte(data), &streamResp); err != nil {
 			// Skip malformed JSON
+			fmt.Printf("Anthropic stream unmarshal error: %v, raw: %s\n", err, data)
 			continue
 		}
 
@@ -294,6 +318,9 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 				}
 			}
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		fmt.Printf("Anthropic stream scanner error: %v\n", err)
 	}
 }
 

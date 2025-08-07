@@ -208,8 +208,10 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 		// Process the LLM response
 		var currentContent string
 		var toolCallReceived *tool.ToolCall
+		streamEnded := false
 
 		// Process the stream
+	StreamLoop:
 		for {
 			select {
 			case <-ctx.Done():
@@ -218,12 +220,8 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 			case item, ok := <-stream:
 				if !ok {
 					// Stream ended
-					if toolCallReceived == nil && currentContent != "" {
-						// Final assistant message
-						convo.AddAssistant(currentContent)
-						return nil
-					}
-					break
+					streamEnded = true
+					break StreamLoop
 				}
 
 				if item.ToolCall != nil {
@@ -233,16 +231,12 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 						Name: item.ToolCall.Name,
 						Args: item.ToolCall.Args,
 					}
-					break
-				} else {
-					// Got a token
-					currentContent += item.Token
-					e.bridge.EmitAssistant(currentContent)
+					break StreamLoop
 				}
-			}
 
-			if toolCallReceived != nil {
-				break // Exit the stream processing loop to handle the tool call
+				// Got a token
+				currentContent += item.Token
+				e.bridge.EmitAssistant(currentContent)
 			}
 		}
 
@@ -275,6 +269,12 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 		// If we reach here with content, it's the final assistant message
 		if currentContent != "" {
 			convo.AddAssistant(currentContent)
+			return nil
+		}
+
+		// If stream ended with no content and no tool call, inform the UI
+		if streamEnded {
+			e.bridge.SendChat("system", "No response from model.")
 			return nil
 		}
 	}
