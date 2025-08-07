@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"os"
 	"runtime/debug"
 
 	"github.com/loom/loom/internal/adapter"
@@ -91,13 +92,27 @@ func (a *App) SetModel(model string) {
 		return
 	}
 
+	// Read proper API key based on the provider
+	var apiKey string
+	switch provider {
+	case adapter.ProviderOpenAI:
+		apiKey = os.Getenv("OPENAI_API_KEY")
+	case adapter.ProviderAnthropic:
+		apiKey = os.Getenv("ANTHROPIC_API_KEY")
+	default:
+		apiKey = a.config.APIKey // Keep existing key for other providers like Ollama
+	}
+
 	// Update the configuration
 	newConfig := adapter.Config{
 		Provider: provider,
 		Model:    modelID,
-		APIKey:   a.config.APIKey,
+		APIKey:   apiKey,
 		Endpoint: a.config.Endpoint,
 	}
+
+	// Log the model change for debugging
+	log.Printf("Switching model to %s:%s with API key %s...", provider, modelID, apiKey[:min(10, len(apiKey))])
 
 	// Create a new LLM adapter with the updated model
 	llm, err := adapter.New(newConfig)
@@ -159,4 +174,12 @@ func (a *App) PromptApproval(actionID, summary, diff string) bool {
 // We need to declare this to satisfy the interface
 var runtime struct {
 	EventsEmit func(ctx context.Context, eventName string, data ...interface{})
+}
+
+// min returns the smaller of a and b
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

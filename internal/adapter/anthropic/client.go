@@ -36,7 +36,7 @@ type ToolUse struct {
 // New creates a new Anthropic Claude client.
 func New(apiKey string, model string) *Client {
 	if model == "" {
-		model = "claude-3-opus-20240229" // Default model
+		model = "claude:claude-sonnet-4-20250514" // Default model
 	}
 
 	return &Client{
