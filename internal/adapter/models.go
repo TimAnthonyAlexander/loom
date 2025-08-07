@@ -40,11 +40,29 @@ func ParseModel(modelString string) (Model, error) {
 func AvailableModels() []Model {
 	// List of supported models with provider prefixes
 	models := []string{
+		// Claude 4 Models
 		"claude:claude-opus-4-20250514",
 		"claude:claude-sonnet-4-20250514",
+		"claude:claude-haiku-4-20250514",
+
+		// Claude 3.7 Models
+		"claude:claude-3-7-sonnet-20250219",
+
+		// Claude 3.5 Models
+		"claude:claude-3-5-sonnet-20241022",
+		"claude:claude-3-5-haiku-20241022",
+
+		// Claude 3 Models
+		"claude:claude-3-opus-20240229",
+		"claude:claude-3-sonnet-20240229",
+		"claude:claude-3-haiku-20240307",
+
+		// OpenAI Models
 		"openai:gpt-4.1",
 		"openai:o4-mini",
 		"openai:o3",
+
+		// Ollama Models
 		"ollama:llama3.1:8b",
 		"ollama:llama3:8b",
 		"ollama:gpt-oss:20b",

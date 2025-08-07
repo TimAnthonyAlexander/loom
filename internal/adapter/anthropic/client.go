@@ -43,7 +43,7 @@ func New(apiKey string, model string) *Client {
 		apiKey:     apiKey,
 		model:      model,
 		endpoint:   "https://api.anthropic.com/v1/messages",
-		apiVersion: "", // No API version needed for Anthropic
+		apiVersion: "2023-06-01", // Required API version for Claude
 		httpClient: &http.Client{
 			Timeout: 120 * time.Second,
 		},
@@ -80,15 +80,19 @@ func (c *Client) Chat(
 	claudeMessages := convertMessages(messages)
 	claudeTools := convertTools(tools)
 
+	// Remove provider prefix if present (e.g., "claude:" prefix)
+	modelID := strings.TrimPrefix(c.model, "claude:")
+
 	// Prepare the request body
-	// Use the model ID as is, without any provider prefix
-	// Anthropic expects model IDs like "claude-opus-4-20250514"
+	// Anthropic expects model IDs like "claude-opus-4-20250514" without provider prefix
 	requestBody := map[string]interface{}{
-		"model":       c.model,
+		"model":       modelID,
 		"messages":    claudeMessages,
 		"temperature": 0.2,
 		"stream":      stream,
 	}
+
+	fmt.Printf("DEBUG: Using Anthropic model: %s\n", modelID)
 
 	// Add tools if provided
 	if len(tools) > 0 {
@@ -119,10 +123,9 @@ func (c *Client) Chat(
 		// Anthropic requires 'x-api-key' header, not 'Authorization'
 		req.Header.Set("x-api-key", c.apiKey)
 
-		// Only set API version if specified
-		if c.apiVersion != "" {
-			req.Header.Set("anthropic-version", c.apiVersion)
-		}
+		// API version is required for Anthropic
+		req.Header.Set("anthropic-version", c.apiVersion)
+		fmt.Printf("DEBUG: Using anthropic-version: %s\n", c.apiVersion)
 
 		// Make the request
 		resp, err := c.httpClient.Do(req)
