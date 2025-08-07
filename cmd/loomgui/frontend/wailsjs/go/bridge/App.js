@@ -6,6 +6,10 @@ export function Approve(arg1, arg2) {
   return window['go']['bridge']['App']['Approve'](arg1, arg2);
 }
 
+export function EmitAssistant(arg1) {
+  return window['go']['bridge']['App']['EmitAssistant'](arg1);
+}
+
 export function GetTools() {
   return window['go']['bridge']['App']['GetTools']();
 }

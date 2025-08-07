@@ -4,6 +4,8 @@ import {context} from '../models';
 
 export function Approve(arg1:string,arg2:boolean):Promise<void>;
 
+export function EmitAssistant(arg1:string):Promise<void>;
+
 export function GetTools():Promise<Array<Record<string, any>>>;
 
 export function PromptApproval(arg1:string,arg2:string,arg3:string):Promise<boolean>;

@@ -22,11 +22,17 @@ import (
 var assets embed.FS
 
 func main() {
+	// Get current working directory as default workspace path
+	workspacePath, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("Failed to get current directory: %v", err)
+	}
+
 	// Create a new tool registry
 	registry := tool.NewRegistry()
 
 	// Register basic tools (would be expanded later)
-	registerTools(registry)
+	registerTools(registry, workspacePath)
 
 	// Create LLM adapter using factory
 	config := adapter.DefaultConfig()
@@ -86,12 +92,7 @@ func main() {
 }
 
 // registerTools registers all available tools with the registry.
-func registerTools(registry *tool.Registry) {
-	// Get current working directory as default workspace path
-	workspacePath, err := os.Getwd()
-	if err != nil {
-		log.Fatalf("Failed to get current directory: %v", err)
-	}
+func registerTools(registry *tool.Registry, workspacePath string) {
 
 	// Create indexer
 	idx := indexer.NewRipgrepIndexer(workspacePath)

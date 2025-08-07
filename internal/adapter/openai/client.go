@@ -17,7 +17,7 @@ type Client struct {
 // New creates a new OpenAI client.
 func New(apiKey string, model string) *Client {
 	if model == "" {
-		model = "gpt-4o" // Default model
+		model = "o4-mini" // Default model
 	}
 
 	return &Client{
