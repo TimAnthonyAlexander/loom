@@ -1,4 +1,0 @@
->>LOOM_EDIT file=docs/CHANGELOG.md REPLACE 4-5
-- First stable release
-- Integrated API layer
-<<LOOM_EDIT
