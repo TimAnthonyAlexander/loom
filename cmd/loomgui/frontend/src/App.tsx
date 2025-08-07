@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { EventsOn } from '../wailsjs/runtime/runtime';
-import { SendUserMessage, Approve, GetTools } from '../wailsjs/go/main/App';
+import { SendUserMessage, Approve, GetTools } from '../wailsjs/go/bridge/App';
 import './App.css';
 
 // Define types for messages from backend
