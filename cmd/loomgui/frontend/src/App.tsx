@@ -3,8 +3,8 @@ import { EventsOn } from '../wailsjs/runtime/runtime';
 import { SendUserMessage, Approve, GetTools } from '../wailsjs/go/bridge/App';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneLight as oneLightStyle } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import './App.css';
 
 // Helper function to format diff output with syntax highlighting
@@ -209,7 +209,7 @@ const App: React.FC = () => {
                       const match = /language-(\w+)/.exec(className || '')
                       return !inline && match ? (
                         <SyntaxHighlighter
-                          style={oneLight}
+                          style={oneLightStyle as any}
                           language={match[1]}
                           PreTag="div"
                           {...props}
