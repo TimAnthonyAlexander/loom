@@ -328,10 +328,13 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 			continue
 		}
 
-		// If we reach here with content, it's the final assistant message
+		// If we reach here with content but no tool call, record it and continue the loop
 		if currentContent != "" {
 			convo.AddAssistant(currentContent)
-			return nil
+			// Nudge the model to proceed with a tool call next
+			convo.AddSystem("Reminder: If the objective is not complete, call exactly one tool next. Do not produce a final answer until you call the finalize tool.")
+			// Continue depth loop to allow further tool calls
+			continue
 		}
 
 		// If stream ended with no content and no tool call, retry once without streaming
@@ -390,7 +393,10 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 			if currentContent != "" {
 				convo.AddAssistant(currentContent)
 				e.bridge.EmitAssistant(currentContent)
-				return nil
+				// Nudge the model to proceed with a tool call next
+				convo.AddSystem("Reminder: If the objective is not complete, call exactly one tool next. Do not produce a final answer until you call the finalize tool.")
+				// Continue depth loop; do not finalize on plain content
+				continue
 			}
 			// Still nothing
 			e.bridge.SendChat("system", "No response from model.")
