@@ -121,6 +121,72 @@ body {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
+/* Make sure markdown is properly styled */
+.message .content {
+  line-height: 1.5;
+}
+
+.message .content p {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.message .content ul, 
+.message .content ol {
+  margin-left: 1.5rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.message .content pre {
+  background-color: #f6f8fa;
+  border-radius: 6px;
+  padding: 0.5rem;
+  overflow-x: auto;
+}
+
+.message .content code {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+  font-size: 0.9em;
+  padding: 0.2em 0.4em;
+  margin: 0;
+  border-radius: 3px;
+  background-color: #f6f8fa;
+}
+
+.message .content blockquote {
+  border-left: 4px solid #dfe2e5;
+  color: #666;
+  padding-left: 1rem;
+  margin-left: 0;
+}
+
+.message .content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.message .content th,
+.message .content td {
+  border: 1px solid #dfe2e5;
+  padding: 6px 13px;
+}
+
+.message .content th {
+  background-color: #f6f8fa;
+}
+
+/* Add proper spacing between elements */
+.message .content > *:first-child {
+  margin-top: 0;
+}
+
+.message .content > *:last-child {
+  margin-bottom: 0;
+}
+
 .message.user {
   align-self: flex-end;
   background-color: var(--user-message-bg);

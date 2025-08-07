@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef, ReactElement } from 'react';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import { SendUserMessage, Approve, GetTools } from '../wailsjs/go/bridge/App';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import './App.css';
 
 // Helper function to format diff output with syntax highlighting
@@ -197,7 +201,32 @@ const App: React.FC = () => {
           {messages.map((msg, index) => (
             <div key={index} className={`message ${msg.role}`}>
               <div className="role">{msg.role}</div>
-              <div className="content">{msg.content}</div>
+              <div className="content">
+                <ReactMarkdown 
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    code({node, inline, className, children, ...props}) {
+                      const match = /language-(\w+)/.exec(className || '')
+                      return !inline && match ? (
+                        <SyntaxHighlighter
+                          style={oneLight}
+                          language={match[1]}
+                          PreTag="div"
+                          {...props}
+                        >
+                          {String(children).replace(/\n$/, '')}
+                        </SyntaxHighlighter>
+                      ) : (
+                        <code className={className} {...props}>
+                          {children}
+                        </code>
+                      )
+                    }
+                  }}
+                >
+                  {msg.content}
+                </ReactMarkdown>
+              </div>
             </div>
           ))}
           <div ref={messagesEndRef} />
