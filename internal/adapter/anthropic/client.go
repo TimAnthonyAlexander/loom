@@ -332,7 +332,7 @@ func (c *Client) handleNonStreamingResponse(ctx context.Context, body io.Reader,
 		return
 	}
 
-	// Parse the response
+	// Parse the response per Anthropic schema
 	var resp struct {
 		Type       string `json:"type"`
 		StopReason string `json:"stop_reason"`
@@ -376,14 +376,10 @@ func (c *Client) handleNonStreamingResponse(ctx context.Context, body io.Reader,
 	// If no tool use, send the text content
 	for _, content := range resp.Content {
 		if content.Type == "text" && content.Text != "" {
-			// Send the content character by character for consistency
-			for _, char := range content.Text {
-				select {
-				case <-ctx.Done():
-					return
-				case ch <- engine.TokenOrToolCall{Token: string(char)}:
-					// Successfully sent token
-				}
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- engine.TokenOrToolCall{Token: content.Text}:
 			}
 		}
 	}

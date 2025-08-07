@@ -83,6 +83,30 @@ func (c *Conversation) AddTool(name string, content string) {
 	c.save()
 }
 
+// AddToolResult adds a tool result message with a reference to the tool use ID
+func (c *Conversation) AddToolResult(name string, toolUseID string, content string) {
+	c.messages = append(c.messages, Message{
+		Role:      "tool",
+		Name:      name,
+		ToolID:    toolUseID,
+		Content:   content,
+		Timestamp: time.Now(),
+	})
+	c.save()
+}
+
+// AddAssistantToolUse adds an assistant tool_use message with the given ID and JSON input (as string)
+func (c *Conversation) AddAssistantToolUse(name string, toolUseID string, inputJSON string) {
+	c.messages = append(c.messages, Message{
+		Role:      "assistant",
+		Name:      name,
+		ToolID:    toolUseID,
+		Content:   inputJSON,
+		Timestamp: time.Now(),
+	})
+	c.save()
+}
+
 // History returns the conversation history.
 func (c *Conversation) History() []Message {
 	return c.messages

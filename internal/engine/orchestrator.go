@@ -231,6 +231,11 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 						Name: item.ToolCall.Name,
 						Args: item.ToolCall.Args,
 					}
+					// Record the assistant tool_use in conversation for Anthropic
+					if convo != nil {
+						// Args is json.RawMessage
+						convo.AddAssistantToolUse(toolCallReceived.Name, toolCallReceived.ID, string(toolCallReceived.Args))
+					}
 					break StreamLoop
 				}
 
@@ -246,7 +251,8 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 			execResult, err := e.tools.InvokeToolCall(ctx, toolCallReceived)
 			if err != nil {
 				errorMsg := fmt.Sprintf("Error executing tool %s: %v", toolCallReceived.Name, err)
-				convo.AddTool(toolCallReceived.Name, errorMsg)
+				// Attach as tool_result with the same tool_use_id for Anthropic
+				convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, errorMsg)
 				e.bridge.SendChat("system", errorMsg)
 				return err
 			}
@@ -259,8 +265,8 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 				}
 			}
 
-			// Add the result to the conversation
-			convo.AddTool(toolCallReceived.Name, execResult.Content)
+			// Add the result to the conversation, referencing tool_use_id
+			convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, execResult.Content)
 
 			// Continue the loop to get the next assistant message
 			continue
