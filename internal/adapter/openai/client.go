@@ -45,6 +45,17 @@ func (c *Client) WithEndpoint(endpoint string) *Client {
 	return c
 }
 
+// isReasoningModel checks if the model is an o-series reasoning model (o3, o3-mini, o4-mini)
+func isReasoningModel(model string) bool {
+	reasoningModels := []string{"o3", "o3-mini", "o4-mini"}
+	for _, m := range reasoningModels {
+		if model == m || strings.HasPrefix(model, m+"-") {
+			return true
+		}
+	}
+	return false
+}
+
 // Chat implements the engine.LLM interface for OpenAI.
 func (c *Client) Chat(
 	ctx context.Context,
@@ -85,10 +96,14 @@ func (c *Client) Chat(
 
 	// Prepare the request body
 	requestBody := map[string]interface{}{
-		"model":       c.model,
-		"messages":    openaiMessages,
-		"temperature": 0.2,
-		"stream":      stream,
+		"model":    c.model,
+		"messages": openaiMessages,
+		"stream":   stream,
+	}
+
+	// Add temperature only for non-reasoning models (not o-series)
+	if !isReasoningModel(c.model) {
+		requestBody["temperature"] = 0.2
 	}
 
 	// Add tools if provided
