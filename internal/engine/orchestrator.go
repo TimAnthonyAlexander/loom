@@ -212,7 +212,17 @@ func (e *Engine) handleEditFileCall(ctx context.Context, call *ToolCall) (json.R
 	workspacePath := "."
 
 	// Create an edit plan to get a proper diff
-	plan, err := e.createEditPlan(workspacePath, editArgs)
+	plan, err := e.createEditPlan(workspacePath, struct {
+		Path      string
+		OldString string
+		NewString string
+		CreateNew bool
+	}{
+		Path:      editArgs.Path,
+		OldString: editArgs.OldString,
+		NewString: editArgs.NewString,
+		CreateNew: editArgs.CreateNew,
+	})
 	if err != nil {
 		return json.RawMessage(fmt.Sprintf(`{"error": "%s"}`, err.Error())), nil
 	}
