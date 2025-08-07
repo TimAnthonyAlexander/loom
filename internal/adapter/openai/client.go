@@ -119,14 +119,24 @@ func (c *Client) Chat(
 		// Prepare request body
 		reqBody, err := json.Marshal(requestBody)
 		if err != nil {
-			// Handle marshal error - can't do much but close the channel
+			// Surface the error to the engine via a token so the UI shows something
+			select {
+			case <-ctx.Done():
+				return
+			case resultCh <- engine.TokenOrToolCall{Token: fmt.Sprintf("OpenAI marshal error: %v", err)}:
+			}
 			return
 		}
 
 		// Create request
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(reqBody))
 		if err != nil {
-			// Handle request creation error
+			// Surface the error to the engine via a token so the UI shows something
+			select {
+			case <-ctx.Done():
+				return
+			case resultCh <- engine.TokenOrToolCall{Token: fmt.Sprintf("OpenAI request error: %v", err)}:
+			}
 			return
 		}
 
@@ -137,16 +147,26 @@ func (c *Client) Chat(
 		// Make the request
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
-			// Handle request error
+			// Surface the error to the engine via a token so the UI shows something
+			select {
+			case <-ctx.Done():
+				return
+			case resultCh <- engine.TokenOrToolCall{Token: fmt.Sprintf("OpenAI HTTP error: %v", err)}:
+			}
 			return
 		}
 		defer resp.Body.Close()
 
 		// Check response status
 		if resp.StatusCode != http.StatusOK {
-			// Log or handle non-200 status
+			// Read and surface non-200 status to the engine so the UI can display it
 			errorResponse, _ := io.ReadAll(resp.Body)
-			fmt.Printf("OpenAI API error: %s", errorResponse)
+			msg := fmt.Sprintf("OpenAI API error (%d): %s", resp.StatusCode, string(errorResponse))
+			select {
+			case <-ctx.Done():
+				return
+			case resultCh <- engine.TokenOrToolCall{Token: msg}:
+			}
 			return
 		}
 
@@ -241,7 +261,12 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 
 	// Keep track of the current assistant response
 	var currentContent string
-	var toolCall *engine.ToolCall
+	// Accumulate tool call deltas by ID until we have full JSON args
+	type partialCall struct {
+		name string
+		args string
+	}
+	partials := make(map[string]*partialCall)
 
 	// Process each line in the stream
 	for scanner.Scan() {
@@ -304,36 +329,33 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 				}
 			}
 
-			// Handle tool calls
+			// Handle tool calls; accumulate arguments across deltas
 			if len(delta.ToolCalls) > 0 {
-				tc := delta.ToolCalls[0]
-
-				// If we have a tool call ID, this is the start of a new tool call
-				if tc.ID != "" {
-					toolCall = &engine.ToolCall{
-						ID:   tc.ID,
-						Name: tc.Function.Name,
+				for _, tc := range delta.ToolCalls {
+					if tc.ID == "" {
+						continue
 					}
-				}
-
-				// If we have arguments and a tool call, append them
-				if tc.Function.Arguments != "" && toolCall != nil {
-					// Parse the arguments
-					var argsMap map[string]interface{}
-					if err := json.Unmarshal([]byte(tc.Function.Arguments), &argsMap); err == nil {
-						// Convert to raw JSON
-						if args, err := json.Marshal(argsMap); err == nil {
-							toolCall.Args = args
-
-							// Send the tool call
-							select {
-							case <-ctx.Done():
-								return
-							case ch <- engine.TokenOrToolCall{ToolCall: toolCall}:
-								// Successfully sent tool call
-								// Reset toolCall to nil as we've handled this one
-								toolCall = nil
-								return // Exit after sending a tool call
+					p, ok := partials[tc.ID]
+					if !ok {
+						p = &partialCall{name: tc.Function.Name}
+						partials[tc.ID] = p
+					}
+					if tc.Function.Name != "" {
+						p.name = tc.Function.Name
+					}
+					if tc.Function.Arguments != "" {
+						p.args += tc.Function.Arguments
+						// Try to parse accumulated args as JSON
+						var argsMap map[string]interface{}
+						if err := json.Unmarshal([]byte(p.args), &argsMap); err == nil {
+							if args, err := json.Marshal(argsMap); err == nil {
+								call := &engine.ToolCall{ID: tc.ID, Name: p.name, Args: args}
+								select {
+								case <-ctx.Done():
+									return
+								case ch <- engine.TokenOrToolCall{ToolCall: call}:
+									return
+								}
 							}
 						}
 					}

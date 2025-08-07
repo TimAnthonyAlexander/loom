@@ -162,19 +162,30 @@ func (c *Client) Chat(
 		// Make the request
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
-			// Handle request error
+			// Surface request error via token
 			fmt.Printf("Anthropic HTTP error: %v\n", err)
+			select {
+			case <-ctx.Done():
+				return
+			case resultCh <- engine.TokenOrToolCall{Token: fmt.Sprintf("Anthropic HTTP error: %v", err)}:
+			}
 			return
 		}
 		defer resp.Body.Close()
 
 		// Check response status
 		if resp.StatusCode != http.StatusOK {
-			// Log or handle non-200 status with improved error message
+			// Log and surface non-200 status
 			errorResponse, _ := io.ReadAll(resp.Body)
-			fmt.Printf("Anthropic API error (status %d): %s\n", resp.StatusCode, errorResponse)
+			msg := fmt.Sprintf("Anthropic API error (%d): %s", resp.StatusCode, string(errorResponse))
+			fmt.Println(msg)
 			fmt.Printf("Debug: Request sent to: %s with model: %s, max_tokens: %d\n",
 				c.endpoint, c.model, c.maxTokens)
+			select {
+			case <-ctx.Done():
+				return
+			case resultCh <- engine.TokenOrToolCall{Token: msg}:
+			}
 			return
 		}
 

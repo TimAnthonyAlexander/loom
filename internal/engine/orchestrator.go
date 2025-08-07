@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/loom/loom/internal/memory"
 	"github.com/loom/loom/internal/tool"
@@ -229,19 +230,32 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 		var toolCallReceived *tool.ToolCall
 		streamEnded := false
 
-		// Process the stream
+		// Process the stream with inactivity timeout
+		inactivityTimer := time.NewTimer(15 * time.Second)
 	StreamLoop:
 		for {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-
+			case <-inactivityTimer.C:
+				// No activity for a while – break to trigger fallback
+				e.bridge.SendChat("system", "Model appears unresponsive, retrying...")
+				streamEnded = true
+				break StreamLoop
 			case item, ok := <-stream:
 				if !ok {
 					// Stream ended
 					streamEnded = true
 					break StreamLoop
 				}
+				// Reset inactivity timer on any activity
+				if !inactivityTimer.Stop() {
+					select {
+					case <-inactivityTimer.C:
+					default:
+					}
+				}
+				inactivityTimer.Reset(15 * time.Second)
 
 				if item.ToolCall != nil {
 					// Got a tool call
@@ -297,8 +311,51 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 			return nil
 		}
 
-		// If stream ended with no content and no tool call, inform the UI
-		if streamEnded {
+		// If stream ended with no content and no tool call, retry once without streaming
+		if streamEnded && currentContent == "" && toolCallReceived == nil {
+			// Retry non-streaming once
+			e.bridge.SendChat("system", "Retrying without streaming...")
+			fallbackStream, err := adapter.Chat(ctx, engineMessages, convertSchemas(tools), false)
+			if err != nil {
+				e.bridge.SendChat("system", "Error: "+err.Error())
+				return err
+			}
+			// Collect the single-shot response
+			for item := range fallbackStream {
+				if item.ToolCall != nil {
+					toolCallReceived = &tool.ToolCall{ID: item.ToolCall.ID, Name: item.ToolCall.Name, Args: item.ToolCall.Args}
+					if convo != nil {
+						convo.AddAssistantToolUse(toolCallReceived.Name, toolCallReceived.ID, string(toolCallReceived.Args))
+					}
+					break
+				}
+				if item.Token != "" {
+					currentContent += item.Token
+				}
+			}
+			if toolCallReceived != nil {
+				// Execute the tool and continue the depth loop
+				execResult, err := e.tools.InvokeToolCall(ctx, toolCallReceived)
+				if err != nil {
+					errorMsg := fmt.Sprintf("Error executing tool %s: %v", toolCallReceived.Name, err)
+					convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, errorMsg)
+					e.bridge.SendChat("system", errorMsg)
+					return err
+				}
+				if !execResult.Safe {
+					if !e.UserApproved(toolCallReceived, execResult.Diff) {
+						execResult.Content = "User denied operation"
+					}
+				}
+				convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, execResult.Content)
+				continue
+			}
+			if currentContent != "" {
+				convo.AddAssistant(currentContent)
+				e.bridge.EmitAssistant(currentContent)
+				return nil
+			}
+			// Still nothing
 			e.bridge.SendChat("system", "No response from model.")
 			return nil
 		}
