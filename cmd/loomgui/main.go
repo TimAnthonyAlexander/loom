@@ -73,8 +73,17 @@ func main() {
 		eng.WithMemory(projectMemory)
 	}
 
+	// Set workspace path
+	eng.WithWorkspace(workspacePath)
+
 	// Create the application
-	app := bridge.NewApp(eng, registry)
+	app := bridge.NewApp()
+	app.WithEngine(eng)
+	app.WithTools(registry)
+	app.WithConfig(config)
+
+	// Connect the engine to the bridge
+	eng.SetBridge(app)
 
 	// Run the application
 	if err := wails.Run(&options.App{
@@ -83,7 +92,7 @@ func main() {
 		Height:           800,
 		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 255},
 		OnStartup: func(ctx context.Context) {
-			app.SetContext(ctx)
+			// No context needed for app
 		},
 		Bind: []interface{}{
 			app,

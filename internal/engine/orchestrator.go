@@ -59,6 +59,7 @@ type Engine struct {
 	tools        *tool.Registry
 	memory       *memory.Project
 	workspaceDir string
+	llmMu        sync.Mutex
 }
 
 // LLM is an interface to abstract different language model providers.
@@ -110,6 +111,13 @@ func (e *Engine) SetBridge(bridge UIBridge) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.bridge = bridge
+}
+
+// SetLLM updates the LLM used by the engine.
+func (e *Engine) SetLLM(llm LLM) {
+	e.llmMu.Lock()
+	defer e.llmMu.Unlock()
+	e.llm = llm
 }
 
 // Enqueue adds a user message and starts the processing loop.

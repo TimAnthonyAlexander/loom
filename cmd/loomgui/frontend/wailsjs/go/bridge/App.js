@@ -26,6 +26,18 @@ export function SendUserMessage(arg1) {
   return window['go']['bridge']['App']['SendUserMessage'](arg1);
 }
 
-export function SetContext(arg1) {
-  return window['go']['bridge']['App']['SetContext'](arg1);
+export function SetModel(arg1) {
+  return window['go']['bridge']['App']['SetModel'](arg1);
+}
+
+export function WithConfig(arg1) {
+  return window['go']['bridge']['App']['WithConfig'](arg1);
+}
+
+export function WithEngine(arg1) {
+  return window['go']['bridge']['App']['WithEngine'](arg1);
+}
+
+export function WithTools(arg1) {
+  return window['go']['bridge']['App']['WithTools'](arg1);
 }

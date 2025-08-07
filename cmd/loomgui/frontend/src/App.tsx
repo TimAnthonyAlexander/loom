@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, ReactElement } from 'react';
 import { EventsOn } from '../wailsjs/runtime/runtime';
-import { SendUserMessage, Approve, GetTools } from '../wailsjs/go/bridge/App';
+import { SendUserMessage, Approve, GetTools, SetModel } from '../wailsjs/go/bridge/App';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight as oneLightStyle } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import ModelSelector from './ModelSelector';
 import './App.css';
 
 // Custom table components to handle the inTable error
@@ -190,6 +191,7 @@ const App: React.FC = () => {
   const [input, setInput] = useState('');
   const [approvalRequest, setApprovalRequest] = useState<ApprovalRequest | null>(null);
   const [tools, setTools] = useState<Tool[]>([]);
+  const [currentModel, setCurrentModel] = useState<string>('');
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
 
   useEffect(() => {
@@ -255,10 +257,22 @@ const App: React.FC = () => {
     }
   };
 
+  // Handle model selection
+  const handleModelSelect = (model: string) => {
+    setCurrentModel(model);
+    SetModel(model).catch(err => {
+      console.error("Failed to set model:", err);
+    });
+  };
+
   return (
     <div className="app">
       <div className="sidebar">
         <h1>Loom v2</h1>
+        <div className="model-selection-container">
+          <h2>Model Selection</h2>
+          <ModelSelector onSelect={handleModelSelect} currentModel={currentModel} />
+        </div>
         <div className="tools-list">
           <h2>Available Tools</h2>
           <ul>

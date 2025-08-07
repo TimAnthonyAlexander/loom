@@ -3,6 +3,7 @@ package adapter
 import (
 	"errors"
 	"os"
+	"strings"
 
 	"github.com/loom/loom/internal/adapter/anthropic"
 	"github.com/loom/loom/internal/adapter/ollama"
@@ -40,14 +41,23 @@ func DefaultConfig() Config {
 		Model:    "gpt-4o",
 	}
 
-	// Check for provider selection
-	if provider := os.Getenv("LOOM_PROVIDER"); provider != "" {
-		config.Provider = Provider(provider)
+	// Check for model selection with provider prefix (e.g., "claude:claude-opus-4-20250514")
+	if model := os.Getenv("LOOM_MODEL"); model != "" {
+		if strings.Contains(model, ":") {
+			provider, modelID, err := GetProviderFromModel(model)
+			if err == nil {
+				config.Provider = provider
+				config.Model = modelID
+			}
+		} else {
+			// Backward compatibility for model without provider prefix
+			config.Model = model
+		}
 	}
 
-	// Check for model selection
-	if model := os.Getenv("LOOM_MODEL"); model != "" {
-		config.Model = model
+	// Check for explicit provider selection (overrides model-based provider)
+	if provider := os.Getenv("LOOM_PROVIDER"); provider != "" {
+		config.Provider = Provider(provider)
 	}
 
 	// Get API key based on provider

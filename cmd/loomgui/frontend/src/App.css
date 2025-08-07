@@ -42,9 +42,21 @@ body {
 
 .sidebar h1 {
   font-size: 1.5rem;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
   font-weight: 600;
   color: var(--primary-color);
+}
+
+.model-selection-container {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.model-selection-container h2 {
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+  color: var(--light-text);
 }
 
 .tools-list {
