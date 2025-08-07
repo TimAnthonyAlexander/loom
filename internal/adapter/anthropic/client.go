@@ -22,6 +22,7 @@ type Client struct {
 	endpoint   string
 	apiVersion string
 	httpClient *http.Client
+	maxTokens  int // Maximum tokens in response
 }
 
 // ToolUse represents a tool use request from Claude.
@@ -44,6 +45,7 @@ func New(apiKey string, model string) *Client {
 		model:      model,
 		endpoint:   "https://api.anthropic.com/v1/messages",
 		apiVersion: "2023-06-01", // Required API version for Claude
+		maxTokens:  4000,         // Default max tokens for responses
 		httpClient: &http.Client{
 			Timeout: 120 * time.Second,
 		},
@@ -59,6 +61,12 @@ func (c *Client) WithEndpoint(endpoint string) *Client {
 // WithAPIVersion sets a custom API version for the Anthropic API.
 func (c *Client) WithAPIVersion(version string) *Client {
 	c.apiVersion = version
+	return c
+}
+
+// WithMaxTokens sets the maximum number of tokens in the response.
+func (c *Client) WithMaxTokens(maxTokens int) *Client {
+	c.maxTokens = maxTokens
 	return c
 }
 
@@ -88,11 +96,12 @@ func (c *Client) Chat(
 	requestBody := map[string]interface{}{
 		"model":       modelID,
 		"messages":    claudeMessages,
+		"max_tokens":  c.maxTokens, // Required parameter for Anthropic API
 		"temperature": 0.2,
 		"stream":      stream,
 	}
 
-	fmt.Printf("DEBUG: Using Anthropic model: %s\n", modelID)
+	fmt.Printf("DEBUG: Using Anthropic model: %s (max_tokens: %d)\n", modelID, c.maxTokens)
 
 	// Add tools if provided
 	if len(tools) > 0 {
@@ -140,7 +149,8 @@ func (c *Client) Chat(
 			// Log or handle non-200 status with improved error message
 			errorResponse, _ := io.ReadAll(resp.Body)
 			fmt.Printf("Anthropic API error (status %d): %s\n", resp.StatusCode, errorResponse)
-			fmt.Printf("Debug: Request sent to: %s with model: %s\n", c.endpoint, c.model)
+			fmt.Printf("Debug: Request sent to: %s with model: %s, max_tokens: %d\n",
+				c.endpoint, c.model, c.maxTokens)
 			return
 		}
 
