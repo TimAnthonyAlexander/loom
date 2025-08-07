@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -208,8 +210,14 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 	// Set up the adapter (LLM)
 	adapter := e.llm
 
-	// Set a maximum depth to prevent infinite loops
-	for depth := 0; depth < 8; depth++ {
+	// Set a configurable maximum depth to prevent infinite loops but allow long tool chains
+	maxDepth := 64
+	if v := os.Getenv("LOOM_MAX_STEPS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			maxDepth = n
+		}
+	}
+	for depth := 0; depth < maxDepth; depth++ {
 		// Convert memory messages to engine messages
 		memoryMessages := convo.History()
 		engineMessages := make([]Message, 0, len(memoryMessages))
@@ -291,16 +299,30 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 				return err
 			}
 
-			// Check if approval is needed
+			// Approval path returns structured result to the model
 			if !execResult.Safe {
-				if !e.UserApproved(toolCallReceived, execResult.Diff) {
-					// User denied the operation
-					execResult.Content = "User denied operation"
+				approved := e.UserApproved(toolCallReceived, execResult.Diff)
+				payload := map[string]any{
+					"tool":     toolCallReceived.Name,
+					"approved": approved,
+					"diff":     execResult.Diff,
+					"message":  execResult.Content,
 				}
+				b, _ := json.Marshal(payload)
+				convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, string(b))
+			} else {
+				// Safe tool: just return content
+				convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, execResult.Content)
 			}
 
-			// Add the result to the conversation, referencing tool_use_id
-			convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, execResult.Content)
+			// If this was a finalize call, end now
+			if toolCallReceived.Name == "finalize" {
+				if execResult.Content != "" {
+					convo.AddAssistant(execResult.Content)
+					e.bridge.EmitAssistant(execResult.Content)
+				}
+				return nil
+			}
 
 			// Continue the loop to get the next assistant message
 			continue
@@ -313,7 +335,7 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 		}
 
 		// If stream ended with no content and no tool call, retry once without streaming
-		if streamEnded && currentContent == "" && toolCallReceived == nil {
+		if streamEnded && currentContent == "" {
 			// Retry non-streaming once
 			e.bridge.SendChat("system", "Retrying without streaming...")
 			fallbackStream, err := adapter.Chat(ctx, engineMessages, convertSchemas(tools), false)
@@ -344,11 +366,25 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 					return err
 				}
 				if !execResult.Safe {
-					if !e.UserApproved(toolCallReceived, execResult.Diff) {
-						execResult.Content = "User denied operation"
+					approved := e.UserApproved(toolCallReceived, execResult.Diff)
+					payload := map[string]any{
+						"tool":     toolCallReceived.Name,
+						"approved": approved,
+						"diff":     execResult.Diff,
+						"message":  execResult.Content,
 					}
+					b, _ := json.Marshal(payload)
+					convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, string(b))
+				} else {
+					convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, execResult.Content)
 				}
-				convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, execResult.Content)
+				if toolCallReceived.Name == "finalize" {
+					if execResult.Content != "" {
+						convo.AddAssistant(execResult.Content)
+						e.bridge.EmitAssistant(execResult.Content)
+					}
+					return nil
+				}
 				continue
 			}
 			if currentContent != "" {

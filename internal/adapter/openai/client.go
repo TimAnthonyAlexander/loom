@@ -78,12 +78,8 @@ func (c *Client) Chat(
 	// Create output channel for tokens/tool calls
 	resultCh := make(chan engine.TokenOrToolCall)
 
-	// Preprocess the message history to ensure OpenAI API compatibility
-	// This rebuilds the conversation with the proper structure that OpenAI expects
-	rebuiltMessages := preprocessMessagesForOpenAI(messages)
-
 	// Convert messages and tools to OpenAI format
-	openaiMessages := convertMessages(rebuiltMessages)
+	openaiMessages := convertMessages(messages)
 	openaiTools := convertTools(tools)
 
 	// Add debug logging of the converted OpenAI messages
@@ -184,68 +180,7 @@ func (c *Client) Chat(
 
 // preprocessMessagesForOpenAI rebuilds the conversation to ensure it has the correct structure for OpenAI API
 // specifically, it makes sure each tool message is preceded by an assistant message with tool_calls
-func preprocessMessagesForOpenAI(messages []engine.Message) []engine.Message {
-	if len(messages) == 0 {
-		return messages
-	}
-
-	result := make([]engine.Message, 0, len(messages)*2) // Potentially doubling size if we add assistant messages
-
-	// Keep track of which tools we've seen and added synthetic assistant messages for
-	processedTools := make(map[string]bool)
-
-	// First copy user and system messages as is
-	for i, msg := range messages {
-		if msg.Role == "user" || msg.Role == "system" {
-			result = append(result, msg)
-			continue
-		}
-
-		// For tool/function messages, make sure there's an assistant message before it
-		if msg.Role == "tool" || msg.Role == "function" {
-			toolName := msg.Name
-			if toolName == "" {
-				fmt.Printf("WARNING: Tool message at position %d has no name, skipping\n", i)
-				continue
-			}
-
-			// Generate a unique tool_call_id if one doesn't exist
-			toolCallID := msg.ToolID
-			if toolCallID == "" {
-				toolCallID = fmt.Sprintf("call_%s_%d", toolName, i)
-				// Update the message with the generated ID
-				msg.ToolID = toolCallID
-				fmt.Printf("INFO: Generated tool_call_id '%s' for tool '%s' at position %d\n",
-					toolCallID, toolName, i)
-			}
-
-			// If we haven't added an assistant message for this tool yet, add one
-			toolKey := fmt.Sprintf("%s_%s", toolName, toolCallID)
-			if !processedTools[toolKey] {
-				// Create a synthetic assistant message with tool_calls
-				assistantMsg := engine.Message{
-					Role:    "assistant",
-					Content: "", // Empty content as per OpenAI's format for assistant messages with tool_calls
-					Name:    "",
-					ToolID:  "",
-				}
-
-				result = append(result, assistantMsg)
-				processedTools[toolKey] = true
-
-				fmt.Printf("INFO: Added synthetic assistant message before tool '%s'\n", toolName)
-			}
-
-			// Now add the tool message
-			result = append(result, msg)
-		} else {
-			// Handle regular assistant messages
-			result = append(result, msg)
-		}
-	}
-
-	return result
-}
+// Removed preprocessMessagesForOpenAI; we will rely on explicit assistant tool_use messages recorded by the engine
 
 // truncateString shortens a string for logging purposes
 func truncateString(s string, maxLength int) string {
@@ -442,92 +377,50 @@ func (c *Client) handleNonStreamingResponse(ctx context.Context, body io.Reader,
 // convertMessages transforms engine messages to OpenAI format.
 func convertMessages(messages []engine.Message) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(messages))
-
-	// Track tool calls from assistant messages to link with tool responses
-	toolCallsByAssistant := make(map[int][]map[string]interface{})
-
-	for i, msg := range messages {
-		// Standard messages (user, system)
-		if msg.Role == "user" || msg.Role == "system" {
-			openaiMsg := map[string]interface{}{
+	for _, msg := range messages {
+		switch msg.Role {
+		case "system", "user":
+			result = append(result, map[string]interface{}{
 				"role":    msg.Role,
 				"content": msg.Content,
-			}
-			result = append(result, openaiMsg)
-			continue
-		}
-
-		// Assistant messages
-		if msg.Role == "assistant" {
-			// Check if there's a tool message following this one
-			hasToolAfter := false
-			if i < len(messages)-1 && (messages[i+1].Role == "tool" || messages[i+1].Role == "function") {
-				hasToolAfter = true
-			}
-
-			openaiMsg := map[string]interface{}{
-				"role": "assistant",
-			}
-
-			// If followed by a tool message, we need to create a tool_calls structure
-			if hasToolAfter {
-				nextMsg := messages[i+1]
-				toolName := nextMsg.Name
-				toolID := nextMsg.ToolID
-
-				// For assistant messages that need to call tools, we leave content empty
-				// and add tool_calls instead
-				toolCall := map[string]interface{}{
-					"id":   toolID,
-					"type": "function",
-					"function": map[string]interface{}{
-						"name":      toolName,
-						"arguments": "{}", // Empty arguments as we don't know what they were
-					},
+			})
+		case "assistant":
+			if msg.Name != "" && msg.ToolID != "" {
+				arguments := msg.Content
+				if arguments == "" {
+					arguments = "{}"
 				}
-
-				toolCalls := []map[string]interface{}{toolCall}
-				openaiMsg["tool_calls"] = toolCalls
-
-				// Store these tool calls so we can link them with tool responses
-				toolCallsByAssistant[i] = toolCalls
+				result = append(result, map[string]interface{}{
+					"role": "assistant",
+					"tool_calls": []map[string]interface{}{
+						{
+							"id":   msg.ToolID,
+							"type": "function",
+							"function": map[string]interface{}{
+								"name":      msg.Name,
+								"arguments": arguments,
+							},
+						},
+					},
+				})
 			} else {
-				// Regular assistant message with content
-				openaiMsg["content"] = msg.Content
+				result = append(result, map[string]interface{}{
+					"role":    "assistant",
+					"content": msg.Content,
+				})
 			}
-
-			result = append(result, openaiMsg)
-			continue
-		}
-
-		// Tool/function response messages
-		if msg.Role == "tool" || msg.Role == "function" {
-			// Tool messages should follow assistant messages
-			// This is handled by preprocessMessagesForOpenAI
-
-			// Make sure the tool message has a valid tool_call_id
-			toolCallID := msg.ToolID
-			if toolCallID == "" {
-				fmt.Printf("WARNING: Tool message at index %d doesn't have a ToolID, generating one\n", i)
-				toolCallID = fmt.Sprintf("call_%s_%d", msg.Name, i)
-			}
-
-			// Create the OpenAI tool response format
+		case "tool", "function":
 			openaiMsg := map[string]interface{}{
 				"role":         "tool",
 				"content":      msg.Content,
-				"tool_call_id": toolCallID,
+				"tool_call_id": msg.ToolID,
 			}
-
-			// Only add name if present (OpenAI spec doesn't require it)
 			if msg.Name != "" {
 				openaiMsg["name"] = msg.Name
 			}
-
 			result = append(result, openaiMsg)
 		}
 	}
-
 	return result
 }
 
