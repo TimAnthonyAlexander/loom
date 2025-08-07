@@ -1,7 +1,87 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, ReactElement } from 'react';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import { SendUserMessage, Approve, GetTools } from '../wailsjs/go/bridge/App';
 import './App.css';
+
+// Helper function to format diff output with syntax highlighting
+const formatDiff = (diff: string): ReactElement => {
+  if (!diff) return <pre>No changes</pre>;
+
+  // Split the diff into lines
+  const lines = diff.split('\n');
+  
+  // Track if we're in the header section
+  let inHeader = true;
+  const headerLines: string[] = [];
+  const contentLines: string[] = [];
+  
+  // Separate header from content
+  for (const line of lines) {
+    if (inHeader && (line.startsWith('---') || line.startsWith('+++'))) {
+      headerLines.push(line);
+    } else if (line === '') {
+      inHeader = false;
+    } else {
+      contentLines.push(line);
+    }
+  }
+  
+  return (
+    <>
+      {headerLines.length > 0 && (
+        <div className="diff-header">
+          {headerLines.map((line, i) => <div key={`header-${i}`}>{line}</div>)}
+        </div>
+      )}
+      
+      <div className="diff-content">
+        {contentLines.map((line, i) => {
+          // Format line based on its prefix
+          if (line.startsWith('+') || line.startsWith('+')) {
+            const match = line.match(/^(\+)(\s*\d+:\s)(.*)$/);
+            if (match) {
+              return (
+                <div key={`line-${i}`} className="diff-added">
+                  <span className="diff-line-number">{match[2]}</span>
+                  {match[3]}
+                </div>
+              );
+            }
+            
+            return <div key={`line-${i}`} className="diff-added">{line}</div>;
+          } else if (line.startsWith('-') || line.startsWith('-')) {
+            const match = line.match(/^(\-)(\s*\d+:\s)(.*)$/);
+            if (match) {
+              return (
+                <div key={`line-${i}`} className="diff-removed">
+                  <span className="diff-line-number">{match[2]}</span>
+                  {match[3]}
+                </div>
+              );
+            }
+            
+            return <div key={`line-${i}`} className="diff-removed">{line}</div>;
+          } else if (line.match(/^\d+ line\(s\) changed$/)) {
+            return <div key={`line-${i}`} className="diff-summary">{line}</div>;
+          }
+          
+          // Normal context lines
+          const match = line.match(/^(\s)(\s*\d+:\s)(.*)$/);
+          if (match) {
+            return (
+              <div key={`line-${i}`}>
+                <span className="diff-line-number">{match[2]}</span>
+                {match[3]}
+              </div>
+            );
+          }
+          
+          return <div key={`line-${i}`}>{line}</div>;
+        })}
+      </div>
+    </>
+  );
+};
 
 // Define types for messages from backend
 interface ChatMessage {
@@ -125,7 +205,7 @@ const App: React.FC = () => {
             <h3>{approvalRequest.summary}</h3>
             
             <div className="diff-view">
-              <pre>{approvalRequest.diff}</pre>
+              {formatDiff(approvalRequest.diff)}
             </div>
             
             <div className="approval-actions">

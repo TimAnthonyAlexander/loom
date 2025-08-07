@@ -230,8 +230,59 @@ body {
   border-radius: 6px;
   padding: 1rem;
   margin-bottom: 1rem;
-  font-family: monospace;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', 'Courier New', monospace;
   white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.diff-view .diff-header {
+  color: #666;
+  margin-bottom: 10px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #ddd;
+  font-weight: bold;
+}
+
+.diff-view .diff-added {
+  background-color: #e6ffec;
+  color: #24292e;
+  display: block;
+  padding: 1px 0;
+}
+
+.diff-view .diff-removed {
+  background-color: #ffebe9;
+  color: #24292e;
+  display: block;
+  padding: 1px 0;
+}
+
+.diff-view .diff-line-number {
+  color: #666;
+  display: inline-block;
+  min-width: 40px;
+  user-select: none;
+  text-align: right;
+  margin-right: 10px;
+  padding-right: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.diff-view .diff-content {
+  margin-top: 5px;
+}
+
+.diff-view .diff-summary {
+  margin-top: 10px;
+  color: #666;
+  font-style: italic;
+}
+
+.diff-view .diff-file {
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #eee;
 }
 
 .approval-actions {
