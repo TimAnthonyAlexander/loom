@@ -193,34 +193,38 @@ func truncateString(s string, maxLength int) string {
 // handleStreamingResponse processes a streaming response from the OpenAI API.
 func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch chan<- engine.TokenOrToolCall) {
 	scanner := bufio.NewScanner(body)
+	// Increase the scanner buffer to safely handle larger SSE chunks
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 1024*1024)
 
 	// Keep track of the current assistant response
 	var currentContent string
-	// Accumulate tool call deltas by ID until we have full JSON args
+
+	// Accumulate tool call deltas until finish_reason == "tool_calls"
 	type partialCall struct {
-		name string
-		args string
+		id    string
+		name  string
+		args  string
+		index int
+		order int
 	}
 	partials := make(map[string]*partialCall)
+	var orderCounter int
+	sawToolCalls := false
 
 	// Process each line in the stream
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		// Skip empty lines
 		if line == "" {
 			continue
 		}
 
-		// Lines from the stream start with "data: "
 		if !strings.HasPrefix(line, "data: ") {
 			continue
 		}
 
-		// Extract the data part
-		data := line[6:] // Skip "data: "
-
-		// The stream can contain a "[DONE]" message to indicate the end
+		data := line[6:]
 		if data == "[DONE]" {
 			break
 		}
@@ -233,68 +237,138 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 					ToolCalls []struct {
 						Index    int    `json:"index"`
 						ID       string `json:"id"`
-						Type     string `json:"type"` // "function"
+						Type     string `json:"type"`
 						Function struct {
 							Name      string `json:"name"`
 							Arguments string `json:"arguments"`
 						} `json:"function"`
 					} `json:"tool_calls"`
 				} `json:"delta"`
+				FinishReason string `json:"finish_reason"`
 			} `json:"choices"`
 		}
 
 		if err := json.Unmarshal([]byte(data), &streamResp); err != nil {
-			// Skip malformed JSON
 			continue
 		}
 
-		// Process the deltas
-		if len(streamResp.Choices) > 0 {
-			delta := streamResp.Choices[0].Delta
+		if len(streamResp.Choices) == 0 {
+			continue
+		}
+		delta := streamResp.Choices[0].Delta
+		finish := streamResp.Choices[0].FinishReason
 
-			// Handle text content
-			if delta.Content != "" {
-				currentContent += delta.Content
+		// Stream text tokens as they arrive
+		if delta.Content != "" {
+			currentContent += delta.Content
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- engine.TokenOrToolCall{Token: delta.Content}:
+			}
+		}
 
-				select {
-				case <-ctx.Done():
-					return
-				case ch <- engine.TokenOrToolCall{Token: delta.Content}:
-					// Successfully sent token
+		// Accumulate any tool_calls deltas
+		if len(delta.ToolCalls) > 0 {
+			sawToolCalls = true
+			for _, tc := range delta.ToolCalls {
+				// Prefer ID for accumulation; fall back to synthetic key using index
+				id := tc.ID
+				if id == "" {
+					id = fmt.Sprintf("idx_%d", tc.Index)
+				}
+				p, ok := partials[id]
+				if !ok {
+					p = &partialCall{id: id, name: tc.Function.Name, index: tc.Index, order: orderCounter}
+					orderCounter++
+					partials[id] = p
+				}
+				if tc.Index >= 0 && p.index < 0 {
+					p.index = tc.Index
+				}
+				if tc.Function.Name != "" {
+					p.name = tc.Function.Name
+				}
+				if tc.Function.Arguments != "" {
+					p.args += tc.Function.Arguments
+				}
+			}
+		}
+
+		// Only emit tool call(s) after model signals completion of tool_calls
+		if finish == "tool_calls" && sawToolCalls {
+			// Choose the first tool call deterministically (by lowest index, then order)
+			var chosen *partialCall
+			for _, pc := range partials {
+				if chosen == nil {
+					chosen = pc
+					continue
+				}
+				// Prefer lower index when available; otherwise fallback to insertion order
+				if pc.index >= 0 && chosen.index >= 0 {
+					if pc.index < chosen.index {
+						chosen = pc
+					}
+				} else if pc.index >= 0 && chosen.index < 0 {
+					chosen = pc
+				} else if pc.index < 0 && chosen.index < 0 && pc.order < chosen.order {
+					chosen = pc
 				}
 			}
 
-			// Handle tool calls; accumulate arguments across deltas
-			if len(delta.ToolCalls) > 0 {
-				for _, tc := range delta.ToolCalls {
-					if tc.ID == "" {
-						continue
-					}
-					p, ok := partials[tc.ID]
-					if !ok {
-						p = &partialCall{name: tc.Function.Name}
-						partials[tc.ID] = p
-					}
-					if tc.Function.Name != "" {
-						p.name = tc.Function.Name
-					}
-					if tc.Function.Arguments != "" {
-						p.args += tc.Function.Arguments
-						// Try to parse accumulated args as JSON
-						var argsMap map[string]interface{}
-						if err := json.Unmarshal([]byte(p.args), &argsMap); err == nil {
-							if args, err := json.Marshal(argsMap); err == nil {
-								call := &engine.ToolCall{ID: tc.ID, Name: p.name, Args: args}
-								select {
-								case <-ctx.Done():
-									return
-								case ch <- engine.TokenOrToolCall{ToolCall: call}:
-									return
-								}
-							}
+			if chosen != nil {
+				// Try to parse accumulated args once at finish
+				var argsMap map[string]interface{}
+				if err := json.Unmarshal([]byte(chosen.args), &argsMap); err == nil {
+					if args, err := json.Marshal(argsMap); err == nil {
+						call := &engine.ToolCall{ID: chosen.id, Name: chosen.name, Args: args}
+						select {
+						case <-ctx.Done():
+							return
+						case ch <- engine.TokenOrToolCall{ToolCall: call}:
+							return
 						}
 					}
 				}
+				// If parsing failed, emit the raw args string as-is to surface the issue
+				call := &engine.ToolCall{ID: chosen.id, Name: chosen.name, Args: json.RawMessage([]byte(chosen.args))}
+				select {
+				case <-ctx.Done():
+					return
+				case ch <- engine.TokenOrToolCall{ToolCall: call}:
+					return
+				}
+			}
+		}
+	}
+
+	// If the scanner ends without explicit finish_reason but we have a parsable tool call, try to emit it
+	if err := scanner.Err(); err == nil && sawToolCalls && len(partials) > 0 {
+		var chosen *partialCall
+		for _, pc := range partials {
+			if chosen == nil || pc.order < chosen.order {
+				chosen = pc
+			}
+		}
+		if chosen != nil {
+			var argsMap map[string]interface{}
+			if err := json.Unmarshal([]byte(chosen.args), &argsMap); err == nil {
+				if args, err := json.Marshal(argsMap); err == nil {
+					call := &engine.ToolCall{ID: chosen.id, Name: chosen.name, Args: args}
+					select {
+					case <-ctx.Done():
+						return
+					case ch <- engine.TokenOrToolCall{ToolCall: call}:
+						return
+					}
+				}
+			}
+			call := &engine.ToolCall{ID: chosen.id, Name: chosen.name, Args: json.RawMessage([]byte(chosen.args))}
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- engine.TokenOrToolCall{ToolCall: call}:
+				return
 			}
 		}
 	}
