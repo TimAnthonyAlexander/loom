@@ -39,6 +39,7 @@ type UIBridge interface {
 	SendChat(role, text string)
 	EmitAssistant(text string)
 	PromptApproval(actionID string, summary string, diff string) (approved bool)
+	SetBusy(isBusy bool)
 }
 
 // ApprovalRequest tracks an outstanding approval request.
@@ -163,6 +164,11 @@ func (e *Engine) UserApproved(toolCall *tool.ToolCall, diff string) bool {
 
 // processLoop is the main processing loop for the engine.
 func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
+	// Indicate busy state to UI during the request lifecycle
+	if e.bridge != nil {
+		e.bridge.SetBusy(true)
+		defer e.bridge.SetBusy(false)
+	}
 	// Initialize memory if needed
 	if e.memory == nil {
 		e.bridge.SendChat("system", "Error: Memory not initialized")
@@ -230,32 +236,27 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 		var toolCallReceived *tool.ToolCall
 		streamEnded := false
 
-		// Process the stream with inactivity timeout
-		inactivityTimer := time.NewTimer(15 * time.Second)
+		// Process the stream; if slow, emit a one-time notice but do not break
+		slowTicker := time.NewTicker(20 * time.Second)
+		defer slowTicker.Stop()
+		slowNotified := false
 	StreamLoop:
 		for {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-inactivityTimer.C:
-				// No activity for a while – break to trigger fallback
-				e.bridge.SendChat("system", "Model appears unresponsive, retrying...")
-				streamEnded = true
-				break StreamLoop
+			case <-slowTicker.C:
+				if !slowNotified {
+					e.bridge.SendChat("system", "Still working...")
+					slowNotified = true
+				}
 			case item, ok := <-stream:
 				if !ok {
 					// Stream ended
 					streamEnded = true
 					break StreamLoop
 				}
-				// Reset inactivity timer on any activity
-				if !inactivityTimer.Stop() {
-					select {
-					case <-inactivityTimer.C:
-					default:
-					}
-				}
-				inactivityTimer.Reset(15 * time.Second)
+				// Any activity observed; no action needed
 
 				if item.ToolCall != nil {
 					// Got a tool call

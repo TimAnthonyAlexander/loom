@@ -26,6 +26,10 @@ export function SendUserMessage(arg1) {
   return window['go']['bridge']['App']['SendUserMessage'](arg1);
 }
 
+export function SetBusy(arg1) {
+  return window['go']['bridge']['App']['SetBusy'](arg1);
+}
+
 export function SetModel(arg1) {
   return window['go']['bridge']['App']['SetModel'](arg1);
 }

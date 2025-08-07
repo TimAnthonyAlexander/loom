@@ -333,6 +333,12 @@ body {
   background-color: #2d62ad;
 }
 
+.input-area button:disabled,
+.input-area textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .approval-modal {
   position: fixed;
   top: 0;

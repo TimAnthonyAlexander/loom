@@ -18,6 +18,7 @@ type App struct {
 	tools  *tool.Registry
 	config adapter.Config
 	ctx    context.Context
+	busy   bool
 }
 
 // NewApp creates a new App application struct.
@@ -165,6 +166,14 @@ func (a *App) EmitAssistant(text string) {
 		runtime.EventsEmit(a.ctx, "assistant-msg", text)
 	} else {
 		log.Println("Warning: Wails context not initialized in EmitAssistant")
+	}
+}
+
+// SetBusy updates the busy state and notifies the frontend to enable/disable inputs
+func (a *App) SetBusy(isBusy bool) {
+	a.busy = isBusy
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "system:busy", isBusy)
 	}
 }
 

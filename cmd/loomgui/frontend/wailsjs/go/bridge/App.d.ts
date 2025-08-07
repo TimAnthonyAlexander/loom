@@ -18,6 +18,8 @@ export function SendChat(arg1:string,arg2:string):Promise<void>;
 
 export function SendUserMessage(arg1:string):Promise<void>;
 
+export function SetBusy(arg1:boolean):Promise<void>;
+
 export function SetModel(arg1:string):Promise<void>;
 
 export function WithConfig(arg1:adapter.Config):Promise<bridge.App>;

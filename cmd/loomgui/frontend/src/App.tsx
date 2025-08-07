@@ -193,6 +193,7 @@ const App: React.FC = () => {
   const [tools, setTools] = useState<Tool[]>([]);
   const [currentModel, setCurrentModel] = useState<string>('');
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
+  const [busy, setBusy] = useState<boolean>(false);
 
   useEffect(() => {
     // Listen for new chat messages
@@ -226,6 +227,11 @@ const App: React.FC = () => {
       setApprovalRequest(request);
     });
 
+    // Listen for busy state changes
+    EventsOn('system:busy', (isBusy: boolean) => {
+      setBusy(!!isBusy);
+    });
+
     // Get available tools
     GetTools().then((fetchedTools: Record<string, any>[]) => {
       const typedTools: Tool[] = fetchedTools.map(tool => ({
@@ -243,7 +249,7 @@ const App: React.FC = () => {
   }, [messages]);
 
   const handleSend = () => {
-    if (!input.trim()) return;
+    if (!input.trim() || busy) return;
     
     // Send message to backend
     SendUserMessage(input);
@@ -337,12 +343,13 @@ const App: React.FC = () => {
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                handleSend();
+                if (!busy) handleSend();
               }
             }}
             placeholder="Ask Loom anything..."
+            disabled={busy}
           />
-          <button onClick={handleSend}>Send</button>
+          <button onClick={handleSend} disabled={busy}>{busy ? 'Working…' : 'Send'}</button>
         </div>
       </div>
 
