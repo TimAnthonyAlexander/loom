@@ -115,6 +115,27 @@ const App: React.FC = () => {
       setMessages(prev => [...prev, message]);
     });
 
+    // Listen for streaming assistant messages
+    EventsOn('assistant-msg', (content: string) => {
+      setMessages(prev => {
+        const lastMessage = prev[prev.length - 1];
+        
+        // If the last message is from the assistant, update it
+        if (lastMessage && lastMessage.role === 'assistant') {
+          return [
+            ...prev.slice(0, -1),
+            { ...lastMessage, content }
+          ];
+        }
+        
+        // Otherwise add a new message
+        return [
+          ...prev,
+          { role: 'assistant', content }
+        ];
+      });
+    });
+
     // Listen for approval requests
     EventsOn('task:prompt', (request: ApprovalRequest) => {
       setApprovalRequest(request);

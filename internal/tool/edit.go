@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/loom/loom/internal/editor"
 )
@@ -66,7 +64,7 @@ func RegisterEditFile(registry *Registry, workspacePath string) error {
 }
 
 // editFile implements the file editing logic.
-func editFile(ctx context.Context, workspacePath string, args EditFileArgs) (*EditFileResult, error) {
+func editFile(ctx context.Context, workspacePath string, args EditFileArgs) (*ExecutionResult, error) {
 	// For new file creation
 	if args.CreateNew {
 		if args.OldString != "" {
@@ -83,35 +81,36 @@ func editFile(ctx context.Context, workspacePath string, args EditFileArgs) (*Ed
 		return nil, fmt.Errorf("failed to create edit plan: %w", err)
 	}
 
-	// Create result to return (with diff from the plan)
-	result := &EditFileResult{
-		Path: args.Path,
-		Diff: plan.Diff,
+	// Perform additional safety checks
+	if err := editor.ValidateEditSafety(plan); err != nil {
+		return nil, fmt.Errorf("safety validation failed: %w", err)
 	}
 
-	// Ensure parent directories exist
-	dir := filepath.Dir(plan.FilePath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		result.Success = false
-		result.Message = fmt.Sprintf("Failed to create directory: %s", err)
-		return result, nil
-	}
-
-	// At this point, we've validated the edit and created a plan
-	// Instead of applying immediately, we'll return the plan with the diff
-	// The actual application of the edit will happen after user approval
-	result.Success = true
-	result.Message = "Edit plan created successfully (pending approval)"
-	// The actual file write will be handled by the approval process
-	// DO NOT write to disk here!
-
-	// Prepare a descriptive message based on edit type
-	if plan.IsCreation {
-		result.Message = "File will be created (pending approval)"
-	} else if plan.IsDeletion {
-		result.Message = "File will be deleted (pending approval)"
+	// Generate a better diff using git if available
+	diff, err := editor.GenerateGitDiff(plan.OldContent, plan.NewContent, plan.FilePath)
+	if err != nil {
+		// Fallback to the basic diff if git diff fails
+		diff = plan.Diff
 	} else {
-		result.Message = "File will be edited (pending approval)"
+		// Update the plan with the better diff
+		plan.Diff = diff
+	}
+
+	// Create a descriptive message based on edit type
+	var message string
+	if plan.IsCreation {
+		message = fmt.Sprintf("File will be created: %s", args.Path)
+	} else if plan.IsDeletion {
+		message = fmt.Sprintf("File will be deleted: %s", args.Path)
+	} else {
+		message = fmt.Sprintf("File will be edited: %s", args.Path)
+	}
+
+	// Create a result that fits the ExecutionResult interface
+	result := &ExecutionResult{
+		Content: message,
+		Diff:    diff,
+		Safe:    false, // Always require approval for edits
 	}
 
 	return result, nil

@@ -1,0 +1,107 @@
+package memory
+
+import (
+	"time"
+)
+
+// Message represents a single message in the conversation history.
+type Message struct {
+	Role      string      `json:"role"`               // user, assistant, system, function, tool
+	Content   string      `json:"content"`            // text content of the message
+	Name      string      `json:"name,omitempty"`     // function/tool name when applicable
+	ToolID    string      `json:"tool_id,omitempty"`  // ID for tool invocations
+	Metadata  interface{} `json:"metadata,omitempty"` // Optional metadata
+	Timestamp time.Time   `json:"timestamp"`          // When the message was created
+}
+
+// Conversation manages a single conversation thread with the LLM.
+type Conversation struct {
+	project   *Project
+	id        string
+	messages  []Message
+	summaries []string // Optional summaries of previous message chunks
+}
+
+// NewConversation creates a new conversation.
+func NewConversation(project *Project, id string) *Conversation {
+	conv := &Conversation{
+		project:  project,
+		id:       id,
+		messages: []Message{},
+	}
+
+	// Try to load existing conversation
+	var savedMessages []Message
+	if project.Has("conversations/" + id) {
+		err := project.Get("conversations/"+id, &savedMessages)
+		if err == nil && len(savedMessages) > 0 {
+			conv.messages = savedMessages
+		}
+	}
+
+	return conv
+}
+
+// AddSystem adds a system message to the conversation.
+func (c *Conversation) AddSystem(content string) {
+	c.messages = append(c.messages, Message{
+		Role:      "system",
+		Content:   content,
+		Timestamp: time.Now(),
+	})
+	c.save()
+}
+
+// AddUser adds a user message to the conversation.
+func (c *Conversation) AddUser(content string) {
+	c.messages = append(c.messages, Message{
+		Role:      "user",
+		Content:   content,
+		Timestamp: time.Now(),
+	})
+	c.save()
+}
+
+// AddAssistant adds an assistant message to the conversation.
+func (c *Conversation) AddAssistant(content string) {
+	c.messages = append(c.messages, Message{
+		Role:      "assistant",
+		Content:   content,
+		Timestamp: time.Now(),
+	})
+	c.save()
+}
+
+// AddTool adds a tool message to the conversation.
+func (c *Conversation) AddTool(name string, content string) {
+	c.messages = append(c.messages, Message{
+		Role:      "tool",
+		Name:      name,
+		Content:   content,
+		Timestamp: time.Now(),
+	})
+	c.save()
+}
+
+// History returns the conversation history.
+func (c *Conversation) History() []Message {
+	return c.messages
+}
+
+// Clear removes all messages from the conversation.
+func (c *Conversation) Clear() {
+	c.messages = []Message{}
+	c.save()
+}
+
+// save stores the conversation to persistent storage.
+func (c *Conversation) save() {
+	if c.project != nil {
+		_ = c.project.Set("conversations/"+c.id, c.messages)
+	}
+}
+
+// StartConversation creates a new conversation or continues an existing one.
+func (p *Project) StartConversation() *Conversation {
+	return NewConversation(p, "current")
+}

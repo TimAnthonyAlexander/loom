@@ -78,6 +78,11 @@ func (a *App) SendChat(role, text string) {
 	})
 }
 
+// EmitAssistant streams assistant messages to the frontend.
+func (a *App) EmitAssistant(text string) {
+	a.emitEvent("assistant-msg", text)
+}
+
 // PromptApproval implements UIBridge.PromptApproval.
 func (a *App) PromptApproval(actionID, summary, diff string) (approved bool) {
 	a.emitEvent("task:prompt", map[string]interface{}{

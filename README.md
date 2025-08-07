@@ -61,14 +61,15 @@ Loom currently includes these core tools:
 ### Setup
 
 ```bash
-# Install Go dependencies
-go mod tidy
-
-# Install Wails CLI (if not already installed)
+# Install required tools
+brew install ripgrep
 go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
 # Make sure the wails binary is in your PATH
 export PATH=$PATH:$HOME/go/bin
+
+# Install Go dependencies
+go mod tidy
 
 # Install frontend dependencies
 cd cmd/loomgui/frontend && npm install

@@ -11,6 +11,7 @@ import (
 	"github.com/loom/loom/internal/bridge"
 	"github.com/loom/loom/internal/engine"
 	"github.com/loom/loom/internal/indexer"
+	"github.com/loom/loom/internal/memory"
 	"github.com/loom/loom/internal/tool"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -37,8 +38,32 @@ func main() {
 		llm = openai.New(os.Getenv("OPENAI_API_KEY"), "gpt-4o")
 	}
 
+	// Initialize memory store
+	store, err := memory.NewStore("")
+	if err != nil {
+		log.Printf("Warning: Failed to initialize memory store: %v", err)
+	}
+
+	// Create project memory
+	var projectMemory *memory.Project
+	if store != nil {
+		projectMemory, err = memory.NewProject(store, workspacePath)
+		if err != nil {
+			log.Printf("Warning: Failed to initialize project memory: %v", err)
+		}
+	}
+
+	// Create the engine and configure it
+	eng := engine.New(llm, nil)
+	eng.WithRegistry(registry)
+
+	// Add memory if available
+	if projectMemory != nil {
+		eng.WithMemory(projectMemory)
+	}
+
 	// Create the application
-	app := bridge.NewApp(engine.New(llm, nil), registry)
+	app := bridge.NewApp(eng, registry)
 
 	// Run the application
 	if err := wails.Run(&options.App{
@@ -82,5 +107,13 @@ func registerTools(registry *tool.Registry) {
 
 	if err := tool.RegisterEditFile(registry, workspacePath); err != nil {
 		log.Printf("Failed to register edit_file tool: %v", err)
+	}
+
+	if err := tool.RegisterApplyEdit(registry, workspacePath); err != nil {
+		log.Printf("Failed to register apply_edit tool: %v", err)
+	}
+
+	if err := tool.RegisterListDir(registry, workspacePath); err != nil {
+		log.Printf("Failed to register list_dir tool: %v", err)
 	}
 }

@@ -3,8 +3,12 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
+
+	"github.com/loom/loom/internal/memory"
+	"github.com/loom/loom/internal/tool"
 )
 
 // Message represents a single message in the chat.
@@ -32,6 +36,7 @@ type ToolCall struct {
 // UIBridge interfaces with the user interface.
 type UIBridge interface {
 	SendChat(role, text string)
+	EmitAssistant(text string)
 	PromptApproval(actionID string, summary string, diff string) (approved bool)
 }
 
@@ -51,6 +56,8 @@ type Engine struct {
 	mu         sync.RWMutex
 	approvals  map[string]chan bool
 	approvalMu sync.Mutex
+	tools      *tool.Registry
+	memory     *memory.Project
 }
 
 // LLM is an interface to abstract different language model providers.
@@ -79,6 +86,18 @@ func New(llm LLM, bridge UIBridge) *Engine {
 	}
 }
 
+// WithRegistry sets the tool registry for the engine.
+func (e *Engine) WithRegistry(registry *tool.Registry) *Engine {
+	e.tools = registry
+	return e
+}
+
+// WithMemory sets the project memory for the engine.
+func (e *Engine) WithMemory(project *memory.Project) *Engine {
+	e.memory = project
+	return e
+}
+
 // SetBridge sets the UI bridge for the engine.
 func (e *Engine) SetBridge(bridge UIBridge) {
 	e.mu.Lock()
@@ -88,19 +107,11 @@ func (e *Engine) SetBridge(bridge UIBridge) {
 
 // Enqueue adds a user message and starts the processing loop.
 func (e *Engine) Enqueue(message string) {
-	// Add user message to history
-	e.mu.Lock()
-	e.messages = append(e.messages, Message{
-		Role:    "user",
-		Content: message,
-	})
-	e.mu.Unlock()
-
 	// Send to UI
 	e.bridge.SendChat("user", message)
 
 	// Start processing in a goroutine
-	go e.processLoop(context.Background())
+	go e.processLoop(context.Background(), message)
 }
 
 // ResolveApproval resolves a pending approval request.
@@ -114,55 +125,159 @@ func (e *Engine) ResolveApproval(id string, approved bool) {
 	}
 }
 
+// UserApproved prompts for approval and waits for the response.
+func (e *Engine) UserApproved(toolCall *tool.ToolCall, diff string) bool {
+	summary := fmt.Sprintf("Tool: %s", toolCall.Name)
+
+	// Create a channel for the response
+	responseCh := make(chan bool)
+
+	// Register the approval request
+	e.approvalMu.Lock()
+	e.approvals[toolCall.ID] = responseCh
+	e.approvalMu.Unlock()
+
+	// Ask the bridge for approval
+	e.bridge.PromptApproval(toolCall.ID, summary, diff)
+
+	// Wait for response
+	approved := <-responseCh
+	return approved
+}
+
 // processLoop is the main processing loop for the engine.
-func (e *Engine) processLoop(ctx context.Context) {
-	// Get tools from registry
-	tools := []ToolSchema{} // TODO: Get from tool registry
-
-	// Create a new LLM chat stream
-	e.mu.RLock()
-	messages := append([]Message{}, e.messages...)
-	e.mu.RUnlock()
-
-	stream, err := e.llm.Chat(ctx, messages, tools, true)
-	if err != nil {
-		e.bridge.SendChat("system", "Error: "+err.Error())
-		return
+func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
+	// Initialize memory if needed
+	if e.memory == nil {
+		e.bridge.SendChat("system", "Error: Memory not initialized")
+		return errors.New("memory not initialized")
 	}
 
-	// Process the stream
-	var currentMessage Message
-	currentMessage.Role = "assistant"
+	// Initialize tool registry if needed
+	if e.tools == nil {
+		e.bridge.SendChat("system", "Error: Tool registry not initialized")
+		return errors.New("tool registry not initialized")
+	}
 
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case item, ok := <-stream:
-			if !ok {
-				// Stream closed, add the last message if not empty
-				if currentMessage.Content != "" {
-					e.mu.Lock()
-					e.messages = append(e.messages, currentMessage)
-					e.mu.Unlock()
+	convo := e.memory.StartConversation() // load history & summaries
+	convo.AddUser(userMsg)                // add latest user message
+
+	tools := e.tools.Schemas() // get all tool specs
+
+	// Set up the adapter (LLM)
+	adapter := e.llm
+
+	// Set a maximum depth to prevent infinite loops
+	for depth := 0; depth < 8; depth++ {
+		// Convert memory messages to engine messages
+		memoryMessages := convo.History()
+		engineMessages := make([]Message, 0, len(memoryMessages))
+
+		for _, msg := range memoryMessages {
+			engineMsg := Message{
+				Role:    msg.Role,
+				Content: msg.Content,
+				Name:    msg.Name,
+				ToolID:  msg.ToolID,
+			}
+			engineMessages = append(engineMessages, engineMsg)
+		}
+
+		// Call the LLM with the conversation history
+		stream, err := adapter.Chat(ctx, engineMessages, convertSchemas(tools), true)
+		if err != nil {
+			e.bridge.SendChat("system", "Error: "+err.Error())
+			return err
+		}
+
+		// Process the LLM response
+		var currentContent string
+		var toolCallReceived *tool.ToolCall
+
+		// Process the stream
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+
+			case item, ok := <-stream:
+				if !ok {
+					// Stream ended
+					if toolCallReceived == nil && currentContent != "" {
+						// Final assistant message
+						convo.AddAssistant(currentContent)
+						return nil
+					}
+					break
 				}
-				return
+
+				if item.ToolCall != nil {
+					// Got a tool call
+					toolCallReceived = &tool.ToolCall{
+						ID:   item.ToolCall.ID,
+						Name: item.ToolCall.Name,
+						Args: item.ToolCall.Args,
+					}
+					break
+				} else {
+					// Got a token
+					currentContent += item.Token
+					e.bridge.EmitAssistant(currentContent)
+				}
 			}
 
-			if item.ToolCall != nil {
-				// Handle tool call
-				_, _ = e.handleToolCall(ctx, item.ToolCall)
-
-				// Continue stream with tool result
-				// TODO: Implement tool result handling
-			} else {
-				// Handle token
-				currentMessage.Content += item.Token
-				// Send partial update to UI
-				// TODO: Implement proper partial update logic
+			if toolCallReceived != nil {
+				break // Exit the stream processing loop to handle the tool call
 			}
 		}
+
+		// If we got a tool call, execute it
+		if toolCallReceived != nil {
+			// Execute the tool
+			execResult, err := e.tools.InvokeToolCall(ctx, toolCallReceived)
+			if err != nil {
+				errorMsg := fmt.Sprintf("Error executing tool %s: %v", toolCallReceived.Name, err)
+				convo.AddTool(toolCallReceived.Name, errorMsg)
+				e.bridge.SendChat("system", errorMsg)
+				return err
+			}
+
+			// Check if approval is needed
+			if !execResult.Safe {
+				if !e.UserApproved(toolCallReceived, execResult.Diff) {
+					// User denied the operation
+					execResult.Content = "User denied operation"
+				}
+			}
+
+			// Add the result to the conversation
+			convo.AddTool(toolCallReceived.Name, execResult.Content)
+
+			// Continue the loop to get the next assistant message
+			continue
+		}
+
+		// If we reach here with content, it's the final assistant message
+		if currentContent != "" {
+			convo.AddAssistant(currentContent)
+			return nil
+		}
 	}
+
+	return errors.New("tool loop exceeded maximum depth")
+}
+
+// convertSchemas converts tool.Schema to ToolSchema
+func convertSchemas(schemas []tool.Schema) []ToolSchema {
+	result := make([]ToolSchema, len(schemas))
+	for i, schema := range schemas {
+		result[i] = ToolSchema{
+			Name:        schema.Name,
+			Description: schema.Description,
+			Schema:      schema.Parameters,
+		}
+	}
+	return result
 }
 
 // handleToolCall processes a tool call from the LLM.
