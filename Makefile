@@ -6,6 +6,10 @@ BUILD_DIR := $(APP_DIR)/build/bin
 DIST_DIR := dist
 APP_NAME := loom
 ENV_PATH := /usr/local/go/bin:/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+CACHE_ENV := -e HOME=/tmp -e GOCACHE=/tmp/go-cache -e GOMODCACHE=/tmp/go-mod -e XDG_CACHE_HOME=/tmp/cache -e npm_config_cache=/tmp/npm-cache
+
+NM_VOL_AMD64 := loom_nm_linux_amd64
+NM_VOL_ARM64 := loom_nm_linux_arm64
 
 ifeq ($(shell command -v wails),)
 	WAILS := $(WAILS_BIN)
@@ -93,6 +97,9 @@ build-windows:
 	@mkdir -p $(DIST_DIR)
 	mv "$(BUILD_DIR)/Loom.exe" "$(DIST_DIR)/$(APP_NAME)-windows-amd64.exe"
 
+UID := $(shell id -u)
+GID := $(shell id -g)
+
 .PHONY: linux-image-amd64
 linux-image-amd64:
 	docker buildx build --platform linux/amd64 --load \
@@ -103,25 +110,49 @@ linux-image-arm64:
 	docker buildx build --platform linux/arm64 --load \
 		-t loom-linux-builder:arm64 -f $(LINUX_BUILDER_FILE) .
 
-.PHONY: build-linux-amd64
-build-linux-amd64: linux-image-amd64
+# Install Linux-native node_modules (as root) into per-arch volume
+.PHONY: prepare-linux-amd64
+prepare-linux-amd64: linux-image-amd64
 	docker run --rm --platform=linux/amd64 \
 		-v $(PWD):/app -w /app \
-		-u $(shell id -u):$(shell id -g) \
+		-v $(NM_VOL_AMD64):/app/$(FRONTEND_DIR)/node_modules \
+		-e PATH=$(ENV_PATH) $(CACHE_ENV) \
+		--user 0:0 \
+		loom-linux-builder:amd64 \
+		bash -c 'set -e; cd $(FRONTEND_DIR); if [ -f package-lock.json ]; then npm ci; else npm install; fi'
+
+.PHONY: prepare-linux-arm64
+prepare-linux-arm64: linux-image-arm64
+	docker run --rm --platform=linux/arm64 \
+		-v $(PWD):/app -w /app \
+		-v $(NM_VOL_ARM64):/app/$(FRONTEND_DIR)/node_modules \
+		-e PATH=$(ENV_PATH) $(CACHE_ENV) \
+		--user 0:0 \
+		loom-linux-builder:arm64 \
+		bash -c 'set -e; cd $(FRONTEND_DIR); if [ -f package-lock.json ]; then npm ci; else npm install; fi'
+
+# Build binaries as your UID (read-only use of node_modules volume)
+.PHONY: build-linux-amd64
+build-linux-amd64: prepare-linux-amd64
+	docker run --rm --platform=linux/amd64 \
+		-v $(PWD):/app -w /app \
+		-v $(NM_VOL_AMD64):/app/$(FRONTEND_DIR)/node_modules \
+		-u $(UID):$(GID) \
 		-e PATH=$(ENV_PATH) $(CACHE_ENV) \
 		loom-linux-builder:amd64 \
-		bash -c 'cd $(APP_DIR) && wails build -platform=linux/amd64 -clean'
+		bash -c 'set -e; cd $(APP_DIR); wails build -platform=linux/amd64 -clean'
 	mkdir -p $(DIST_DIR)
 	mv "$(BUILD_DIR)/Loom" "$(DIST_DIR)/$(APP_NAME)-linux-amd64"
 
 .PHONY: build-linux-arm64
-build-linux-arm64: linux-image-arm64
+build-linux-arm64: prepare-linux-arm64
 	docker run --rm --platform=linux/arm64 \
 		-v $(PWD):/app -w /app \
-		-u $(shell id -u):$(shell id -g) \
+		-v $(NM_VOL_ARM64):/app/$(FRONTEND_DIR)/node_modules \
+		-u $(UID):$(GID) \
 		-e PATH=$(ENV_PATH) $(CACHE_ENV) \
 		loom-linux-builder:arm64 \
-		bash -c 'cd $(APP_DIR) && wails build -platform=linux/arm64 -clean'
+		bash -c 'set -e; cd $(APP_DIR); wails build -platform=linux/arm64 -clean'
 	mkdir -p $(DIST_DIR)
 	mv "$(BUILD_DIR)/Loom" "$(DIST_DIR)/$(APP_NAME)-linux-arm64"
 
