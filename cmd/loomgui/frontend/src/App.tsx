@@ -342,9 +342,12 @@ const App: React.FC = () => {
                 }}
             >
                 <Box>
-                    <Typography variant="h6" fontWeight={600} gutterBottom>
-                        Loom v2
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                        <Box component="img" src="/logo.png" alt="Loom" sx={{ width: 28, height: 28, borderRadius: 0.5 }} />
+                        <Typography variant="h6" fontWeight={600}>
+                            Loom v2
+                        </Typography>
+                    </Box>
                     <Typography variant="body2" color="text.secondary">
                         Minimal, calm, precise.
                     </Typography>
