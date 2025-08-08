@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,6 +29,7 @@ func LoadRules(workspacePath string) (userRules []string, projectRules []string,
 	// Normalize: trim whitespace and drop empty
 	userRules = normalizeRules(u)
 	projectRules = normalizeRules(p)
+	log.Printf("LoadRules: workspace=%s user=%d project=%d", workspacePath, len(userRules), len(projectRules))
 	return userRules, projectRules, nil
 }
 
@@ -40,7 +42,16 @@ func SaveUserRules(rules []string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("failed to create rules directory: %w", err)
 	}
-	return writeRulesFile(path, normalizeRules(rules))
+	normalized := normalizeRules(rules)
+	if err := writeRulesFile(path, normalized); err != nil {
+		return err
+	}
+	log.Printf("SaveUserRules: saved %d rules to %s", len(normalized), path)
+	// Read back for verification
+	if rb, err := readRulesFile(path); err == nil {
+		log.Printf("SaveUserRules: file now has %d rules", len(rb))
+	}
+	return nil
 }
 
 // SaveProjectRules writes project rules to <workspace>/.loom/rules.json
@@ -48,11 +59,25 @@ func SaveProjectRules(workspacePath string, rules []string) error {
 	if workspacePath == "" {
 		return errors.New("workspace path is empty")
 	}
+	// Normalize workspace path to avoid writing to literal "~" paths
+	workspacePath = expandUserHome(workspacePath)
+	if abs, err := filepath.Abs(workspacePath); err == nil {
+		workspacePath = abs
+	}
 	path := filepath.Join(workspacePath, ".loom", "rules.json")
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("failed to create project rules directory: %w", err)
 	}
-	return writeRulesFile(path, normalizeRules(rules))
+	normalized := normalizeRules(rules)
+	if err := writeRulesFile(path, normalized); err != nil {
+		return err
+	}
+	log.Printf("SaveProjectRules: saved %d rules to %s", len(normalized), path)
+	// Read back for verification
+	if rb, err := readRulesFile(path); err == nil {
+		log.Printf("SaveProjectRules: file now has %d rules", len(rb))
+	}
+	return nil
 }
 
 func loadUserRules() ([]string, error) {
@@ -75,7 +100,13 @@ func loadProjectRules(workspacePath string) ([]string, error) {
 	if workspacePath == "" {
 		return nil, errors.New("workspace path is empty")
 	}
+	// Expand ~ and normalize abs path for robustness
+	workspacePath = expandUserHome(workspacePath)
+	if abs, err := filepath.Abs(workspacePath); err == nil {
+		workspacePath = abs
+	}
 	path := filepath.Join(workspacePath, ".loom", "rules.json")
+	log.Printf("loadProjectRules: reading %s", path)
 	return readRulesFile(path)
 }
 
@@ -83,18 +114,22 @@ func readRulesFile(path string) ([]string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
+			log.Printf("readRulesFile: file not found: %s", path)
 			return []string{}, os.ErrNotExist
 		}
+		log.Printf("readRulesFile: error reading %s: %v", path, err)
 		return nil, err
 	}
 	// Expect a simple JSON array of strings
 	var rules []string
 	if len(data) == 0 {
+		log.Printf("readRulesFile: empty file: %s", path)
 		return []string{}, nil
 	}
 	if err := json.Unmarshal(data, &rules); err != nil {
 		return nil, fmt.Errorf("failed to parse rules file '%s': %w", path, err)
 	}
+	log.Printf("readRulesFile: loaded %d rules from %s", len(rules), path)
 	return rules, nil
 }
 
@@ -125,4 +160,20 @@ func normalizeRules(rules []string) []string {
 		out = append(out, trimmed)
 	}
 	return out
+}
+
+// expandUserHome expands a leading ~ or ~/ to the user's home directory.
+func expandUserHome(p string) string {
+	if p == "" {
+		return p
+	}
+	if p == "~" || strings.HasPrefix(p, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			if p == "~" {
+				return home
+			}
+			return filepath.Join(home, p[2:])
+		}
+	}
+	return p
 }

@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"os"
 	"runtime/debug"
@@ -267,6 +268,7 @@ func (a *App) SetWorkspace(path string) {
 	if path == "" {
 		return
 	}
+	log.Printf("SetWorkspace: switching to %s", path)
 	// Update engine workspace
 	if a.engine != nil {
 		a.engine.WithWorkspace(path)
@@ -310,11 +312,31 @@ func (a *App) SetWorkspace(path string) {
 	if err := config.Save(a.settings); err != nil {
 		log.Printf("Failed to persist last workspace: %v", err)
 	}
+	// After switching, log current rules snapshot for debug
+	user, project, _ := config.LoadRules(path)
+	log.Printf("SetWorkspace: loaded rules for %s -> user=%d, project=%d", path, len(user), len(project))
 }
 
 // GetRules exposes user and project rules to the frontend.
 func (a *App) GetRules() map[string][]string {
-	user, project, _ := config.LoadRules(a.engine.Workspace())
+	ws := ""
+	if a.engine != nil {
+		ws = a.engine.Workspace()
+	}
+	user, project, _ := config.LoadRules(ws)
+	// Debug log what we loaded
+	payload := map[string]any{
+		"workspace":           ws,
+		"user_rules_count":    len(user),
+		"project_rules_count": len(project),
+		"user_rules":          user,
+		"project_rules":       project,
+	}
+	if b, err := json.Marshal(payload); err == nil {
+		log.Printf("GetRules: %s", string(b))
+	} else {
+		log.Printf("GetRules: workspace=%s user=%d project=%d", ws, len(user), len(project))
+	}
 	return map[string][]string{
 		"user":    user,
 		"project": project,
@@ -326,6 +348,7 @@ func (a *App) GetRules() map[string][]string {
 func (a *App) SaveRules(payload map[string][]string) {
 	// Save user rules
 	if userRules, ok := payload["user"]; ok {
+		log.Printf("SaveRules: saving %d user rules", len(userRules))
 		if err := config.SaveUserRules(userRules); err != nil {
 			log.Printf("Failed to save user rules: %v", err)
 		}
@@ -337,9 +360,12 @@ func (a *App) SaveRules(payload map[string][]string) {
 			wp = a.engine.Workspace()
 		}
 		if wp == "" {
-			log.Printf("Cannot save project rules: workspace not set")
-		} else if err := config.SaveProjectRules(wp, projectRules); err != nil {
-			log.Printf("Failed to save project rules: %v", err)
+			log.Printf("SaveRules: cannot save project rules: workspace not set")
+		} else {
+			log.Printf("SaveRules: saving %d project rules to workspace=%s", len(projectRules), wp)
+			if err := config.SaveProjectRules(wp, projectRules); err != nil {
+				log.Printf("Failed to save project rules: %v", err)
+			}
 		}
 	}
 }
