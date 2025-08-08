@@ -7,6 +7,12 @@ DIST_DIR := dist
 APP_NAME := loom
 ENV_PATH := /usr/local/go/bin:/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 CACHE_ENV := -e HOME=/tmp -e GOCACHE=/tmp/go-cache -e GOMODCACHE=/tmp/go-mod -e XDG_CACHE_HOME=/tmp/cache -e npm_config_cache=/tmp/npm-cache
+# macOS product metadata
+APP_PRODUCT := Loom
+VOLUME_NAME := $(APP_PRODUCT)
+
+DMG_FORMAT := UDZO
+DMG_TMP := $(DIST_DIR)/.dmg-staging
 
 NM_VOL_AMD64 := loom_nm_linux_amd64
 NM_VOL_ARM64 := loom_nm_linux_arm64
@@ -75,21 +81,36 @@ build-macos-amd64:
 	cd $(APP_DIR) && $(WAILS) build -platform=darwin/amd64 -clean
 	@mkdir -p $(DIST_DIR)
 	rm -rf "$(DIST_DIR)/$(APP_NAME)-darwin-amd64.app"
-	mv "$(BUILD_DIR)/Loom.app" "$(DIST_DIR)/$(APP_NAME)-darwin-amd64.app"
+	mv "$(BUILD_DIR)/$(APP_PRODUCT).app" "$(DIST_DIR)/$(APP_NAME)-darwin-amd64.app"
+	rm -rf "$(DMG_TMP)" && mkdir -p "$(DMG_TMP)"
+	cp -R "$(DIST_DIR)/$(APP_NAME)-darwin-amd64.app" "$(DMG_TMP)/$(APP_PRODUCT).app"
+	ln -sf /Applications "$(DMG_TMP)/Applications"
+	hdiutil create -volname "$(VOLUME_NAME)" -srcfolder "$(DMG_TMP)" -ov -format $(DMG_FORMAT) "$(DIST_DIR)/$(APP_NAME)-darwin-amd64.dmg"
+	rm -rf "$(DMG_TMP)"
 
 .PHONY: build-macos-arm64
 build-macos-arm64:
 	cd $(APP_DIR) && $(WAILS) build -platform=darwin/arm64 -clean
 	@mkdir -p $(DIST_DIR)
 	rm -rf "$(DIST_DIR)/$(APP_NAME)-darwin-arm64.app"
-	mv "$(BUILD_DIR)/Loom.app" "$(DIST_DIR)/$(APP_NAME)-darwin-arm64.app"
+	mv "$(BUILD_DIR)/$(APP_PRODUCT).app" "$(DIST_DIR)/$(APP_NAME)-darwin-arm64.app"
+	rm -rf "$(DMG_TMP)" && mkdir -p "$(DMG_TMP)"
+	cp -R "$(DIST_DIR)/$(APP_NAME)-darwin-arm64.app" "$(DMG_TMP)/$(APP_PRODUCT).app"
+	ln -sf /Applications "$(DMG_TMP)/Applications"
+	hdiutil create -volname "$(VOLUME_NAME)" -srcfolder "$(DMG_TMP)" -ov -format $(DMG_FORMAT) "$(DIST_DIR)/$(APP_NAME)-darwin-arm64.dmg"
+	rm -rf "$(DMG_TMP)"
 
 .PHONY: build-macos-universal
 build-macos-universal:
 	cd $(APP_DIR) && $(WAILS) build -platform=darwin/universal -clean
 	@mkdir -p $(DIST_DIR)
 	rm -rf "$(DIST_DIR)/$(APP_NAME)-darwin-universal.app"
-	mv "$(BUILD_DIR)/Loom.app" "$(DIST_DIR)/$(APP_NAME)-darwin-universal.app"
+	mv "$(BUILD_DIR)/$(APP_PRODUCT).app" "$(DIST_DIR)/$(APP_NAME)-darwin-universal.app"
+	rm -rf "$(DMG_TMP)" && mkdir -p "$(DMG_TMP)"
+	cp -R "$(DIST_DIR)/$(APP_NAME)-darwin-universal.app" "$(DMG_TMP)/$(APP_PRODUCT).app"
+	ln -sf /Applications "$(DMG_TMP)/Applications"
+	hdiutil create -volname "$(VOLUME_NAME)" -srcfolder "$(DMG_TMP)" -ov -format $(DMG_FORMAT) "$(DIST_DIR)/$(APP_NAME)-darwin-universal.dmg"
+	rm -rf "$(DMG_TMP)"
 
 .PHONY: build-windows
 build-windows:
@@ -132,6 +153,7 @@ prepare-linux-arm64: linux-image-arm64
 		loom-linux-builder:arm64 \
 		bash -c 'set -e; cd $(FRONTEND_DIR); if [ -f package-lock.json ]; then npm ci; else npm install; fi'
 
+# Build binaries as your UID (read-only use of node_modules volume)
 .PHONY: build-linux-amd64
 build-linux-amd64: prepare-linux-amd64
 	docker run --rm --platform=linux/amd64 \
@@ -140,7 +162,7 @@ build-linux-amd64: prepare-linux-amd64
 		-u $(UID):$(GID) \
 		-e PATH=$(ENV_PATH) $(CACHE_ENV) \
 		loom-linux-builder:amd64 \
-		bash -c 'set -e; cd $(APP_DIR); wails build -platform=linux/amd64 -tags $(WEBKIT_TAG) -clean'
+		bash -c 'set -e; cd $(APP_DIR); wails build -platform=linux/amd64 -clean'
 	mkdir -p $(DIST_DIR)
 	mv "$(BUILD_DIR)/Loom" "$(DIST_DIR)/$(APP_NAME)-linux-amd64"
 
@@ -152,12 +174,18 @@ build-linux-arm64: prepare-linux-arm64
 		-u $(UID):$(GID) \
 		-e PATH=$(ENV_PATH) $(CACHE_ENV) \
 		loom-linux-builder:arm64 \
-		bash -c 'set -e; cd $(APP_DIR); wails build -platform=linux/arm64 -tags $(WEBKIT_TAG) -clean'
+		bash -c 'set -e; cd $(APP_DIR); wails build -platform=linux/arm64 -clean'
 	mkdir -p $(DIST_DIR)
 	mv "$(BUILD_DIR)/Loom" "$(DIST_DIR)/$(APP_NAME)-linux-arm64"
 
 .PHONY: build-linux-all
 build-linux-all: build-linux-amd64 build-linux-arm64
+
+.PHONY: build-all
+build-all: build-macos-amd64 build-macos-arm64 build-macos-universal build-windows build-linux-all
+
+.PHONY: build-macos-all
+build-macos-all: build-macos-amd64 build-macos-arm64 build-macos-universal
 
 .PHONY: help
 help:
