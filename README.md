@@ -1,8 +1,8 @@
 # Loom v2
 
-Modern, code-aware, desktop AI assistant with an extensible tool system, built with Go (Wails) and React (Vite) using Material UI. Loom v2 is a ground-up rewrite of Loom v1 focused on simplicity, extensibility, reliability, and a calm, content‑centric UX.
+## By Tim Anthony Alexander
 
-Repository: https://github.com/timanthonyalexander/loom
+Modern, code-aware, desktop AI assistant with an extensible tool system, built with Go (Wails) and React (Vite) using Material UI. Loom v2 is a ground-up rewrite of Loom v1 focused on simplicity, extensibility, reliability, and a calm, content‑centric UX.
 
 ## Table of contents
 - Overview
@@ -55,48 +55,19 @@ Loom v2 pairs a Go orchestrator and tooling layer with a modern React UI. It’s
   - Memory stores project data under the workspace path
   - Indexer performs fast code search via ripgrep
 
-## Directory structure
-```
-loom/
-  cmd/loomgui/                       # Wails desktop app
-    main.go                          # App entrypoint
-    frontend/                        # Vite + React + MUI frontend
-      src/
-        main.tsx                     # Theme + Error boundary + App mount
-        App.tsx                      # Layout, chat, approvals
-        ModelSelector.tsx            # Provider-grouped MUI Autocomplete
-        ErrorBoundary.tsx
-        App.css
-      vite.config.ts
-      package.json
-  internal/
-    adapter/                         # LLM provider adapters
-      openai/                        # OpenAI client
-      anthropic/                     # Anthropic client
-      ollama/                        # Ollama client (available in codebase)
-      models.go                      # Provider/model parsing
-    bridge/                          # Wails bridge for UI <-> engine
-    editor/                          # Edit and apply logic
-    engine/                          # Orchestration, system prompt
-    indexer/                         # Ripgrep search
-    memory/                          # Project-level persistence
-    tool/                            # Tool registry & schemas
-  Makefile
-  LICENSE
-  README.md
-```
-
 ## Getting started
 Prerequisites:
-- Go 1.21+ (recommended 1.22)
+- Go 1.21+
 - Node.js 18+ and npm
 - ripgrep (`rg`) on PATH
 - Platform toolchain (e.g., Xcode Command Line Tools on macOS)
 
 Install all dependencies:
+
 ```bash
 make deps
 ```
+
 This will:
 - Tidy Go modules and install the Wails CLI
 - Install frontend dependencies (including Material UI)
@@ -148,6 +119,15 @@ The frontend exposes a curated, static model selector. Entries are of the form `
 { id: 'claude:claude-3-sonnet-20240229', name: 'Claude 3 Sonnet', provider: 'claude' },
 { id: 'claude:claude-3-haiku-20240307', name: 'Claude 3 Haiku', provider: 'claude' },
 { id: 'openai:gpt-4.1', name: 'GPT-4.1', provider: 'openai' },
+{ id: 'openai:o4-mini', name: 'o4-mini', provider: 'openai' },
+{ id: 'openai:o3', name: 'o3', provider: 'openai' },
+{ id: 'ollama:llama3.1:8b', name: 'Llama 3.1 (8B)', provider: 'ollama' },
+{ id: 'ollama:llama3:8b', name: 'Llama 3 (8B)', provider: 'ollama' },
+{ id: 'ollama:gpt-oss:20b', name: 'GPT-OSS (20B)', provider: 'ollama' },
+{ id: 'ollama:qwen3:8b', name: 'Qwen3 (8B)', provider: 'ollama' },
+{ id: 'ollama:gemma3:12b', name: 'Gemma3 (12B)', provider: 'ollama' },
+{ id: 'ollama:mistral:7b', name: 'Mistral (7B)', provider: 'ollama' },
+{ id: 'ollama:deepseek-r1:70b', name: 'DeepSeek R1 (70B)', provider: 'ollama' },
 ```
 
 The backend parses model strings as `provider:model_id` (see `internal/adapter/models.go`) and maps the provider prefix to the corresponding adapter.
@@ -187,6 +167,9 @@ Each tool is described by a schema and flagged as Safe or Requires approval. Des
 - Anthropic (`internal/adapter/anthropic`)
   - Messages API with tool use
   - Non-streaming by default for reliability; streaming handler scaffold present
+- Ollama (`internal/adapter/ollama`)
+  - Local model execution with Ollama CLI
+  - Supports both chat and tool calls, depending on model
 
 Adapters convert engine messages to provider-specific payloads and parse streaming/tool-call responses back into engine events.
 
@@ -203,18 +186,13 @@ Adapters convert engine messages to provider-specific payloads and parse streami
 - Path handling: tools operate within the workspace root; path escapes are disallowed by design.
 - Secrets: prompts and engine heuristics avoid echoing secrets verbatim; treat credentials as redacted.
 
-## Migrating from Loom v1
-What changed in v2:
+## What changed in v2:
+- Entirely rewritten.
 - UI/UX: rebuilt with Material UI; content-first, minimalist aesthetic
 - Engine: streamlined orchestration and explicit tool schemas
 - Adapters: clear mapping via `provider:model_id`; easier model selection
 - Edits: consistent propose → approve → apply workflow with structured diffs
 - Memory: workspace-scoped storage for predictable persistence
-
-If you automated v1 flows, re-check:
-- Tool names and parameter schemas
-- Model naming (`provider:model_id`)
-- Approval and event flow semantics
 
 ## Troubleshooting
 - No output / stalls: verify API keys and network access
@@ -231,7 +209,7 @@ If you automated v1 flows, re-check:
 - Theming toggle and accessibility refinements
 
 ## Contributing
-- Fork the repo and create a focused feature branch
+- Fork the repo and create a feature branch
 - Follow the code style and naming guidelines
 - Run `make deps` and `make dev` to validate changes locally
 - Open a PR with a concise description and, if applicable, screenshots
