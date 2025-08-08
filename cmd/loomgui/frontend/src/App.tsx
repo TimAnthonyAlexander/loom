@@ -12,9 +12,6 @@ import {
     Typography,
     Paper,
     Divider,
-    Accordion,
-    AccordionSummary,
-    AccordionDetails,
     List,
     ListItem,
     ListItemText,
@@ -32,7 +29,6 @@ import {
     TableRow as MuiTableRow,
     TableContainer as MuiTableContainer,
 } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SendIcon from '@mui/icons-material/Send';
 import SettingsIcon from '@mui/icons-material/Settings';
 
@@ -311,7 +307,7 @@ const App: React.FC = () => {
                 setAnthropicKey(s?.anthropic_api_key || '');
                 setOllamaEndpoint(s?.ollama_endpoint || '');
             })
-            .catch(() => {});
+            .catch(() => { });
     }, []);
 
     // Scroll to bottom when messages change
@@ -357,7 +353,7 @@ const App: React.FC = () => {
                     gap: 3,
                 }}
             >
-                <Box>
+                <Box sx={{ pt: 2 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                         <Box component="img" src="/logo.png" alt="Loom" sx={{ width: 28, height: 28, borderRadius: 0.5 }} />
                         <Typography variant="h6" fontWeight={600}>
@@ -376,17 +372,14 @@ const App: React.FC = () => {
                 </Box>
 
                 <Box>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                        Model
-                    </Typography>
                     <ModelSelector onSelect={handleModelSelect} currentModel={currentModel} />
                 </Box>
 
-                <Accordion disableGutters elevation={0}>
-                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                        <Typography variant="subtitle2">Tools ({tools.length})</Typography>
-                    </AccordionSummary>
-                    <AccordionDetails>
+                <Box>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                        Tools ({tools.length})
+                    </Typography>
+                    <Paper variant="outlined" sx={{ p: 1 }}>
                         <List dense sx={{ width: '100%' }}>
                             {tools.map((tool) => (
                                 <ListItem key={tool.name} disableGutters secondaryAction={
@@ -405,8 +398,8 @@ const App: React.FC = () => {
                                 </ListItem>
                             ))}
                         </List>
-                    </AccordionDetails>
-                </Accordion>
+                    </Paper>
+                </Box>
             </Box>
 
             {/* Main */}

@@ -218,6 +218,9 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 	// Set up the adapter (LLM)
 	adapter := e.llm
 
+	// Track whether any tool has been used since the latest user message
+	toolsUsed := false
+
 	// Set a configurable maximum depth to prevent infinite loops but allow long tool chains
 	maxDepth := 64
 	if v := os.Getenv("LOOM_MAX_STEPS"); v != "" {
@@ -302,6 +305,8 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 
 		// If we got a tool call, execute it
 		if toolCallReceived != nil {
+			// Mark that at least one tool was used in this turn
+			toolsUsed = true
 			// Execute the tool
 			execResult, err := e.tools.InvokeToolCall(ctx, toolCallReceived)
 			if err != nil {
@@ -341,13 +346,17 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 			continue
 		}
 
-		// If we reach here with content but no tool call, record it and continue the loop
+		// If we reach here with content but no tool call, record it
 		if currentContent != "" {
 			convo.AddAssistant(currentContent)
-			// Nudge the model to proceed with a tool call next
-			convo.AddSystem("Reminder: If the objective is not complete, call exactly one tool next. Do not produce a final answer until you call the finalize tool.")
-			// Continue depth loop to allow further tool calls
-			continue
+			// If any tools were used earlier in this turn, nudge the model to finalize; otherwise end here
+			if toolsUsed {
+				convo.AddSystem("Reminder: Tools were used. If the objective is complete, call the finalize tool with a concise summary. If more steps are needed, call exactly one next tool.")
+				// Continue depth loop to allow further tool calls or finalize
+				continue
+			}
+			// Pure conversational response with no tools used — end the turn
+			return nil
 		}
 
 		// If stream ended with no content and no tool call, retry once without streaming
@@ -406,10 +415,13 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 			if currentContent != "" {
 				convo.AddAssistant(currentContent)
 				e.bridge.EmitAssistant(currentContent)
-				// Nudge the model to proceed with a tool call next
-				convo.AddSystem("Reminder: If the objective is not complete, call exactly one tool next. Do not produce a final answer until you call the finalize tool.")
-				// Continue depth loop; do not finalize on plain content
-				continue
+				// If tools were used in this turn, nudge to finalize; otherwise stop
+				if toolsUsed {
+					convo.AddSystem("Reminder: Tools were used. If the objective is complete, call the finalize tool with a concise summary. If more steps are needed, call exactly one next tool.")
+					// Continue depth loop; do not finalize automatically on plain content
+					continue
+				}
+				return nil
 			}
 			// Still nothing
 			e.bridge.SendChat("system", "No response from model.")
