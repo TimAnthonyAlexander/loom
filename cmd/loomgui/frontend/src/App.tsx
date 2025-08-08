@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, ReactElement } from 'react';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import { SendUserMessage, Approve, GetTools, SetModel, GetSettings, SaveSettings } from '../wailsjs/go/bridge/App';
+import * as AppBridge from '../wailsjs/go/bridge/App';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -31,6 +32,7 @@ import {
 } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import SettingsIcon from '@mui/icons-material/Settings';
+import RuleIcon from '@mui/icons-material/Rule';
 
 // Custom table components using MUI Table APIs
 const CustomTable = ({ children }: any) => (
@@ -252,6 +254,11 @@ const App: React.FC = () => {
     const [openaiKey, setOpenaiKey] = useState<string>('');
     const [anthropicKey, setAnthropicKey] = useState<string>('');
     const [ollamaEndpoint, setOllamaEndpoint] = useState<string>('');
+    const [rulesOpen, setRulesOpen] = useState<boolean>(false);
+    const [userRules, setUserRules] = useState<string[]>([]);
+    const [projectRules, setProjectRules] = useState<string[]>([]);
+    const [newUserRule, setNewUserRule] = useState<string>('');
+    const [newProjectRule, setNewProjectRule] = useState<string>('');
 
     useEffect(() => {
         // Listen for new chat messages
@@ -308,6 +315,14 @@ const App: React.FC = () => {
                 setOllamaEndpoint(s?.ollama_endpoint || '');
             })
             .catch(() => { });
+
+        // Load rules
+        AppBridge.GetRules()
+            .then((r: any) => {
+                setUserRules(Array.isArray(r?.user) ? r.user : []);
+                setProjectRules(Array.isArray(r?.project) ? r.project : []);
+            })
+            .catch(() => { });
     }, []);
 
     // Scroll to bottom when messages change
@@ -361,6 +376,11 @@ const App: React.FC = () => {
                             Loom v2
                         </Typography>
                         <Box sx={{ flex: 1 }} />
+                        <Tooltip title="Rules">
+                            <IconButton size="small" onClick={() => setRulesOpen(true)}>
+                                <RuleIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
                         <Tooltip title="Settings">
                             <IconButton size="small" onClick={() => setSettingsOpen(true)}>
                                 <SettingsIcon fontSize="small" />
@@ -521,6 +541,115 @@ const App: React.FC = () => {
                 </DialogActions>
             </Dialog>
 
+            {/* Rules Dialog */}
+            <Dialog open={rulesOpen} onClose={() => setRulesOpen(false)} maxWidth="md" fullWidth>
+                <DialogTitle>Rules</DialogTitle>
+                <DialogContent dividers>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1 }}>
+                        <Box sx={{ flex: 1 }}>
+                            <Typography variant="subtitle2" sx={{ mb: 1 }}>User Rules (apply to all projects)</Typography>
+                            <Paper variant="outlined" sx={{ p: 1 }}>
+                                <Stack spacing={1}>
+                                    {userRules.map((r, idx) => (
+                                        <Stack key={`ur-${idx}`} direction="row" spacing={1} alignItems="center">
+                                            <TextField
+                                                size="small"
+                                                fullWidth
+                                                value={r}
+                                                onChange={(e) => {
+                                                    const next = [...userRules];
+                                                    next[idx] = e.target.value;
+                                                    setUserRules(next);
+                                                }}
+                                            />
+                                            <Button color="inherit" onClick={() => setUserRules(userRules.filter((_, i) => i !== idx))}>Delete</Button>
+                                        </Stack>
+                                    ))}
+                                    <Stack direction="row" spacing={1}>
+                                        <TextField
+                                            size="small"
+                                            fullWidth
+                                            placeholder="Add a new user rule"
+                                            value={newUserRule}
+                                            onChange={(e) => setNewUserRule(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' && newUserRule.trim()) {
+                                                    setUserRules([...userRules, newUserRule.trim()]);
+                                                    setNewUserRule('');
+                                                }
+                                            }}
+                                        />
+                                        <Button
+                                            variant="outlined"
+                                            onClick={() => {
+                                                if (newUserRule.trim()) {
+                                                    setUserRules([...userRules, newUserRule.trim()]);
+                                                    setNewUserRule('');
+                                                }
+                                            }}
+                                        >Add</Button>
+                                    </Stack>
+                                </Stack>
+                            </Paper>
+                        </Box>
+                        <Box sx={{ flex: 1 }}>
+                            <Typography variant="subtitle2" sx={{ mb: 1 }}>Project Rules (saved in .loom/rules.json)</Typography>
+                            <Paper variant="outlined" sx={{ p: 1 }}>
+                                <Stack spacing={1}>
+                                    {projectRules.map((r, idx) => (
+                                        <Stack key={`pr-${idx}`} direction="row" spacing={1} alignItems="center">
+                                            <TextField
+                                                size="small"
+                                                fullWidth
+                                                value={r}
+                                                onChange={(e) => {
+                                                    const next = [...projectRules];
+                                                    next[idx] = e.target.value;
+                                                    setProjectRules(next);
+                                                }}
+                                            />
+                                            <Button color="inherit" onClick={() => setProjectRules(projectRules.filter((_, i) => i !== idx))}>Delete</Button>
+                                        </Stack>
+                                    ))}
+                                    <Stack direction="row" spacing={1}>
+                                        <TextField
+                                            size="small"
+                                            fullWidth
+                                            placeholder="Add a new project rule"
+                                            value={newProjectRule}
+                                            onChange={(e) => setNewProjectRule(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' && newProjectRule.trim()) {
+                                                    setProjectRules([...projectRules, newProjectRule.trim()]);
+                                                    setNewProjectRule('');
+                                                }
+                                            }}
+                                        />
+                                        <Button
+                                            variant="outlined"
+                                            onClick={() => {
+                                                if (newProjectRule.trim()) {
+                                                    setProjectRules([...projectRules, newProjectRule.trim()]);
+                                                    setNewProjectRule('');
+                                                }
+                                            }}
+                                        >Add</Button>
+                                    </Stack>
+                                </Stack>
+                            </Paper>
+                        </Box>
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setRulesOpen(false)} color="inherit">Close</Button>
+                    <Button
+                        variant="contained"
+                        onClick={() => {
+                            AppBridge.SaveRules({ user: userRules, project: projectRules }).finally(() => setRulesOpen(false));
+                        }}
+                    >Save</Button>
+                </DialogActions>
+            </Dialog>
             {/* Settings Dialog */}
             <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>Settings</DialogTitle>

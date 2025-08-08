@@ -259,6 +259,38 @@ func (a *App) SaveSettings(settings map[string]string) {
 	a.applyAndSaveSettings(s)
 }
 
+// GetRules exposes user and project rules to the frontend.
+func (a *App) GetRules() map[string][]string {
+	user, project, _ := config.LoadRules(a.engine.Workspace())
+	return map[string][]string{
+		"user":    user,
+		"project": project,
+	}
+}
+
+// SaveRules persists rules coming from the frontend. The payload is
+// { user: string[], project: string[] }.
+func (a *App) SaveRules(payload map[string][]string) {
+	// Save user rules
+	if userRules, ok := payload["user"]; ok {
+		if err := config.SaveUserRules(userRules); err != nil {
+			log.Printf("Failed to save user rules: %v", err)
+		}
+	}
+	// Save project rules
+	if projectRules, ok := payload["project"]; ok {
+		wp := ""
+		if a.engine != nil {
+			wp = a.engine.Workspace()
+		}
+		if wp == "" {
+			log.Printf("Cannot save project rules: workspace not set")
+		} else if err := config.SaveProjectRules(wp, projectRules); err != nil {
+			log.Printf("Failed to save project rules: %v", err)
+		}
+	}
+}
+
 // SetBusy updates the busy state and notifies the frontend to enable/disable inputs
 func (a *App) SetBusy(isBusy bool) {
 	a.busy = isBusy

@@ -88,3 +88,28 @@ Follow these rules and the tools provided in the current request. When code acce
 
 	return fmt.Sprintf(template, today, toolsBlock)
 }
+
+// GenerateSystemPromptWithRules augments the base prompt with user and project rules blocks.
+func GenerateSystemPromptWithRules(tools []tool.Schema, userRules []string, projectRules []string) string {
+	base := GenerateSystemPrompt(tools)
+
+	var b strings.Builder
+	b.WriteString(base)
+	if len(userRules) > 0 {
+		b.WriteString("\n\nUser Rules:\n")
+		for _, r := range userRules {
+			b.WriteString("- ")
+			b.WriteString(r)
+			b.WriteString("\n")
+		}
+	}
+	if len(projectRules) > 0 {
+		b.WriteString("\nProject Rules:\n")
+		for _, r := range projectRules {
+			b.WriteString("- ")
+			b.WriteString(r)
+			b.WriteString("\n")
+		}
+	}
+	return strings.TrimSpace(b.String())
+}

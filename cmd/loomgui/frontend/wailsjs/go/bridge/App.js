@@ -10,6 +10,10 @@ export function EmitAssistant(arg1) {
   return window['go']['bridge']['App']['EmitAssistant'](arg1);
 }
 
+export function GetRules() {
+  return window['go']['bridge']['App']['GetRules']();
+}
+
 export function GetSettings() {
   return window['go']['bridge']['App']['GetSettings']();
 }
@@ -20,6 +24,10 @@ export function GetTools() {
 
 export function PromptApproval(arg1, arg2, arg3) {
   return window['go']['bridge']['App']['PromptApproval'](arg1, arg2, arg3);
+}
+
+export function SaveRules(arg1) {
+  return window['go']['bridge']['App']['SaveRules'](arg1);
 }
 
 export function SaveSettings(arg1) {

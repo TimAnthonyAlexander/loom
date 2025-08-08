@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/loom/loom/internal/config"
 	"github.com/loom/loom/internal/memory"
 	"github.com/loom/loom/internal/tool"
 )
@@ -114,6 +115,13 @@ func (e *Engine) WithWorkspace(path string) *Engine {
 	return e
 }
 
+// Workspace returns the configured workspace directory.
+func (e *Engine) Workspace() string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.workspaceDir
+}
+
 // SetBridge sets the UI bridge for the engine.
 func (e *Engine) SetBridge(bridge UIBridge) {
 	e.mu.Lock()
@@ -206,7 +214,9 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 		}
 	}
 	if !hasSystem {
-		convo.AddSystem(GenerateSystemPrompt(toolSchemas))
+		// Load dynamic rules and inject into system prompt
+		userRules, projectRules, _ := config.LoadRules(e.workspaceDir)
+		convo.AddSystem(GenerateSystemPromptWithRules(toolSchemas, userRules, projectRules))
 	}
 
 	// Add latest user message
