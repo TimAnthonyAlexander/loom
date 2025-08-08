@@ -257,6 +257,8 @@ const App: React.FC = () => {
     const [openaiKey, setOpenaiKey] = useState<string>('');
     const [anthropicKey, setAnthropicKey] = useState<string>('');
     const [ollamaEndpoint, setOllamaEndpoint] = useState<string>('');
+    const [autoApproveShell, setAutoApproveShell] = useState<boolean>(false);
+    const [autoApproveEdits, setAutoApproveEdits] = useState<boolean>(false);
     const [rulesOpen, setRulesOpen] = useState<boolean>(false);
     const [userRules, setUserRules] = useState<string[]>([]);
     const [projectRules, setProjectRules] = useState<string[]>([]);
@@ -316,6 +318,8 @@ const App: React.FC = () => {
                 setOpenaiKey(s?.openai_api_key || '');
                 setAnthropicKey(s?.anthropic_api_key || '');
                 setOllamaEndpoint(s?.ollama_endpoint || '');
+                setAutoApproveShell(String(s?.auto_approve_shell).toLowerCase() === 'true');
+                setAutoApproveEdits(String(s?.auto_approve_edits).toLowerCase() === 'true');
                 const last = s?.last_workspace || '';
                 if (last) {
                     setWorkspacePath(last);
@@ -703,6 +707,22 @@ const App: React.FC = () => {
                             placeholder="http://localhost:11434"
                             fullWidth
                         />
+                        <Stack direction="row" spacing={2} alignItems="center">
+                            <Tooltip title="If enabled, shell commands proposed by the model are executed without manual approval.">
+                                <Chip label="Auto-Approve Shell" />
+                            </Tooltip>
+                            <Button variant={autoApproveShell ? 'contained' : 'outlined'} onClick={() => setAutoApproveShell(!autoApproveShell)}>
+                                {autoApproveShell ? 'On' : 'Off'}
+                            </Button>
+                        </Stack>
+                        <Stack direction="row" spacing={2} alignItems="center">
+                            <Tooltip title="If enabled, file edits are applied without manual approval.">
+                                <Chip label="Auto-Approve Edits" />
+                            </Tooltip>
+                            <Button variant={autoApproveEdits ? 'contained' : 'outlined'} onClick={() => setAutoApproveEdits(!autoApproveEdits)}>
+                                {autoApproveEdits ? 'On' : 'Off'}
+                            </Button>
+                        </Stack>
                     </Stack>
                 </DialogContent>
                 <DialogActions>
@@ -714,6 +734,8 @@ const App: React.FC = () => {
                                 openai_api_key: openaiKey,
                                 anthropic_api_key: anthropicKey,
                                 ollama_endpoint: ollamaEndpoint,
+                                auto_approve_shell: String(autoApproveShell),
+                                auto_approve_edits: String(autoApproveEdits),
                             }).finally(() => setSettingsOpen(false));
                         }}
                     >

@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"runtime/debug"
+	"strings"
 
 	"github.com/loom/loom/internal/adapter"
 	"github.com/loom/loom/internal/config"
@@ -52,6 +53,10 @@ func (a *App) WithConfig(config adapter.Config) *App {
 // WithSettings sets persisted settings for the UI bridge.
 func (a *App) WithSettings(s config.Settings) *App {
 	a.settings = s
+	// Apply auto-approve flags to engine if available
+	if a.engine != nil {
+		a.engine.SetAutoApprove(s.AutoApproveShell, s.AutoApproveEdits)
+	}
 	return a
 }
 
@@ -208,6 +213,11 @@ func (a *App) applyAndSaveSettings(s config.Settings) {
 			a.config = updatedConfig
 		}
 	}
+
+	// Apply engine flags for auto-approve regardless of LLM update
+	if a.engine != nil {
+		a.engine.SetAutoApprove(s.AutoApproveShell, s.AutoApproveEdits)
+	}
 }
 
 // SendChat emits a chat message to the UI.
@@ -245,20 +255,24 @@ func (a *App) GetSettings() map[string]string {
 	a.ensureSettingsLoaded()
 	s := a.settings
 	return map[string]string{
-		"openai_api_key":    s.OpenAIAPIKey,
-		"anthropic_api_key": s.AnthropicAPIKey,
-		"ollama_endpoint":   s.OllamaEndpoint,
-		"last_workspace":    s.LastWorkspace,
+		"openai_api_key":     s.OpenAIAPIKey,
+		"anthropic_api_key":  s.AnthropicAPIKey,
+		"ollama_endpoint":    s.OllamaEndpoint,
+		"last_workspace":     s.LastWorkspace,
+		"auto_approve_shell": boolToStr(s.AutoApproveShell),
+		"auto_approve_edits": boolToStr(s.AutoApproveEdits),
 	}
 }
 
 // SaveSettings saves settings provided by the frontend.
 func (a *App) SaveSettings(settings map[string]string) {
 	s := config.Settings{
-		OpenAIAPIKey:    settings["openai_api_key"],
-		AnthropicAPIKey: settings["anthropic_api_key"],
-		OllamaEndpoint:  settings["ollama_endpoint"],
-		LastWorkspace:   settings["last_workspace"],
+		OpenAIAPIKey:     settings["openai_api_key"],
+		AnthropicAPIKey:  settings["anthropic_api_key"],
+		OllamaEndpoint:   settings["ollama_endpoint"],
+		LastWorkspace:    settings["last_workspace"],
+		AutoApproveShell: strToBool(settings["auto_approve_shell"]),
+		AutoApproveEdits: strToBool(settings["auto_approve_edits"]),
 	}
 	a.applyAndSaveSettings(s)
 }
@@ -429,4 +443,20 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func boolToStr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
+}
+
+func strToBool(s string) bool {
+	switch strings.ToLower(s) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }

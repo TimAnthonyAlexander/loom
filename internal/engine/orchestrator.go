@@ -65,6 +65,9 @@ type Engine struct {
 	memory       *memory.Project
 	workspaceDir string
 	llmMu        sync.Mutex
+	// Settings-backed flags
+	autoApproveShell bool
+	autoApproveEdits bool
 }
 
 // LLM is an interface to abstract different language model providers.
@@ -133,6 +136,14 @@ func (e *Engine) SetBridge(bridge UIBridge) {
 	}
 }
 
+// SetAutoApprove toggles auto-approval behaviors based on settings
+func (e *Engine) SetAutoApprove(shell bool, edits bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.autoApproveShell = shell
+	e.autoApproveEdits = edits
+}
+
 // SetLLM updates the LLM used by the engine.
 func (e *Engine) SetLLM(llm LLM) {
 	e.llmMu.Lock()
@@ -162,6 +173,16 @@ func (e *Engine) ResolveApproval(id string, approved bool) {
 
 // UserApproved prompts for approval and waits for the response.
 func (e *Engine) UserApproved(toolCall *tool.ToolCall, diff string) bool {
+	// Auto-approval rules
+	if toolCall != nil {
+		if toolCall.Name == "apply_shell" && e.autoApproveShell {
+			return true
+		}
+		if (toolCall.Name == "edit_file" || toolCall.Name == "apply_edit") && e.autoApproveEdits {
+			return true
+		}
+	}
+
 	summary := fmt.Sprintf("Tool: %s", toolCall.Name)
 
 	// Create a channel for the response
