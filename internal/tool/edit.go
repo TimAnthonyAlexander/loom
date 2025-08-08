@@ -8,12 +8,19 @@ import (
 	"github.com/loom/loom/internal/editor"
 )
 
-// EditFileArgs represents the arguments for the edit_file tool.
+// EditFileArgs represents the arguments for the edit_file tool (advanced actions).
 type EditFileArgs struct {
-	Path      string `json:"path"`
-	OldString string `json:"old_string"`
-	NewString string `json:"new_string"`
-	CreateNew bool   `json:"create_new,omitempty"`
+	Path   string `json:"path"`
+	Action string `json:"action"`
+	// Content for create/replace/insert operations
+	Content string `json:"content,omitempty"`
+	// Line-based parameters (1-indexed)
+	StartLine int `json:"start_line,omitempty"`
+	EndLine   int `json:"end_line,omitempty"`
+	Line      int `json:"line,omitempty"`
+	// Search/replace parameters
+	OldString string `json:"old_string,omitempty"`
+	NewString string `json:"new_string,omitempty"`
 }
 
 // EditFileResult represents the result of the edit_file tool.
@@ -28,7 +35,7 @@ type EditFileResult struct {
 func RegisterEditFile(registry *Registry, workspacePath string) error {
 	return registry.Register(Definition{
 		Name:        "edit_file",
-		Description: "Edit a file in the workspace by replacing text or creating a new file",
+		Description: "Edit a file with advanced actions: CREATE, REPLACE (line range), INSERT_BEFORE/INSERT_AFTER (line), DELETE (line range), or SEARCH_REPLACE",
 		Safe:        false, // Editing files requires approval
 		JSONSchema: map[string]interface{}{
 			"type": "object",
@@ -37,20 +44,38 @@ func RegisterEditFile(registry *Registry, workspacePath string) error {
 					"type":        "string",
 					"description": "Path to the file, relative to the workspace root",
 				},
+				"action": map[string]interface{}{
+					"type":        "string",
+					"description": "Action to perform",
+					"enum":        []string{"CREATE", "REPLACE", "INSERT_AFTER", "INSERT_BEFORE", "DELETE", "SEARCH_REPLACE"},
+				},
+				"content": map[string]interface{}{
+					"type":        "string",
+					"description": "Content used for CREATE/REPLACE/INSERT actions",
+				},
+				"start_line": map[string]interface{}{
+					"type":        "integer",
+					"description": "Start line (1-indexed) for REPLACE/DELETE",
+				},
+				"end_line": map[string]interface{}{
+					"type":        "integer",
+					"description": "End line (1-indexed, inclusive) for REPLACE/DELETE",
+				},
+				"line": map[string]interface{}{
+					"type":        "integer",
+					"description": "Line (1-indexed) for INSERT_BEFORE/INSERT_AFTER",
+				},
 				"old_string": map[string]interface{}{
 					"type":        "string",
-					"description": "The text to replace (must be present in the file unless creating a new file)",
+					"description": "String to search for during SEARCH_REPLACE",
 				},
 				"new_string": map[string]interface{}{
 					"type":        "string",
-					"description": "The new text to insert",
-				},
-				"create_new": map[string]interface{}{
-					"type":        "boolean",
-					"description": "If true, creates a new file (old_string should be empty in this case)",
+					"description": "Replacement string for SEARCH_REPLACE",
 				},
 			},
-			"required": []string{"path", "old_string", "new_string"},
+			// We cannot express conditional requirements here; runtime will validate
+			"required": []string{"path", "action"},
 		},
 		Handler: func(ctx context.Context, raw json.RawMessage) (interface{}, error) {
 			var args EditFileArgs
@@ -65,18 +90,20 @@ func RegisterEditFile(registry *Registry, workspacePath string) error {
 
 // editFile implements the file editing logic.
 func editFile(ctx context.Context, workspacePath string, args EditFileArgs) (*ExecutionResult, error) {
-	// For new file creation
-	if args.CreateNew {
-		if args.OldString != "" {
-			return nil, fmt.Errorf("old_string must be empty when creating a new file")
-		}
-
-		// Use empty old string for new file
-		args.OldString = ""
+	// Map args to advanced request
+	adv := editor.AdvancedEditRequest{
+		FilePath:  args.Path,
+		Action:    editor.ActionType(args.Action),
+		Content:   args.Content,
+		StartLine: args.StartLine,
+		EndLine:   args.EndLine,
+		Line:      args.Line,
+		OldString: args.OldString,
+		NewString: args.NewString,
 	}
 
 	// Create an edit plan first
-	plan, err := editor.ProposeEdit(workspacePath, args.Path, args.OldString, args.NewString)
+	plan, err := editor.ProposeAdvancedEdit(workspacePath, adv)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create edit plan: %w", err)
 	}
@@ -98,11 +125,20 @@ func editFile(ctx context.Context, workspacePath string, args EditFileArgs) (*Ex
 
 	// Create a descriptive message based on edit type
 	var message string
-	if plan.IsCreation {
+	switch editor.ActionType(args.Action) {
+	case editor.ActionCreate:
 		message = fmt.Sprintf("File will be created: %s", args.Path)
-	} else if plan.IsDeletion {
-		message = fmt.Sprintf("File will be deleted: %s", args.Path)
-	} else {
+	case editor.ActionDeleteLines:
+		message = fmt.Sprintf("File will be edited (DELETE lines %d-%d): %s", args.StartLine, args.EndLine, args.Path)
+	case editor.ActionReplaceLines:
+		message = fmt.Sprintf("File will be edited (REPLACE lines %d-%d): %s", args.StartLine, args.EndLine, args.Path)
+	case editor.ActionInsertBefore:
+		message = fmt.Sprintf("File will be edited (INSERT_BEFORE line %d): %s", args.Line, args.Path)
+	case editor.ActionInsertAfter:
+		message = fmt.Sprintf("File will be edited (INSERT_AFTER line %d): %s", args.Line, args.Path)
+	case editor.ActionSearchReplace:
+		message = fmt.Sprintf("File will be edited (SEARCH_REPLACE): %s", args.Path)
+	default:
 		message = fmt.Sprintf("File will be edited: %s", args.Path)
 	}
 

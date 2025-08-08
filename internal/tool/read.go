@@ -15,6 +15,8 @@ type ReadFileArgs struct {
 	Path   string `json:"path"`
 	Offset int    `json:"offset,omitempty"`
 	Limit  int    `json:"limit,omitempty"`
+	// IncludeLineNumbers controls whether to add line numbers to each returned line. Defaults to true.
+	IncludeLineNumbers *bool `json:"include_line_numbers,omitempty"`
 }
 
 // ReadFileResult represents the result of the read_file tool.
@@ -45,6 +47,10 @@ func RegisterReadFile(registry *Registry, workspacePath string) error {
 				"limit": map[string]interface{}{
 					"type":        "integer",
 					"description": "Maximum number of lines to read",
+				},
+				"include_line_numbers": map[string]interface{}{
+					"type":        "boolean",
+					"description": "Whether to prefix line numbers to each line in the response (default true)",
 				},
 			},
 			"required": []string{"path"},
@@ -103,6 +109,7 @@ func readFile(workspacePath string, args ReadFileArgs) (*ReadFileResult, error) 
 	lines := strings.Count(contentStr, "\n") + 1
 
 	// Apply offset and limit if specified
+	startLineForNumbering := 1
 	if args.Offset > 0 || args.Limit > 0 {
 		contentLines := strings.Split(contentStr, "\n")
 
@@ -113,6 +120,8 @@ func readFile(workspacePath string, args ReadFileArgs) (*ReadFileResult, error) 
 				return nil, fmt.Errorf("offset %d is beyond the file length (%d lines)", args.Offset, len(contentLines))
 			}
 		}
+
+		startLineForNumbering = start + 1
 
 		end := len(contentLines)
 		if args.Limit > 0 {
@@ -125,6 +134,16 @@ func readFile(workspacePath string, args ReadFileArgs) (*ReadFileResult, error) 
 		contentStr = strings.Join(contentLines[start:end], "\n")
 	}
 
+	// Optionally prefix line numbers (default true)
+	includeNumbers := true
+	if args.IncludeLineNumbers != nil {
+		includeNumbers = *args.IncludeLineNumbers
+	}
+	if includeNumbers {
+		numbered := addLineNumbers(contentStr, startLineForNumbering)
+		contentStr = numbered
+	}
+
 	// Detect language based on file extension
 	language := detectLanguage(path)
 
@@ -134,6 +153,20 @@ func readFile(workspacePath string, args ReadFileArgs) (*ReadFileResult, error) 
 		Lines:    lines,
 		Path:     args.Path,
 	}, nil
+}
+
+// addLineNumbers prefixes each line with its 1-indexed line number, optionally starting at a given base.
+func addLineNumbers(content string, startLine int) string {
+	if startLine <= 0 {
+		startLine = 1
+	}
+	lines := strings.Split(content, "\n")
+	// Pre-allocate a builder-like slice for performance and clarity
+	withNums := make([]string, len(lines))
+	for i, line := range lines {
+		withNums[i] = fmt.Sprintf("L%d: %s", startLine+i, line)
+	}
+	return strings.Join(withNums, "\n")
 }
 
 // detectLanguage attempts to determine the programming language from file extension.
