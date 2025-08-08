@@ -38,6 +38,9 @@ Loom v2 pairs a Go orchestrator and tooling layer with a modern React UI. It’s
 - Semantic search: ripgrep-backed search with structured results
 - Safe editing: proposed edits with diff preview and explicit approval before apply
 - Project memory: workspace-scoped persistence for stable, predictable state
+- Shell execution: safe command execution with stdout/stderr capture and workspace confinement
+- Auto-approval: configurable automatic approval for edits and shell commands
+- Rules system: user and project-specific rules for consistent AI behavior
 
 ## Architecture
 - Frontend (`cmd/loomgui/frontend/`)
@@ -104,6 +107,19 @@ Environment variables:
 
 The backend default OpenAI fallback model is `gpt-4o`. The active model can be set at runtime from the UI.
 
+### Settings
+Loom persists user settings including API keys, workspace paths, and feature flags:
+- **Auto-approve Shell**: When enabled, shell commands are executed without manual approval
+- **Auto-approve Edits**: When enabled, file edits are applied without manual approval
+- Settings are stored in the OS-specific user config directory under `loom/settings.json`
+
+### Rules
+Loom supports two types of rules that influence AI behavior:
+- **User Rules**: Global rules that apply to all projects, stored in user config
+- **Project Rules**: Workspace-specific rules stored in `.loom/rules.json` within each project
+
+Rules are accessible via the Rules button in the UI and can be edited inline.
+
 ### Model selection
 The frontend exposes a curated, static model selector. Entries are of the form `provider:model_id` and grouped by provider. The current set is exactly:
 
@@ -145,8 +161,9 @@ The backend parses model strings as `provider:model_id` (see `internal/adapter/m
     - `assistant-msg`: streaming assistant content
     - `task:prompt`: approval request with diff
     - `system:busy`: UI busy state
-- Approvals:
-  - For actions that require approval (e.g., applying file edits), a dialog presents a summary and a formatted diff. Choose Approve or Reject.
+ - Approvals:
+   - For actions that require approval (e.g., applying file edits), a dialog presents a summary and a formatted diff. Choose Approve or Reject.
+   - Auto-approval settings can bypass manual approval for shell commands and file edits
 
 ## Tools and approvals
 Tools are registered in the backend via `registerTools` (see `cmd/loomgui/main.go`) and defined under `internal/tool/`. Typical tools include:
@@ -155,9 +172,19 @@ Tools are registered in the backend via `registerTools` (see `cmd/loomgui/main.g
 - `edit_file`: Propose an edit (requires approval)
 - `apply_edit`: Apply an approved edit
 - `list_dir`: Enumerate directories
+- `run_shell`: Propose a shell command (requires approval)
+- `apply_shell`: Execute an approved shell command
 - `finalize`: Final summary to conclude workflows
 
-Each tool is described by a schema and flagged as Safe or Requires approval. Destructive actions require explicit user approval in the UI before execution.
+Each tool is described by a schema and flagged as Safe or Requires approval. Destructive actions require explicit user approval in the UI before execution, unless auto-approval is enabled.
+
+### Shell Commands
+Shell commands support:
+- Direct binary execution or shell interpretation (`sh -c`)
+- Working directory specification (confined to workspace)
+- Timeout limits (default 60s, max 600s)
+- Full output capture (stdout, stderr, exit code, duration)
+- Path safety: commands cannot escape the workspace directory
 
 ## Model adapters
 - OpenAI (`internal/adapter/openai`)
@@ -185,6 +212,8 @@ Adapters convert engine messages to provider-specific payloads and parse streami
 - Tool safety: destructive tools require explicit approval; the UI cannot apply edits without approval.
 - Path handling: tools operate within the workspace root; path escapes are disallowed by design.
 - Secrets: prompts and engine heuristics avoid echoing secrets verbatim; treat credentials as redacted.
+- Shell execution: commands are confined to the workspace directory and subject to timeout limits
+- Auto-approval: when enabled, bypasses manual approval - use with caution
 
 ## What changed in v2:
 - Entirely rewritten.
