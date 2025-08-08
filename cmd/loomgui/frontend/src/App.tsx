@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, ReactElement } from 'react';
 import { EventsOn } from '../wailsjs/runtime/runtime';
-import { SendUserMessage, Approve, GetTools, SetModel, GetSettings, SaveSettings, SetWorkspace } from '../wailsjs/go/bridge/App';
+import { SendUserMessage, Approve, GetTools, SetModel, GetSettings, SaveSettings, SetWorkspace, ClearConversation } from '../wailsjs/go/bridge/App';
 import * as Bridge from '../wailsjs/go/bridge/App';
 import * as AppBridge from '../wailsjs/go/bridge/App';
 import ReactMarkdown from 'react-markdown';
@@ -293,6 +293,11 @@ const App: React.FC = () => {
             });
         });
 
+        // Listen for clear chat event to reset UI state
+        EventsOn('chat:clear', () => {
+            setMessages([]);
+        });
+
         // Listen for approval requests
         EventsOn('task:prompt', (request: ApprovalRequest) => {
             setApprovalRequest(request);
@@ -531,6 +536,18 @@ const App: React.FC = () => {
                             maxRows={8}
                             fullWidth
                         />
+                        <Button
+                            onClick={() => {
+                                // clear UI immediately, then ask backend to clear memory
+                                setMessages([])
+                                ClearConversation()
+                            }}
+                            color="inherit"
+                            disabled={busy}
+                            variant="outlined"
+                        >
+                            Clear
+                        </Button>
                         <Button
                             onClick={handleSend}
                             disabled={busy || !input.trim()}

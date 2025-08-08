@@ -26,7 +26,8 @@ type Client struct {
 // New creates a new OpenAI client.
 func New(apiKey string, model string) *Client {
 	if model == "" {
-		model = "o4-mini" // Default model
+		// Default to a Chat Completions-capable model to ensure streaming works
+		model = "o4-mini"
 	}
 
 	return &Client{
@@ -45,13 +46,15 @@ func (c *Client) WithEndpoint(endpoint string) *Client {
 	return c
 }
 
-// isReasoningModel checks if the model is an o-series reasoning model (o3, o3-mini, o4-mini)
+// isReasoningModel returns true for OpenAI o-series reasoning models.
+// Treat all o3* and o4* variants as reasoning (e.g., o3, o3-mini, o4, o4-mini).
 func isReasoningModel(model string) bool {
-	reasoningModels := []string{"o3", "o3-mini", "o4-mini", "gpt-5"}
-	for _, m := range reasoningModels {
-		if model == m || strings.HasPrefix(model, m+"-") {
-			return true
-		}
+	m := strings.ToLower(strings.TrimSpace(model))
+	if m == "o3" || strings.HasPrefix(m, "o3-") {
+		return true
+	}
+	if m == "o4" || strings.HasPrefix(m, "o4-") {
+		return true
 	}
 	return false
 }
@@ -129,7 +132,7 @@ func (c *Client) Chat(
 	}
 	fmt.Println("=== End OpenAI Messages ===")
 
-    // Prepare the request body
+	// Prepare the request body
 	requestBody := map[string]interface{}{
 		"model":    c.model,
 		"messages": openaiMessages,
@@ -141,12 +144,14 @@ func (c *Client) Chat(
 		requestBody["temperature"] = 0.2
 	}
 
-    // Add tools if provided
+	// Add tools if provided
 	if len(tools) > 0 {
 		requestBody["tools"] = openaiTools
 		requestBody["tool_choice"] = "auto"
-        // Avoid multiple simultaneous tool calls which complicate accumulation
-        requestBody["parallel_tool_calls"] = false
+		// Only include parallel_tool_calls for non-reasoning models.
+		if !isReasoningModel(c.model) {
+			requestBody["parallel_tool_calls"] = false
+		}
 	}
 
 	// Start a goroutine to handle the streaming response
@@ -207,13 +212,13 @@ func (c *Client) Chat(
 			return
 		}
 
-        // Handle streaming response
-        if stream {
-            // Create a cancellable context that we can cancel after emitting a tool call
-            sseCtx, sseCancel := context.WithCancel(ctx)
-            defer sseCancel()
-            c.handleStreamingResponse(sseCtx, resp.Body, resultCh)
-        } else {
+		// Handle streaming response
+		if stream {
+			// Create a cancellable context that we can cancel after emitting a tool call
+			sseCtx, sseCancel := context.WithCancel(ctx)
+			defer sseCancel()
+			c.handleStreamingResponse(sseCtx, resp.Body, resultCh)
+		} else {
 			// Handle non-streaming response
 			c.handleNonStreamingResponse(ctx, resp.Body, resultCh)
 		}
@@ -244,15 +249,15 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 	// Keep track of the current assistant response
 	var currentContent string
 
-    // Accumulate tool call deltas until finish_reason == "tool_calls"
-    type partialCall struct {
-        id   string
-        name string
-        args string
-    }
-    // Key by index to avoid splitting state when an ID appears mid-stream
-    partials := make(map[int]*partialCall)
-    sawToolCalls := false
+	// Accumulate tool call deltas until finish_reason == "tool_calls"
+	type partialCall struct {
+		id   string
+		name string
+		args string
+	}
+	// Key by index to avoid splitting state when an ID appears mid-stream
+	partials := make(map[int]*partialCall)
+	sawToolCalls := false
 
 	// Process each line in the stream
 	for scanner.Scan() {
@@ -310,39 +315,39 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 			}
 		}
 
-        // Accumulate any tool_calls deltas
-        if len(delta.ToolCalls) > 0 {
-            sawToolCalls = true
-            for _, tc := range delta.ToolCalls {
-                idx := tc.Index
-                p, ok := partials[idx]
-                if !ok {
-                    p = &partialCall{}
-                    partials[idx] = p
-                }
-                if tc.ID != "" {
-                    p.id = tc.ID
-                }
-                if tc.Function.Name != "" {
-                    p.name = tc.Function.Name
-                }
-                if tc.Function.Arguments != "" {
-                    p.args += tc.Function.Arguments
-                }
-            }
-        }
+		// Accumulate any tool_calls deltas
+		if len(delta.ToolCalls) > 0 {
+			sawToolCalls = true
+			for _, tc := range delta.ToolCalls {
+				idx := tc.Index
+				p, ok := partials[idx]
+				if !ok {
+					p = &partialCall{}
+					partials[idx] = p
+				}
+				if tc.ID != "" {
+					p.id = tc.ID
+				}
+				if tc.Function.Name != "" {
+					p.name = tc.Function.Name
+				}
+				if tc.Function.Arguments != "" {
+					p.args += tc.Function.Arguments
+				}
+			}
+		}
 
 		// Only emit tool call(s) after model signals completion of tool_calls
-        if finish == "tool_calls" && sawToolCalls {
-            // Choose the lowest index tool call (parallel tool calls disabled)
-            var chosen *partialCall
-            var chosenIdx int
-            for idx, pc := range partials {
-                if chosen == nil || idx < chosenIdx {
-                    chosen = pc
-                    chosenIdx = idx
-                }
-            }
+		if finish == "tool_calls" && sawToolCalls {
+			// Choose the lowest index tool call (parallel tool calls disabled)
+			var chosen *partialCall
+			var chosenIdx int
+			for idx, pc := range partials {
+				if chosen == nil || idx < chosenIdx {
+					chosen = pc
+					chosenIdx = idx
+				}
+			}
 
 			if chosen != nil {
 				// If we never received a function name, do not emit a tool call.
@@ -364,12 +369,12 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 				if !validateToolArgs(chosen.name, argsMap) {
 					return
 				}
-                if args, err := json.Marshal(argsMap); err == nil {
-                    id := chosen.id
-                    if id == "" {
-                        id = fmt.Sprintf("idx_%d", chosenIdx)
-                    }
-                    call := &engine.ToolCall{ID: id, Name: chosen.name, Args: args}
+				if args, err := json.Marshal(argsMap); err == nil {
+					id := chosen.id
+					if id == "" {
+						id = fmt.Sprintf("idx_%d", chosenIdx)
+					}
+					call := &engine.ToolCall{ID: id, Name: chosen.name, Args: args}
 					select {
 					case <-ctx.Done():
 						return
@@ -382,15 +387,15 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 	}
 
 	// If the scanner ends without explicit finish_reason but we have a parsable tool call, try to emit it
-    if err := scanner.Err(); err == nil && sawToolCalls && len(partials) > 0 {
-        var chosen *partialCall
-        var chosenIdx int
-        for idx, pc := range partials {
-            if chosen == nil || idx < chosenIdx {
-                chosen = pc
-                chosenIdx = idx
-            }
-        }
+	if err := scanner.Err(); err == nil && sawToolCalls && len(partials) > 0 {
+		var chosen *partialCall
+		var chosenIdx int
+		for idx, pc := range partials {
+			if chosen == nil || idx < chosenIdx {
+				chosen = pc
+				chosenIdx = idx
+			}
+		}
 		if chosen != nil {
 			// If function name is still missing at end of stream, do not emit a tool call.
 			// This will signal the engine to perform a non-streaming retry.
@@ -408,12 +413,12 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 			if !validateToolArgs(chosen.name, argsMap) {
 				return
 			}
-            if args, err := json.Marshal(argsMap); err == nil {
-                id := chosen.id
-                if id == "" {
-                    id = fmt.Sprintf("idx_%d", chosenIdx)
-                }
-                call := &engine.ToolCall{ID: id, Name: chosen.name, Args: args}
+			if args, err := json.Marshal(argsMap); err == nil {
+				id := chosen.id
+				if id == "" {
+					id = fmt.Sprintf("idx_%d", chosenIdx)
+				}
+				call := &engine.ToolCall{ID: id, Name: chosen.name, Args: args}
 				select {
 				case <-ctx.Done():
 					return

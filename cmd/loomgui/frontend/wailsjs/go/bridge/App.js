@@ -10,6 +10,10 @@ export function ChooseWorkspace() {
   return window['go']['bridge']['App']['ChooseWorkspace']();
 }
 
+export function ClearConversation() {
+  return window['go']['bridge']['App']['ClearConversation']();
+}
+
 export function EmitAssistant(arg1) {
   return window['go']['bridge']['App']['EmitAssistant'](arg1);
 }

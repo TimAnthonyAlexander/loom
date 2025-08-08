@@ -76,6 +76,16 @@ func (a *App) SendUserMessage(message string) {
 	}
 }
 
+// ClearConversation clears the current conversation in the engine/memory and emits a UI event to clear local state.
+func (a *App) ClearConversation() {
+	if a.engine != nil {
+		a.engine.ClearConversation()
+	}
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "chat:clear")
+	}
+}
+
 // Approve resolves an approval request with the given decision.
 func (a *App) Approve(id string, approved bool) {
 	if a.engine != nil {

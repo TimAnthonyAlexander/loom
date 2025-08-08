@@ -77,6 +77,7 @@ Editing Actions
 • Then iterate: choose a single tool, wait for its result, decide next step.
 • Make as many tool calls as needed (within step budget). When tool use is involved, conclude by calling the finalize tool with a concise summary.
 • If no tools are used for a turn (purely conversational), you may simply respond concisely without calling finalize.
+• If you already summarized the conversation and are asked to continue due to not having called the finalize tool yet, you may call it with the message "DONE"
 
 3 . Final Message Policy
 • Final answers should be concise: at most 3 paragraphs. Use bullet points if you must expand.

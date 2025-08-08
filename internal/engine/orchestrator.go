@@ -151,6 +151,17 @@ func (e *Engine) SetLLM(llm LLM) {
 	e.llm = llm
 }
 
+// ClearConversation clears the current conversation history in memory and notifies the UI.
+func (e *Engine) ClearConversation() {
+	if e.memory != nil {
+		convo := e.memory.StartConversation()
+		convo.Clear()
+	}
+	if e.bridge != nil {
+		e.bridge.SendChat("system", "Conversation cleared.")
+	}
+}
+
 // Enqueue adds a user message and starts the processing loop.
 func (e *Engine) Enqueue(message string) {
 	// Send to UI
