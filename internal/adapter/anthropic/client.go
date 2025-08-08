@@ -105,6 +105,21 @@ func (c *Client) Chat(
 
 	// Convert messages and tools to Claude format (excluding system messages)
 	claudeMessages := convertMessages(messages)
+	// Anthropic requires the last message to be from the user. If not, append
+	// a minimal nudge from user to prompt a continuation/tool call.
+	if len(claudeMessages) == 0 {
+		claudeMessages = append(claudeMessages, map[string]interface{}{
+			"role":    "user",
+			"content": []map[string]interface{}{{"type": "text", "text": "Continue."}},
+		})
+	} else {
+		if role, _ := claudeMessages[len(claudeMessages)-1]["role"].(string); role != "user" {
+			claudeMessages = append(claudeMessages, map[string]interface{}{
+				"role":    "user",
+				"content": []map[string]interface{}{{"type": "text", "text": "Continue."}},
+			})
+		}
+	}
 	claudeTools := convertTools(tools)
 
 	// Add debug logging of the converted Anthropic messages (parity with OpenAI adapter)
@@ -366,20 +381,19 @@ func (c *Client) handleNonStreamingResponse(ctx context.Context, body io.Reader,
 	if err != nil {
 		return
 	}
+	// Debug: dump raw Anthropic response
+	fmt.Printf("=== DEBUG: Anthropic Raw Response ===\n%s\n=== End Anthropic Raw Response ===\n", string(respBody))
 
 	// Parse the response per Anthropic schema
 	var resp struct {
 		Type       string `json:"type"`
 		StopReason string `json:"stop_reason"`
 		Content    []struct {
-			Type    string `json:"type"`
-			Text    string `json:"text"`
-			ToolUse *struct {
-				ID    string          `json:"id"`
-				Name  string          `json:"name"`
-				Type  string          `json:"type"`
-				Input json.RawMessage `json:"input"`
-			} `json:"tool_use"`
+			Type  string          `json:"type"`
+			Text  string          `json:"text"`
+			ID    string          `json:"id"`
+			Name  string          `json:"name"`
+			Input json.RawMessage `json:"input"`
 		} `json:"content"`
 	}
 
@@ -387,23 +401,19 @@ func (c *Client) handleNonStreamingResponse(ctx context.Context, body io.Reader,
 		return
 	}
 
-	// Check for tool use
-	if resp.StopReason == "tool_use" {
-		for _, content := range resp.Content {
-			if content.ToolUse != nil {
-				toolCall := &engine.ToolCall{
-					ID:   content.ToolUse.ID,
-					Name: content.ToolUse.Name,
-					Args: content.ToolUse.Input,
-				}
-
-				select {
-				case <-ctx.Done():
-					return
-				case ch <- engine.TokenOrToolCall{ToolCall: toolCall}:
-					// Successfully sent tool call
-					return
-				}
+	// Prefer tool_use if present, regardless of stop_reason
+	for _, content := range resp.Content {
+		if strings.EqualFold(content.Type, "tool_use") {
+			toolCall := &engine.ToolCall{
+				ID:   content.ID,
+				Name: content.Name,
+				Args: content.Input,
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- engine.TokenOrToolCall{ToolCall: toolCall}:
+				return
 			}
 		}
 	}
@@ -430,9 +440,34 @@ func convertMessages(messages []engine.Message) []map[string]interface{} {
 			continue
 		}
 
-		claudeMsg := map[string]interface{}{
-			"role": convertRole(msg.Role),
+		claudeMsg := map[string]interface{}{}
+
+		// Special handling: assistant tool_use messages recorded by the engine
+		if msg.Role == "assistant" && msg.Name != "" && msg.ToolID != "" {
+			claudeMsg["role"] = "assistant"
+			// Parse input JSON if possible; default to empty object
+			var input any
+			if strings.TrimSpace(msg.Content) == "" {
+				input = map[string]any{}
+			} else {
+				if err := json.Unmarshal([]byte(msg.Content), &input); err != nil {
+					input = map[string]any{}
+				}
+			}
+			claudeMsg["content"] = []map[string]interface{}{
+				{
+					"type":  "tool_use",
+					"id":    msg.ToolID,
+					"name":  msg.Name,
+					"input": input,
+				},
+			}
+			result = append(result, claudeMsg)
+			continue
 		}
+
+		// Default role mapping after handling tool_use above
+		claudeMsg["role"] = convertRole(msg.Role)
 
 		// Handle content based on role
 		switch msg.Role {
@@ -465,7 +500,8 @@ func convertRole(role string) string {
 	case "assistant":
 		return "assistant"
 	case "function", "tool":
-		return "assistant"
+		// Anthropic expects tool results to be sent from the user
+		return "user"
 	case "system":
 		return "system"
 	default:
@@ -478,13 +514,16 @@ func convertTools(tools []engine.ToolSchema) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(tools))
 
 	for _, tool := range tools {
+		var properties interface{} = tool.Schema["properties"]
+		var required interface{} = tool.Schema["required"]
 		claudeTool := map[string]interface{}{
 			"name":        tool.Name,
 			"description": tool.Description,
 			"input_schema": map[string]interface{}{
-				"type":       "object",
-				"properties": tool.Schema["properties"],
-				"required":   tool.Schema["required"],
+				"type":                 "object",
+				"properties":           properties,
+				"required":             required,
+				"additionalProperties": false,
 			},
 		}
 
