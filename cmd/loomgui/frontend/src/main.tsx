@@ -4,6 +4,33 @@ import App from './App'
 import ErrorBoundary from './ErrorBoundary'
 import { LogError } from '../wailsjs/runtime/runtime'
 import './App.css'
+import { ThemeProvider, createTheme, CssBaseline } from '@mui/material'
+
+const theme = createTheme({
+  palette: {
+    mode: 'light',
+    primary: { main: '#0A84FF' },
+    background: { default: '#F8F9FB', paper: '#FFFFFF' },
+  },
+  shape: { borderRadius: 12 },
+  typography: {
+    fontFamily:
+      "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'",
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: { root: { textTransform: 'none' } },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          boxShadow:
+            '0 1px 2px rgba(16,24,40,0.06), 0 1px 3px rgba(16,24,40,0.1)',
+        },
+      },
+    },
+  },
+})
 
 // Global error handlers
 window.addEventListener('error', (event) => {
@@ -32,8 +59,11 @@ window.addEventListener('unhandledrejection', (event) => {
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    </ThemeProvider>
   </React.StrictMode>,
 )

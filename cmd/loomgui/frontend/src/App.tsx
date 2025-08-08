@@ -6,48 +6,53 @@ import remarkGfm from 'remark-gfm';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight as oneLightStyle } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import ModelSelector from './ModelSelector';
-import './App.css';
+import {
+  Box,
+  Stack,
+  Typography,
+  Paper,
+  Divider,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  List,
+  ListItem,
+  ListItemText,
+  Chip,
+  TextField,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Table as MuiTable,
+  TableCell as MuiTableCell,
+  TableRow as MuiTableRow,
+  TableContainer as MuiTableContainer,
+} from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import SendIcon from '@mui/icons-material/Send';
 
-// Custom table components to handle the inTable error
-const CustomTable = ({ children, ...props }: any) => {
-  try {
-    return (
-      <table className="markdown-table" {...props}>
-        {children}
-      </table>
-    );
-  } catch (error) {
-    console.error('Table rendering error:', error);
-    return <div className="table-error">Table rendering failed</div>;
-  }
-};
+// Custom table components using MUI Table APIs
+const CustomTable = ({ children }: any) => (
+  <MuiTableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1 }}>
+    <MuiTable size="small">{children}</MuiTable>
+  </MuiTableContainer>
+)
 
-const CustomTableRow = ({ children, ...props }: any) => {
-  try {
-    return <tr {...props}>{children}</tr>;
-  } catch (error) {
-    console.error('Table row rendering error:', error);
-    return <div className="table-row-error">Row rendering failed</div>;
-  }
-};
+const CustomTableRow = ({ children, ...props }: any) => (
+  <MuiTableRow {...props}>{children}</MuiTableRow>
+)
 
-const CustomTableCell = ({ children, ...props }: any) => {
-  try {
-    return <td {...props}>{children}</td>;
-  } catch (error) {
-    console.error('Table cell rendering error:', error);
-    return <span className="table-cell-error">Cell rendering failed</span>;
-  }
-};
+const CustomTableCell = ({ children, ...props }: any) => (
+  <MuiTableCell {...props}>{children}</MuiTableCell>
+)
 
-const CustomTableHeader = ({ children, ...props }: any) => {
-  try {
-    return <th {...props}>{children}</th>;
-  } catch (error) {
-    console.error('Table header rendering error:', error);
-    return <span className="table-header-error">Header rendering failed</span>;
-  }
-};
+const CustomTableHeader = ({ children, ...props }: any) => (
+  <MuiTableCell {...props} component="th">
+    {children}
+  </MuiTableCell>
+)
 
 // Error boundary for ReactMarkdown
 class MarkdownErrorBoundary extends React.Component<
@@ -87,85 +92,135 @@ class MarkdownErrorBoundary extends React.Component<
   }
 }
 
-// Helper function to format diff output with syntax highlighting
+// Helper function to format diff output with MUI components
 const formatDiff = (diff: string): ReactElement => {
-  if (!diff) return <pre>No changes</pre>;
+  if (!diff) return (
+    <Typography variant="body2" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+      No changes
+    </Typography>
+  )
 
-  // Split the diff into lines
-  const lines = diff.split('\n');
-  
-  // Track if we're in the header section
-  let inHeader = true;
-  const headerLines: string[] = [];
-  const contentLines: string[] = [];
-  
-  // Separate header from content
+  const lines = diff.split('\n')
+  let inHeader = true
+  const headerLines: string[] = []
+  const contentLines: string[] = []
+
   for (const line of lines) {
     if (inHeader && (line.startsWith('---') || line.startsWith('+++'))) {
-      headerLines.push(line);
+      headerLines.push(line)
     } else if (line === '') {
-      inHeader = false;
+      inHeader = false
     } else {
-      contentLines.push(line);
+      contentLines.push(line)
     }
   }
-  
+
   return (
-    <>
+    <Box>
       {headerLines.length > 0 && (
-        <div className="diff-header">
-          {headerLines.map((line, i) => <div key={`header-${i}`}>{line}</div>)}
-        </div>
+        <Box sx={{ color: 'text.secondary', mb: 1 }}>
+          {headerLines.map((line, i) => (
+            <Typography
+              key={`header-${i}`}
+              variant="caption"
+              component="div"
+              sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+            >
+              {line}
+            </Typography>
+          ))}
+        </Box>
       )}
-      
-      <div className="diff-content">
+      <Box>
         {contentLines.map((line, i) => {
-          // Format line based on its prefix
-          if (line.startsWith('+') || line.startsWith('+')) {
-            const match = line.match(/^(\+)(\s*\d+:\s)(.*)$/);
-            if (match) {
-              return (
-                <div key={`line-${i}`} className="diff-added">
-                  <span className="diff-line-number">{match[2]}</span>
-                  {match[3]}
-                </div>
-              );
-            }
-            
-            return <div key={`line-${i}`} className="diff-added">{line}</div>;
-          } else if (line.startsWith('-') || line.startsWith('-')) {
-            const match = line.match(/^(\-)(\s*\d+:\s)(.*)$/);
-            if (match) {
-              return (
-                <div key={`line-${i}`} className="diff-removed">
-                  <span className="diff-line-number">{match[2]}</span>
-                  {match[3]}
-                </div>
-              );
-            }
-            
-            return <div key={`line-${i}`} className="diff-removed">{line}</div>;
-          } else if (line.match(/^\d+ line\(s\) changed$/)) {
-            return <div key={`line-${i}`} className="diff-summary">{line}</div>;
+          if (line.startsWith('+')) {
+            const match = line.match(/^(\+)(\s*\d+:\s)(.*)$/)
+            return (
+              <Box
+                key={`line-${i}`}
+                sx={{
+                  bgcolor: 'success.light',
+                  color: 'success.contrastText',
+                  px: 1,
+                  py: 0.25,
+                  borderRadius: 0.5,
+                  my: 0.25,
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                }}
+              >
+                {match ? (
+                  <>
+                    <Box component="span" sx={{ opacity: 0.75, mr: 1 }}>
+                      {match[2]}
+                    </Box>
+                    {match[3]}
+                  </>
+                ) : (
+                  line
+                )}
+              </Box>
+            )
           }
-          
-          // Normal context lines
-          const match = line.match(/^(\s)(\s*\d+:\s)(.*)$/);
+
+          if (line.startsWith('-')) {
+            const match = line.match(/^(\-)(\s*\d+:\s)(.*)$/)
+            return (
+              <Box
+                key={`line-${i}`}
+                sx={{
+                  bgcolor: 'error.light',
+                  color: 'error.contrastText',
+                  px: 1,
+                  py: 0.25,
+                  borderRadius: 0.5,
+                  my: 0.25,
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                }}
+              >
+                {match ? (
+                  <>
+                    <Box component="span" sx={{ opacity: 0.75, mr: 1 }}>
+                      {match[2]}
+                    </Box>
+                    {match[3]}
+                  </>
+                ) : (
+                  line
+                )}
+              </Box>
+            )
+          }
+
+          if (line.match(/^\d+ line\(s\) changed$/)) {
+            return (
+              <Typography key={`line-${i}`} variant="caption" color="text.secondary">
+                {line}
+              </Typography>
+            )
+          }
+
+          const match = line.match(/^(\s)(\s*\d+:\s)(.*)$/)
           if (match) {
             return (
-              <div key={`line-${i}`}>
-                <span className="diff-line-number">{match[2]}</span>
+              <Box key={`line-${i}`} sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                <Box component="span" sx={{ opacity: 0.5, mr: 1 }}>
+                  {match[2]}
+                </Box>
                 {match[3]}
-              </div>
-            );
+              </Box>
+            )
           }
-          
-          return <div key={`line-${i}`}>{line}</div>;
+
+          return (
+            <Box key={`line-${i}`} sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+              {line}
+            </Box>
+          )
         })}
-      </div>
-    </>
-  );
-};
+      </Box>
+    </Box>
+  )
+}
 
 // Define types for messages from backend
 interface ChatMessage {
@@ -272,115 +327,182 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="app">
-      <div className="sidebar">
-        <h1>Loom v2</h1>
-        <div className="model-selection-container">
-          <h2>Model Selection</h2>
-          <ModelSelector onSelect={handleModelSelect} currentModel={currentModel} />
-        </div>
-        <div className="tools-list">
-          <h2>Available Tools</h2>
-          <ul>
-            {tools.map(tool => (
-              <li key={tool.name}>
-                <strong>{tool.name}</strong>
-                <p>{tool.description}</p>
-                <span className={tool.safe ? 'safe' : 'requires-approval'}>
-                  {tool.safe ? 'Safe' : 'Requires Approval'}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-      
-      <div className="main">
-        <div className="chat-window">
-          {messages.map((msg, index) => (
-            <div key={index} className={`message ${msg.role}`}>
-              <div className="role">{msg.role}</div>
-              <div className="content">
-                <MarkdownErrorBoundary>
-                  <ReactMarkdown 
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      code({node, inline, className, children, ...props}: any) {
-                        const match = /language-(\w+)/.exec(className || '')
-                        return !inline && match ? (
-                          <SyntaxHighlighter
-                            style={oneLightStyle as any}
-                            language={match[1]}
-                            PreTag="div"
-                          >
-                            {String(children).replace(/\n$/, '')}
-                          </SyntaxHighlighter>
-                        ) : (
-                          <code className={className} {...props}>
-                            {children}
-                          </code>
-                        )
-                      },
-                      table: CustomTable,
-                      tr: CustomTableRow,
-                      td: CustomTableCell,
-                      th: CustomTableHeader
-                    }}
-                  >
-                    {msg.content}
-                  </ReactMarkdown>
-                </MarkdownErrorBoundary>
-              </div>
-            </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
-        
-        <div className="input-area">
-          <textarea 
-            value={input} 
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (!busy) handleSend();
-              }
-            }}
-            placeholder="Ask Loom anything..."
-            disabled={busy}
-          />
-          <button onClick={handleSend} disabled={busy}>{busy ? 'Working…' : 'Send'}</button>
-        </div>
-      </div>
+    <Box display="flex" minHeight="100vh" sx={{ bgcolor: 'background.default' }}>
+      {/* Sidebar */}
+      <Box
+        sx={{
+          width: 320,
+          borderRight: 1,
+          borderColor: 'divider',
+          px: 3,
+          py: 3,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 3,
+        }}
+      >
+        <Box>
+          <Typography variant="h6" fontWeight={600} gutterBottom>
+            Loom v2
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Minimal, calm, precise.
+          </Typography>
+        </Box>
 
-      {approvalRequest && (
-        <div className="approval-modal">
-          <div className="modal-content">
-            <h2>Action Requires Approval</h2>
-            <h3>{approvalRequest.summary}</h3>
-            
-            <div className="diff-view">
-              {formatDiff(approvalRequest.diff)}
-            </div>
-            
-            <div className="approval-actions">
-              <button 
-                className="reject" 
-                onClick={() => handleApproval(false)}
-              >
-                Reject
-              </button>
-              <button 
-                className="approve" 
-                onClick={() => handleApproval(true)}
-              >
-                Approve
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+        <Box>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            Model
+          </Typography>
+          <ModelSelector onSelect={handleModelSelect} currentModel={currentModel} />
+        </Box>
+
+        <Accordion disableGutters elevation={0}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography variant="subtitle2">Tools ({tools.length})</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <List dense sx={{ width: '100%' }}>
+              {tools.map((tool) => (
+                <ListItem key={tool.name} disableGutters secondaryAction={
+                  <Chip
+                    size="small"
+                    label={tool.safe ? 'Safe' : 'Approval'}
+                    color={tool.safe ? 'success' : 'warning'}
+                    variant={tool.safe ? 'outlined' : 'filled'}
+                  />
+                }>
+                  <ListItemText
+                    primary={tool.name}
+                    secondary={tool.description}
+                    primaryTypographyProps={{ fontWeight: 600 }}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          </AccordionDetails>
+        </Accordion>
+      </Box>
+
+      {/* Main */}
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        {/* Chat */}
+        <Box sx={{ flex: 1, overflowY: 'auto', px: 4, py: 3 }}>
+          <Stack spacing={2}>
+            {messages.map((msg, index) => {
+              const isUser = msg.role === 'user'
+              const isSystem = msg.role === 'system'
+              const containerProps = isUser
+                ? { component: Paper, elevation: 0, variant: 'outlined' as const, sx: { p: 2 } }
+                : { component: Box, sx: { py: 0.5 } }
+
+              return (
+                <Box key={index} {...(containerProps as any)}>
+                  <MarkdownErrorBoundary>
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        code({ node, inline, className, children, ...props }: any) {
+                          const match = /language-(\w+)/.exec(className || '')
+                          return !inline && match ? (
+                            <SyntaxHighlighter
+                              style={oneLightStyle as any}
+                              language={match[1]}
+                              PreTag="div"
+                            >
+                              {String(children).replace(/\n$/, '')}
+                            </SyntaxHighlighter>
+                          ) : (
+                            <Box
+                              component="code"
+                              className={className}
+                              sx={{
+                                bgcolor: 'action.hover',
+                                borderRadius: 1,
+                                px: 0.5,
+                                py: 0.25,
+                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                              }}
+                              {...props}
+                            >
+                              {children}
+                            </Box>
+                          )
+                        },
+                        table: CustomTable,
+                        tr: CustomTableRow,
+                        td: CustomTableCell,
+                        th: CustomTableHeader,
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  </MarkdownErrorBoundary>
+                </Box>
+              )
+            })}
+            <div ref={messagesEndRef} />
+          </Stack>
+        </Box>
+
+        {/* Composer */}
+        <Divider />
+        <Box sx={{ px: 3, py: 2 }}>
+          <Stack direction="row" spacing={1} alignItems="flex-end">
+            <TextField
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  if (!busy) handleSend()
+                }
+              }}
+              placeholder="Ask Loom anything…"
+              disabled={busy}
+              multiline
+              minRows={1}
+              maxRows={8}
+              fullWidth
+            />
+            <Button
+              onClick={handleSend}
+              disabled={busy || !input.trim()}
+              variant="contained"
+              endIcon={<SendIcon />}
+            >
+              {busy ? 'Working…' : 'Send'}
+            </Button>
+          </Stack>
+        </Box>
+      </Box>
+
+      {/* Approval Dialog */}
+      <Dialog open={!!approvalRequest} onClose={() => setApprovalRequest(null)} maxWidth="md" fullWidth>
+        <DialogTitle>Action Requires Approval</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="subtitle1" sx={{ mb: 2 }}>
+            {approvalRequest?.summary}
+          </Typography>
+          <Box sx={{
+            bgcolor: 'background.paper',
+            p: 2,
+            borderRadius: 1,
+            border: '1px solid',
+            borderColor: 'divider',
+            overflow: 'auto',
+            maxHeight: 400,
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+          }}>
+            {approvalRequest && formatDiff(approvalRequest.diff)}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button color="inherit" onClick={() => handleApproval(false)}>Reject</Button>
+          <Button variant="contained" onClick={() => handleApproval(true)}>Approve</Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   );
 };
 
