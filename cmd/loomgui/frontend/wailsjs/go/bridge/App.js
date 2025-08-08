@@ -6,6 +6,10 @@ export function Approve(arg1, arg2) {
   return window['go']['bridge']['App']['Approve'](arg1, arg2);
 }
 
+export function ChooseWorkspace() {
+  return window['go']['bridge']['App']['ChooseWorkspace']();
+}
+
 export function EmitAssistant(arg1) {
   return window['go']['bridge']['App']['EmitAssistant'](arg1);
 }

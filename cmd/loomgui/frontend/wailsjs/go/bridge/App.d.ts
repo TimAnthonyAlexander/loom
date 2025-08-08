@@ -9,6 +9,8 @@ import {tool} from '../models';
 
 export function Approve(arg1:string,arg2:boolean):Promise<void>;
 
+export function ChooseWorkspace():Promise<string>;
+
 export function EmitAssistant(arg1:string):Promise<void>;
 
 export function GetRules():Promise<Record<string, Array<string>>>;

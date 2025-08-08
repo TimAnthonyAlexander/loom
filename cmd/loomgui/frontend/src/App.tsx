@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, ReactElement } from 'react';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import { SendUserMessage, Approve, GetTools, SetModel, GetSettings, SaveSettings, SetWorkspace } from '../wailsjs/go/bridge/App';
+import * as Bridge from '../wailsjs/go/bridge/App';
 import * as AppBridge from '../wailsjs/go/bridge/App';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -718,13 +719,23 @@ const App: React.FC = () => {
                 <DialogTitle>Select Workspace</DialogTitle>
                 <DialogContent dividers>
                     <Stack spacing={2} sx={{ mt: 1 }}>
-                        <TextField
-                            label="Workspace Path"
-                            value={workspacePath}
-                            onChange={(e) => setWorkspacePath(e.target.value)}
-                            placeholder="/path/to/project"
-                            fullWidth
-                        />
+                        <Stack direction="row" spacing={1}>
+                            <TextField
+                                label="Workspace Path"
+                                value={workspacePath}
+                                onChange={(e) => setWorkspacePath(e.target.value)}
+                                placeholder="/path/to/project"
+                                fullWidth
+                            />
+                            <Button
+                                variant="outlined"
+                                onClick={() => {
+                                    Bridge.ChooseWorkspace().then((path: string) => {
+                                        if (path) setWorkspacePath(path);
+                                    });
+                                }}
+                            >Browse…</Button>
+                        </Stack>
                         <Typography variant="body2" color="text.secondary">
                             Enter a project directory. Project rules will be stored in <code>.loom/rules.json</code> under this path.
                         </Typography>

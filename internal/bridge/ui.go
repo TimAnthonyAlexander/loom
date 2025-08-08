@@ -344,6 +344,25 @@ func (a *App) SaveRules(payload map[string][]string) {
 	}
 }
 
+// ChooseWorkspace opens a native directory picker and returns the selected path.
+func (a *App) ChooseWorkspace() string {
+	if a.ctx == nil {
+		log.Printf("ChooseWorkspace: context not initialized")
+		return ""
+	}
+	dir, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select Workspace",
+	})
+	if err != nil {
+		log.Printf("ChooseWorkspace error: %v", err)
+		return ""
+	}
+	if dir == "" {
+		return ""
+	}
+	return dir
+}
+
 // SetBusy updates the busy state and notifies the frontend to enable/disable inputs
 func (a *App) SetBusy(isBusy bool) {
 	a.busy = isBusy
