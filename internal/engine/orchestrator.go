@@ -175,7 +175,7 @@ func (e *Engine) ResolveApproval(id string, approved bool) {
 func (e *Engine) UserApproved(toolCall *tool.ToolCall, diff string) bool {
 	// Auto-approval rules
 	if toolCall != nil {
-		if toolCall.Name == "apply_shell" && e.autoApproveShell {
+		if (toolCall.Name == "run_shell" || toolCall.Name == "apply_shell") && e.autoApproveShell {
 			return true
 		}
 		if (toolCall.Name == "edit_file" || toolCall.Name == "apply_edit") && e.autoApproveEdits {

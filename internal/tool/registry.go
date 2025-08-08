@@ -198,6 +198,7 @@ func (r *Registry) InvokeToolCall(ctx context.Context, call *ToolCall) (*Executi
 				ui.SendChat("system", "APPLYING EDIT")
 			}
 		default:
+			// Do not emit approval-asking popups here; engine handles approval.
 			ui.SendChat("system", fmt.Sprintf("USING TOOL %s", action))
 		}
 	}
