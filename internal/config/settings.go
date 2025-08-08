@@ -13,6 +13,7 @@ type Settings struct {
 	OpenAIAPIKey    string `json:"openai_api_key"`
 	AnthropicAPIKey string `json:"anthropic_api_key"`
 	OllamaEndpoint  string `json:"ollama_endpoint,omitempty"`
+	LastWorkspace   string `json:"last_workspace,omitempty"`
 }
 
 // settingsFilePath returns the absolute path to the settings JSON file

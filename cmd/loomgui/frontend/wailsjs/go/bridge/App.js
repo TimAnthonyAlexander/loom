@@ -50,6 +50,10 @@ export function SetModel(arg1) {
   return window['go']['bridge']['App']['SetModel'](arg1);
 }
 
+export function SetWorkspace(arg1) {
+  return window['go']['bridge']['App']['SetWorkspace'](arg1);
+}
+
 export function WithConfig(arg1) {
   return window['go']['bridge']['App']['WithConfig'](arg1);
 }

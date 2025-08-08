@@ -9,6 +9,7 @@ import (
 	"github.com/loom/loom/internal/adapter"
 	"github.com/loom/loom/internal/config"
 	"github.com/loom/loom/internal/engine"
+	"github.com/loom/loom/internal/indexer"
 	"github.com/loom/loom/internal/tool"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -246,6 +247,7 @@ func (a *App) GetSettings() map[string]string {
 		"openai_api_key":    s.OpenAIAPIKey,
 		"anthropic_api_key": s.AnthropicAPIKey,
 		"ollama_endpoint":   s.OllamaEndpoint,
+		"last_workspace":    s.LastWorkspace,
 	}
 }
 
@@ -255,8 +257,59 @@ func (a *App) SaveSettings(settings map[string]string) {
 		OpenAIAPIKey:    settings["openai_api_key"],
 		AnthropicAPIKey: settings["anthropic_api_key"],
 		OllamaEndpoint:  settings["ollama_endpoint"],
+		LastWorkspace:   settings["last_workspace"],
 	}
 	a.applyAndSaveSettings(s)
+}
+
+// SetWorkspace updates the engine and tools for a new workspace and persists it as last workspace.
+func (a *App) SetWorkspace(path string) {
+	if path == "" {
+		return
+	}
+	// Update engine workspace
+	if a.engine != nil {
+		a.engine.WithWorkspace(path)
+	}
+	// Re-register tools with new workspace paths
+	if a.tools != nil {
+		// Create a new registry to avoid stale state
+		newRegistry := tool.NewRegistry().WithUI(a)
+		// Re-register tools using main.registerTools equivalent
+		// We cannot import main.registerTools; re-register a minimal set here
+		// In this context, we expect the Registry to already contain tools registered at startup.
+		// For correctness, try to re-register using the same helpers.
+		// Note: we rely on tool package Register* functions.
+		if err := tool.RegisterReadFile(newRegistry, path); err != nil {
+			log.Printf("Failed to register read_file tool for new workspace: %v", err)
+		}
+		idx := indexer.NewRipgrepIndexer(path)
+		if err := tool.RegisterSearchCode(newRegistry, idx); err != nil {
+			log.Printf("Failed to register search_code tool for new workspace: %v", err)
+		}
+		if err := tool.RegisterEditFile(newRegistry, path); err != nil {
+			log.Printf("Failed to register edit_file tool for new workspace: %v", err)
+		}
+		if err := tool.RegisterApplyEdit(newRegistry, path); err != nil {
+			log.Printf("Failed to register apply_edit tool for new workspace: %v", err)
+		}
+		if err := tool.RegisterListDir(newRegistry, path); err != nil {
+			log.Printf("Failed to register list_dir tool for new workspace: %v", err)
+		}
+		if err := tool.RegisterFinalize(newRegistry); err != nil {
+			log.Printf("Failed to register finalize tool for new workspace: %v", err)
+		}
+		a.tools = newRegistry
+		if a.engine != nil {
+			a.engine.WithRegistry(newRegistry)
+		}
+	}
+	// Persist as last workspace
+	a.ensureSettingsLoaded()
+	a.settings.LastWorkspace = path
+	if err := config.Save(a.settings); err != nil {
+		log.Printf("Failed to persist last workspace: %v", err)
+	}
 }
 
 // GetRules exposes user and project rules to the frontend.

@@ -44,6 +44,7 @@ export namespace config {
 	    openai_api_key: string;
 	    anthropic_api_key: string;
 	    ollama_endpoint?: string;
+	    last_workspace?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -54,6 +55,7 @@ export namespace config {
 	        this.openai_api_key = source["openai_api_key"];
 	        this.anthropic_api_key = source["anthropic_api_key"];
 	        this.ollama_endpoint = source["ollama_endpoint"];
+	        this.last_workspace = source["last_workspace"];
 	    }
 	}
 

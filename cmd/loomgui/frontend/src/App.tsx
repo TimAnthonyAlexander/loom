@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, ReactElement } from 'react';
 import { EventsOn } from '../wailsjs/runtime/runtime';
-import { SendUserMessage, Approve, GetTools, SetModel, GetSettings, SaveSettings } from '../wailsjs/go/bridge/App';
+import { SendUserMessage, Approve, GetTools, SetModel, GetSettings, SaveSettings, SetWorkspace } from '../wailsjs/go/bridge/App';
 import * as AppBridge from '../wailsjs/go/bridge/App';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -251,6 +251,8 @@ const App: React.FC = () => {
     const messagesEndRef = useRef<null | HTMLDivElement>(null);
     const [busy, setBusy] = useState<boolean>(false);
     const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
+    const [workspaceOpen, setWorkspaceOpen] = useState<boolean>(false);
+    const [workspacePath, setWorkspacePath] = useState<string>('');
     const [openaiKey, setOpenaiKey] = useState<string>('');
     const [anthropicKey, setAnthropicKey] = useState<string>('');
     const [ollamaEndpoint, setOllamaEndpoint] = useState<string>('');
@@ -313,6 +315,13 @@ const App: React.FC = () => {
                 setOpenaiKey(s?.openai_api_key || '');
                 setAnthropicKey(s?.anthropic_api_key || '');
                 setOllamaEndpoint(s?.ollama_endpoint || '');
+                const last = s?.last_workspace || '';
+                if (last) {
+                    setWorkspacePath(last);
+                    SetWorkspace(last).catch(() => {});
+                } else {
+                    setWorkspaceOpen(true);
+                }
             })
             .catch(() => { });
 
@@ -376,6 +385,11 @@ const App: React.FC = () => {
                             Loom v2
                         </Typography>
                         <Box sx={{ flex: 1 }} />
+                        <Tooltip title="Select Workspace">
+                            <IconButton size="small" onClick={() => setWorkspaceOpen(true)}>
+                                <Typography variant="caption">WS</Typography>
+                            </IconButton>
+                        </Tooltip>
                         <Tooltip title="Rules">
                             <IconButton size="small" onClick={() => setRulesOpen(true)}>
                                 <RuleIcon fontSize="small" />
@@ -696,6 +710,38 @@ const App: React.FC = () => {
                     >
                         Save
                     </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Workspace Dialog */}
+            <Dialog open={workspaceOpen} onClose={() => setWorkspaceOpen(false)} maxWidth="sm" fullWidth>
+                <DialogTitle>Select Workspace</DialogTitle>
+                <DialogContent dividers>
+                    <Stack spacing={2} sx={{ mt: 1 }}>
+                        <TextField
+                            label="Workspace Path"
+                            value={workspacePath}
+                            onChange={(e) => setWorkspacePath(e.target.value)}
+                            placeholder="/path/to/project"
+                            fullWidth
+                        />
+                        <Typography variant="body2" color="text.secondary">
+                            Enter a project directory. Project rules will be stored in <code>.loom/rules.json</code> under this path.
+                        </Typography>
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setWorkspaceOpen(false)} color="inherit">Cancel</Button>
+                    <Button
+                        variant="contained"
+                        onClick={() => {
+                            const p = workspacePath.trim();
+                            if (p) {
+                                SetWorkspace(p).finally(() => setWorkspaceOpen(false));
+                            }
+                        }}
+                        disabled={!workspacePath.trim()}
+                    >Use</Button>
                 </DialogActions>
             </Dialog>
         </Box>

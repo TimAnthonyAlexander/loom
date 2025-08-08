@@ -48,6 +48,10 @@ func main() {
 	if err != nil {
 		log.Printf("Warning: Failed to load settings: %v", err)
 	}
+	// Prefer last workspace from settings if present
+	if settings.LastWorkspace != "" {
+		workspacePath = settings.LastWorkspace
+	}
 	if settings.OpenAIAPIKey != "" && configAdapter.Provider == adapter.ProviderOpenAI {
 		configAdapter.APIKey = settings.OpenAIAPIKey
 	}
