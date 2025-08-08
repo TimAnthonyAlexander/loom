@@ -319,7 +319,15 @@ const App: React.FC = () => {
                 const last = s?.last_workspace || '';
                 if (last) {
                     setWorkspacePath(last);
-                    SetWorkspace(last).catch(() => {});
+                    SetWorkspace(last)
+                        .then(() => {
+                            return AppBridge.GetRules();
+                        })
+                        .then((r: any) => {
+                            setUserRules(Array.isArray(r?.user) ? r.user : []);
+                            setProjectRules(Array.isArray(r?.project) ? r.project : []);
+                        })
+                        .catch(() => {});
                 } else {
                     setWorkspaceOpen(true);
                 }
@@ -748,7 +756,13 @@ const App: React.FC = () => {
                         onClick={() => {
                             const p = workspacePath.trim();
                             if (p) {
-                                SetWorkspace(p).finally(() => setWorkspaceOpen(false));
+                                SetWorkspace(p)
+                                    .then(() => AppBridge.GetRules())
+                                    .then((r: any) => {
+                                        setUserRules(Array.isArray(r?.user) ? r.user : []);
+                                        setProjectRules(Array.isArray(r?.project) ? r.project : []);
+                                    })
+                                    .finally(() => setWorkspaceOpen(false));
                             }
                         }}
                         disabled={!workspacePath.trim()}
