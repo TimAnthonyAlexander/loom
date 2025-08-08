@@ -5,6 +5,8 @@ WAILS_BIN := $(shell go env GOPATH)/bin/wails
 APP_DIR := cmd/loomgui
 FRONTEND_DIR := $(APP_DIR)/frontend
 BUILD_DIR := $(APP_DIR)/build/bin
+DIST_DIR := dist
+APP_NAME := loom
 
 # Check if wails is available in PATH, if not use local path
 ifeq ($(shell command -v wails),)
@@ -57,6 +59,27 @@ debug:
 build:
 	@echo "Building for current platform..."
 	cd $(APP_DIR) && $(WAILS) build
+	@echo "Preparing artifact in $(DIST_DIR)/ with platform suffix..."
+	@mkdir -p $(DIST_DIR)
+	@GOOS=$$(go env GOOS); GOARCH=$$(go env GOARCH); \
+	SRC_DIR="$(BUILD_DIR)"; \
+	if [ "$$GOOS" = "darwin" ]; then \
+	  SUFFIX="darwin-$$GOARCH"; \
+	  SRC_APP="$$SRC_DIR/Loom.app"; \
+	  DEST="$(DIST_DIR)/$(APP_NAME)-$$SUFFIX.app"; \
+	  rm -rf "$$DEST"; \
+	  mv "$$SRC_APP" "$$DEST"; \
+	elif [ "$$GOOS" = "windows" ]; then \
+	  SUFFIX="windows-$$GOARCH"; \
+	  SRC_EXE="$$SRC_DIR/Loom.exe"; \
+	  DEST="$(DIST_DIR)/$(APP_NAME)-$$SUFFIX.exe"; \
+	  mv "$$SRC_EXE" "$$DEST"; \
+	else \
+	  SUFFIX="linux-$$GOARCH"; \
+	  SRC_BIN="$$SRC_DIR/Loom"; \
+	  DEST="$(DIST_DIR)/$(APP_NAME)-$$SUFFIX"; \
+	  mv "$$SRC_BIN" "$$DEST"; \
+	fi
 
 # Clean build artifacts
 .PHONY: clean
@@ -64,24 +87,34 @@ clean:
 	@echo "Cleaning build artifacts..."
 	cd $(APP_DIR) && $(WAILS) build -clean
 	rm -rf $(BUILD_DIR)
+	rm -rf $(DIST_DIR)
 
 # Build for macOS (universal binary)
 .PHONY: build-macos
 build-macos:
 	@echo "Building for macOS (universal)..."
 	cd $(APP_DIR) && $(WAILS) build -platform=darwin/universal -clean
+	@echo "Moving macOS artifact to $(DIST_DIR)/$(APP_NAME)-darwin-universal.app ..."
+	@mkdir -p $(DIST_DIR)
+	@mv "$(BUILD_DIR)/Loom.app" "$(DIST_DIR)/$(APP_NAME)-darwin-universal.app"
 
 # Build for Windows
 .PHONY: build-windows
 build-windows:
 	@echo "Building for Windows (amd64)..."
 	cd $(APP_DIR) && $(WAILS) build -platform=windows/amd64 -clean
+	@echo "Moving Windows artifact to $(DIST_DIR)/$(APP_NAME)-windows-amd64.exe ..."
+	@mkdir -p $(DIST_DIR)
+	@mv "$(BUILD_DIR)/Loom.exe" "$(DIST_DIR)/$(APP_NAME)-windows-amd64.exe"
 
 # Build for Linux
 .PHONY: build-linux
 build-linux:
 	@echo "Building for Linux (amd64)..."
 	cd $(APP_DIR) && $(WAILS) build -platform=linux/amd64 -clean
+	@echo "Moving Linux artifact to $(DIST_DIR)/$(APP_NAME)-linux-amd64 ..."
+	@mkdir -p $(DIST_DIR)
+	@mv "$(BUILD_DIR)/Loom" "$(DIST_DIR)/$(APP_NAME)-linux-amd64"
 
 # Build for all platforms
 .PHONY: build-all
