@@ -339,7 +339,7 @@ const App: React.FC = () => {
     };
 
     return (
-        <Box display="flex" minHeight="100vh" sx={{ bgcolor: 'background.default' }}>
+        <Box display="flex" height="100vh" sx={{ bgcolor: 'background.default' }}>
             {/* Sidebar */}
             <Box
                 sx={{
@@ -351,6 +351,7 @@ const App: React.FC = () => {
                     display: 'flex',
                     flexDirection: 'column',
                     gap: 3,
+                    overflowY: 'auto',
                 }}
             >
                 <Box sx={{ pt: 2 }}>
@@ -403,9 +404,9 @@ const App: React.FC = () => {
             </Box>
 
             {/* Main */}
-            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, height: '100vh' }}>
                 {/* Chat */}
-                <Box sx={{ flex: 1, overflowY: 'auto', px: 4, py: 3 }}>
+                <Box sx={{ flex: 1, overflowY: 'auto', px: 4, py: 3, minHeight: 0 }}>
                     <Stack spacing={2}>
                         {messages.map((msg, index) => {
                             const isUser = msg.role === 'user'
