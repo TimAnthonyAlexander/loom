@@ -10,12 +10,20 @@ export function EmitAssistant(arg1) {
   return window['go']['bridge']['App']['EmitAssistant'](arg1);
 }
 
+export function GetSettings() {
+  return window['go']['bridge']['App']['GetSettings']();
+}
+
 export function GetTools() {
   return window['go']['bridge']['App']['GetTools']();
 }
 
 export function PromptApproval(arg1, arg2, arg3) {
   return window['go']['bridge']['App']['PromptApproval'](arg1, arg2, arg3);
+}
+
+export function SaveSettings(arg1) {
+  return window['go']['bridge']['App']['SaveSettings'](arg1);
 }
 
 export function SendChat(arg1, arg2) {
@@ -44,6 +52,10 @@ export function WithContext(arg1) {
 
 export function WithEngine(arg1) {
   return window['go']['bridge']['App']['WithEngine'](arg1);
+}
+
+export function WithSettings(arg1) {
+  return window['go']['bridge']['App']['WithSettings'](arg1);
 }
 
 export function WithTools(arg1) {

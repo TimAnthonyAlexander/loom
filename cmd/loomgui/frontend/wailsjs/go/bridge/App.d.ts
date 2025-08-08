@@ -4,15 +4,20 @@ import {adapter} from '../models';
 import {bridge} from '../models';
 import {context} from '../models';
 import {engine} from '../models';
+import {config} from '../models';
 import {tool} from '../models';
 
 export function Approve(arg1:string,arg2:boolean):Promise<void>;
 
 export function EmitAssistant(arg1:string):Promise<void>;
 
+export function GetSettings():Promise<Record<string, string>>;
+
 export function GetTools():Promise<Array<Record<string, any>>>;
 
 export function PromptApproval(arg1:string,arg2:string,arg3:string):Promise<boolean>;
+
+export function SaveSettings(arg1:Record<string, string>):Promise<void>;
 
 export function SendChat(arg1:string,arg2:string):Promise<void>;
 
@@ -27,5 +32,7 @@ export function WithConfig(arg1:adapter.Config):Promise<bridge.App>;
 export function WithContext(arg1:context.Context):Promise<bridge.App>;
 
 export function WithEngine(arg1:engine.Engine):Promise<bridge.App>;
+
+export function WithSettings(arg1:config.Settings):Promise<bridge.App>;
 
 export function WithTools(arg1:tool.Registry):Promise<bridge.App>;

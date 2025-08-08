@@ -9,6 +9,7 @@ import (
 	"github.com/loom/loom/internal/adapter"
 	"github.com/loom/loom/internal/adapter/openai"
 	"github.com/loom/loom/internal/bridge"
+	"github.com/loom/loom/internal/config"
 	"github.com/loom/loom/internal/engine"
 	"github.com/loom/loom/internal/indexer"
 	"github.com/loom/loom/internal/memory"
@@ -40,8 +41,24 @@ func main() {
 	registerTools(registry, workspacePath)
 
 	// Create LLM adapter using factory
-	config := adapter.DefaultConfig()
-	llm, err := adapter.New(config)
+	configAdapter := adapter.DefaultConfig()
+
+	// Load persisted settings and prefer them over env for API keys
+	settings, err := config.Load()
+	if err != nil {
+		log.Printf("Warning: Failed to load settings: %v", err)
+	}
+	if settings.OpenAIAPIKey != "" && configAdapter.Provider == adapter.ProviderOpenAI {
+		configAdapter.APIKey = settings.OpenAIAPIKey
+	}
+	if settings.AnthropicAPIKey != "" && configAdapter.Provider == adapter.ProviderAnthropic {
+		configAdapter.APIKey = settings.AnthropicAPIKey
+	}
+	if settings.OllamaEndpoint != "" && configAdapter.Provider == adapter.ProviderOllama {
+		configAdapter.Endpoint = settings.OllamaEndpoint
+	}
+
+	llm, err := adapter.New(configAdapter)
 	if err != nil {
 		log.Printf("Warning: Failed to initialize LLM adapter: %v", err)
 		log.Printf("Using OpenAI as fallback")
@@ -80,7 +97,8 @@ func main() {
 	app := bridge.NewApp()
 	app.WithEngine(eng)
 	app.WithTools(registry)
-	app.WithConfig(config)
+	app.WithConfig(configAdapter)
+	app.WithSettings(settings)
 
 	// Connect the engine to the bridge
 	eng.SetBridge(app)

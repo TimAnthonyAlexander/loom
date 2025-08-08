@@ -7,6 +7,7 @@ import (
 	"runtime/debug"
 
 	"github.com/loom/loom/internal/adapter"
+	"github.com/loom/loom/internal/config"
 	"github.com/loom/loom/internal/engine"
 	"github.com/loom/loom/internal/tool"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -19,6 +20,8 @@ type App struct {
 	config adapter.Config
 	ctx    context.Context
 	busy   bool
+	// persisted settings (API keys, endpoints)
+	settings config.Settings
 }
 
 // NewApp creates a new App application struct.
@@ -41,6 +44,12 @@ func (a *App) WithTools(tools *tool.Registry) *App {
 // WithConfig sets the configuration for the UI bridge.
 func (a *App) WithConfig(config adapter.Config) *App {
 	a.config = config
+	return a
+}
+
+// WithSettings sets persisted settings for the UI bridge.
+func (a *App) WithSettings(s config.Settings) *App {
+	a.settings = s
 	return a
 }
 
@@ -100,13 +109,21 @@ func (a *App) SetModel(model string) {
 		return
 	}
 
-	// Read proper API key based on the provider
+	// Determine API key based on provider, preferring persisted settings, then env
 	var apiKey string
 	switch provider {
 	case adapter.ProviderOpenAI:
-		apiKey = os.Getenv("OPENAI_API_KEY")
+		if a.settings.OpenAIAPIKey != "" {
+			apiKey = a.settings.OpenAIAPIKey
+		} else {
+			apiKey = os.Getenv("OPENAI_API_KEY")
+		}
 	case adapter.ProviderAnthropic:
-		apiKey = os.Getenv("ANTHROPIC_API_KEY")
+		if a.settings.AnthropicAPIKey != "" {
+			apiKey = a.settings.AnthropicAPIKey
+		} else {
+			apiKey = os.Getenv("ANTHROPIC_API_KEY")
+		}
 	default:
 		apiKey = a.config.APIKey // Keep existing key for other providers like Ollama
 	}
@@ -139,6 +156,58 @@ func (a *App) SetModel(model string) {
 	}
 }
 
+// ensureSettingsLoaded loads settings from disk into memory if not already loaded.
+func (a *App) ensureSettingsLoaded() {
+	if a.settings != (config.Settings{}) {
+		return
+	}
+	if s, err := config.Load(); err == nil {
+		a.settings = s
+	}
+}
+
+// applyAndSaveSettings persists the provided settings and applies them to the current engine if applicable.
+func (a *App) applyAndSaveSettings(s config.Settings) {
+	// Persist to disk
+	if err := config.Save(s); err != nil {
+		log.Printf("Failed to save settings: %v", err)
+		return
+	}
+
+	// Update in-memory settings
+	a.settings = s
+
+	// If current provider uses one of these keys, update config and LLM
+	var updatedConfig = a.config
+	switch a.config.Provider {
+	case adapter.ProviderOpenAI:
+		if s.OpenAIAPIKey != "" {
+			updatedConfig.APIKey = s.OpenAIAPIKey
+		}
+	case adapter.ProviderAnthropic:
+		if s.AnthropicAPIKey != "" {
+			updatedConfig.APIKey = s.AnthropicAPIKey
+		}
+	case adapter.ProviderOllama:
+		if s.OllamaEndpoint != "" {
+			updatedConfig.Endpoint = s.OllamaEndpoint
+		}
+	}
+
+	// Recreate LLM if config changed materially
+	if updatedConfig != a.config {
+		llm, err := adapter.New(updatedConfig)
+		if err != nil {
+			log.Printf("Failed to apply new settings to LLM: %v", err)
+			return
+		}
+		if a.engine != nil {
+			a.engine.SetLLM(llm)
+			a.config = updatedConfig
+		}
+	}
+}
+
 // SendChat emits a chat message to the UI.
 func (a *App) SendChat(role, text string) {
 	defer func() {
@@ -167,6 +236,27 @@ func (a *App) EmitAssistant(text string) {
 	} else {
 		log.Println("Warning: Wails context not initialized in EmitAssistant")
 	}
+}
+
+// GetSettings exposes persisted settings to the frontend.
+func (a *App) GetSettings() map[string]string {
+	a.ensureSettingsLoaded()
+	s := a.settings
+	return map[string]string{
+		"openai_api_key":    s.OpenAIAPIKey,
+		"anthropic_api_key": s.AnthropicAPIKey,
+		"ollama_endpoint":   s.OllamaEndpoint,
+	}
+}
+
+// SaveSettings saves settings provided by the frontend.
+func (a *App) SaveSettings(settings map[string]string) {
+	s := config.Settings{
+		OpenAIAPIKey:    settings["openai_api_key"],
+		AnthropicAPIKey: settings["anthropic_api_key"],
+		OllamaEndpoint:  settings["ollama_endpoint"],
+	}
+	a.applyAndSaveSettings(s)
 }
 
 // SetBusy updates the busy state and notifies the frontend to enable/disable inputs

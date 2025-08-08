@@ -38,6 +38,27 @@ export namespace bridge {
 
 }
 
+export namespace config {
+	
+	export class Settings {
+	    openai_api_key: string;
+	    anthropic_api_key: string;
+	    ollama_endpoint?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Settings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.openai_api_key = source["openai_api_key"];
+	        this.anthropic_api_key = source["anthropic_api_key"];
+	        this.ollama_endpoint = source["ollama_endpoint"];
+	    }
+	}
+
+}
+
 export namespace engine {
 	
 	export class Engine {

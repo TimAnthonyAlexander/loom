@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, ReactElement } from 'react';
 import { EventsOn } from '../wailsjs/runtime/runtime';
-import { SendUserMessage, Approve, GetTools, SetModel } from '../wailsjs/go/bridge/App';
+import { SendUserMessage, Approve, GetTools, SetModel, GetSettings, SaveSettings } from '../wailsjs/go/bridge/App';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -25,6 +25,8 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
+    IconButton,
+    Tooltip,
     Table as MuiTable,
     TableCell as MuiTableCell,
     TableRow as MuiTableRow,
@@ -32,6 +34,7 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SendIcon from '@mui/icons-material/Send';
+import SettingsIcon from '@mui/icons-material/Settings';
 
 // Custom table components using MUI Table APIs
 const CustomTable = ({ children }: any) => (
@@ -249,6 +252,10 @@ const App: React.FC = () => {
     const [currentModel, setCurrentModel] = useState<string>('');
     const messagesEndRef = useRef<null | HTMLDivElement>(null);
     const [busy, setBusy] = useState<boolean>(false);
+    const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
+    const [openaiKey, setOpenaiKey] = useState<string>('');
+    const [anthropicKey, setAnthropicKey] = useState<string>('');
+    const [ollamaEndpoint, setOllamaEndpoint] = useState<string>('');
 
     useEffect(() => {
         // Listen for new chat messages
@@ -296,6 +303,15 @@ const App: React.FC = () => {
             }));
             setTools(typedTools);
         });
+
+        // Load settings
+        GetSettings()
+            .then((s: any) => {
+                setOpenaiKey(s?.openai_api_key || '');
+                setAnthropicKey(s?.anthropic_api_key || '');
+                setOllamaEndpoint(s?.ollama_endpoint || '');
+            })
+            .catch(() => {});
     }, []);
 
     // Scroll to bottom when messages change
@@ -347,6 +363,12 @@ const App: React.FC = () => {
                         <Typography variant="h6" fontWeight={600}>
                             Loom v2
                         </Typography>
+                        <Box sx={{ flex: 1 }} />
+                        <Tooltip title="Settings">
+                            <IconButton size="small" onClick={() => setSettingsOpen(true)}>
+                                <SettingsIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
                     </Box>
                     <Typography variant="body2" color="text.secondary">
                         Minimal, calm, precise.
@@ -502,6 +524,55 @@ const App: React.FC = () => {
                 <DialogActions>
                     <Button color="inherit" onClick={() => handleApproval(false)}>Reject</Button>
                     <Button variant="contained" onClick={() => handleApproval(true)}>Approve</Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Settings Dialog */}
+            <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} maxWidth="sm" fullWidth>
+                <DialogTitle>Settings</DialogTitle>
+                <DialogContent dividers>
+                    <Stack spacing={2} sx={{ mt: 1 }}>
+                        <TextField
+                            label="OpenAI API Key"
+                            type="password"
+                            autoComplete="off"
+                            value={openaiKey}
+                            onChange={(e) => setOpenaiKey(e.target.value)}
+                            placeholder="sk-..."
+                            fullWidth
+                        />
+                        <TextField
+                            label="Anthropic API Key"
+                            type="password"
+                            autoComplete="off"
+                            value={anthropicKey}
+                            onChange={(e) => setAnthropicKey(e.target.value)}
+                            placeholder="sk-ant-..."
+                            fullWidth
+                        />
+                        <TextField
+                            label="Ollama Endpoint"
+                            value={ollamaEndpoint}
+                            onChange={(e) => setOllamaEndpoint(e.target.value)}
+                            placeholder="http://localhost:11434"
+                            fullWidth
+                        />
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setSettingsOpen(false)} color="inherit">Close</Button>
+                    <Button
+                        variant="contained"
+                        onClick={() => {
+                            SaveSettings({
+                                openai_api_key: openaiKey,
+                                anthropic_api_key: anthropicKey,
+                                ollama_endpoint: ollamaEndpoint,
+                            }).finally(() => setSettingsOpen(false));
+                        }}
+                    >
+                        Save
+                    </Button>
                 </DialogActions>
             </Dialog>
         </Box>
