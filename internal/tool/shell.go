@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 )
 
 // RunShellArgs describes a shell command proposal.
@@ -62,14 +64,14 @@ func RegisterRunShell(registry *Registry, workspacePath string) error {
 			}
 
 			// Normalize CWD for display using the same validation used at execution time
-			absCwd := workspacePath
+			absCwd := expandWorkspacePath(workspacePath)
 			if args.Cwd != "" {
 				var err error
 				// validatePath ensures path remains within workspace
-				absCwd, err = validatePath(workspacePath, args.Cwd)
+				absCwd, err = validatePath(expandWorkspacePath(workspacePath), args.Cwd)
 				if err != nil {
 					// For proposals, just show the intended cwd even if invalid; execution will fail later
-					absCwd = filepath.Clean(filepath.Join(workspacePath, args.Cwd))
+					absCwd = filepath.Clean(filepath.Join(expandWorkspacePath(workspacePath), args.Cwd))
 				}
 			}
 
@@ -101,4 +103,27 @@ func normalizeTimeout(seconds int) int {
 		return 600
 	}
 	return seconds
+}
+
+// expandWorkspacePath expands a workspace path that might contain ~ or be relative.
+func expandWorkspacePath(p string) string {
+	if p == "" {
+		return p
+	}
+	if strings.HasPrefix(p, "~") {
+		if home, err := os.UserHomeDir(); err == nil {
+			// handle "~" or "~/..."
+			if p == "~" {
+				p = home
+			} else if strings.HasPrefix(p, "~/") {
+				p = filepath.Join(home, strings.TrimPrefix(p, "~/"))
+			}
+		}
+	}
+	if !filepath.IsAbs(p) {
+		if abs, err := filepath.Abs(p); err == nil {
+			p = abs
+		}
+	}
+	return filepath.Clean(p)
 }

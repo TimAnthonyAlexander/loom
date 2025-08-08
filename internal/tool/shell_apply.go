@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -72,29 +73,42 @@ func RegisterApplyShell(registry *Registry, workspacePath string) error {
 	})
 }
 
-func applyShell(ctx context.Context, workspacePath string, args ApplyShellArgs) (*ShellResult, error) {
+func applyShell(parentCtx context.Context, workspacePath string, args ApplyShellArgs) (*ShellResult, error) {
 	if strings.TrimSpace(args.Command) == "" {
 		return nil, errors.New("command is required")
 	}
 
 	// Resolve CWD and ensure it's inside the workspace
-	absCwd := workspacePath
+	absCwd := expandWorkspacePath(workspacePath)
 	if args.Cwd != "" {
 		var err error
-		absCwd, err = validatePath(workspacePath, args.Cwd)
+		absCwd, err = validatePath(expandWorkspacePath(workspacePath), args.Cwd)
 		if err != nil {
 			return nil, fmt.Errorf("invalid cwd: %w", err)
 		}
 	}
 
+	// Verify cwd exists and is a directory
+	if st, err := os.Stat(absCwd); err != nil || !st.IsDir() {
+		if err != nil {
+			return nil, fmt.Errorf("cwd does not exist: %s", absCwd)
+		}
+		return nil, fmt.Errorf("cwd is not a directory: %s", absCwd)
+	}
+
 	// Prepare the command
+	// Apply timeout using context
+	timeout := time.Duration(normalizeTimeout(args.TimeoutSeconds)) * time.Second
+	timeoutCtx, cancel := context.WithTimeout(parentCtx, timeout)
+	defer cancel()
+
 	var cmd *exec.Cmd
 	if args.Shell {
 		// Use 'sh -c' for POSIX shells; we're on darwin per user env
-		cmd = exec.CommandContext(ctx, "sh", "-c", args.Command)
+		cmd = exec.CommandContext(timeoutCtx, "sh", "-c", args.Command)
 	} else {
 		// Execute binary directly with args
-		cmd = exec.CommandContext(ctx, args.Command, args.Args...)
+		cmd = exec.CommandContext(timeoutCtx, args.Command, args.Args...)
 	}
 	cmd.Dir = absCwd
 
@@ -102,13 +116,6 @@ func applyShell(ctx context.Context, workspacePath string, args ApplyShellArgs) 
 	var stdoutBuf, stderrBuf bytes.Buffer
 	cmd.Stdout = &stdoutBuf
 	cmd.Stderr = &stderrBuf
-
-	// Apply timeout using context
-	timeout := time.Duration(normalizeTimeout(args.TimeoutSeconds)) * time.Second
-	var cancel context.CancelFunc
-	ctx, cancel = context.WithTimeout(ctx, timeout)
-	defer cancel()
-	cmd = withContext(cmd, ctx)
 
 	start := time.Now()
 	runErr := cmd.Run()
@@ -122,6 +129,12 @@ func applyShell(ctx context.Context, workspacePath string, args ApplyShellArgs) 
 		} else {
 			// Non-exit errors (e.g., context deadline)
 			exitCode = -1
+			// Include error message in stderr for visibility
+			if stderrBuf.Len() == 0 {
+				stderrBuf.WriteString(runErr.Error())
+			} else {
+				stderrBuf.WriteString("\n" + runErr.Error())
+			}
 		}
 	}
 
