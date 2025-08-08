@@ -99,6 +99,7 @@ build-windows:
 
 UID := $(shell id -u)
 GID := $(shell id -g)
+WEBKIT_TAG := webkit2_41
 
 .PHONY: linux-image-amd64
 linux-image-amd64:
@@ -131,7 +132,6 @@ prepare-linux-arm64: linux-image-arm64
 		loom-linux-builder:arm64 \
 		bash -c 'set -e; cd $(FRONTEND_DIR); if [ -f package-lock.json ]; then npm ci; else npm install; fi'
 
-# Build binaries as your UID (read-only use of node_modules volume)
 .PHONY: build-linux-amd64
 build-linux-amd64: prepare-linux-amd64
 	docker run --rm --platform=linux/amd64 \
@@ -140,7 +140,7 @@ build-linux-amd64: prepare-linux-amd64
 		-u $(UID):$(GID) \
 		-e PATH=$(ENV_PATH) $(CACHE_ENV) \
 		loom-linux-builder:amd64 \
-		bash -c 'set -e; cd $(APP_DIR); wails build -platform=linux/amd64 -clean'
+		bash -c 'set -e; cd $(APP_DIR); wails build -platform=linux/amd64 -tags $(WEBKIT_TAG) -clean'
 	mkdir -p $(DIST_DIR)
 	mv "$(BUILD_DIR)/Loom" "$(DIST_DIR)/$(APP_NAME)-linux-amd64"
 
@@ -152,7 +152,7 @@ build-linux-arm64: prepare-linux-arm64
 		-u $(UID):$(GID) \
 		-e PATH=$(ENV_PATH) $(CACHE_ENV) \
 		loom-linux-builder:arm64 \
-		bash -c 'set -e; cd $(APP_DIR); wails build -platform=linux/arm64 -clean'
+		bash -c 'set -e; cd $(APP_DIR); wails build -platform=linux/arm64 -tags $(WEBKIT_TAG) -clean'
 	mkdir -p $(DIST_DIR)
 	mv "$(BUILD_DIR)/Loom" "$(DIST_DIR)/$(APP_NAME)-linux-arm64"
 
