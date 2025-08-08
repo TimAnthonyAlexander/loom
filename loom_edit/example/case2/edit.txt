@@ -1,3 +1,0 @@
->>LOOM_EDIT file=docs/CHANGELOG.md INSERT_AFTER 9
-3. Edit `config.yml`
-<<LOOM_EDIT
