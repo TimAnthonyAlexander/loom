@@ -172,6 +172,25 @@ func (a *App) SetModel(model string) {
 	} else {
 		log.Println("Engine not initialized")
 	}
+
+	// Persist last selected model to settings
+	a.ensureSettingsLoaded()
+	// Compose back to provider-prefixed model string for persistence
+	var providerPrefix string
+	switch provider {
+	case adapter.ProviderOpenAI:
+		providerPrefix = "openai"
+	case adapter.ProviderAnthropic:
+		providerPrefix = "claude"
+	case adapter.ProviderOllama:
+		providerPrefix = "ollama"
+	default:
+		providerPrefix = string(provider)
+	}
+	a.settings.LastModel = providerPrefix + ":" + modelID
+	if err := config.Save(a.settings); err != nil {
+		log.Printf("Failed to persist last model: %v", err)
+	}
 }
 
 // ensureSettingsLoaded loads settings from disk into memory if not already loaded.
@@ -270,6 +289,7 @@ func (a *App) GetSettings() map[string]string {
 		"anthropic_api_key":  s.AnthropicAPIKey,
 		"ollama_endpoint":    s.OllamaEndpoint,
 		"last_workspace":     s.LastWorkspace,
+		"last_model":         s.LastModel,
 		"auto_approve_shell": boolToStr(s.AutoApproveShell),
 		"auto_approve_edits": boolToStr(s.AutoApproveEdits),
 	}
@@ -282,6 +302,7 @@ func (a *App) SaveSettings(settings map[string]string) {
 		AnthropicAPIKey:  settings["anthropic_api_key"],
 		OllamaEndpoint:   settings["ollama_endpoint"],
 		LastWorkspace:    settings["last_workspace"],
+		LastModel:        settings["last_model"],
 		AutoApproveShell: strToBool(settings["auto_approve_shell"]),
 		AutoApproveEdits: strToBool(settings["auto_approve_edits"]),
 	}

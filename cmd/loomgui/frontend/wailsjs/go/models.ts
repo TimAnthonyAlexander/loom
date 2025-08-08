@@ -45,6 +45,7 @@ export namespace config {
 	    anthropic_api_key: string;
 	    ollama_endpoint?: string;
 	    last_workspace?: string;
+	    last_model?: string;
 	    auto_approve_shell?: boolean;
 	    auto_approve_edits?: boolean;
 	
@@ -58,6 +59,7 @@ export namespace config {
 	        this.anthropic_api_key = source["anthropic_api_key"];
 	        this.ollama_endpoint = source["ollama_endpoint"];
 	        this.last_workspace = source["last_workspace"];
+	        this.last_model = source["last_model"];
 	        this.auto_approve_shell = source["auto_approve_shell"];
 	        this.auto_approve_edits = source["auto_approve_edits"];
 	    }

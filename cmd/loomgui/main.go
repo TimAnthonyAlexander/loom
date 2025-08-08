@@ -66,6 +66,14 @@ func main() {
 		configAdapter.Endpoint = settings.OllamaEndpoint
 	}
 
+	// If a last selected model exists, prefer it at startup
+	if settings.LastModel != "" {
+		if prov, modelID, err := adapter.GetProviderFromModel(settings.LastModel); err == nil {
+			configAdapter.Provider = prov
+			configAdapter.Model = modelID
+		}
+	}
+
 	llm, err := adapter.New(configAdapter)
 	if err != nil {
 		log.Printf("Warning: Failed to initialize LLM adapter: %v", err)

@@ -341,6 +341,14 @@ const App: React.FC = () => {
                 } else {
                     setWorkspaceOpen(true);
                 }
+
+                // Preselect last selected model if available
+                const lastModel = s?.last_model || '';
+                if (lastModel) {
+                    setCurrentModel(lastModel);
+                    // Inform backend to set model immediately on startup
+                    SetModel(lastModel).catch(() => {});
+                }
             })
             .catch(() => { });
 
