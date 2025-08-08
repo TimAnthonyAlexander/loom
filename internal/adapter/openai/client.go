@@ -317,6 +317,11 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 			}
 
 			if chosen != nil {
+				// If we never received a function name, do not emit a tool call.
+				// Let the engine fall back to non-streaming parsing which typically includes full tool metadata.
+				if strings.TrimSpace(chosen.name) == "" {
+					continue
+				}
 				// Default empty arguments to an empty object
 				argsStr := strings.TrimSpace(chosen.args)
 				if argsStr == "" {
@@ -357,6 +362,11 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 			}
 		}
 		if chosen != nil {
+			// If function name is still missing at end of stream, do not emit a tool call.
+			// This will signal the engine to perform a non-streaming retry.
+			if strings.TrimSpace(chosen.name) == "" {
+				return
+			}
 			argsStr := strings.TrimSpace(chosen.args)
 			if argsStr == "" {
 				argsStr = "{}"
@@ -421,6 +431,21 @@ func (c *Client) handleNonStreamingResponse(ctx context.Context, body io.Reader,
 		if len(message.ToolCalls) > 0 {
 			tc := message.ToolCalls[0]
 
+			// If the function name is missing, do not emit a tool call.
+			// Prefer emitting content if present instead.
+			if strings.TrimSpace(tc.Function.Name) == "" {
+				if message.Content != "" {
+					for _, char := range message.Content {
+						select {
+						case <-ctx.Done():
+							return
+						case ch <- engine.TokenOrToolCall{Token: string(char)}:
+						}
+					}
+				}
+				return
+			}
+
 			// Create a tool call
 			toolCall := &engine.ToolCall{
 				ID:   tc.ID,
@@ -443,7 +468,6 @@ func (c *Client) handleNonStreamingResponse(ctx context.Context, body io.Reader,
 					case <-ctx.Done():
 						return
 					case ch <- engine.TokenOrToolCall{ToolCall: toolCall}:
-						// Successfully sent tool call
 						return
 					}
 				}
@@ -463,7 +487,6 @@ func (c *Client) handleNonStreamingResponse(ctx context.Context, body io.Reader,
 				case <-ctx.Done():
 					return
 				case ch <- engine.TokenOrToolCall{Token: string(char)}:
-					// Successfully sent token
 				}
 			}
 		}

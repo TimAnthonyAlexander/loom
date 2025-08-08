@@ -30,6 +30,13 @@ type Definition struct {
 type Registry struct {
 	tools map[string]Definition
 	mu    sync.RWMutex
+	// Optional UI bridge for emitting human-readable activity messages
+	ui engineUIBridge
+}
+
+// Minimal interface for emitting UI messages without importing engine package to avoid cyclic deps
+type engineUIBridge interface {
+	SendChat(role, text string)
 }
 
 // NewRegistry creates a new tool registry.
@@ -37,6 +44,14 @@ func NewRegistry() *Registry {
 	return &Registry{
 		tools: make(map[string]Definition),
 	}
+}
+
+// WithUI allows the registry to emit user-visible activity messages
+func (r *Registry) WithUI(ui engineUIBridge) *Registry {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.ui = ui
+	return r
 }
 
 // Register adds a tool to the registry.
@@ -134,6 +149,59 @@ func (r *Registry) Invoke(ctx context.Context, name string, args json.RawMessage
 
 // InvokeToolCall executes a tool call and returns a structured result.
 func (r *Registry) InvokeToolCall(ctx context.Context, call *ToolCall) (*ExecutionResult, error) {
+	// Emit an informational message to the UI about the upcoming tool action
+	r.mu.RLock()
+	ui := r.ui
+	r.mu.RUnlock()
+	if ui != nil {
+		// Try to derive a concise action verb from the tool name
+		action := call.Name
+		switch call.Name {
+		case "read_file":
+			var args ReadFileArgs
+			_ = json.Unmarshal(call.Args, &args)
+			if args.Path != "" {
+				ui.SendChat("system", fmt.Sprintf("READING %s", args.Path))
+			} else {
+				ui.SendChat("system", "READING file")
+			}
+		case "list_dir":
+			var args ListDirArgs
+			_ = json.Unmarshal(call.Args, &args)
+			path := args.Path
+			if path == "" {
+				path = "."
+			}
+			ui.SendChat("system", fmt.Sprintf("LISTING %s", path))
+		case "search_code":
+			var args SearchCodeArgs
+			_ = json.Unmarshal(call.Args, &args)
+			if args.Query != "" {
+				ui.SendChat("system", fmt.Sprintf("SEARCHING %q", args.Query))
+			} else {
+				ui.SendChat("system", "SEARCHING codebase")
+			}
+		case "edit_file":
+			var args EditFileArgs
+			_ = json.Unmarshal(call.Args, &args)
+			if args.Path != "" {
+				ui.SendChat("system", fmt.Sprintf("PROPOSING EDIT %s", args.Path))
+			} else {
+				ui.SendChat("system", "PROPOSING EDIT")
+			}
+		case "apply_edit":
+			var args ApplyEditArgs
+			_ = json.Unmarshal(call.Args, &args)
+			if args.Path != "" {
+				ui.SendChat("system", fmt.Sprintf("APPLYING EDIT %s", args.Path))
+			} else {
+				ui.SendChat("system", "APPLYING EDIT")
+			}
+		default:
+			ui.SendChat("system", fmt.Sprintf("USING TOOL %s", action))
+		}
+	}
+
 	result, err := r.Invoke(ctx, call.Name, call.Args)
 	if err != nil {
 		return &ExecutionResult{

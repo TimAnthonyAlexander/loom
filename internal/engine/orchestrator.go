@@ -95,6 +95,10 @@ func New(llm LLM, bridge UIBridge) *Engine {
 // WithRegistry sets the tool registry for the engine.
 func (e *Engine) WithRegistry(registry *tool.Registry) *Engine {
 	e.tools = registry
+	// Provide the UI bridge to the tools registry for activity notifications
+	if e.bridge != nil {
+		registry.WithUI(e.bridge)
+	}
 	return e
 }
 
@@ -115,6 +119,10 @@ func (e *Engine) SetBridge(bridge UIBridge) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.bridge = bridge
+	// Propagate the bridge to the tools registry so it can emit activity messages
+	if e.tools != nil && bridge != nil {
+		e.tools.WithUI(bridge)
+	}
 }
 
 // SetLLM updates the LLM used by the engine.
@@ -268,6 +276,11 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 
 				if item.ToolCall != nil {
 					// Got a tool call
+					// Guard against empty tool names from partial/ambiguous streams
+					if item.ToolCall.Name == "" {
+						// Ignore and continue reading tokens; likely a partial stream
+						continue
+					}
 					toolCallReceived = &tool.ToolCall{
 						ID:   item.ToolCall.ID,
 						Name: item.ToolCall.Name,
