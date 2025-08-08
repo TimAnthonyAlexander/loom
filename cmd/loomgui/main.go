@@ -185,6 +185,11 @@ func registerTools(registry *tool.Registry, workspacePath string) {
 	if err := tool.RegisterApplyShell(registry, workspacePath); err != nil {
 		log.Printf("Failed to register apply_shell tool: %v", err)
 	}
+
+	// HTTP request tool
+	if err := tool.RegisterHTTPRequest(registry); err != nil {
+		log.Printf("Failed to register http_request tool: %v", err)
+	}
 }
 
 // normalizeWorkspacePath expands a leading ~ and returns a cleaned absolute path

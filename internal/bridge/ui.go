@@ -355,6 +355,9 @@ func (a *App) SetWorkspace(path string) {
 		if err := tool.RegisterApplyShell(newRegistry, norm); err != nil {
 			log.Printf("Failed to register apply_shell tool for new workspace: %v", err)
 		}
+		if err := tool.RegisterHTTPRequest(newRegistry); err != nil {
+			log.Printf("Failed to register http_request tool for new workspace: %v", err)
+		}
 		a.tools = newRegistry
 		if a.engine != nil {
 			a.engine.WithRegistry(newRegistry)
