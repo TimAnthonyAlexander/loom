@@ -56,6 +56,45 @@ func isReasoningModel(model string) bool {
 	return false
 }
 
+// validateToolArgs applies minimal, tool-specific validation for required fields
+// to avoid prematurely emitting incomplete tool calls during streaming.
+func validateToolArgs(toolName string, args map[string]interface{}) bool {
+	switch toolName {
+	case "read_file":
+		// require path
+		if v, ok := args["path"]; ok {
+			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+				return true
+			}
+		}
+		return false
+	case "search_code":
+		if v, ok := args["query"]; ok {
+			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+				return true
+			}
+		}
+		return false
+	case "edit_file", "apply_edit":
+		if v, ok := args["path"]; ok {
+			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+				return true
+			}
+		}
+		return false
+	case "finalize":
+		if v, ok := args["summary"]; ok {
+			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+				return true
+			}
+		}
+		return false
+	default:
+		// For other tools, accept any JSON (including empty) by default
+		return true
+	}
+}
+
 // Chat implements the engine.LLM interface for OpenAI.
 func (c *Client) Chat(
 	ctx context.Context,
@@ -322,32 +361,28 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 				if strings.TrimSpace(chosen.name) == "" {
 					continue
 				}
-				// Default empty arguments to an empty object
+				// Gather and validate arguments. If missing or invalid, do not emit; let engine retry non-streaming.
 				argsStr := strings.TrimSpace(chosen.args)
 				if argsStr == "" {
-					argsStr = "{}"
+					return
 				}
 
-				// Try to parse accumulated args once at finish
 				var argsMap map[string]interface{}
-				if err := json.Unmarshal([]byte(argsStr), &argsMap); err == nil {
-					if args, err := json.Marshal(argsMap); err == nil {
-						call := &engine.ToolCall{ID: chosen.id, Name: chosen.name, Args: args}
-						select {
-						case <-ctx.Done():
-							return
-						case ch <- engine.TokenOrToolCall{ToolCall: call}:
-							return
-						}
-					}
+				if err := json.Unmarshal([]byte(argsStr), &argsMap); err != nil {
+					return
 				}
-				// If parsing failed, emit the raw args string (still defaults to `{}` when empty)
-				call := &engine.ToolCall{ID: chosen.id, Name: chosen.name, Args: json.RawMessage([]byte(argsStr))}
-				select {
-				case <-ctx.Done():
+				// Validate required args for known tools
+				if !validateToolArgs(chosen.name, argsMap) {
 					return
-				case ch <- engine.TokenOrToolCall{ToolCall: call}:
-					return
+				}
+				if args, err := json.Marshal(argsMap); err == nil {
+					call := &engine.ToolCall{ID: chosen.id, Name: chosen.name, Args: args}
+					select {
+					case <-ctx.Done():
+						return
+					case ch <- engine.TokenOrToolCall{ToolCall: call}:
+						return
+					}
 				}
 			}
 		}
@@ -369,26 +404,23 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 			}
 			argsStr := strings.TrimSpace(chosen.args)
 			if argsStr == "" {
-				argsStr = "{}"
+				return
 			}
 			var argsMap map[string]interface{}
-			if err := json.Unmarshal([]byte(argsStr), &argsMap); err == nil {
-				if args, err := json.Marshal(argsMap); err == nil {
-					call := &engine.ToolCall{ID: chosen.id, Name: chosen.name, Args: args}
-					select {
-					case <-ctx.Done():
-						return
-					case ch <- engine.TokenOrToolCall{ToolCall: call}:
-						return
-					}
-				}
+			if err := json.Unmarshal([]byte(argsStr), &argsMap); err != nil {
+				return
 			}
-			call := &engine.ToolCall{ID: chosen.id, Name: chosen.name, Args: json.RawMessage([]byte(argsStr))}
-			select {
-			case <-ctx.Done():
+			if !validateToolArgs(chosen.name, argsMap) {
 				return
-			case ch <- engine.TokenOrToolCall{ToolCall: call}:
-				return
+			}
+			if args, err := json.Marshal(argsMap); err == nil {
+				call := &engine.ToolCall{ID: chosen.id, Name: chosen.name, Args: args}
+				select {
+				case <-ctx.Done():
+					return
+				case ch <- engine.TokenOrToolCall{ToolCall: call}:
+					return
+				}
 			}
 		}
 	}
