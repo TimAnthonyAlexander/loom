@@ -46,14 +46,17 @@ func (c *Client) WithEndpoint(endpoint string) *Client {
 	return c
 }
 
-// isReasoningModel returns true for OpenAI o-series reasoning models.
-// Treat all o3* and o4* variants as reasoning (e.g., o3, o3-mini, o4, o4-mini).
+// isReasoningModel returns true for OpenAI reasoning models that don't support temperature.
+// Treat all o3*, o4*, and gpt-5* variants as reasoning models.
 func isReasoningModel(model string) bool {
 	m := strings.ToLower(strings.TrimSpace(model))
 	if m == "o3" || strings.HasPrefix(m, "o3-") {
 		return true
 	}
 	if m == "o4" || strings.HasPrefix(m, "o4-") {
+		return true
+	}
+	if m == "gpt-5" || strings.HasPrefix(m, "gpt-5-") {
 		return true
 	}
 	return false
