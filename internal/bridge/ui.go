@@ -284,11 +284,25 @@ func (a *App) EmitAssistant(text string) {
 func (a *App) GetSettings() map[string]string {
 	a.ensureSettingsLoaded()
 	s := a.settings
+	// Fallback to engine workspace if settings don't have one yet
+	lastWorkspace := s.LastWorkspace
+	if lastWorkspace == "" && a.engine != nil {
+		lastWorkspace = a.engine.Workspace()
+	}
+	// Fallback API keys to environment if not persisted
+	openaiKey := s.OpenAIAPIKey
+	if openaiKey == "" {
+		openaiKey = os.Getenv("OPENAI_API_KEY")
+	}
+	anthropicKey := s.AnthropicAPIKey
+	if anthropicKey == "" {
+		anthropicKey = os.Getenv("ANTHROPIC_API_KEY")
+	}
 	return map[string]string{
-		"openai_api_key":     s.OpenAIAPIKey,
-		"anthropic_api_key":  s.AnthropicAPIKey,
+		"openai_api_key":     openaiKey,
+		"anthropic_api_key":  anthropicKey,
 		"ollama_endpoint":    s.OllamaEndpoint,
-		"last_workspace":     s.LastWorkspace,
+		"last_workspace":     lastWorkspace,
 		"last_model":         s.LastModel,
 		"auto_approve_shell": boolToStr(s.AutoApproveShell),
 		"auto_approve_edits": boolToStr(s.AutoApproveEdits),
@@ -297,15 +311,32 @@ func (a *App) GetSettings() map[string]string {
 
 // SaveSettings saves settings provided by the frontend.
 func (a *App) SaveSettings(settings map[string]string) {
-	s := config.Settings{
-		OpenAIAPIKey:     settings["openai_api_key"],
-		AnthropicAPIKey:  settings["anthropic_api_key"],
-		OllamaEndpoint:   settings["ollama_endpoint"],
-		LastWorkspace:    settings["last_workspace"],
-		LastModel:        settings["last_model"],
-		AutoApproveShell: strToBool(settings["auto_approve_shell"]),
-		AutoApproveEdits: strToBool(settings["auto_approve_edits"]),
+	// Merge with existing settings to avoid wiping fields (e.g. last_workspace) when omitted by the UI
+	a.ensureSettingsLoaded()
+	s := a.settings
+
+	if v, ok := settings["openai_api_key"]; ok {
+		s.OpenAIAPIKey = v
 	}
+	if v, ok := settings["anthropic_api_key"]; ok {
+		s.AnthropicAPIKey = v
+	}
+	if v, ok := settings["ollama_endpoint"]; ok {
+		s.OllamaEndpoint = v
+	}
+	if v, ok := settings["last_workspace"]; ok && strings.TrimSpace(v) != "" {
+		s.LastWorkspace = normalizeWorkspacePath(v)
+	}
+	if v, ok := settings["last_model"]; ok && v != "" {
+		s.LastModel = v
+	}
+	if v, ok := settings["auto_approve_shell"]; ok {
+		s.AutoApproveShell = strToBool(v)
+	}
+	if v, ok := settings["auto_approve_edits"]; ok {
+		s.AutoApproveEdits = strToBool(v)
+	}
+
 	a.applyAndSaveSettings(s)
 }
 
