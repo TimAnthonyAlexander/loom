@@ -599,6 +599,10 @@ func (a *App) LoadConversation(id string) {
 		return
 	}
 	for _, m := range msgs {
+		// Hide system and tool messages from the chat view when loading history
+		if m.Role == "system" || m.Role == "tool" {
+			continue
+		}
 		a.SendChat(m.Role, m.Content)
 	}
 }
