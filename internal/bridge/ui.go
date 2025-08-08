@@ -301,6 +301,12 @@ func (a *App) SetWorkspace(path string) {
 		if err := tool.RegisterFinalize(newRegistry); err != nil {
 			log.Printf("Failed to register finalize tool for new workspace: %v", err)
 		}
+		if err := tool.RegisterRunShell(newRegistry, path); err != nil {
+			log.Printf("Failed to register run_shell tool for new workspace: %v", err)
+		}
+		if err := tool.RegisterApplyShell(newRegistry, path); err != nil {
+			log.Printf("Failed to register apply_shell tool for new workspace: %v", err)
+		}
 		a.tools = newRegistry
 		if a.engine != nil {
 			a.engine.WithRegistry(newRegistry)

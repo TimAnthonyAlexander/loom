@@ -165,4 +165,12 @@ func registerTools(registry *tool.Registry, workspacePath string) {
 	if err := tool.RegisterFinalize(registry); err != nil {
 		log.Printf("Failed to register finalize tool: %v", err)
 	}
+
+	// Shell tools
+	if err := tool.RegisterRunShell(registry, workspacePath); err != nil {
+		log.Printf("Failed to register run_shell tool: %v", err)
+	}
+	if err := tool.RegisterApplyShell(registry, workspacePath); err != nil {
+		log.Printf("Failed to register apply_shell tool: %v", err)
+	}
 }
