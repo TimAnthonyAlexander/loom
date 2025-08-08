@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 
@@ -282,10 +283,12 @@ func (a *App) SetWorkspace(path string) {
 	if path == "" {
 		return
 	}
-	log.Printf("SetWorkspace: switching to %s", path)
+	// Normalize provided path: expand ~ and make absolute/clean
+	norm := normalizeWorkspacePath(path)
+	log.Printf("SetWorkspace: switching to %s (normalized: %s)", path, norm)
 	// Update engine workspace
 	if a.engine != nil {
-		a.engine.WithWorkspace(path)
+		a.engine.WithWorkspace(norm)
 	}
 	// Re-register tools with new workspace paths
 	if a.tools != nil {
@@ -296,29 +299,29 @@ func (a *App) SetWorkspace(path string) {
 		// In this context, we expect the Registry to already contain tools registered at startup.
 		// For correctness, try to re-register using the same helpers.
 		// Note: we rely on tool package Register* functions.
-		if err := tool.RegisterReadFile(newRegistry, path); err != nil {
+		if err := tool.RegisterReadFile(newRegistry, norm); err != nil {
 			log.Printf("Failed to register read_file tool for new workspace: %v", err)
 		}
-		idx := indexer.NewRipgrepIndexer(path)
+		idx := indexer.NewRipgrepIndexer(norm)
 		if err := tool.RegisterSearchCode(newRegistry, idx); err != nil {
 			log.Printf("Failed to register search_code tool for new workspace: %v", err)
 		}
-		if err := tool.RegisterEditFile(newRegistry, path); err != nil {
+		if err := tool.RegisterEditFile(newRegistry, norm); err != nil {
 			log.Printf("Failed to register edit_file tool for new workspace: %v", err)
 		}
-		if err := tool.RegisterApplyEdit(newRegistry, path); err != nil {
+		if err := tool.RegisterApplyEdit(newRegistry, norm); err != nil {
 			log.Printf("Failed to register apply_edit tool for new workspace: %v", err)
 		}
-		if err := tool.RegisterListDir(newRegistry, path); err != nil {
+		if err := tool.RegisterListDir(newRegistry, norm); err != nil {
 			log.Printf("Failed to register list_dir tool for new workspace: %v", err)
 		}
 		if err := tool.RegisterFinalize(newRegistry); err != nil {
 			log.Printf("Failed to register finalize tool for new workspace: %v", err)
 		}
-		if err := tool.RegisterRunShell(newRegistry, path); err != nil {
+		if err := tool.RegisterRunShell(newRegistry, norm); err != nil {
 			log.Printf("Failed to register run_shell tool for new workspace: %v", err)
 		}
-		if err := tool.RegisterApplyShell(newRegistry, path); err != nil {
+		if err := tool.RegisterApplyShell(newRegistry, norm); err != nil {
 			log.Printf("Failed to register apply_shell tool for new workspace: %v", err)
 		}
 		a.tools = newRegistry
@@ -328,13 +331,34 @@ func (a *App) SetWorkspace(path string) {
 	}
 	// Persist as last workspace
 	a.ensureSettingsLoaded()
-	a.settings.LastWorkspace = path
+	a.settings.LastWorkspace = norm
 	if err := config.Save(a.settings); err != nil {
 		log.Printf("Failed to persist last workspace: %v", err)
 	}
 	// After switching, log current rules snapshot for debug
 	user, project, _ := config.LoadRules(path)
 	log.Printf("SetWorkspace: loaded rules for %s -> user=%d, project=%d", path, len(user), len(project))
+}
+
+// normalizeWorkspacePath expands ~ and returns a cleaned absolute path
+func normalizeWorkspacePath(p string) string {
+	p = strings.TrimSpace(p)
+	if p == "" {
+		return p
+	}
+	if p == "~" || strings.HasPrefix(p, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			if p == "~" {
+				p = home
+			} else {
+				p = filepath.Join(home, p[2:])
+			}
+		}
+	}
+	if abs, err := filepath.Abs(p); err == nil {
+		p = abs
+	}
+	return filepath.Clean(p)
 }
 
 // GetRules exposes user and project rules to the frontend.

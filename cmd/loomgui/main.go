@@ -5,6 +5,8 @@ import (
 	"embed"
 	"log"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/loom/loom/internal/adapter"
 	"github.com/loom/loom/internal/adapter/openai"
@@ -48,9 +50,11 @@ func main() {
 	if err != nil {
 		log.Printf("Warning: Failed to load settings: %v", err)
 	}
-	// Prefer last workspace from settings if present
+	// Prefer last workspace from settings if present (normalize to abs path and expand ~)
 	if settings.LastWorkspace != "" {
-		workspacePath = settings.LastWorkspace
+		workspacePath = normalizeWorkspacePath(settings.LastWorkspace)
+	} else {
+		workspacePath = normalizeWorkspacePath(workspacePath)
 	}
 	if settings.OpenAIAPIKey != "" && configAdapter.Provider == adapter.ProviderOpenAI {
 		configAdapter.APIKey = settings.OpenAIAPIKey
@@ -173,4 +177,25 @@ func registerTools(registry *tool.Registry, workspacePath string) {
 	if err := tool.RegisterApplyShell(registry, workspacePath); err != nil {
 		log.Printf("Failed to register apply_shell tool: %v", err)
 	}
+}
+
+// normalizeWorkspacePath expands a leading ~ and returns a cleaned absolute path
+func normalizeWorkspacePath(p string) string {
+	p = strings.TrimSpace(p)
+	if p == "" {
+		return p
+	}
+	if p == "~" || strings.HasPrefix(p, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			if p == "~" {
+				p = home
+			} else {
+				p = filepath.Join(home, p[2:])
+			}
+		}
+	}
+	if abs, err := filepath.Abs(p); err == nil {
+		p = abs
+	}
+	return filepath.Clean(p)
 }
