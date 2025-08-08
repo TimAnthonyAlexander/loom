@@ -1,155 +1,138 @@
-# Loom v2 Makefile
-
-# Variables
 WAILS_BIN := $(shell go env GOPATH)/bin/wails
 APP_DIR := cmd/loomgui
 FRONTEND_DIR := $(APP_DIR)/frontend
+LINUX_BUILDER_FILE := Dockerfile.linux
 BUILD_DIR := $(APP_DIR)/build/bin
 DIST_DIR := dist
 APP_NAME := loom
+ENV_PATH := /usr/local/go/bin:/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-# Check if wails is available in PATH, if not use local path
 ifeq ($(shell command -v wails),)
 	WAILS := $(WAILS_BIN)
 else
 	WAILS := wails
 endif
 
-# Default target
-.PHONY: all
-all: deps dev
+DOCKER_IMAGE := loom-linux-builder
+DOCKER_RUN := docker run --rm -v $(PWD):/app -w /app
 
-# Install dependencies
+.PHONY: all
+all: deps build-macos-universal build-windows build-linux-all
+
 .PHONY: deps
 deps: deps-go deps-frontend deps-tools
 
-# Install Go dependencies
 .PHONY: deps-go
 deps-go:
-	@echo "Installing Go dependencies..."
 	go mod tidy
 	go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
-# Install frontend dependencies
 .PHONY: deps-frontend
 deps-frontend:
-	@echo "Installing frontend dependencies..."
 	cd $(FRONTEND_DIR) && npm install
 
-# Install required tools
 .PHONY: deps-tools
 deps-tools:
-	@echo "Installing required tools..."
-	which ripgrep || brew install ripgrep
+	which rg || brew install ripgrep
 
-# Run in development mode
 .PHONY: dev
 dev:
-	@echo "Starting development server..."
 	cd $(APP_DIR) && $(WAILS) dev
 
-# Run in debug mode with Chrome DevTools
 .PHONY: debug
 debug:
-	@echo "Starting development server with debug mode..."
 	cd $(APP_DIR) && $(WAILS) dev -debug
 
-# Build for current platform
-.PHONY: build
-build:
-	@echo "Building for current platform..."
-	cd $(APP_DIR) && $(WAILS) build
-	@echo "Preparing artifact in $(DIST_DIR)/ with platform suffix..."
-	@mkdir -p $(DIST_DIR)
-	@GOOS=$$(go env GOOS); GOARCH=$$(go env GOARCH); \
-	SRC_DIR="$(BUILD_DIR)"; \
-	if [ "$$GOOS" = "darwin" ]; then \
-	  SUFFIX="darwin-$$GOARCH"; \
-	  SRC_APP="$$SRC_DIR/Loom.app"; \
-	  DEST="$(DIST_DIR)/$(APP_NAME)-$$SUFFIX.app"; \
-	  rm -rf "$$DEST"; \
-	  mv "$$SRC_APP" "$$DEST"; \
-	elif [ "$$GOOS" = "windows" ]; then \
-	  SUFFIX="windows-$$GOARCH"; \
-	  SRC_EXE="$$SRC_DIR/Loom.exe"; \
-	  DEST="$(DIST_DIR)/$(APP_NAME)-$$SUFFIX.exe"; \
-	  mv "$$SRC_EXE" "$$DEST"; \
-	else \
-	  SUFFIX="linux-$$GOARCH"; \
-	  SRC_BIN="$$SRC_DIR/Loom"; \
-	  DEST="$(DIST_DIR)/$(APP_NAME)-$$SUFFIX"; \
-	  mv "$$SRC_BIN" "$$DEST"; \
-	fi
-
-# Clean build artifacts
 .PHONY: clean
 clean:
-	@echo "Cleaning build artifacts..."
 	cd $(APP_DIR) && $(WAILS) build -clean
-	rm -rf $(BUILD_DIR)
-	rm -rf $(DIST_DIR)
+	rm -rf $(BUILD_DIR) $(DIST_DIR)
 
-# Build for macOS (universal binary)
-.PHONY: build-macos
-build-macos:
-	@echo "Building for macOS (universal)..."
-	cd $(APP_DIR) && $(WAILS) build -platform=darwin/universal -clean
-	@echo "Moving macOS artifact to $(DIST_DIR)/$(APP_NAME)-darwin-universal.app ..."
+.PHONY: docker-image
+docker-image:
+	docker build -t $(DOCKER_IMAGE) -f Dockerfile.linux .
+
+.PHONY: build
+build:
+	cd $(APP_DIR) && $(WAILS) build
 	@mkdir -p $(DIST_DIR)
-	@mv "$(BUILD_DIR)/Loom.app" "$(DIST_DIR)/$(APP_NAME)-darwin-universal.app"
+	@GOOS=$$(go env GOOS); GOARCH=$$(go env GOARCH); \
+	if [ "$$GOOS" = "darwin" ]; then \
+	  rm -rf "$(DIST_DIR)/$(APP_NAME)-darwin-$$GOARCH.app"; \
+	  mv "$(BUILD_DIR)/Loom.app" "$(DIST_DIR)/$(APP_NAME)-darwin-$$GOARCH.app"; \
+	elif [ "$$GOOS" = "windows" ]; then \
+	  mv "$(BUILD_DIR)/Loom.exe" "$(DIST_DIR)/$(APP_NAME)-windows-$$GOARCH.exe"; \
+	else \
+	  mv "$(BUILD_DIR)/Loom" "$(DIST_DIR)/$(APP_NAME)-linux-$$GOARCH"; \
+	fi
 
-# Build for Windows
+.PHONY: build-macos-amd64
+build-macos-amd64:
+	cd $(APP_DIR) && $(WAILS) build -platform=darwin/amd64 -clean
+	@mkdir -p $(DIST_DIR)
+	rm -rf "$(DIST_DIR)/$(APP_NAME)-darwin-amd64.app"
+	mv "$(BUILD_DIR)/Loom.app" "$(DIST_DIR)/$(APP_NAME)-darwin-amd64.app"
+
+.PHONY: build-macos-arm64
+build-macos-arm64:
+	cd $(APP_DIR) && $(WAILS) build -platform=darwin/arm64 -clean
+	@mkdir -p $(DIST_DIR)
+	rm -rf "$(DIST_DIR)/$(APP_NAME)-darwin-arm64.app"
+	mv "$(BUILD_DIR)/Loom.app" "$(DIST_DIR)/$(APP_NAME)-darwin-arm64.app"
+
+.PHONY: build-macos-universal
+build-macos-universal:
+	cd $(APP_DIR) && $(WAILS) build -platform=darwin/universal -clean
+	@mkdir -p $(DIST_DIR)
+	rm -rf "$(DIST_DIR)/$(APP_NAME)-darwin-universal.app"
+	mv "$(BUILD_DIR)/Loom.app" "$(DIST_DIR)/$(APP_NAME)-darwin-universal.app"
+
 .PHONY: build-windows
 build-windows:
-	@echo "Building for Windows (amd64)..."
 	cd $(APP_DIR) && $(WAILS) build -platform=windows/amd64 -clean
-	@echo "Moving Windows artifact to $(DIST_DIR)/$(APP_NAME)-windows-amd64.exe ..."
 	@mkdir -p $(DIST_DIR)
-	@mv "$(BUILD_DIR)/Loom.exe" "$(DIST_DIR)/$(APP_NAME)-windows-amd64.exe"
+	mv "$(BUILD_DIR)/Loom.exe" "$(DIST_DIR)/$(APP_NAME)-windows-amd64.exe"
 
-# Build for Linux
-.PHONY: build-linux
-build-linux:
-	@echo "Building for Linux (amd64)..."
-	cd $(APP_DIR) && $(WAILS) build -platform=linux/amd64 -clean
-	@echo "Moving Linux artifact to $(DIST_DIR)/$(APP_NAME)-linux-amd64 ..."
-	@mkdir -p $(DIST_DIR)
-	@mv "$(BUILD_DIR)/Loom" "$(DIST_DIR)/$(APP_NAME)-linux-amd64"
+.PHONY: linux-image-amd64
+linux-image-amd64:
+	docker buildx build --platform linux/amd64 --load \
+		-t loom-linux-builder:amd64 -f $(LINUX_BUILDER_FILE) .
 
-# Build for all platforms
-.PHONY: build-all
-build-all: build-macos build-windows build-linux
-	@echo "Built for all platforms"
+.PHONY: linux-image-arm64
+linux-image-arm64:
+	docker buildx build --platform linux/arm64 --load \
+		-t loom-linux-builder:arm64 -f $(LINUX_BUILDER_FILE) .
 
-# Frontend-specific targets
-.PHONY: frontend-dev
-frontend-dev:
-	@echo "Starting frontend dev server..."
-	cd $(FRONTEND_DIR) && npm run dev
+.PHONY: build-linux-amd64
+build-linux-amd64: linux-image-amd64
+	docker run --rm --platform=linux/amd64 \
+		-v $(PWD):/app -w /app \
+		-u $(shell id -u):$(shell id -g) \
+		-e PATH=$(ENV_PATH) $(CACHE_ENV) \
+		loom-linux-builder:amd64 \
+		bash -c 'cd $(APP_DIR) && wails build -platform=linux/amd64 -clean'
+	mkdir -p $(DIST_DIR)
+	mv "$(BUILD_DIR)/Loom" "$(DIST_DIR)/$(APP_NAME)-linux-amd64"
 
-.PHONY: frontend-build
-frontend-build:
-	@echo "Building frontend..."
-	cd $(FRONTEND_DIR) && npm run build
+.PHONY: build-linux-arm64
+build-linux-arm64: linux-image-arm64
+	docker run --rm --platform=linux/arm64 \
+		-v $(PWD):/app -w /app \
+		-u $(shell id -u):$(shell id -g) \
+		-e PATH=$(ENV_PATH) $(CACHE_ENV) \
+		loom-linux-builder:arm64 \
+		bash -c 'cd $(APP_DIR) && wails build -platform=linux/arm64 -clean'
+	mkdir -p $(DIST_DIR)
+	mv "$(BUILD_DIR)/Loom" "$(DIST_DIR)/$(APP_NAME)-linux-arm64"
 
-# Help
+.PHONY: build-linux-all
+build-linux-all: build-linux-amd64 build-linux-arm64
+
 .PHONY: help
 help:
-	@echo "Loom v2 Makefile"
-	@echo ""
-	@echo "Available targets:"
-	@echo "  deps            - Install all dependencies"
-	@echo "  deps-go         - Install Go dependencies"
-	@echo "  deps-frontend   - Install frontend dependencies"
-	@echo "  deps-tools      - Install required tools (ripgrep)"
-	@echo "  dev             - Run in development mode"
-	@echo "  debug           - Run in debug mode with Chrome DevTools"
-	@echo "  build           - Build for current platform"
-	@echo "  build-macos     - Build for macOS (universal)"
-	@echo "  build-windows   - Build for Windows (amd64)"
-	@echo "  build-linux     - Build for Linux (amd64)"
-	@echo "  build-all       - Build for all platforms"
-	@echo "  clean           - Clean build artifacts"
-	@echo "  frontend-dev    - Run frontend dev server only"
-	@echo "  frontend-build  - Build frontend only"
-	@echo "  help            - Show this help"
+	@echo "targets:"
+	@echo "  dev debug build clean"
+	@echo "  build-macos-amd64 build-macos-arm64 build-macos-universal build-macos-all"
+	@echo "  build-windows"
+	@echo "  build-linux-amd64 build-linux-arm64 build-linux-all"
+	@echo "  build-all"
