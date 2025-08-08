@@ -81,6 +81,14 @@ func (c *Client) Chat(
 		return nil, errors.New("Anthropic API key not set")
 	}
 
+	// Add debug logging of the raw message history (parity with OpenAI adapter)
+	fmt.Println("=== DEBUG: Message History ===")
+	for i, msg := range messages {
+		fmt.Printf("[%d] Role: %s, Name: %s, ToolID: %s, Content: %s\n",
+			i, msg.Role, msg.Name, msg.ToolID, truncateString(msg.Content, 50))
+	}
+	fmt.Println("=== End Message History ===")
+
 	// Create output channel for tokens/tool calls
 	resultCh := make(chan engine.TokenOrToolCall)
 
@@ -98,6 +106,14 @@ func (c *Client) Chat(
 	// Convert messages and tools to Claude format (excluding system messages)
 	claudeMessages := convertMessages(messages)
 	claudeTools := convertTools(tools)
+
+	// Add debug logging of the converted Anthropic messages (parity with OpenAI adapter)
+	fmt.Println("=== DEBUG: Anthropic Messages ===")
+	for i, msg := range claudeMessages {
+		debugJSON, _ := json.MarshalIndent(msg, "", "  ")
+		fmt.Printf("[%d] %s\n", i, string(debugJSON))
+	}
+	fmt.Println("=== End Anthropic Messages ===")
 
 	// Remove provider prefix if present (e.g., "claude:" prefix)
 	modelID := strings.TrimPrefix(c.model, "claude:")
@@ -195,6 +211,14 @@ func (c *Client) Chat(
 	}()
 
 	return resultCh, nil
+}
+
+// truncateString shortens a string for logging purposes
+func truncateString(s string, maxLength int) string {
+	if len(s) <= maxLength {
+		return s
+	}
+	return s[:maxLength] + "..."
 }
 
 // handleStreamingResponse processes a streaming response from the Anthropic API.
