@@ -100,6 +100,10 @@ func main() {
 	// Create the engine and configure it
 	eng := engine.New(llm, nil)
 	eng.WithRegistry(registry)
+	// Seed initial model label from startup config
+	if configAdapter.Provider != "" && configAdapter.Model != "" {
+		eng.SetModelLabel(string(configAdapter.Provider) + ":" + configAdapter.Model)
+	}
 
 	// Add memory if available
 	if projectMemory != nil {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, ReactElement } from 'react';
+import React, { useState, useEffect, useRef, ReactElement, useMemo } from 'react';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 import { SendUserMessage, Approve, GetTools, SetModel, GetSettings, SaveSettings, SetWorkspace, ClearConversation, GetConversations, LoadConversation, NewConversation } from '../wailsjs/go/bridge/App';
 import * as Bridge from '../wailsjs/go/bridge/App';
@@ -268,15 +268,27 @@ const App: React.FC = () => {
     const [conversations, setConversations] = useState<{ id: string; title: string; updated_at?: string }[]>([]);
     const [currentConversationId, setCurrentConversationId] = useState<string>('');
 
+    const orderedConversations = useMemo(
+        () => {
+            if (!currentConversationId) return conversations;
+            const idx = conversations.findIndex(c => c.id === currentConversationId);
+            if (idx < 0) return conversations;
+            const current = conversations[idx];
+            const rest = conversations.filter((_, i) => i !== idx);
+            return [current, ...rest];
+        },
+        [conversations, currentConversationId]
+    );
+
     useEffect(() => {
         // Listen for new chat messages
         EventsOn('chat:new', (message: ChatMessage) => {
-            setMessages(prev => [...prev, message]);
+            setMessages((prev: ChatMessage[]) => [...prev, message]);
         });
 
         // Listen for streaming assistant messages
         EventsOn('assistant-msg', (content: string) => {
-            setMessages(prev => {
+            setMessages((prev: ChatMessage[]) => {
                 const lastMessage = prev[prev.length - 1];
 
                 // If the last message is from the assistant, update it
@@ -304,7 +316,7 @@ const App: React.FC = () => {
                     const list = Array.isArray(res?.conversations) ? res.conversations : [];
                     setConversations(list.map((c: any) => ({ id: String(c.id), title: String(c.title || c.id), updated_at: String(c.updated_at || '') })));
                 })
-                .catch(() => {});
+                .catch(() => { });
         });
 
         // Listen for approval requests
@@ -346,7 +358,7 @@ const App: React.FC = () => {
                             setUserRules(Array.isArray(r?.user) ? r.user : []);
                             setProjectRules(Array.isArray(r?.project) ? r.project : []);
                         })
-                        .catch(() => {});
+                        .catch(() => { });
                 } else {
                     setWorkspaceOpen(true);
                 }
@@ -356,7 +368,7 @@ const App: React.FC = () => {
                 if (lastModel) {
                     setCurrentModel(lastModel);
                     // Inform backend to set model immediately on startup
-                    SetModel(lastModel).catch(() => {});
+                    SetModel(lastModel).catch(() => { });
                 }
             })
             .catch(() => { });
@@ -368,7 +380,7 @@ const App: React.FC = () => {
                 const list = Array.isArray(res?.conversations) ? res.conversations : [];
                 setConversations(list.map((c: any) => ({ id: String(c.id), title: String(c.title || c.id), updated_at: String(c.updated_at || '') })));
             })
-            .catch(() => {});
+            .catch(() => { });
 
         // Load rules
         AppBridge.GetRules()
@@ -410,7 +422,7 @@ const App: React.FC = () => {
     const handleSelectConversation = (id: string) => {
         if (!id || id === currentConversationId) return;
         setCurrentConversationId(id);
-        LoadConversation(id).catch(() => {});
+        LoadConversation(id).catch(() => { });
     };
 
     const handleNewConversation = () => {
@@ -418,9 +430,9 @@ const App: React.FC = () => {
             .then((id: string) => {
                 setCurrentConversationId(id);
                 // Prepend a placeholder until next refresh
-                setConversations((prev) => [{ id, title: 'New Conversation' }, ...prev]);
+                setConversations((prev: { id: string; title: string; updated_at?: string }[]) => [{ id, title: 'New Conversation' }, ...prev]);
             })
-            .catch(() => {});
+            .catch(() => { });
     };
 
     return (
@@ -478,7 +490,7 @@ const App: React.FC = () => {
                     </Typography>
                     <Paper variant="outlined" sx={{ p: 1, mb: 2 }}>
                         <List dense sx={{ width: '100%' }}>
-                            {conversations.map((c) => (
+                            {orderedConversations.map((c: { id: string; title: string; updated_at?: string }) => (
                                 <ListItem
                                     key={c.id}
                                     disableGutters
@@ -507,7 +519,7 @@ const App: React.FC = () => {
                     </Typography>
                     <Paper variant="outlined" sx={{ p: 1 }}>
                         <List dense sx={{ width: '100%' }}>
-                            {tools.map((tool) => (
+                            {tools.map((tool: Tool) => (
                                 <ListItem key={tool.name} disableGutters secondaryAction={
                                     <Chip
                                         size="small"
@@ -533,7 +545,7 @@ const App: React.FC = () => {
                 {/* Chat */}
                 <Box sx={{ flex: 1, overflowY: 'auto', px: 4, py: 3, minHeight: 0 }}>
                     <Stack spacing={2}>
-                        {messages.map((msg, index) => {
+                        {messages.map((msg: ChatMessage, index: number) => {
                             const isUser = msg.role === 'user'
                             const containerProps = isUser
                                 ? { component: Paper, elevation: 0, variant: 'outlined' as const, sx: { p: 2 } }
@@ -667,7 +679,7 @@ const App: React.FC = () => {
                             <Typography variant="subtitle2" sx={{ mb: 1 }}>User Rules (apply to all projects)</Typography>
                             <Paper variant="outlined" sx={{ p: 1 }}>
                                 <Stack spacing={1}>
-                                    {userRules.map((r, idx) => (
+                                    {userRules.map((r: string, idx: number) => (
                                         <Stack key={`ur-${idx}`} direction="row" spacing={1} alignItems="center">
                                             <TextField
                                                 size="small"
@@ -679,7 +691,7 @@ const App: React.FC = () => {
                                                     setUserRules(next);
                                                 }}
                                             />
-                                            <Button color="inherit" onClick={() => setUserRules(userRules.filter((_, i) => i !== idx))}>Delete</Button>
+                                            <Button color="inherit" onClick={() => setUserRules(userRules.filter((_: string, i: number) => i !== idx))}>Delete</Button>
                                         </Stack>
                                     ))}
                                     <Stack direction="row" spacing={1}>
@@ -713,7 +725,7 @@ const App: React.FC = () => {
                             <Typography variant="subtitle2" sx={{ mb: 1 }}>Project Rules (saved in .loom/rules.json)</Typography>
                             <Paper variant="outlined" sx={{ p: 1 }}>
                                 <Stack spacing={1}>
-                                    {projectRules.map((r, idx) => (
+                                    {projectRules.map((r: string, idx: number) => (
                                         <Stack key={`pr-${idx}`} direction="row" spacing={1} alignItems="center">
                                             <TextField
                                                 size="small"
@@ -725,7 +737,7 @@ const App: React.FC = () => {
                                                     setProjectRules(next);
                                                 }}
                                             />
-                                            <Button color="inherit" onClick={() => setProjectRules(projectRules.filter((_, i) => i !== idx))}>Delete</Button>
+                                            <Button color="inherit" onClick={() => setProjectRules(projectRules.filter((_: string, i: number) => i !== idx))}>Delete</Button>
                                         </Stack>
                                     ))}
                                     <Stack direction="row" spacing={1}>

@@ -68,6 +68,8 @@ type Engine struct {
 	// Settings-backed flags
 	autoApproveShell bool
 	autoApproveEdits bool
+	// model label like "openai:gpt-4o" for titling
+	currentModelLabel string
 }
 
 // LLM is an interface to abstract different language model providers.
@@ -151,11 +153,27 @@ func (e *Engine) SetLLM(llm LLM) {
 	e.llm = llm
 }
 
+// SetModelLabel sets a human-readable model label (e.g., "openai:gpt-4o").
+func (e *Engine) SetModelLabel(label string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.currentModelLabel = label
+}
+
+// GetModelLabel returns the current model label if known.
+func (e *Engine) GetModelLabel() string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.currentModelLabel
+}
+
 // ListConversations returns summaries for available conversations.
 func (e *Engine) ListConversations() ([]memory.ConversationSummary, error) {
 	if e.memory == nil {
 		return nil, errors.New("memory not initialized")
 	}
+	// Immediately remove any non-current empty conversations
+	e.memory.CleanupEmptyConversations(e.memory.CurrentConversationID())
 	return e.memory.ListConversationSummaries()
 }
 
@@ -196,13 +214,18 @@ func (e *Engine) NewConversation() string {
 	if e.memory == nil {
 		return ""
 	}
-	return e.memory.CreateNewConversation()
+	id := e.memory.CreateNewConversation()
+	// Immediately remove any non-current empty conversations
+	e.memory.CleanupEmptyConversations(id)
+	return id
 }
 
 // ClearConversation clears the current conversation history in memory and notifies the UI.
 func (e *Engine) ClearConversation() {
 	if e.memory != nil {
-		e.memory.CreateNewConversation()
+		newID := e.memory.CreateNewConversation()
+		// Remove any non-current conversations with no user messages immediately
+		e.memory.CleanupEmptyConversations(newID)
 	}
 	if e.bridge != nil {
 		e.bridge.SendChat("system", "Conversation cleared.")
@@ -300,6 +323,21 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 
 	// Add latest user message
 	convo.AddUser(userMsg)
+	// After the first user message in a conversation, if no title yet, set a title using the selected model
+	if e.memory != nil {
+		currentID := e.memory.CurrentConversationID()
+		if currentID != "" && e.memory.GetConversationTitle(currentID) == "" {
+			// Title: first (~50 chars) of the user's first message + current model label
+			title := userMsg
+			if len(title) > 50 {
+				title = title[:50] + "…"
+			}
+			if label := e.GetModelLabel(); label != "" {
+				title = title + " — " + label
+			}
+			_ = e.memory.SetConversationTitle(currentID, title)
+		}
+	}
 
 	// Prepare tool schemas for the adapter
 	tools := toolSchemas // get all tool specs

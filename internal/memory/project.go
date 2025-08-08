@@ -140,6 +140,12 @@ type ConversationSummary struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// ConversationMeta stores additional metadata for a conversation
+type ConversationMeta struct {
+	Title     string    `json:"title,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
+}
+
 // CurrentConversationID returns the currently active conversation id.
 func (p *Project) CurrentConversationID() string {
 	var id string
@@ -182,18 +188,24 @@ func (p *Project) ListConversationSummaries() ([]ConversationSummary, error) {
 			// Skip malformed
 			continue
 		}
-		// Title from first non-system message content (trimmed, first line)
+		// Title from meta if available; otherwise derive from first non-system message
 		title := convID
+		var meta ConversationMeta
+		if p.Has("conversations_meta/" + convID) {
+			if err := p.Get("conversations_meta/"+convID, &meta); err == nil && strings.TrimSpace(meta.Title) != "" {
+				title = meta.Title
+			}
+		}
 		var updated time.Time
 		if len(messages) > 0 {
 			for _, m := range messages {
 				if m.Timestamp.After(updated) {
 					updated = m.Timestamp
 				}
-				if title == convID && m.Role != "system" && strings.TrimSpace(m.Content) != "" {
-					title = trimTitle(m.Content)
-				}
 			}
+		}
+		if !meta.UpdatedAt.IsZero() && meta.UpdatedAt.After(updated) {
+			updated = meta.UpdatedAt
 		}
 		summaries = append(summaries, ConversationSummary{ID: convID, Title: title, UpdatedAt: updated})
 	}
@@ -219,6 +231,59 @@ func trimTitle(s string) string {
 
 func generateConversationID() string {
 	return time.Now().Format("20060102-150405")
+}
+
+// SetConversationTitle stores a title for the conversation in meta.
+func (p *Project) SetConversationTitle(id string, title string) error {
+	meta := ConversationMeta{Title: trimTitle(title), UpdatedAt: time.Now()}
+	return p.Set("conversations_meta/"+id, meta)
+}
+
+// GetConversationTitle retrieves a stored title, if any.
+func (p *Project) GetConversationTitle(id string) string {
+	var meta ConversationMeta
+	if err := p.Get("conversations_meta/"+id, &meta); err == nil {
+		return meta.Title
+	}
+	return ""
+}
+
+// DeleteConversation removes a conversation and its metadata.
+func (p *Project) DeleteConversation(id string) error {
+	_ = p.Delete("conversations/" + id)
+	_ = p.Delete("conversations_meta/" + id)
+	return nil
+}
+
+// CleanupEmptyConversations deletes all non-current conversations that have no user messages.
+func (p *Project) CleanupEmptyConversations(currentID string) {
+	keys, err := p.Keys()
+	if err != nil {
+		return
+	}
+	for _, key := range keys {
+		if !strings.HasPrefix(key, "conversations/") || key == "conversations/current_id" {
+			continue
+		}
+		convID := strings.TrimPrefix(key, "conversations/")
+		if convID == currentID {
+			continue
+		}
+		var messages []Message
+		if err := p.Get(key, &messages); err != nil {
+			continue
+		}
+		hasUser := false
+		for _, m := range messages {
+			if m.Role == "user" {
+				hasUser = true
+				break
+			}
+		}
+		if !hasUser {
+			_ = p.DeleteConversation(convID)
+		}
+	}
 }
 
 // generateProjectID creates a unique identifier for a workspace.

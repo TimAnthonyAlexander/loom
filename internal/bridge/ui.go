@@ -170,6 +170,8 @@ func (a *App) SetModel(model string) {
 		a.engine.SetLLM(llm)
 		// Update stored config
 		a.config = newConfig
+		// Inform engine of current model label for titling
+		a.engine.SetModelLabel(string(provider) + ":" + modelID)
 	} else {
 		log.Println("Engine not initialized")
 	}
