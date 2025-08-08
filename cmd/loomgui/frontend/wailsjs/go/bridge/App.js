@@ -18,6 +18,10 @@ export function EmitAssistant(arg1) {
   return window['go']['bridge']['App']['EmitAssistant'](arg1);
 }
 
+export function GetConversations() {
+  return window['go']['bridge']['App']['GetConversations']();
+}
+
 export function GetRules() {
   return window['go']['bridge']['App']['GetRules']();
 }
@@ -28,6 +32,14 @@ export function GetSettings() {
 
 export function GetTools() {
   return window['go']['bridge']['App']['GetTools']();
+}
+
+export function LoadConversation(arg1) {
+  return window['go']['bridge']['App']['LoadConversation'](arg1);
+}
+
+export function NewConversation() {
+  return window['go']['bridge']['App']['NewConversation']();
 }
 
 export function PromptApproval(arg1, arg2, arg3) {

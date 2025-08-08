@@ -151,11 +151,58 @@ func (e *Engine) SetLLM(llm LLM) {
 	e.llm = llm
 }
 
+// ListConversations returns summaries for available conversations.
+func (e *Engine) ListConversations() ([]memory.ConversationSummary, error) {
+	if e.memory == nil {
+		return nil, errors.New("memory not initialized")
+	}
+	return e.memory.ListConversationSummaries()
+}
+
+// CurrentConversationID returns the active conversation id.
+func (e *Engine) CurrentConversationID() string {
+	if e.memory == nil {
+		return ""
+	}
+	return e.memory.CurrentConversationID()
+}
+
+// SetCurrentConversationID switches the active conversation id.
+func (e *Engine) SetCurrentConversationID(id string) error {
+	if e.memory == nil {
+		return errors.New("memory not initialized")
+	}
+	return e.memory.SetCurrentConversationID(id)
+}
+
+// GetConversation returns the messages for the given conversation id.
+func (e *Engine) GetConversation(id string) ([]Message, error) {
+	if e.memory == nil {
+		return nil, errors.New("memory not initialized")
+	}
+	var memMsgs []memory.Message
+	if err := e.memory.Get("conversations/"+id, &memMsgs); err != nil {
+		return nil, err
+	}
+	msgs := make([]Message, 0, len(memMsgs))
+	for _, m := range memMsgs {
+		msgs = append(msgs, Message{Role: m.Role, Content: m.Content, Name: m.Name, ToolID: m.ToolID})
+	}
+	return msgs, nil
+}
+
+// NewConversation creates and switches to a new conversation.
+func (e *Engine) NewConversation() string {
+	if e.memory == nil {
+		return ""
+	}
+	return e.memory.CreateNewConversation()
+}
+
 // ClearConversation clears the current conversation history in memory and notifies the UI.
 func (e *Engine) ClearConversation() {
 	if e.memory != nil {
-		convo := e.memory.StartConversation()
-		convo.Clear()
+		e.memory.CreateNewConversation()
 	}
 	if e.bridge != nil {
 		e.bridge.SendChat("system", "Conversation cleared.")

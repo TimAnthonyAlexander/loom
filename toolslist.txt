@@ -1,0 +1,53 @@
+Master, I have access to the following tools, each with specific parameters:
+read_file
+Reads the content of a file in the workspace.
+Parameters:
+path (string, required): Relative path to the file.
+include_line_numbers (boolean, optional): Whether to prefix line numbers (default: true).
+limit (integer, optional): Max number of lines to read.
+offset (integer, optional): Line offset to start reading from (0-indexed).
+search_code
+Searches the codebase for specific text patterns.
+Parameters:
+query (string, required): The search query or pattern.
+file_pattern (string, optional): Glob pattern to filter files (e.g., '*.js').
+max_results (integer, optional): Max number of results (default: 50).
+edit_file
+Edits a file with advanced actions.
+Parameters:
+action (string, required): One of CREATE, REPLACE, INSERT_AFTER, INSERT_BEFORE, DELETE, SEARCH_REPLACE.
+path (string, required): Relative path to the file.
+content (string, optional): Content for CREATE/REPLACE/INSERT actions.
+start_line (integer, optional): Start line for REPLACE/DELETE (1-indexed).
+end_line (integer, optional): End line for REPLACE/DELETE (1-indexed, inclusive).
+line (integer, optional): Line for INSERT_BEFORE/INSERT_AFTER (1-indexed).
+old_string (string, optional): String to search for in SEARCH_REPLACE.
+new_string (string, optional): Replacement string for SEARCH_REPLACE.
+apply_edit
+Applies a previously approved file edit (same parameters as edit_file).
+list_dir
+Lists the contents of a directory.
+Parameters:
+path (string, optional): Relative path to the directory (default: current directory).
+run_shell
+Proposes running a shell command (requires approval).
+Parameters:
+command (string, required): Command string or binary.
+args (array of strings, optional): Arguments (ignored if shell=true).
+cwd (string, optional): Working directory (relative).
+shell (boolean, optional): If true, run via system shell.
+timeout_seconds (integer, optional): Max execution time (default: 60).
+apply_shell
+Executes a shell command previously proposed via run_shell (same parameters as run_shell).
+http_request
+Makes HTTP calls against local dev servers or APIs.
+Parameters:
+url (string, required): Absolute URL.
+method (string, required): HTTP method (GET, POST, etc.).
+body (string, optional): Raw request body.
+timeout (integer, optional): Timeout in seconds (default: 60).
+finalize
+Signals that the objective is complete and provides a concise summary.
+Parameters:
+summary (string, required): Final answer to present to you.
+If you need details or examples for any specific tool, let me know, master!

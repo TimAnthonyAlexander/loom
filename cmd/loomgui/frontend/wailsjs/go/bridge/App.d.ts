@@ -15,11 +15,17 @@ export function ClearConversation():Promise<void>;
 
 export function EmitAssistant(arg1:string):Promise<void>;
 
+export function GetConversations():Promise<Record<string, any>>;
+
 export function GetRules():Promise<Record<string, Array<string>>>;
 
 export function GetSettings():Promise<Record<string, string>>;
 
 export function GetTools():Promise<Array<Record<string, any>>>;
+
+export function LoadConversation(arg1:string):Promise<void>;
+
+export function NewConversation():Promise<string>;
 
 export function PromptApproval(arg1:string,arg2:string,arg3:string):Promise<boolean>;
 

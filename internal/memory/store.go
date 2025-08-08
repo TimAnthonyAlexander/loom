@@ -3,6 +3,7 @@ package memory
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
@@ -17,13 +18,13 @@ type Store struct {
 
 // NewStore creates a new Store.
 func NewStore(rootDir string) (*Store, error) {
-	// If no root dir specified, use user config directory
+	// If no root dir specified, use ~/.loom by default
 	if rootDir == "" {
-		configDir, err := os.UserConfigDir()
+		home, err := os.UserHomeDir()
 		if err != nil {
-			return nil, fmt.Errorf("failed to determine user config directory: %w", err)
+			return nil, fmt.Errorf("failed to determine user home directory: %w", err)
 		}
-		rootDir = filepath.Join(configDir, "loom")
+		rootDir = filepath.Join(home, ".loom")
 	}
 
 	// Ensure directory exists
@@ -97,6 +98,10 @@ func (s *Store) Set(key string, value interface{}) error {
 
 	// Write to file
 	filePath := filepath.Join(s.rootDir, key+".json")
+	// Ensure parent directory exists for nested keys
+	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+		return fmt.Errorf("failed to create parent directory: %w", err)
+	}
 	if err := os.WriteFile(filePath, data, 0644); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
@@ -146,26 +151,31 @@ func (s *Store) Keys() ([]string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Read directory
-	entries, err := os.ReadDir(s.rootDir)
+	keys := make([]string, 0)
+	// Walk recursively to include nested keys
+	err := filepath.WalkDir(s.rootDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if filepath.Ext(path) != ".json" {
+			return nil
+		}
+		// Derive key relative to rootDir without .json
+		rel, err := filepath.Rel(s.rootDir, path)
+		if err != nil {
+			return err
+		}
+		key := rel[:len(rel)-5]
+		// Normalize to use '/' as separator in keys
+		key = filepath.ToSlash(key)
+		keys = append(keys, key)
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to list directory: %w", err)
+		return nil, fmt.Errorf("failed to list keys: %w", err)
 	}
-
-	// Filter JSON files and extract keys
-	keys := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-
-		name := entry.Name()
-		if filepath.Ext(name) == ".json" {
-			// Remove .json extension to get the key
-			key := name[:len(name)-5] // len(".json") == 5
-			keys = append(keys, key)
-		}
-	}
-
 	return keys, nil
 }

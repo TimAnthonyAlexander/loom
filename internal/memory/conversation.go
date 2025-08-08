@@ -127,5 +127,10 @@ func (c *Conversation) save() {
 
 // StartConversation creates a new conversation or continues an existing one.
 func (p *Project) StartConversation() *Conversation {
-	return NewConversation(p, "current")
+	id := p.CurrentConversationID()
+	if id == "" {
+		id = "current"
+		_ = p.SetCurrentConversationID(id)
+	}
+	return NewConversation(p, id)
 }

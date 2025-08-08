@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, ReactElement } from 'react';
 import { EventsOn } from '../wailsjs/runtime/runtime';
-import { SendUserMessage, Approve, GetTools, SetModel, GetSettings, SaveSettings, SetWorkspace, ClearConversation } from '../wailsjs/go/bridge/App';
+import { SendUserMessage, Approve, GetTools, SetModel, GetSettings, SaveSettings, SetWorkspace, ClearConversation, GetConversations, LoadConversation, NewConversation } from '../wailsjs/go/bridge/App';
 import * as Bridge from '../wailsjs/go/bridge/App';
 import * as AppBridge from '../wailsjs/go/bridge/App';
 import ReactMarkdown from 'react-markdown';
@@ -265,6 +265,8 @@ const App: React.FC = () => {
     const [projectRules, setProjectRules] = useState<string[]>([]);
     const [newUserRule, setNewUserRule] = useState<string>('');
     const [newProjectRule, setNewProjectRule] = useState<string>('');
+    const [conversations, setConversations] = useState<{ id: string; title: string; updated_at?: string }[]>([]);
+    const [currentConversationId, setCurrentConversationId] = useState<string>('');
 
     useEffect(() => {
         // Listen for new chat messages
@@ -293,9 +295,16 @@ const App: React.FC = () => {
             });
         });
 
-        // Listen for clear chat event to reset UI state
+        // Listen for clear chat event to reset UI state and refresh conversation list
         EventsOn('chat:clear', () => {
             setMessages([]);
+            GetConversations()
+                .then((res: any) => {
+                    setCurrentConversationId(res?.current_id || '');
+                    const list = Array.isArray(res?.conversations) ? res.conversations : [];
+                    setConversations(list.map((c: any) => ({ id: String(c.id), title: String(c.title || c.id), updated_at: String(c.updated_at || '') })));
+                })
+                .catch(() => {});
         });
 
         // Listen for approval requests
@@ -352,6 +361,15 @@ const App: React.FC = () => {
             })
             .catch(() => { });
 
+        // Load conversations list
+        GetConversations()
+            .then((res: any) => {
+                setCurrentConversationId(res?.current_id || '');
+                const list = Array.isArray(res?.conversations) ? res.conversations : [];
+                setConversations(list.map((c: any) => ({ id: String(c.id), title: String(c.title || c.id), updated_at: String(c.updated_at || '') })));
+            })
+            .catch(() => {});
+
         // Load rules
         AppBridge.GetRules()
             .then((r: any) => {
@@ -387,6 +405,22 @@ const App: React.FC = () => {
         SetModel(model).catch(err => {
             console.error("Failed to set model:", err);
         });
+    };
+
+    const handleSelectConversation = (id: string) => {
+        if (!id || id === currentConversationId) return;
+        setCurrentConversationId(id);
+        LoadConversation(id).catch(() => {});
+    };
+
+    const handleNewConversation = () => {
+        NewConversation()
+            .then((id: string) => {
+                setCurrentConversationId(id);
+                // Prepend a placeholder until next refresh
+                setConversations((prev) => [{ id, title: 'New Conversation' }, ...prev]);
+            })
+            .catch(() => {});
     };
 
     return (
@@ -435,6 +469,36 @@ const App: React.FC = () => {
 
                 <Box>
                     <ModelSelector onSelect={handleModelSelect} currentModel={currentModel} />
+                </Box>
+
+                <Box>
+                    <Typography variant="subtitle2" sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span>Conversations</span>
+                        <Button size="small" variant="outlined" onClick={handleNewConversation}>New</Button>
+                    </Typography>
+                    <Paper variant="outlined" sx={{ p: 1, mb: 2 }}>
+                        <List dense sx={{ width: '100%' }}>
+                            {conversations.map((c) => (
+                                <ListItem
+                                    key={c.id}
+                                    disableGutters
+                                    onClick={() => handleSelectConversation(c.id)}
+                                    sx={{ cursor: 'pointer', bgcolor: c.id === currentConversationId ? 'action.selected' : 'transparent', borderRadius: 0.5, px: 1 }}
+                                >
+                                    <ListItemText
+                                        primary={c.title || c.id}
+                                        secondary={c.updated_at ? new Date(c.updated_at).toLocaleString() : undefined}
+                                        primaryTypographyProps={{ fontWeight: c.id === currentConversationId ? 700 : 500 }}
+                                    />
+                                </ListItem>
+                            ))}
+                            {conversations.length === 0 && (
+                                <ListItem disableGutters>
+                                    <ListItemText primary="No conversations yet" />
+                                </ListItem>
+                            )}
+                        </List>
+                    </Paper>
                 </Box>
 
                 <Box>
@@ -809,6 +873,12 @@ const App: React.FC = () => {
                                     .then((r: any) => {
                                         setUserRules(Array.isArray(r?.user) ? r.user : []);
                                         setProjectRules(Array.isArray(r?.project) ? r.project : []);
+                                        return GetConversations();
+                                    })
+                                    .then((res: any) => {
+                                        setCurrentConversationId(res?.current_id || '');
+                                        const list = Array.isArray(res?.conversations) ? res.conversations : [];
+                                        setConversations(list.map((c: any) => ({ id: String(c.id), title: String(c.title || c.id), updated_at: String(c.updated_at || '') })));
                                     })
                                     .finally(() => setWorkspaceOpen(false));
                             }

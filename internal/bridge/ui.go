@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+	"time"
 
 	"github.com/loom/loom/internal/adapter"
 	"github.com/loom/loom/internal/config"
@@ -548,4 +549,66 @@ func strToBool(s string) bool {
 	default:
 		return false
 	}
+}
+
+// GetConversations returns recent conversations and current id for the active workspace.
+func (a *App) GetConversations() map[string]interface{} {
+	result := map[string]interface{}{
+		"current_id":    "",
+		"conversations": []map[string]string{},
+	}
+	if a.engine == nil {
+		return result
+	}
+	id := a.engine.CurrentConversationID()
+	result["current_id"] = id
+	summaries, err := a.engine.ListConversations()
+	if err != nil {
+		return result
+	}
+	list := make([]map[string]string, 0, len(summaries))
+	for _, s := range summaries {
+		list = append(list, map[string]string{
+			"id":         s.ID,
+			"title":      s.Title,
+			"updated_at": s.UpdatedAt.Format(time.RFC3339),
+		})
+	}
+	result["conversations"] = list
+	return result
+}
+
+// LoadConversation switches to the specified conversation and emits its messages to the UI.
+func (a *App) LoadConversation(id string) {
+	if a.engine == nil || id == "" {
+		return
+	}
+	if err := a.engine.SetCurrentConversationID(id); err != nil {
+		log.Printf("LoadConversation: %v", err)
+		return
+	}
+	// Clear UI then replay messages
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "chat:clear")
+	}
+	msgs, err := a.engine.GetConversation(id)
+	if err != nil {
+		log.Printf("LoadConversation: failed to get conversation %s: %v", id, err)
+		return
+	}
+	for _, m := range msgs {
+		a.SendChat(m.Role, m.Content)
+	}
+}
+
+// NewConversation creates a new conversation and clears the UI.
+func (a *App) NewConversation() string {
+	if a.engine == nil {
+		return ""
+	}
+	id := a.engine.NewConversation()
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "chat:clear")
+	}
+	return id
 }
