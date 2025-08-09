@@ -535,7 +535,7 @@ const App: React.FC = () => {
                     </Typography>
                     <Paper variant="outlined" sx={{ p: 1, mb: 2 }}>
                         <List dense sx={{ width: '100%' }}>
-                            {orderedConversations.map((c: { id: string; title: string; updated_at?: string }) => (
+                            {orderedConversations.slice(0, 5).map((c: { id: string; title: string; updated_at?: string }) => (
                                 <ListItem
                                     key={c.id}
                                     disableGutters
