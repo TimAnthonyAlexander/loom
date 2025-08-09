@@ -276,6 +276,17 @@ func (a *App) SendChat(role, text string) {
 
 // EmitAssistant sends partial assistant tokens to the UI.
 func (a *App) EmitAssistant(text string) {
+	// Debug log trimmed content to help diagnose missing reasoning UI
+	if len(text) > 0 {
+		snippet := text
+		if len(snippet) > 120 {
+			snippet = snippet[:120] + "…"
+		}
+		hasReasoning := strings.Contains(text, "[REASONING]") || strings.Contains(text, "[REASONING_DONE]")
+		log.Printf("UI.EmitAssistant: len=%d reasoning_tags=%v snippet=%q", len(text), hasReasoning, snippet)
+	} else {
+		log.Printf("UI.EmitAssistant: empty content emitted")
+	}
 	if a.ctx != nil {
 		runtime.EventsEmit(a.ctx, "assistant-msg", text)
 	} else {

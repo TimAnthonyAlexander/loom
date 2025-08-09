@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -109,6 +110,10 @@ type responsesRequest struct {
 	Temperature  *float64                 `json:"temperature,omitempty"`
 	MaxTokens    *int                     `json:"max_completion_tokens,omitempty"`
 	PreviousID   string                   `json:"previous_response_id,omitempty"`
+	Reasoning    *struct {
+		Effort  string `json:"effort,omitempty"`
+		Summary string `json:"summary,omitempty"`
+	} `json:"reasoning,omitempty"`
 }
 
 func toResponsesInput(msgs []engine.Message) (instructions string, items []map[string]interface{}) {
@@ -168,6 +173,16 @@ func (c *Client) Chat(
 		Input:        input,
 		Stream:       stream,
 	}
+	// Enable reasoning summaries on supported models
+	if isReasoningModel(c.model) {
+		req.Reasoning = &struct {
+			Effort  string `json:"effort,omitempty"`
+			Summary string `json:"summary,omitempty"`
+		}{Effort: "medium", Summary: "auto"}
+		log.Printf("OpenAI Responses: enabling reasoning summaries for model=%s (effort=medium, summary=auto)", c.model)
+	} else {
+		log.Printf("OpenAI Responses: reasoning summaries disabled for non-reasoning model=%s", c.model)
+	}
 	if len(tools) > 0 {
 		req.Tools = convertTools(tools)
 		req.ToolChoice = "auto"
@@ -225,6 +240,7 @@ func (c *Client) Chat(
 		}
 
 		if stream {
+			log.Printf("OpenAI Responses: streaming response started for model=%s", c.model)
 			c.handleResponsesStream(ctx, resp.Body, out)
 			return
 		}
@@ -255,6 +271,10 @@ type sseEvent struct {
 	CallID      string `json:"call_id,omitempty"`
 	Name        string `json:"name,omitempty"`
 	Arguments   string `json:"arguments,omitempty"`
+
+	// Reasoning summary fields
+	SummaryIndex *int   `json:"summary_index,omitempty"`
+	Text         string `json:"text,omitempty"`
 }
 
 type partialCall struct{ Name, Args, CallID string }
@@ -278,10 +298,12 @@ func (c *Client) handleResponsesStream(ctx context.Context, r io.Reader, out cha
 		if !strings.HasPrefix(line, "data: ") {
 			continue
 		}
-		payload := strings.TrimSpace(line[6:])
+        payload := strings.TrimSpace(line[6:])
 		if payload == "" || payload == "[DONE]" {
 			continue
 		}
+        // Debug: log every SSE event name we see with a short payload snippet
+        log.Printf("OpenAI Responses SSE: event=%s payload=%.160q", currentEvent, payload)
 		var ev sseEvent
 		if err := json.Unmarshal([]byte(payload), &ev); err != nil {
 			continue
@@ -294,6 +316,42 @@ func (c *Client) handleResponsesStream(ctx context.Context, r io.Reader, out cha
 				case <-ctx.Done():
 					return
 				case out <- engine.TokenOrToolCall{Token: ev.Delta}:
+				}
+			}
+		case "response.reasoning_summary.delta", "response.reasoning_summary_text.delta":
+			if ev.Delta != "" {
+				log.Printf("OpenAI Responses: reasoning_summary.delta: %.80q", ev.Delta)
+				select {
+				case <-ctx.Done():
+					return
+				case out <- engine.TokenOrToolCall{Token: "[REASONING] " + ev.Delta}:
+				}
+			}
+		case "response.reasoning_summary.done", "response.reasoning_summary_text.done":
+			if ev.Text != "" {
+				log.Printf("OpenAI Responses: reasoning_summary.done: %.120q", ev.Text)
+				select {
+				case <-ctx.Done():
+					return
+				case out <- engine.TokenOrToolCall{Token: "[REASONING_DONE] " + ev.Text}:
+				}
+			}
+		case "response.reasoning.delta":
+			if ev.Delta != "" {
+				log.Printf("OpenAI Responses: reasoning.delta: %.80q", ev.Delta)
+				select {
+				case <-ctx.Done():
+					return
+				case out <- engine.TokenOrToolCall{Token: "[REASONING_RAW] " + ev.Delta}:
+				}
+			}
+		case "response.reasoning.done":
+			if ev.Text != "" {
+				log.Printf("OpenAI Responses: reasoning.done: %.120q", ev.Text)
+				select {
+				case <-ctx.Done():
+					return
+				case out <- engine.TokenOrToolCall{Token: "[REASONING_RAW_DONE] " + ev.Text}:
 				}
 			}
 		case "response.function_call.arguments.delta":
@@ -363,6 +421,10 @@ type responsesNonStream struct {
 			Name      string `json:"name"`
 			Arguments string `json:"arguments"`
 		} `json:"function_call,omitempty"`
+		Summary []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"summary,omitempty"`
 	} `json:"output"`
 }
 
@@ -371,7 +433,23 @@ func (c *Client) handleResponsesNonStreaming(ctx context.Context, body []byte, o
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return
 	}
+	log.Printf("OpenAI Responses: non-stream response with %d output items", len(resp.Output))
 	for _, it := range resp.Output {
+		// Non-streaming reasoning summary
+		if it.Type == "reasoning" && len(it.Summary) > 0 {
+			log.Printf("OpenAI Responses: reasoning summary (non-stream) with %d parts", len(it.Summary))
+			for _, s := range it.Summary {
+				if s.Text != "" {
+					for _, ch := range s.Text {
+						select {
+						case <-ctx.Done():
+							return
+						case out <- engine.TokenOrToolCall{Token: string(ch)}:
+						}
+					}
+				}
+			}
+		}
 		if it.FunctionCall != nil {
 			// Validate arguments if possible
 			argsStr := strings.TrimSpace(it.FunctionCall.Arguments)

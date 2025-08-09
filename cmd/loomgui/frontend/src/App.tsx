@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, ReactElement, useMemo } from 'react';
-import { EventsOn } from '../wailsjs/runtime/runtime';
+import { EventsOn, LogDebug, LogInfo } from '../wailsjs/runtime/runtime';
 import { SendUserMessage, Approve, GetTools, SetModel, GetSettings, SaveSettings, SetWorkspace, ClearConversation, GetConversations, LoadConversation, NewConversation } from '../wailsjs/go/bridge/App';
 import * as Bridge from '../wailsjs/go/bridge/App';
 import * as AppBridge from '../wailsjs/go/bridge/App';
@@ -31,7 +31,12 @@ import {
     TableCell as MuiTableCell,
     TableRow as MuiTableRow,
     TableContainer as MuiTableContainer,
+    Accordion,
+    AccordionSummary,
+    AccordionDetails,
+    LinearProgress,
 } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SendIcon from '@mui/icons-material/Send';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RuleIcon from '@mui/icons-material/Rule';
@@ -267,6 +272,9 @@ const App: React.FC = () => {
     const [newProjectRule, setNewProjectRule] = useState<string>('');
     const [conversations, setConversations] = useState<{ id: string; title: string; updated_at?: string }[]>([]);
     const [currentConversationId, setCurrentConversationId] = useState<string>('');
+    const [reasoningText, setReasoningText] = useState<string>('');
+    const [reasoningOpen, setReasoningOpen] = useState<boolean>(false);
+    const collapseTimerRef = useRef<number | null>(null);
 
     const orderedConversations = useMemo(
         () => {
@@ -288,28 +296,106 @@ const App: React.FC = () => {
 
         // Listen for streaming assistant messages
         EventsOn('assistant-msg', (content: string) => {
+            try { LogDebug(`[UI] assistant-msg len=${content?.length ?? 0}`) } catch {}
+            // Extract reasoning segments and clean assistant content
+            const extractReasoning = (full: string): { clean: string; reasoning: string; done: boolean } => {
+                const markers = [
+                    '[REASONING] ',
+                    '[REASONING_DONE] ',
+                    '[REASONING_RAW] ',
+                    '[REASONING_RAW_DONE] ',
+                ];
+                let pos = 0;
+                let cleanBuilder = '';
+                let reasoningBuilder = '';
+                let done = false;
+
+                const findNextMarker = (from: number): { idx: number; marker: string } | null => {
+                    let bestIdx = -1;
+                    let bestMarker = '';
+                    for (const m of markers) {
+                        const i = full.indexOf(m, from);
+                        if (i !== -1 && (bestIdx === -1 || i < bestIdx)) {
+                            bestIdx = i;
+                            bestMarker = m;
+                        }
+                    }
+                    return bestIdx === -1 ? null : { idx: bestIdx, marker: bestMarker };
+                };
+
+                while (pos < full.length) {
+                    const next = findNextMarker(pos);
+                    if (!next) {
+                        cleanBuilder += full.slice(pos);
+                        break;
+                    }
+                    // Append non-reasoning segment to clean
+                    cleanBuilder += full.slice(pos, next.idx);
+                    const marker = next.marker;
+                    let start = next.idx + marker.length;
+                    // Find the following marker to know where this reasoning segment ends
+                    const following = findNextMarker(start);
+                    const end = following ? following.idx : full.length;
+                    const segment = full.slice(start, end);
+                    reasoningBuilder += segment;
+                    if (marker.includes('DONE')) done = true;
+                    pos = end;
+                }
+                return { clean: cleanBuilder, reasoning: reasoningBuilder, done };
+            };
+
+            const { clean, reasoning, done } = extractReasoning(content);
+            try { LogInfo(`[UI] reasoning chars=${reasoning.length}, done=${done}`) } catch {}
+            const trimmed = reasoning.trim();
+            setReasoningText(trimmed);
+            if (trimmed.length > 0) {
+                if (done) {
+                    // Keep open briefly, then auto-collapse
+                    setReasoningOpen(true);
+                    if (collapseTimerRef.current) {
+                        clearTimeout(collapseTimerRef.current);
+                        collapseTimerRef.current = null;
+                    }
+                    collapseTimerRef.current = window.setTimeout(() => {
+                        setReasoningOpen(false);
+                        collapseTimerRef.current = null;
+                    }, 2000);
+                } else {
+                    // Streaming reasoning, ensure open and cancel any pending collapse
+                    if (collapseTimerRef.current) {
+                        clearTimeout(collapseTimerRef.current);
+                        collapseTimerRef.current = null;
+                    }
+                    setReasoningOpen(true);
+                }
+            }
+
             setMessages((prev: ChatMessage[]) => {
                 const lastMessage = prev[prev.length - 1];
-
-                // If the last message is from the assistant, update it
+                const nextContent = clean;
                 if (lastMessage && lastMessage.role === 'assistant') {
                     return [
                         ...prev.slice(0, -1),
-                        { ...lastMessage, content }
+                        { ...lastMessage, content: nextContent }
                     ];
                 }
-
-                // Otherwise add a new message
                 return [
                     ...prev,
-                    { role: 'assistant', content }
+                    { role: 'assistant', content: nextContent }
                 ];
             });
         });
 
         // Listen for clear chat event to reset UI state and refresh conversation list
         EventsOn('chat:clear', () => {
+            try { LogInfo('[UI] chat:clear received; resetting UI state') } catch {}
             setMessages([]);
+            setReasoningText('');
+            setReasoningOpen(false);
+            if (collapseTimerRef.current) {
+                clearTimeout(collapseTimerRef.current);
+                collapseTimerRef.current = null;
+            }
             GetConversations()
                 .then((res: any) => {
                     setCurrentConversationId(res?.current_id || '');
@@ -593,6 +679,30 @@ const App: React.FC = () => {
                                             {msg.content}
                                         </ReactMarkdown>
                                     </MarkdownErrorBoundary>
+                                    {/* Reasoning panel directly under the last assistant message when active */}
+                                    {index === messages.length - 1 && reasoningText && (
+                                        <Box sx={{ mt: 1 }}>
+                                            <Accordion expanded={reasoningOpen} onChange={(_, exp) => setReasoningOpen(exp)}>
+                                                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                                                    <Typography variant="subtitle2" fontWeight={600}>
+                                                        Planning / Reasoning
+                                                    </Typography>
+                                                </AccordionSummary>
+                                                <AccordionDetails>
+                                                    {reasoningOpen && (
+                                                        <Box sx={{ mb: 1 }}>
+                                                            <LinearProgress />
+                                                        </Box>
+                                                    )}
+                                                    <MarkdownErrorBoundary>
+                                                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                                                            {reasoningText}
+                                                        </ReactMarkdown>
+                                                    </MarkdownErrorBoundary>
+                                                </AccordionDetails>
+                                            </Accordion>
+                                        </Box>
+                                    )}
                                 </Box>
                             )
                         })}
