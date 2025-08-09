@@ -108,6 +108,37 @@ func lastAssistantTurnHasToolUseWithoutThinking(messages []engine.Message) bool 
 	return foundAssistant && hasToolUse && !hasThinkingWithSignature
 }
 
+// lastAssistantTurnHasThinking returns true if the most recent assistant turn
+// contains a preserved thinking block (with a valid signature).
+func lastAssistantTurnHasThinking(messages []engine.Message) bool {
+	foundAssistant := false
+	hasThinkingWithSignature := false
+	for i := len(messages) - 1; i >= 0; i-- {
+		m := messages[i]
+		role := strings.ToLower(m.Role)
+		// These roles delimit turns; once we've seen assistant and hit another role, stop.
+		if role == "user" || role == "system" || role == "tool" || role == "function" {
+			if foundAssistant {
+				break
+			}
+			continue
+		}
+		if role == "assistant" {
+			foundAssistant = true
+			if m.Name == "thinking" && strings.TrimSpace(m.Content) != "" {
+				var payload struct {
+					Thinking  string `json:"thinking"`
+					Signature string `json:"signature"`
+				}
+				if json.Unmarshal([]byte(m.Content), &payload) == nil && payload.Thinking != "" && payload.Signature != "" {
+					hasThinkingWithSignature = true
+				}
+			}
+		}
+	}
+	return hasThinkingWithSignature
+}
+
 // Chat implements the engine.LLM interface for Anthropic Claude.
 func (c *Client) Chat(
 	ctx context.Context,
@@ -173,9 +204,12 @@ func (c *Client) Chat(
 		// Honor stream flag so we can deliver incremental messages & thinking
 		"stream": stream,
 	}
-	// Enable extended thinking when streaming so UI can show reasoning.
-	// Budget kept conservative; configurable later if needed.
-	enableThinking := stream && supportsThinkingForModel(modelID)
+	// Enable extended thinking when allowed or required by transcript.
+	// - If streaming and model supports it → allow thinking.
+	// - If the last assistant turn has a signed thinking block → enable thinking even if not streaming (replay requirement).
+	modelSupportsThinking := supportsThinkingForModel(modelID)
+	mustReplayThinking := lastAssistantTurnHasThinking(messages)
+	enableThinking := modelSupportsThinking && (stream || mustReplayThinking)
 
 	// If the last assistant turn in history includes tool_use without a preceding
 	// preserved thinking block, Anthropic requires either: (a) disable thinking or
@@ -240,7 +274,9 @@ func (c *Client) Chat(
 			req.Header.Set("Cache-Control", "no-cache")
 			req.Header.Set("Connection", "keep-alive")
 			// Opt-in to Anthropic interleaved thinking beta (no-op on unsupported models)
-			req.Header.Set("interleaved-thinking-2025-05-14", "true")
+			if enableThinking {
+				req.Header.Set("interleaved-thinking-2025-05-14", "true")
+			}
 		}
 		// Removed debug log for API key
 		// Anthropic requires 'x-api-key' header, not 'Authorization'
