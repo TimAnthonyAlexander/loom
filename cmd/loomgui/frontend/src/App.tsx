@@ -34,7 +34,6 @@ import {
     Accordion,
     AccordionSummary,
     AccordionDetails,
-    LinearProgress,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SendIcon from '@mui/icons-material/Send';
@@ -614,11 +613,6 @@ const App: React.FC = () => {
                                                     </Typography>
                                                 </AccordionSummary>
                                                 <AccordionDetails>
-                                                    {reasoningOpen && (
-                                                        <Box sx={{ mb: 1 }}>
-                                                            <LinearProgress />
-                                                        </Box>
-                                                    )}
                                                     <MarkdownErrorBoundary>
                                                         <Box sx={{ color: 'text.secondary' }}>
                                                             <ReactMarkdown
