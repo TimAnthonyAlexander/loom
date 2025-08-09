@@ -288,10 +288,10 @@ const App: React.FC = () => {
         [conversations, currentConversationId]
     );
 
-    // Track the index of the last assistant message to anchor the reasoning panel
-    const lastAssistantIdx = useMemo(() => {
+    // Track the index of the last user message to anchor the reasoning panel before the assistant reply
+    const lastUserIdx = useMemo(() => {
         for (let i = messages.length - 1; i >= 0; i--) {
-            if (messages[i]?.role === 'assistant') return i;
+            if (messages[i]?.role === 'user') return i;
         }
         return -1;
     }, [messages]);
@@ -600,8 +600,8 @@ const App: React.FC = () => {
 
                             return (
                                 <Box key={index} {...(containerProps as any)}>
-                                    {/* Reasoning panel shown above the last assistant message when active */}
-                                    {index === lastAssistantIdx && reasoningText && (
+                                    {/* Reasoning panel shown after the last user message and before the assistant reply */}
+                                    {index === lastUserIdx && reasoningText && (
                                         <Box sx={{ mb: 1 }}>
                                             <Accordion
                                                 expanded={reasoningOpen}
