@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/loom/loom/internal/adapter"
-	responses "github.com/loom/loom/internal/adapter/openai/responses"
 	"github.com/loom/loom/internal/bridge"
 	"github.com/loom/loom/internal/config"
 	"github.com/loom/loom/internal/engine"
@@ -77,9 +76,7 @@ func main() {
 	llm, err := adapter.New(configAdapter)
 	if err != nil {
 		log.Printf("Warning: Failed to initialize LLM adapter: %v", err)
-		log.Printf("Using OpenAI as fallback")
-		// Prefer Responses API fallback with a reasoning-capable default
-		llm = responses.New(os.Getenv("OPENAI_API_KEY"), "o4-mini")
+		llm = nil
 	}
 
 	// Initialize memory store

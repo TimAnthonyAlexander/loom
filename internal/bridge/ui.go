@@ -127,56 +127,19 @@ func (a *App) SetModel(model string) {
 		return
 	}
 
-	// Determine API key based on provider, preferring persisted settings, then env
+	// Determine API key based on provider using persisted settings only
 	var apiKey string
 	switch provider {
 	case adapter.ProviderOpenAI:
-		if a.settings.OpenAIAPIKey != "" {
-			apiKey = a.settings.OpenAIAPIKey
-		} else {
-			apiKey = os.Getenv("OPENAI_API_KEY")
-		}
+		apiKey = a.settings.OpenAIAPIKey
 	case adapter.ProviderAnthropic:
-		if a.settings.AnthropicAPIKey != "" {
-			apiKey = a.settings.AnthropicAPIKey
-		} else {
-			apiKey = os.Getenv("ANTHROPIC_API_KEY")
-		}
+		apiKey = a.settings.AnthropicAPIKey
 	default:
 		apiKey = a.config.APIKey // Keep existing key for other providers like Ollama
 	}
 
-	// Update the configuration
-	newConfig := adapter.Config{
-		Provider: provider,
-		Model:    modelID,
-		APIKey:   apiKey,
-		Endpoint: a.config.Endpoint,
-	}
-
-	// Removed verbose debug log containing API key
-
-	// Create a new LLM adapter with the updated model
-	llm, err := adapter.New(newConfig)
-	if err != nil {
-		log.Printf("Failed to create new LLM adapter: %v", err)
-		return
-	}
-
-	// Update the engine with the new LLM
-	if a.engine != nil {
-		a.engine.SetLLM(llm)
-		// Update stored config
-		a.config = newConfig
-		// Inform engine of current model label for titling
-		a.engine.SetModelLabel(string(provider) + ":" + modelID)
-	} else {
-		log.Println("Engine not initialized")
-	}
-
-	// Persist last selected model to settings
+	// Persist last selected model to settings immediately (even if LLM init fails)
 	a.ensureSettingsLoaded()
-	// Compose back to provider-prefixed model string for persistence
 	var providerPrefix string
 	switch provider {
 	case adapter.ProviderOpenAI:
@@ -191,6 +154,30 @@ func (a *App) SetModel(model string) {
 	a.settings.LastModel = providerPrefix + ":" + modelID
 	if err := config.Save(a.settings); err != nil {
 		log.Printf("Failed to persist last model: %v", err)
+	}
+
+	// Update the configuration
+	newConfig := adapter.Config{
+		Provider: provider,
+		Model:    modelID,
+		APIKey:   apiKey,
+		Endpoint: a.config.Endpoint,
+	}
+
+	// Create a new LLM adapter with the updated model
+	llm, err := adapter.New(newConfig)
+	if err != nil {
+		log.Printf("Failed to create new LLM adapter: %v", err)
+		return
+	}
+
+	// Update the engine with the new LLM
+	if a.engine != nil {
+		a.engine.SetLLM(llm)
+		a.config = newConfig
+		a.engine.SetModelLabel(string(provider) + ":" + modelID)
+	} else {
+		log.Println("Engine not initialized")
 	}
 }
 
@@ -304,15 +291,9 @@ func (a *App) GetSettings() map[string]string {
 	if lastWorkspace == "" && a.engine != nil {
 		lastWorkspace = a.engine.Workspace()
 	}
-	// Fallback API keys to environment if not persisted
+	// Do not fallback API keys to environment; only return persisted values
 	openaiKey := s.OpenAIAPIKey
-	if openaiKey == "" {
-		openaiKey = os.Getenv("OPENAI_API_KEY")
-	}
 	anthropicKey := s.AnthropicAPIKey
-	if anthropicKey == "" {
-		anthropicKey = os.Getenv("ANTHROPIC_API_KEY")
-	}
 	return map[string]string{
 		"openai_api_key":     openaiKey,
 		"anthropic_api_key":  anthropicKey,

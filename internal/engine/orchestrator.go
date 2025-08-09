@@ -346,6 +346,12 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 
 	// Set up the adapter (LLM)
 	adapter := e.llm
+	if adapter == nil {
+		if e.bridge != nil {
+			e.bridge.SendChat("system", "No model is configured. Open Settings to enter your API key and select a model.")
+		}
+		return errors.New("llm not configured")
+	}
 
 	// Track whether any tool has been used since the latest user message
 	toolsUsed := false

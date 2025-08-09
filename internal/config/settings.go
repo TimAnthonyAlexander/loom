@@ -22,8 +22,19 @@ type Settings struct {
 }
 
 // settingsFilePath returns the absolute path to the settings JSON file
-// using the OS-specific user config directory, under "loom/settings.json".
+// under the user's home directory at ~/.loom/settings.json
 func settingsFilePath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve HOME: %w", err)
+	}
+	loomDir := filepath.Join(home, ".loom")
+	return filepath.Join(loomDir, "settings.json"), nil
+}
+
+// legacySettingsFilePath returns the old settings location under the OS config dir
+// e.g. macOS: ~/Library/Application Support/loom/settings.json
+func legacySettingsFilePath() (string, error) {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve user config dir: %w", err)
@@ -46,13 +57,26 @@ func ensureDir(path string) error {
 
 // Load reads settings from disk. If the settings file doesn't exist, it returns an empty Settings.
 func Load() (Settings, error) {
-	path, err := settingsFilePath()
+	// Prefer new location
+	newPath, err := settingsFilePath()
 	if err != nil {
 		return Settings{}, err
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(newPath)
 	if err != nil {
 		if os.IsNotExist(err) {
+			// Try legacy location
+			legacyPath, lerr := legacySettingsFilePath()
+			if lerr == nil {
+				if legacyData, rerr := os.ReadFile(legacyPath); rerr == nil && len(legacyData) > 0 {
+					var legacy Settings
+					if jerr := json.Unmarshal(legacyData, &legacy); jerr == nil {
+						// Migrate by saving to new path
+						_ = Save(legacy)
+						return legacy, nil
+					}
+				}
+			}
 			return Settings{}, nil
 		}
 		return Settings{}, fmt.Errorf("failed to read settings: %w", err)
