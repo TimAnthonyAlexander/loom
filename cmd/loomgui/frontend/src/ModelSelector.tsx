@@ -41,11 +41,8 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onSelect, currentModel })
         ]
 
         setModels(availableModels)
-
-        if (!currentModel && availableModels.length > 0) {
-            setSelected(availableModels[0].id)
-            onSelect(availableModels[0].id)
-        }
+        // Do not auto-select a default; wait for persisted currentModel or user selection
+        // If parent passes a currentModel later, it will be applied in the next effect
     }, [currentModel, onSelect])
 
     useEffect(() => {
