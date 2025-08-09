@@ -70,6 +70,38 @@ func (c *Client) WithMaxTokens(maxTokens int) *Client {
 	return c
 }
 
+// lastAssistantTurnHasToolUseWithoutThinking inspects the message history to
+// determine if the most recent assistant turn includes tool_use but lacks any
+// preserved thinking block content in that turn. This helps decide whether to
+// disable thinking to satisfy Anthropic's requirement.
+func lastAssistantTurnHasToolUseWithoutThinking(messages []engine.Message) bool {
+    // Scan from the end to find the last assistant turn boundary.
+    foundAssistant := false
+    hasToolUse := false
+    hasThinking := false
+    for i := len(messages) - 1; i >= 0; i-- {
+        m := messages[i]
+        if strings.ToLower(m.Role) == "user" || strings.ToLower(m.Role) == "system" || strings.ToLower(m.Role) == "tool" || strings.ToLower(m.Role) == "function" {
+            if foundAssistant {
+                break
+            }
+            continue
+        }
+        if strings.ToLower(m.Role) == "assistant" {
+            foundAssistant = true
+            // thinking blocks are recorded as assistant with Name=="thinking"
+            if m.Name == "thinking" && strings.TrimSpace(m.Content) != "" {
+                hasThinking = true
+            }
+            // tool_use messages are recorded as assistant with Name set and ToolID present
+            if m.Name != "" && m.ToolID != "" {
+                hasToolUse = true
+            }
+        }
+    }
+    return foundAssistant && hasToolUse && !hasThinking
+}
+
 // Chat implements the engine.LLM interface for Anthropic Claude.
 func (c *Client) Chat(
 	ctx context.Context,
@@ -97,8 +129,8 @@ func (c *Client) Chat(
 		}
 	}
 
-	// Convert messages and tools to Claude format (excluding system messages)
-	claudeMessages := convertMessages(messages)
+    // Convert messages and tools to Claude format (excluding system messages)
+    claudeMessages := convertMessages(messages)
 	// Anthropic requires the last message to be from the user. If not, append
 	// a minimal nudge from user to prompt a continuation/tool call.
 	if len(claudeMessages) == 0 {
@@ -135,9 +167,19 @@ func (c *Client) Chat(
 		// Honor stream flag so we can deliver incremental messages & thinking
 		"stream": stream,
 	}
-	// Enable extended thinking when streaming so UI can show reasoning.
-	// Budget kept conservative; configurable later if needed.
-	if stream {
+    // Enable extended thinking when streaming so UI can show reasoning.
+    // Budget kept conservative; configurable later if needed.
+    enableThinking := stream && supportsThinkingForModel(modelID)
+
+    // If the last assistant turn in history includes tool_use without a preceding
+    // preserved thinking block, Anthropic requires either: (a) disable thinking or
+    // (b) include the previous thinking unmodified. We choose (a) automatically
+    // to avoid 400s; the engine will still show tokens normally.
+    if enableThinking && lastAssistantTurnHasToolUseWithoutThinking(messages) {
+        enableThinking = false
+    }
+
+    if enableThinking {
 		// Constrain thinking budget to always be < max_tokens and within a reasonable cap
 		budget := maxTokens - 1
 		if budget > 1024 {
@@ -184,13 +226,15 @@ func (c *Client) Chat(
 			return
 		}
 
-		// Set headers
+        // Set headers
 		req.Header.Set("Content-Type", "application/json")
 		// Streaming responses are delivered via Server-Sent Events
 		if stream {
 			req.Header.Set("Accept", "text/event-stream")
 			req.Header.Set("Cache-Control", "no-cache")
 			req.Header.Set("Connection", "keep-alive")
+            // Opt-in to Anthropic interleaved thinking beta (no-op on unsupported models)
+            req.Header.Set("interleaved-thinking-2025-05-14", "true")
 		}
 		// Removed debug log for API key
 		// Anthropic requires 'x-api-key' header, not 'Authorization'
@@ -337,19 +381,19 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 				}
 			case "input_json_delta":
 				bs.InputJSON += ev.Delta.PartialJSON
-			case "thinking_delta":
-				if ev.Delta.Thinking != "" {
-					bs.ThinkingBuf += ev.Delta.Thinking
-					select {
-					case <-ctx.Done():
-						return
-					case ch <- engine.TokenOrToolCall{Token: "[REASONING] " + ev.Delta.Thinking}:
-					}
-				}
+            case "thinking_delta":
+                if ev.Delta.Thinking != "" {
+                    bs.ThinkingBuf += ev.Delta.Thinking
+                    select {
+                    case <-ctx.Done():
+                        return
+                    case ch <- engine.TokenOrToolCall{Token: "[REASONING] " + ev.Delta.Thinking}:
+                    }
+                }
 			case "signature_delta":
 				// Ignore for now
 			}
-		case "content_block_stop":
+        case "content_block_stop":
 			bs := blocks[ev.Index]
 			if bs == nil {
 				continue
@@ -372,7 +416,8 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 				case <-ctx.Done():
 					return
 				case ch <- engine.TokenOrToolCall{ToolCall: tc}:
-					return
+                    // Do not return immediately; allow following blocks like message_stop
+                    // to be consumed, but we will break out by returning at message_stop.
 				}
 			}
 			if bs.BlockType == "thinking" {
@@ -463,66 +508,102 @@ func (c *Client) handleNonStreamingResponse(ctx context.Context, body io.Reader,
 
 // convertMessages transforms engine messages to Anthropic Claude format.
 func convertMessages(messages []engine.Message) []map[string]interface{} {
-	result := make([]map[string]interface{}, 0, len(messages))
+    result := make([]map[string]interface{}, 0, len(messages))
 
-	for _, msg := range messages {
-		// Skip system messages here; included via top-level system field
-		if strings.ToLower(msg.Role) == "system" {
-			continue
-		}
+    // We coalesce consecutive assistant messages into a single assistant message
+    // with an ordered list of content blocks, so that if thinking and tool_use
+    // occurred in the same turn, the final assistant message can start with a
+    // thinking block as required by Anthropic.
+    flushAssistant := func(pending *[]map[string]interface{}) {
+        if len(*pending) == 0 {
+            return
+        }
+        result = append(result, map[string]interface{}{
+            "role":    "assistant",
+            "content": *pending,
+        })
+        *pending = nil
+    }
 
-		claudeMsg := map[string]interface{}{}
+    var pendingAssistant []map[string]interface{}
 
-		// Special handling: assistant tool_use messages recorded by the engine
-		if msg.Role == "assistant" && msg.Name != "" && msg.ToolID != "" {
-			claudeMsg["role"] = "assistant"
-			// Parse input JSON if possible; default to empty object
-			var input any
-			if strings.TrimSpace(msg.Content) == "" {
-				input = map[string]any{}
-			} else {
-				if err := json.Unmarshal([]byte(msg.Content), &input); err != nil {
-					input = map[string]any{}
-				}
-			}
-			claudeMsg["content"] = []map[string]interface{}{
-				{
-					"type":  "tool_use",
-					"id":    msg.ToolID,
-					"name":  msg.Name,
-					"input": input,
-				},
-			}
-			result = append(result, claudeMsg)
-			continue
-		}
+    for _, msg := range messages {
+        // Skip system messages here; included via top-level system field
+        if strings.ToLower(msg.Role) == "system" {
+            continue
+        }
 
-		// Default role mapping after handling tool_use above
-		claudeMsg["role"] = convertRole(msg.Role)
+        switch msg.Role {
+        case "assistant":
+            // Build appropriate content item
+            if msg.Name == "thinking" {
+                pendingAssistant = append(pendingAssistant, map[string]interface{}{
+                    "type":     "thinking",
+                    "thinking": msg.Content,
+                })
+                continue
+            }
+            if msg.Name != "" && msg.ToolID != "" {
+                // tool_use item
+                var input any
+                if strings.TrimSpace(msg.Content) == "" {
+                    input = map[string]any{}
+                } else if err := json.Unmarshal([]byte(msg.Content), &input); err != nil {
+                    input = map[string]any{}
+                }
+                pendingAssistant = append(pendingAssistant, map[string]interface{}{
+                    "type":  "tool_use",
+                    "id":    msg.ToolID,
+                    "name":  msg.Name,
+                    "input": input,
+                })
+                continue
+            }
+            // Plain assistant text
+            pendingAssistant = append(pendingAssistant, map[string]interface{}{
+                "type": "text",
+                "text": msg.Content,
+            })
+        case "tool", "function":
+            // Flush any pending assistant content before switching roles
+            flushAssistant(&pendingAssistant)
+            // Tool results are sent from the user with a tool_result block
+            result = append(result, map[string]interface{}{
+                "role": "user",
+                "content": []map[string]interface{}{
+                    {
+                        "type":        "tool_result",
+                        "tool_use_id": msg.ToolID,
+                        "content":     msg.Content,
+                        "is_error":    false,
+                    },
+                },
+            })
+        default:
+            // Flush any pending assistant content before switching roles
+            flushAssistant(&pendingAssistant)
+            // user message or others
+            result = append(result, map[string]interface{}{
+                "role": "user",
+                "content": []map[string]interface{}{
+                    {
+                        "type": "text",
+                        "text": msg.Content,
+                    },
+                },
+            })
+        }
+    }
 
-		// Handle content based on role
-		switch msg.Role {
-		case "function", "tool":
-			claudeMsg["content"] = []map[string]interface{}{
-				{
-					"type":        "tool_result",
-					"tool_use_id": msg.ToolID,
-					"content":     msg.Content,
-				},
-			}
-		default:
-			claudeMsg["content"] = []map[string]interface{}{
-				{
-					"type": "text",
-					"text": msg.Content,
-				},
-			}
-		}
+    // Flush trailing assistant content
+    if len(pendingAssistant) > 0 {
+        result = append(result, map[string]interface{}{
+            "role":    "assistant",
+            "content": pendingAssistant,
+        })
+    }
 
-		result = append(result, claudeMsg)
-	}
-
-	return result
+    return result
 }
 
 // convertRole maps standard roles to Claude roles.
@@ -606,4 +687,20 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// supportsThinkingForModel returns whether the Anthropic model supports the
+// "thinking" parameter. We disable thinking for all `claude-3-*` models
+// except the newer `claude-3-5-*` and `claude-3-7-*` series. All other models
+// (e.g., 3.5, 3.7, 4.x) keep the existing behavior.
+func supportsThinkingForModel(modelID string) bool {
+	// Normalize common provider prefix already trimmed to modelID earlier.
+	// Only block classic 3.x (opus/sonnet/haiku) which do not support thinking.
+	if strings.HasPrefix(modelID, "claude-3-") {
+		if strings.HasPrefix(modelID, "claude-3-5-") || strings.HasPrefix(modelID, "claude-3-7-") {
+			return true
+		}
+		return false
+	}
+	return true
 }

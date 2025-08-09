@@ -435,25 +435,35 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 
 				// Got a token
 				tok := item.Token
-				if strings.HasPrefix(tok, "[REASONING] ") {
-					e.bridge.EmitReasoning(strings.TrimPrefix(tok, "[REASONING] "), false)
-					reasoningAccumulated = true
-					continue
-				}
-				if strings.HasPrefix(tok, "[REASONING_RAW] ") {
-					e.bridge.EmitReasoning(strings.TrimPrefix(tok, "[REASONING_RAW] "), false)
-					reasoningAccumulated = true
-					continue
-				}
+                if strings.HasPrefix(tok, "[REASONING] ") {
+                    text := strings.TrimPrefix(tok, "[REASONING] ")
+                    // Persist thinking so Anthropic can continue across tool calls
+                    if convo != nil {
+                        convo.AddAssistantThinking(text)
+                    }
+                    e.bridge.EmitReasoning(text, false)
+                    reasoningAccumulated = true
+                    continue
+                }
+                if strings.HasPrefix(tok, "[REASONING_RAW] ") {
+                    text := strings.TrimPrefix(tok, "[REASONING_RAW] ")
+                    if convo != nil {
+                        convo.AddAssistantThinking(text)
+                    }
+                    e.bridge.EmitReasoning(text, false)
+                    reasoningAccumulated = true
+                    continue
+                }
 				if strings.HasPrefix(tok, "[REASONING_DONE] ") {
 					text := strings.TrimPrefix(tok, "[REASONING_DONE] ")
-					if reasoningAccumulated {
+                    if reasoningAccumulated {
 						e.bridge.EmitReasoning("", true)
 					} else if strings.TrimSpace(text) != "" {
 						e.bridge.EmitReasoning(text, true)
 					} else {
 						e.bridge.EmitReasoning("", true)
 					}
+                    // No need to persist a separate DONE marker; thinking content is already stored.
 					// Do not add to assistant content
 					continue
 				}

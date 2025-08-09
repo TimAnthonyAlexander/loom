@@ -72,6 +72,18 @@ func (c *Conversation) AddAssistant(content string) {
 	c.save()
 }
 
+// AddAssistantThinking records an assistant thinking block so it can be
+// preserved across tool calls for providers that require it (e.g., Anthropic).
+func (c *Conversation) AddAssistantThinking(content string) {
+    c.messages = append(c.messages, Message{
+        Role:      "assistant",
+        Name:      "thinking",
+        Content:   content,
+        Timestamp: time.Now(),
+    })
+    c.save()
+}
+
 // AddTool adds a tool message to the conversation.
 func (c *Conversation) AddTool(name string, content string) {
 	c.messages = append(c.messages, Message{

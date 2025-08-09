@@ -34,11 +34,13 @@ import {
     Accordion,
     AccordionSummary,
     AccordionDetails,
+    CircularProgress,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SendIcon from '@mui/icons-material/Send';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RuleIcon from '@mui/icons-material/Rule';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 
 // Custom table components using MUI Table APIs
 const CustomTable = ({ children }: any) => (
@@ -592,8 +594,80 @@ const App: React.FC = () => {
                     <Stack spacing={2}>
                         {messages.map((msg: ChatMessage, index: number) => {
                             const isUser = msg.role === 'user'
+                            const isSystem = msg.role === 'system'
+                            const isLastMessage = index === messages.length - 1
+                            const showSpinner = isSystem && isLastMessage && busy
+
+                            if (isSystem) {
+                                return (
+                                    <Box
+                                        key={index}
+                                        sx={{
+                                            p: 1.25,
+                                            borderRadius: 1.5,
+                                            border: '1px solid',
+                                            borderColor: 'divider',
+                                            bgcolor: 'grey.50',
+                                            color: 'text.secondary',
+                                        }}
+                                    >
+                                        <Stack direction="row" spacing={1.25} alignItems="flex-start">
+                                            <Box sx={{ pt: '3px' }}>
+                                                {showSpinner ? (
+                                                    <CircularProgress size={14} thickness={5} />
+                                                ) : (
+                                                    <InfoOutlinedIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
+                                                )}
+                                            </Box>
+                                            <Box sx={{ flex: 1 }}>
+                                                <MarkdownErrorBoundary>
+                                                    <ReactMarkdown
+                                                        remarkPlugins={[remarkGfm, remarkBreaks]}
+                                                        components={{
+                                                            code({ node, inline, className, children, ...props }: any) {
+                                                                const match = /language-(\w+)/.exec(className || '')
+                                                                return !inline && match ? (
+                                                                    <SyntaxHighlighter
+                                                                        style={oneLightStyle as any}
+                                                                        language={match[1]}
+                                                                        PreTag="div"
+                                                                    >
+                                                                        {String(children).replace(/\n$/, '')}
+                                                                    </SyntaxHighlighter>
+                                                                ) : (
+                                                                    <Box
+                                                                        component="code"
+                                                                        className={className}
+                                                                        sx={{
+                                                                            bgcolor: 'action.hover',
+                                                                            borderRadius: 1,
+                                                                            px: 0.5,
+                                                                            py: 0.25,
+                                                                            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                                                        }}
+                                                                        {...props}
+                                                                    >
+                                                                        {children}
+                                                                    </Box>
+                                                                )
+                                                            },
+                                                            table: CustomTable,
+                                                            tr: CustomTableRow,
+                                                            td: CustomTableCell,
+                                                            th: CustomTableHeader,
+                                                        }}
+                                                    >
+                                                        {msg.content}
+                                                    </ReactMarkdown>
+                                                </MarkdownErrorBoundary>
+                                            </Box>
+                                        </Stack>
+                                    </Box>
+                                )
+                            }
+
                             const containerProps = isUser
-                                ? { component: Box, sx: { p: 2, border: '0.1px solid #cccccc', borderRadius: 2, } }
+                                ? { component: Box, sx: { p: 2, border: '0.1px solid #cccccc', borderRadius: 2 } }
                                 : { component: Box, sx: { py: 1, borderTop: '0.1px solid #eeeeee', borderBottom: '0.1px solid #eeeeee' } }
 
                             return (
