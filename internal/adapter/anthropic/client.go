@@ -135,13 +135,37 @@ func (c *Client) Chat(
 
 	// Prepare the request body
 	// Anthropic expects model IDs like "claude-opus-4-20250514" without provider prefix
+	// Ensure max_tokens is compatible with thinking budget when streaming
+	maxTokens := c.maxTokens
+	if stream && maxTokens < 2 {
+		maxTokens = 2
+	}
 	requestBody := map[string]interface{}{
-		"model":       modelID,
-		"messages":    claudeMessages,
-		"max_tokens":  c.maxTokens, // Required parameter for Anthropic API
-		"temperature": 0.2,
-		// Temporarily disable streaming for reliability until SSE parser is hardened
-		"stream": false,
+		"model":      modelID,
+		"messages":   claudeMessages,
+		"max_tokens": maxTokens, // Required parameter for Anthropic API
+		// Honor stream flag so we can deliver incremental messages & thinking
+		"stream": stream,
+	}
+	// Enable extended thinking when streaming so UI can show reasoning.
+	// Budget kept conservative; configurable later if needed.
+	if stream {
+		// Constrain thinking budget to always be < max_tokens and within a reasonable cap
+		budget := maxTokens - 1
+		if budget > 1024 {
+			budget = 1024
+		}
+		if budget < 1 {
+			budget = 1
+		}
+		requestBody["thinking"] = map[string]interface{}{
+			"type":          "enabled",
+			"budget_tokens": budget,
+		}
+		// Anthropic requires temperature to be 1 when thinking is enabled
+		requestBody["temperature"] = 1
+	} else {
+		requestBody["temperature"] = 0.2
 	}
 	if systemPrompt != "" {
 		requestBody["system"] = systemPrompt
@@ -189,7 +213,7 @@ func (c *Client) Chat(
 		fmt.Printf("DEBUG: Using anthropic-version: %s\n", c.apiVersion)
 
 		// Log request basics
-		fmt.Printf("Anthropic: POST %s | model=%s | stream=false | messages=%d | tools=%d\n", c.endpoint, modelID, len(claudeMessages), len(claudeTools))
+		fmt.Printf("Anthropic: POST %s | model=%s | stream=%v | messages=%d | tools=%d\n", c.endpoint, modelID, stream, len(claudeMessages), len(claudeTools))
 		// Make the request
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
@@ -221,8 +245,12 @@ func (c *Client) Chat(
 		}
 
 		fmt.Printf("Anthropic: status=%d content-type=%s\n", resp.StatusCode, resp.Header.Get("Content-Type"))
-		// Handle response (non-streaming for now)
-		c.handleNonStreamingResponse(ctx, resp.Body, resultCh)
+		// Handle response
+		if stream {
+			c.handleStreamingResponse(ctx, resp.Body, resultCh)
+		} else {
+			c.handleNonStreamingResponse(ctx, resp.Body, resultCh)
+		}
 	}()
 
 	return resultCh, nil
@@ -238,138 +266,167 @@ func truncateString(s string, maxLength int) string {
 
 // handleStreamingResponse processes a streaming response from the Anthropic API.
 func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch chan<- engine.TokenOrToolCall) {
-	scanner := bufio.NewScanner(body)
-	// Increase buffer for large SSE lines
-	buf := make([]byte, 0, 64*1024)
-	scanner.Buffer(buf, 1024*1024)
+	sc := bufio.NewScanner(body)
+	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
-	// Keep track of the current assistant response
-	var currentContent string
-	var toolCallID string
-	var toolCallName string
-	var toolCallInput json.RawMessage
+	type blockState struct {
+		BlockType   string
+		ToolID      string
+		ToolName    string
+		InputJSON   string
+		ThinkingBuf string
+	}
+	blocks := make(map[int]*blockState)
+	currentEvent := ""
 
-	// Process each line in the stream
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		// Skip empty lines
+	for sc.Scan() {
+		line := sc.Text()
 		if line == "" {
 			continue
 		}
-
-		// Lines from the stream start with "data: "
-		if !strings.HasPrefix(line, "event: ") && !strings.HasPrefix(line, "data: ") {
-			continue
-		}
-
-		// Check for event type
 		if strings.HasPrefix(line, "event: ") {
-			// Event might indicate content_block_start, content_block_delta, etc.
+			currentEvent = strings.TrimSpace(line[7:])
+			continue
+		}
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		payload := strings.TrimSpace(line[6:])
+		if payload == "" || payload == "[DONE]" {
 			continue
 		}
 
-		// Extract the data part
-		data := strings.TrimPrefix(line, "data: ")
-
-		// Parse the JSON
-		var streamResp struct {
-			Type       string `json:"type"`
-			StopReason string `json:"stop_reason"`
-			Delta      struct {
+		// Define a loose struct to capture common fields
+		var ev struct {
+			Type  string `json:"type"`
+			Index int    `json:"index"`
+			// content_block_start
+			ContentBlock *struct {
+				Type  string `json:"type"`
+				ID    string `json:"id,omitempty"`
+				Name  string `json:"name,omitempty"`
+				Input any    `json:"input,omitempty"`
+			} `json:"content_block,omitempty"`
+			// content_block_delta
+			Delta *struct {
+				Type        string `json:"type"`
+				Text        string `json:"text,omitempty"`
+				PartialJSON string `json:"partial_json,omitempty"`
+				Thinking    string `json:"thinking,omitempty"`
+				Signature   string `json:"signature,omitempty"`
+			} `json:"delta,omitempty"`
+			// message_delta
+			MessageDelta *struct {
+				StopReason string `json:"stop_reason,omitempty"`
+			} `json:"message_delta,omitempty"`
+			// error
+			Error *struct {
 				Type    string `json:"type"`
-				Text    string `json:"text"`
-				ToolUse *struct {
-					ID    string          `json:"id"`
-					Name  string          `json:"name"`
-					Type  string          `json:"type"`
-					Input json.RawMessage `json:"input"`
-				} `json:"tool_use"`
-			} `json:"delta"`
-			Message struct {
-				Content []struct {
-					Type    string `json:"type"`
-					Text    string `json:"text"`
-					ToolUse *struct {
-						ID    string          `json:"id"`
-						Name  string          `json:"name"`
-						Type  string          `json:"type"`
-						Input json.RawMessage `json:"input"`
-					} `json:"tool_use"`
-				} `json:"content"`
-			} `json:"message"`
+				Message string `json:"message"`
+			} `json:"error,omitempty"`
 		}
 
-		if err := json.Unmarshal([]byte(data), &streamResp); err != nil {
-			// Skip malformed JSON
-			fmt.Printf("Anthropic stream unmarshal error: %v, raw: %s\n", err, data)
+		if err := json.Unmarshal([]byte(payload), &ev); err != nil {
+			fmt.Printf("Anthropic SSE unmarshal error: %v, raw: %s\n", err, payload)
 			continue
 		}
 
-		// Handle tool use
-		if streamResp.StopReason == "tool_use" {
-			// Find the tool use block in the message
-			for _, content := range streamResp.Message.Content {
-				if content.ToolUse != nil {
-					toolCall := &engine.ToolCall{
-						ID:   content.ToolUse.ID,
-						Name: content.ToolUse.Name,
-						Args: content.ToolUse.Input,
-					}
-
+		switch currentEvent {
+		case "message_start":
+			// No action
+		case "content_block_start":
+			bs := &blockState{}
+			if ev.ContentBlock != nil {
+				bs.BlockType = ev.ContentBlock.Type
+				if ev.ContentBlock.Type == "tool_use" {
+					bs.ToolID = ev.ContentBlock.ID
+					bs.ToolName = ev.ContentBlock.Name
+				}
+			}
+			blocks[ev.Index] = bs
+		case "content_block_delta":
+			bs := blocks[ev.Index]
+			if bs == nil || ev.Delta == nil {
+				continue
+			}
+			switch ev.Delta.Type {
+			case "text_delta":
+				if ev.Delta.Text != "" {
 					select {
 					case <-ctx.Done():
 						return
-					case ch <- engine.TokenOrToolCall{ToolCall: toolCall}:
-						// Successfully sent tool call
-						return
+					case ch <- engine.TokenOrToolCall{Token: ev.Delta.Text}:
 					}
 				}
-			}
-		}
-
-		// Handle content deltas
-		if streamResp.Type == "content_block_delta" && streamResp.Delta.Type == "text" && streamResp.Delta.Text != "" {
-			select {
-			case <-ctx.Done():
-				return
-			case ch <- engine.TokenOrToolCall{Token: streamResp.Delta.Text}:
-				// Successfully sent token
-				currentContent += streamResp.Delta.Text
-			}
-		}
-
-		// Handle tool use deltas
-		if streamResp.Delta.ToolUse != nil {
-			if streamResp.Delta.ToolUse.ID != "" {
-				toolCallID = streamResp.Delta.ToolUse.ID
-			}
-			if streamResp.Delta.ToolUse.Name != "" {
-				toolCallName = streamResp.Delta.ToolUse.Name
-			}
-			if streamResp.Delta.ToolUse.Input != nil {
-				toolCallInput = streamResp.Delta.ToolUse.Input
-			}
-
-			// If we have all the components of a tool call, send it
-			if toolCallID != "" && toolCallName != "" && toolCallInput != nil {
-				toolCall := &engine.ToolCall{
-					ID:   toolCallID,
-					Name: toolCallName,
-					Args: toolCallInput,
+			case "input_json_delta":
+				bs.InputJSON += ev.Delta.PartialJSON
+			case "thinking_delta":
+				if ev.Delta.Thinking != "" {
+					bs.ThinkingBuf += ev.Delta.Thinking
+					select {
+					case <-ctx.Done():
+						return
+					case ch <- engine.TokenOrToolCall{Token: "[REASONING] " + ev.Delta.Thinking}:
+					}
 				}
-
+			case "signature_delta":
+				// Ignore for now
+			}
+		case "content_block_stop":
+			bs := blocks[ev.Index]
+			if bs == nil {
+				continue
+			}
+			// If this was a tool use, emit a tool call now
+			if bs.BlockType == "tool_use" {
+				argsStr := strings.TrimSpace(bs.InputJSON)
+				if argsStr == "" {
+					argsStr = "{}"
+				}
+				var raw json.RawMessage
+				// Ensure valid JSON; if invalid, wrap as empty object
+				if json.Valid([]byte(argsStr)) {
+					raw = json.RawMessage(argsStr)
+				} else {
+					raw = json.RawMessage("{}")
+				}
+				tc := &engine.ToolCall{ID: bs.ToolID, Name: bs.ToolName, Args: raw}
 				select {
 				case <-ctx.Done():
 					return
-				case ch <- engine.TokenOrToolCall{ToolCall: toolCall}:
-					// Successfully sent tool call
+				case ch <- engine.TokenOrToolCall{ToolCall: tc}:
 					return
 				}
 			}
+			if bs.BlockType == "thinking" {
+				// Signal reasoning done so UI can collapse; no extra text needed
+				select {
+				case <-ctx.Done():
+					return
+				case ch <- engine.TokenOrToolCall{Token: "[REASONING_DONE] "}:
+				}
+			}
+			delete(blocks, ev.Index)
+		case "message_delta":
+			// We could look at stop_reason here, but content_block_stop handles tool_use
+			_ = ev.MessageDelta
+		case "message_stop":
+			// End of assistant turn
+			return
+		case "error":
+			if ev.Error != nil {
+				select {
+				case <-ctx.Done():
+					return
+				case ch <- engine.TokenOrToolCall{Token: fmt.Sprintf("Anthropic error: %s", ev.Error.Message)}:
+					return
+				}
+			}
+		default:
+			// Unknown/ignored events: ping, etc.
 		}
 	}
-	if err := scanner.Err(); err != nil {
+	if err := sc.Err(); err != nil {
 		fmt.Printf("Anthropic stream scanner error: %v\n", err)
 	}
 }
