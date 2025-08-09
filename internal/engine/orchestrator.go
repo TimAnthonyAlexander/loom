@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -41,6 +42,7 @@ type ToolCall struct {
 type UIBridge interface {
 	SendChat(role, text string)
 	EmitAssistant(text string)
+	EmitReasoning(text string, done bool)
 	PromptApproval(actionID string, summary string, diff string) (approved bool)
 	SetBusy(isBusy bool)
 }
@@ -381,6 +383,7 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 		var currentContent string
 		var toolCallReceived *tool.ToolCall
 		streamEnded := false
+		reasoningAccumulated := false
 
 		// Process the stream; if slow, emit a one-time notice but do not break
 		slowTicker := time.NewTicker(20 * time.Second)
@@ -425,7 +428,41 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 				}
 
 				// Got a token
-				currentContent += item.Token
+				tok := item.Token
+				if strings.HasPrefix(tok, "[REASONING] ") {
+					e.bridge.EmitReasoning(strings.TrimPrefix(tok, "[REASONING] "), false)
+					reasoningAccumulated = true
+					continue
+				}
+				if strings.HasPrefix(tok, "[REASONING_RAW] ") {
+					e.bridge.EmitReasoning(strings.TrimPrefix(tok, "[REASONING_RAW] "), false)
+					reasoningAccumulated = true
+					continue
+				}
+				if strings.HasPrefix(tok, "[REASONING_DONE] ") {
+					text := strings.TrimPrefix(tok, "[REASONING_DONE] ")
+					if reasoningAccumulated {
+						e.bridge.EmitReasoning("", true)
+					} else if strings.TrimSpace(text) != "" {
+						e.bridge.EmitReasoning(text, true)
+					} else {
+						e.bridge.EmitReasoning("", true)
+					}
+					// Do not add to assistant content
+					continue
+				}
+				if strings.HasPrefix(tok, "[REASONING_RAW_DONE] ") {
+					text := strings.TrimPrefix(tok, "[REASONING_RAW_DONE] ")
+					if reasoningAccumulated {
+						e.bridge.EmitReasoning("", true)
+					} else if strings.TrimSpace(text) != "" {
+						e.bridge.EmitReasoning(text, true)
+					} else {
+						e.bridge.EmitReasoning("", true)
+					}
+					continue
+				}
+				currentContent += tok
 				e.bridge.EmitAssistant(currentContent)
 			}
 		}

@@ -294,101 +294,50 @@ const App: React.FC = () => {
             setMessages((prev: ChatMessage[]) => [...prev, message]);
         });
 
-        // Listen for streaming assistant messages
+        // Listen for streaming assistant messages (final output only)
         EventsOn('assistant-msg', (content: string) => {
-            try { LogDebug(`[UI] assistant-msg len=${content?.length ?? 0}`) } catch {}
-            // Extract reasoning segments and clean assistant content
-            const extractReasoning = (full: string): { clean: string; reasoning: string; done: boolean } => {
-                const markers = [
-                    '[REASONING] ',
-                    '[REASONING_DONE] ',
-                    '[REASONING_RAW] ',
-                    '[REASONING_RAW_DONE] ',
-                ];
-                let pos = 0;
-                let cleanBuilder = '';
-                let reasoningBuilder = '';
-                let done = false;
-
-                const findNextMarker = (from: number): { idx: number; marker: string } | null => {
-                    let bestIdx = -1;
-                    let bestMarker = '';
-                    for (const m of markers) {
-                        const i = full.indexOf(m, from);
-                        if (i !== -1 && (bestIdx === -1 || i < bestIdx)) {
-                            bestIdx = i;
-                            bestMarker = m;
-                        }
-                    }
-                    return bestIdx === -1 ? null : { idx: bestIdx, marker: bestMarker };
-                };
-
-                while (pos < full.length) {
-                    const next = findNextMarker(pos);
-                    if (!next) {
-                        cleanBuilder += full.slice(pos);
-                        break;
-                    }
-                    // Append non-reasoning segment to clean
-                    cleanBuilder += full.slice(pos, next.idx);
-                    const marker = next.marker;
-                    let start = next.idx + marker.length;
-                    // Find the following marker to know where this reasoning segment ends
-                    const following = findNextMarker(start);
-                    const end = following ? following.idx : full.length;
-                    const segment = full.slice(start, end);
-                    reasoningBuilder += segment;
-                    if (marker.includes('DONE')) done = true;
-                    pos = end;
-                }
-                return { clean: cleanBuilder, reasoning: reasoningBuilder, done };
-            };
-
-            const { clean, reasoning, done } = extractReasoning(content);
-            try { LogInfo(`[UI] reasoning chars=${reasoning.length}, done=${done}`) } catch {}
-            const trimmed = reasoning.trim();
-            setReasoningText(trimmed);
-            if (trimmed.length > 0) {
-                if (done) {
-                    // Keep open briefly, then auto-collapse
-                    setReasoningOpen(true);
-                    if (collapseTimerRef.current) {
-                        clearTimeout(collapseTimerRef.current);
-                        collapseTimerRef.current = null;
-                    }
-                    collapseTimerRef.current = window.setTimeout(() => {
-                        setReasoningOpen(false);
-                        collapseTimerRef.current = null;
-                    }, 2000);
-                } else {
-                    // Streaming reasoning, ensure open and cancel any pending collapse
-                    if (collapseTimerRef.current) {
-                        clearTimeout(collapseTimerRef.current);
-                        collapseTimerRef.current = null;
-                    }
-                    setReasoningOpen(true);
-                }
-            }
-
+            try { LogDebug(`[UI] assistant-msg len=${content?.length ?? 0}`) } catch { }
             setMessages((prev: ChatMessage[]) => {
                 const lastMessage = prev[prev.length - 1];
-                const nextContent = clean;
                 if (lastMessage && lastMessage.role === 'assistant') {
                     return [
                         ...prev.slice(0, -1),
-                        { ...lastMessage, content: nextContent }
+                        { ...lastMessage, content: content || '' }
                     ];
                 }
                 return [
                     ...prev,
-                    { role: 'assistant', content: nextContent }
+                    { role: 'assistant', content: content || '' }
                 ];
             });
         });
 
+        // Listen for explicit reasoning stream
+        EventsOn('assistant-reasoning', (payload: any) => {
+            const text = String(payload?.text || '');
+            const done = Boolean(payload?.done);
+            if (!text && !done) return;
+            setReasoningText((prev: string) => {
+                if (!text) return prev;
+                const prior = prev || '';
+                return prior + text;
+            });
+            if (done) {
+                setReasoningOpen(true);
+                if (collapseTimerRef.current) { clearTimeout(collapseTimerRef.current); collapseTimerRef.current = null; }
+                collapseTimerRef.current = window.setTimeout(() => {
+                    setReasoningOpen(false);
+                    collapseTimerRef.current = null;
+                }, 1200);
+            } else {
+                if (collapseTimerRef.current) { clearTimeout(collapseTimerRef.current); collapseTimerRef.current = null; }
+                setReasoningOpen(true);
+            }
+        });
+
         // Listen for clear chat event to reset UI state and refresh conversation list
         EventsOn('chat:clear', () => {
-            try { LogInfo('[UI] chat:clear received; resetting UI state') } catch {}
+            try { LogInfo('[UI] chat:clear received; resetting UI state') } catch { }
             setMessages([]);
             setReasoningText('');
             setReasoningOpen(false);

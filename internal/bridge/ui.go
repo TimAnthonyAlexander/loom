@@ -294,6 +294,19 @@ func (a *App) EmitAssistant(text string) {
 	}
 }
 
+// EmitReasoning sends reasoning text to the UI with a done flag for summaries
+func (a *App) EmitReasoning(text string, done bool) {
+	if a.ctx != nil {
+		payload := map[string]any{
+			"text": text,
+			"done": done,
+		}
+		runtime.EventsEmit(a.ctx, "assistant-reasoning", payload)
+	} else {
+		log.Println("Warning: Wails context not initialized in EmitReasoning")
+	}
+}
+
 // GetSettings exposes persisted settings to the frontend.
 func (a *App) GetSettings() map[string]string {
 	a.ensureSettingsLoaded()

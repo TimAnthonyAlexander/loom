@@ -18,6 +18,10 @@ export function EmitAssistant(arg1) {
   return window['go']['bridge']['App']['EmitAssistant'](arg1);
 }
 
+export function EmitReasoning(arg1, arg2) {
+  return window['go']['bridge']['App']['EmitReasoning'](arg1, arg2);
+}
+
 export function GetConversations() {
   return window['go']['bridge']['App']['GetConversations']();
 }

@@ -298,12 +298,12 @@ func (c *Client) handleResponsesStream(ctx context.Context, r io.Reader, out cha
 		if !strings.HasPrefix(line, "data: ") {
 			continue
 		}
-        payload := strings.TrimSpace(line[6:])
+		payload := strings.TrimSpace(line[6:])
 		if payload == "" || payload == "[DONE]" {
 			continue
 		}
-        // Debug: log every SSE event name we see with a short payload snippet
-        log.Printf("OpenAI Responses SSE: event=%s payload=%.160q", currentEvent, payload)
+		// Debug: log every SSE event name we see with a short payload snippet
+		log.Printf("OpenAI Responses SSE: event=%s payload=%.160q", currentEvent, payload)
 		var ev sseEvent
 		if err := json.Unmarshal([]byte(payload), &ev); err != nil {
 			continue

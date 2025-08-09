@@ -15,6 +15,8 @@ export function ClearConversation():Promise<void>;
 
 export function EmitAssistant(arg1:string):Promise<void>;
 
+export function EmitReasoning(arg1:string,arg2:boolean):Promise<void>;
+
 export function GetConversations():Promise<Record<string, any>>;
 
 export function GetRules():Promise<Record<string, Array<string>>>;
