@@ -437,20 +437,13 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 				tok := item.Token
                 if strings.HasPrefix(tok, "[REASONING] ") {
                     text := strings.TrimPrefix(tok, "[REASONING] ")
-                    // Persist thinking so Anthropic can continue across tool calls
-                    if convo != nil {
-                        convo.AddAssistantThinking(text)
-                    }
+                    // Show incremental reasoning to the UI but do not persist until the block ends
                     e.bridge.EmitReasoning(text, false)
                     reasoningAccumulated = true
                     continue
                 }
                 if strings.HasPrefix(tok, "[REASONING_SIGNATURE] ") {
-                    sig := strings.TrimPrefix(tok, "[REASONING_SIGNATURE] ")
-                    // Upgrade the last thinking entry (if any) to include signature
-                    if convo != nil {
-                        convo.AddAssistantThinkingSigned("", sig)
-                    }
+                    // Signature is captured in the final JSON event; ignore incremental signature token
                     continue
                 }
                 if strings.HasPrefix(tok, "[REASONING_JSON] ") {
@@ -467,9 +460,7 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
                 }
                 if strings.HasPrefix(tok, "[REASONING_RAW] ") {
                     text := strings.TrimPrefix(tok, "[REASONING_RAW] ")
-                    if convo != nil {
-                        convo.AddAssistantThinking(text)
-                    }
+                    // Show incremental reasoning to the UI but do not persist until the block ends
                     e.bridge.EmitReasoning(text, false)
                     reasoningAccumulated = true
                     continue

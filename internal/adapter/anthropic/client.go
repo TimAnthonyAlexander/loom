@@ -556,26 +556,20 @@ func convertMessages(messages []engine.Message) []map[string]interface{} {
         case "assistant":
             // Build appropriate content item
             if msg.Name == "thinking" {
-                // If content is JSON with thinking+signature, preserve both fields
+                // Only include thinking blocks that have a signature as required by Anthropic.
                 var payload struct {
                     Thinking  string `json:"thinking"`
                     Signature string `json:"signature"`
                 }
-                if json.Unmarshal([]byte(msg.Content), &payload) == nil && payload.Thinking != "" {
+                if json.Unmarshal([]byte(msg.Content), &payload) == nil && payload.Thinking != "" && payload.Signature != "" {
                     item := map[string]interface{}{
                         "type":      "thinking",
                         "thinking":  payload.Thinking,
-                    }
-                    if payload.Signature != "" {
-                        item["signature"] = payload.Signature
+                        "signature": payload.Signature,
                     }
                     pendingAssistant = append(pendingAssistant, item)
-                } else {
-                    pendingAssistant = append(pendingAssistant, map[string]interface{}{
-                        "type":     "thinking",
-                        "thinking": msg.Content,
-                    })
                 }
+                // If no valid signature, omit the thinking block entirely.
                 continue
             }
             if msg.Name != "" && msg.ToolID != "" {
