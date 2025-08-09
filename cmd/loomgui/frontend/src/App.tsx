@@ -288,6 +288,14 @@ const App: React.FC = () => {
         [conversations, currentConversationId]
     );
 
+    // Track the index of the last assistant message to anchor the reasoning panel
+    const lastAssistantIdx = useMemo(() => {
+        for (let i = messages.length - 1; i >= 0; i--) {
+            if (messages[i]?.role === 'assistant') return i;
+        }
+        return -1;
+    }, [messages]);
+
     useEffect(() => {
         // Listen for new chat messages
         EventsOn('chat:new', (message: ChatMessage) => {
@@ -592,6 +600,71 @@ const App: React.FC = () => {
 
                             return (
                                 <Box key={index} {...(containerProps as any)}>
+                                    {/* Reasoning panel shown above the last assistant message when active */}
+                                    {index === lastAssistantIdx && reasoningText && (
+                                        <Box sx={{ mb: 1 }}>
+                                            <Accordion
+                                                expanded={reasoningOpen}
+                                                onChange={(_, exp) => setReasoningOpen(exp)}
+                                                sx={{ boxShadow: 'none', bgcolor: 'transparent', '&:before': { display: 'none' } }}
+                                            >
+                                                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                                                    <Typography variant="subtitle2" fontWeight={600}>
+                                                        Planning / Reasoning
+                                                    </Typography>
+                                                </AccordionSummary>
+                                                <AccordionDetails>
+                                                    {reasoningOpen && (
+                                                        <Box sx={{ mb: 1 }}>
+                                                            <LinearProgress />
+                                                        </Box>
+                                                    )}
+                                                    <MarkdownErrorBoundary>
+                                                        <Box sx={{ color: 'text.secondary' }}>
+                                                        <ReactMarkdown
+                                                            remarkPlugins={[remarkGfm, remarkBreaks]}
+                                                            components={{
+                                                                code({ node, inline, className, children, ...props }: any) {
+                                                                    const match = /language-(\w+)/.exec(className || '')
+                                                                    return !inline && match ? (
+                                                                        <SyntaxHighlighter
+                                                                            style={oneLightStyle as any}
+                                                                            language={match[1]}
+                                                                            PreTag="div"
+                                                                        >
+                                                                            {String(children).replace(/\n$/, '')}
+                                                                        </SyntaxHighlighter>
+                                                                    ) : (
+                                                                        <Box
+                                                                            component="code"
+                                                                            className={className}
+                                                                            sx={{
+                                                                                bgcolor: 'action.hover',
+                                                                                borderRadius: 1,
+                                                                                px: 0.5,
+                                                                                py: 0.25,
+                                                                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                                                            }}
+                                                                            {...props}
+                                                                        >
+                                                                            {children}
+                                                                        </Box>
+                                                                    )
+                                                                },
+                                                                table: CustomTable,
+                                                                tr: CustomTableRow,
+                                                                td: CustomTableCell,
+                                                                th: CustomTableHeader,
+                                                            }}
+                                                        >
+                                                            {reasoningText}
+                                                        </ReactMarkdown>
+                                                        </Box>
+                                                    </MarkdownErrorBoundary>
+                                                </AccordionDetails>
+                                            </Accordion>
+                                        </Box>
+                                    )}
                                     <MarkdownErrorBoundary>
                                         <ReactMarkdown
                                             remarkPlugins={[remarkGfm, remarkBreaks]}
@@ -632,30 +705,6 @@ const App: React.FC = () => {
                                             {msg.content}
                                         </ReactMarkdown>
                                     </MarkdownErrorBoundary>
-                                    {/* Reasoning panel directly under the last assistant message when active */}
-                                    {index === messages.length - 1 && reasoningText && (
-                                        <Box sx={{ mt: 1 }}>
-                                            <Accordion expanded={reasoningOpen} onChange={(_, exp) => setReasoningOpen(exp)}>
-                                                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                                                    <Typography variant="subtitle2" fontWeight={600}>
-                                                        Planning / Reasoning
-                                                    </Typography>
-                                                </AccordionSummary>
-                                                <AccordionDetails>
-                                                    {reasoningOpen && (
-                                                        <Box sx={{ mb: 1 }}>
-                                                            <LinearProgress />
-                                                        </Box>
-                                                    )}
-                                                    <MarkdownErrorBoundary>
-                                                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
-                                                            {reasoningText}
-                                                        </ReactMarkdown>
-                                                    </MarkdownErrorBoundary>
-                                                </AccordionDetails>
-                                            </Accordion>
-                                        </Box>
-                                    )}
                                 </Box>
                             )
                         })}
