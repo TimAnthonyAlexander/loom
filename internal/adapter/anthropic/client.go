@@ -78,7 +78,7 @@ func lastAssistantTurnHasToolUseWithoutThinking(messages []engine.Message) bool 
     // Scan from the end to find the last assistant turn boundary.
     foundAssistant := false
     hasToolUse := false
-    hasThinking := false
+    hasThinkingWithSignature := false
     for i := len(messages) - 1; i >= 0; i-- {
         m := messages[i]
         if strings.ToLower(m.Role) == "user" || strings.ToLower(m.Role) == "system" || strings.ToLower(m.Role) == "tool" || strings.ToLower(m.Role) == "function" {
@@ -91,7 +91,13 @@ func lastAssistantTurnHasToolUseWithoutThinking(messages []engine.Message) bool 
             foundAssistant = true
             // thinking blocks are recorded as assistant with Name=="thinking"
             if m.Name == "thinking" && strings.TrimSpace(m.Content) != "" {
-                hasThinking = true
+                var payload struct {
+                    Thinking  string `json:"thinking"`
+                    Signature string `json:"signature"`
+                }
+                if json.Unmarshal([]byte(m.Content), &payload) == nil && payload.Thinking != "" && payload.Signature != "" {
+                    hasThinkingWithSignature = true
+                }
             }
             // tool_use messages are recorded as assistant with Name set and ToolID present
             if m.Name != "" && m.ToolID != "" {
@@ -99,7 +105,7 @@ func lastAssistantTurnHasToolUseWithoutThinking(messages []engine.Message) bool 
             }
         }
     }
-    return foundAssistant && hasToolUse && !hasThinking
+    return foundAssistant && hasToolUse && !hasThinkingWithSignature
 }
 
 // Chat implements the engine.LLM interface for Anthropic Claude.
