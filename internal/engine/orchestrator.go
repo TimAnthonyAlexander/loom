@@ -402,7 +402,7 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 				return ctx.Err()
 			case <-slowTicker.C:
 				if !slowNotified {
-					e.bridge.SendChat("system", "Still working...")
+					// e.bridge.SendChat("system", "Still working...")
 					slowNotified = true
 				}
 			case item, ok := <-stream:
@@ -418,7 +418,13 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 					// Guard against empty tool names from partial/ambiguous streams
 					if item.ToolCall.Name == "" {
 						// Ignore and continue reading tokens; likely a partial stream
+						if os.Getenv("LOOM_DEBUG_ENGINE") == "1" || strings.EqualFold(os.Getenv("LOOM_DEBUG_ENGINE"), "true") {
+							e.bridge.SendChat("system", "[debug] Received partial tool call with empty name; continuing to read stream")
+						}
 						continue
+					}
+					if os.Getenv("LOOM_DEBUG_ENGINE") == "1" || strings.EqualFold(os.Getenv("LOOM_DEBUG_ENGINE"), "true") {
+						e.bridge.SendChat("system", fmt.Sprintf("[debug] Tool call received: id=%s name=%s argsLen=%d", item.ToolCall.ID, item.ToolCall.Name, len(item.ToolCall.Args)))
 					}
 					toolCallReceived = &tool.ToolCall{
 						ID:   item.ToolCall.ID,
@@ -435,46 +441,46 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 
 				// Got a token
 				tok := item.Token
-                if strings.HasPrefix(tok, "[REASONING] ") {
-                    text := strings.TrimPrefix(tok, "[REASONING] ")
-                    // Show incremental reasoning to the UI but do not persist until the block ends
-                    e.bridge.EmitReasoning(text, false)
-                    reasoningAccumulated = true
-                    continue
-                }
-                if strings.HasPrefix(tok, "[REASONING_SIGNATURE] ") {
-                    // Signature is captured in the final JSON event; ignore incremental signature token
-                    continue
-                }
-                if strings.HasPrefix(tok, "[REASONING_JSON] ") {
-                    raw := strings.TrimPrefix(tok, "[REASONING_JSON] ")
-                    // Persist the full JSON so adapter can replay signature
-                    if convo != nil {
-                        // Try to parse and store; if parse fails, fall back to plain
-                        var tmp map[string]string
-                        if json.Unmarshal([]byte(raw), &tmp) == nil {
-                            convo.AddAssistantThinkingSigned(tmp["thinking"], tmp["signature"])
-                        }
-                    }
-                    continue
-                }
-                if strings.HasPrefix(tok, "[REASONING_RAW] ") {
-                    text := strings.TrimPrefix(tok, "[REASONING_RAW] ")
-                    // Show incremental reasoning to the UI but do not persist until the block ends
-                    e.bridge.EmitReasoning(text, false)
-                    reasoningAccumulated = true
-                    continue
-                }
+				if strings.HasPrefix(tok, "[REASONING] ") {
+					text := strings.TrimPrefix(tok, "[REASONING] ")
+					// Show incremental reasoning to the UI but do not persist until the block ends
+					e.bridge.EmitReasoning(text, false)
+					reasoningAccumulated = true
+					continue
+				}
+				if strings.HasPrefix(tok, "[REASONING_SIGNATURE] ") {
+					// Signature is captured in the final JSON event; ignore incremental signature token
+					continue
+				}
+				if strings.HasPrefix(tok, "[REASONING_JSON] ") {
+					raw := strings.TrimPrefix(tok, "[REASONING_JSON] ")
+					// Persist the full JSON so adapter can replay signature
+					if convo != nil {
+						// Try to parse and store; if parse fails, fall back to plain
+						var tmp map[string]string
+						if json.Unmarshal([]byte(raw), &tmp) == nil {
+							convo.AddAssistantThinkingSigned(tmp["thinking"], tmp["signature"])
+						}
+					}
+					continue
+				}
+				if strings.HasPrefix(tok, "[REASONING_RAW] ") {
+					text := strings.TrimPrefix(tok, "[REASONING_RAW] ")
+					// Show incremental reasoning to the UI but do not persist until the block ends
+					e.bridge.EmitReasoning(text, false)
+					reasoningAccumulated = true
+					continue
+				}
 				if strings.HasPrefix(tok, "[REASONING_DONE] ") {
 					text := strings.TrimPrefix(tok, "[REASONING_DONE] ")
-                    if reasoningAccumulated {
+					if reasoningAccumulated {
 						e.bridge.EmitReasoning("", true)
 					} else if strings.TrimSpace(text) != "" {
 						e.bridge.EmitReasoning(text, true)
 					} else {
 						e.bridge.EmitReasoning("", true)
 					}
-                    // No need to persist a separate DONE marker; thinking content is already stored.
+					// No need to persist a separate DONE marker; thinking content is already stored.
 					// Do not add to assistant content
 					continue
 				}
@@ -506,6 +512,9 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 				convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, errorMsg)
 				e.bridge.SendChat("system", errorMsg)
 				return err
+			}
+			if os.Getenv("LOOM_DEBUG_ENGINE") == "1" || strings.EqualFold(os.Getenv("LOOM_DEBUG_ENGINE"), "true") {
+				e.bridge.SendChat("system", fmt.Sprintf("[debug] Tool executed: name=%s safe=%v diffLen=%d contentLen=%d", toolCallReceived.Name, execResult.Safe, len(execResult.Diff), len(execResult.Content)))
 			}
 
 			// Approval path returns structured result to the model
@@ -563,6 +572,9 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 			for item := range fallbackStream {
 				if item.ToolCall != nil {
 					toolCallReceived = &tool.ToolCall{ID: item.ToolCall.ID, Name: item.ToolCall.Name, Args: item.ToolCall.Args}
+					if os.Getenv("LOOM_DEBUG_ENGINE") == "1" || strings.EqualFold(os.Getenv("LOOM_DEBUG_ENGINE"), "true") {
+						e.bridge.SendChat("system", fmt.Sprintf("[debug] Non-stream tool call received: id=%s name=%s argsLen=%d", item.ToolCall.ID, item.ToolCall.Name, len(item.ToolCall.Args)))
+					}
 					if convo != nil {
 						convo.AddAssistantToolUse(toolCallReceived.Name, toolCallReceived.ID, string(toolCallReceived.Args))
 					}
@@ -580,6 +592,9 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 					convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, errorMsg)
 					e.bridge.SendChat("system", errorMsg)
 					return err
+				}
+				if os.Getenv("LOOM_DEBUG_ENGINE") == "1" || strings.EqualFold(os.Getenv("LOOM_DEBUG_ENGINE"), "true") {
+					e.bridge.SendChat("system", fmt.Sprintf("[debug] Non-stream tool executed: name=%s safe=%v diffLen=%d contentLen=%d", toolCallReceived.Name, execResult.Safe, len(execResult.Diff), len(execResult.Content)))
 				}
 				if !execResult.Safe {
 					approved := e.UserApproved(toolCallReceived, execResult.Diff)
@@ -615,6 +630,9 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 				return nil
 			}
 			// Still nothing
+			if os.Getenv("LOOM_DEBUG_ENGINE") == "1" || strings.EqualFold(os.Getenv("LOOM_DEBUG_ENGINE"), "true") {
+				e.bridge.SendChat("system", "[debug] Fallback non-stream returned no content and no tool calls")
+			}
 			e.bridge.SendChat("system", "No response from model.")
 			return nil
 		}
