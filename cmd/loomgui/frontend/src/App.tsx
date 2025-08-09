@@ -595,8 +595,8 @@ const App: React.FC = () => {
                         {messages.map((msg: ChatMessage, index: number) => {
                             const isUser = msg.role === 'user'
                             const containerProps = isUser
-                                ? { component: Paper, elevation: 0, variant: 'outlined' as const, sx: { p: 2 } }
-                                : { component: Box, sx: { py: 0.5 } }
+                                ? { component: Box, sx: { p: 2, border: '0.1px solid #cccccc', borderRadius: 2, } }
+                                : { component: Box, sx: { py: 1, borderTop: '0.1px solid #eeeeee', borderBottom: '0.1px solid #eeeeee' } }
 
                             return (
                                 <Box key={index} {...(containerProps as any)}>
@@ -621,44 +621,44 @@ const App: React.FC = () => {
                                                     )}
                                                     <MarkdownErrorBoundary>
                                                         <Box sx={{ color: 'text.secondary' }}>
-                                                        <ReactMarkdown
-                                                            remarkPlugins={[remarkGfm, remarkBreaks]}
-                                                            components={{
-                                                                code({ node, inline, className, children, ...props }: any) {
-                                                                    const match = /language-(\w+)/.exec(className || '')
-                                                                    return !inline && match ? (
-                                                                        <SyntaxHighlighter
-                                                                            style={oneLightStyle as any}
-                                                                            language={match[1]}
-                                                                            PreTag="div"
-                                                                        >
-                                                                            {String(children).replace(/\n$/, '')}
-                                                                        </SyntaxHighlighter>
-                                                                    ) : (
-                                                                        <Box
-                                                                            component="code"
-                                                                            className={className}
-                                                                            sx={{
-                                                                                bgcolor: 'action.hover',
-                                                                                borderRadius: 1,
-                                                                                px: 0.5,
-                                                                                py: 0.25,
-                                                                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                                                                            }}
-                                                                            {...props}
-                                                                        >
-                                                                            {children}
-                                                                        </Box>
-                                                                    )
-                                                                },
-                                                                table: CustomTable,
-                                                                tr: CustomTableRow,
-                                                                td: CustomTableCell,
-                                                                th: CustomTableHeader,
-                                                            }}
-                                                        >
-                                                            {reasoningText}
-                                                        </ReactMarkdown>
+                                                            <ReactMarkdown
+                                                                remarkPlugins={[remarkGfm, remarkBreaks]}
+                                                                components={{
+                                                                    code({ node, inline, className, children, ...props }: any) {
+                                                                        const match = /language-(\w+)/.exec(className || '')
+                                                                        return !inline && match ? (
+                                                                            <SyntaxHighlighter
+                                                                                style={oneLightStyle as any}
+                                                                                language={match[1]}
+                                                                                PreTag="div"
+                                                                            >
+                                                                                {String(children).replace(/\n$/, '')}
+                                                                            </SyntaxHighlighter>
+                                                                        ) : (
+                                                                            <Box
+                                                                                component="code"
+                                                                                className={className}
+                                                                                sx={{
+                                                                                    bgcolor: 'action.hover',
+                                                                                    borderRadius: 1,
+                                                                                    px: 0.5,
+                                                                                    py: 0.25,
+                                                                                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                                                                }}
+                                                                                {...props}
+                                                                            >
+                                                                                {children}
+                                                                            </Box>
+                                                                        )
+                                                                    },
+                                                                    table: CustomTable,
+                                                                    tr: CustomTableRow,
+                                                                    td: CustomTableCell,
+                                                                    th: CustomTableHeader,
+                                                                }}
+                                                            >
+                                                                {reasoningText}
+                                                            </ReactMarkdown>
                                                         </Box>
                                                     </MarkdownErrorBoundary>
                                                 </AccordionDetails>
