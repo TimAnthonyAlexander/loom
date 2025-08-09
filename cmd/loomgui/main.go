@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/loom/loom/internal/adapter"
-	"github.com/loom/loom/internal/adapter/openai"
+	responses "github.com/loom/loom/internal/adapter/openai/responses"
 	"github.com/loom/loom/internal/bridge"
 	"github.com/loom/loom/internal/config"
 	"github.com/loom/loom/internal/engine"
@@ -78,8 +78,8 @@ func main() {
 	if err != nil {
 		log.Printf("Warning: Failed to initialize LLM adapter: %v", err)
 		log.Printf("Using OpenAI as fallback")
-		// Fallback to OpenAI if no other provider configured
-		llm = openai.New(os.Getenv("OPENAI_API_KEY"), "gpt-4o")
+		// Prefer Responses API fallback with a reasoning-capable default
+		llm = responses.New(os.Getenv("OPENAI_API_KEY"), "o4-mini")
 	}
 
 	// Initialize memory store

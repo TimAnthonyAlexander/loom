@@ -9,6 +9,7 @@ import (
 	"github.com/loom/loom/internal/adapter/anthropic"
 	"github.com/loom/loom/internal/adapter/ollama"
 	"github.com/loom/loom/internal/adapter/openai"
+	responses "github.com/loom/loom/internal/adapter/openai/responses"
 	"github.com/loom/loom/internal/engine"
 )
 
@@ -93,6 +94,20 @@ func New(config Config) (engine.LLM, error) {
 	case ProviderOpenAI:
 		if config.APIKey == "" {
 			return nil, errors.New("OpenAI API key not set. Set the OPENAI_API_KEY environment variable")
+		}
+		// Prefer Responses API for o-series and gpt-5 models, or when explicitly requested
+		useResponses := false
+		m := strings.ToLower(strings.TrimSpace(config.Model))
+		if strings.HasPrefix(m, "o3") || strings.HasPrefix(m, "o4") || strings.HasPrefix(m, "gpt-5") {
+			useResponses = true
+		}
+		if v := os.Getenv("OPENAI_USE_RESPONSES"); v != "" {
+			if vv := strings.ToLower(strings.TrimSpace(v)); vv == "1" || vv == "true" || vv == "yes" || vv == "on" {
+				useResponses = true
+			}
+		}
+		if useResponses {
+			return responses.New(config.APIKey, config.Model), nil
 		}
 		return openai.New(config.APIKey, config.Model), nil
 
