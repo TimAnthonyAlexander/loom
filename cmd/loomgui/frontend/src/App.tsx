@@ -444,6 +444,10 @@ const App: React.FC = () => {
                             setUserRules(Array.isArray(r?.user) ? r.user : []);
                             setProjectRules(Array.isArray(r?.project) ? r.project : []);
                         })
+                        .then(() => NewConversation())
+                        .then((id: string) => {
+                            setCurrentConversationId(id);
+                        })
                         .catch(() => { });
                 } else {
                     setWorkspaceOpen(true);
@@ -995,6 +999,10 @@ const App: React.FC = () => {
                                     .then((r: any) => {
                                         setUserRules(Array.isArray(r?.user) ? r.user : []);
                                         setProjectRules(Array.isArray(r?.project) ? r.project : []);
+                                        return NewConversation();
+                                    })
+                                    .then((id: string) => {
+                                        setCurrentConversationId(id);
                                         return GetConversations();
                                     })
                                     .then((res: any) => {
