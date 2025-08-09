@@ -296,6 +296,7 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 		ToolName    string
 		InputJSON   string
 		ThinkingBuf string
+    Signature   string
 	}
 	blocks := make(map[int]*blockState)
 	currentEvent := ""
@@ -390,8 +391,15 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
                     case ch <- engine.TokenOrToolCall{Token: "[REASONING] " + ev.Delta.Thinking}:
                     }
                 }
-			case "signature_delta":
-				// Ignore for now
+            case "signature_delta":
+                if ev.Delta.Signature != "" {
+                    bs.Signature = ev.Delta.Signature
+                    select {
+                    case <-ctx.Done():
+                        return
+                    case ch <- engine.TokenOrToolCall{Token: "[REASONING_SIGNATURE] " + ev.Delta.Signature}:
+                    }
+                }
 			}
         case "content_block_stop":
 			bs := blocks[ev.Index]
@@ -421,7 +429,18 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 				}
 			}
 			if bs.BlockType == "thinking" {
-				// Signal reasoning done so UI can collapse; no extra text needed
+                // Emit final JSON payload with thinking + signature so the engine can persist
+                finalPayload := map[string]string{
+                    "thinking":  bs.ThinkingBuf,
+                    "signature": bs.Signature,
+                }
+                b, _ := json.Marshal(finalPayload)
+                select {
+                case <-ctx.Done():
+                    return
+                case ch <- engine.TokenOrToolCall{Token: "[REASONING_JSON] " + string(b)}:
+                }
+                // Signal reasoning done so UI can collapse; no extra text needed
 				select {
 				case <-ctx.Done():
 					return
@@ -511,9 +530,9 @@ func convertMessages(messages []engine.Message) []map[string]interface{} {
     result := make([]map[string]interface{}, 0, len(messages))
 
     // We coalesce consecutive assistant messages into a single assistant message
-    // with an ordered list of content blocks, so that if thinking and tool_use
-    // occurred in the same turn, the final assistant message can start with a
-    // thinking block as required by Anthropic.
+    // with an ordered list of content blocks. If both thinking and tool_use
+    // happened in the same turn, we ensure that the first content block is a
+    // thinking or redacted_thinking block to satisfy Anthropic's rule.
     flushAssistant := func(pending *[]map[string]interface{}) {
         if len(*pending) == 0 {
             return
@@ -537,10 +556,26 @@ func convertMessages(messages []engine.Message) []map[string]interface{} {
         case "assistant":
             // Build appropriate content item
             if msg.Name == "thinking" {
-                pendingAssistant = append(pendingAssistant, map[string]interface{}{
-                    "type":     "thinking",
-                    "thinking": msg.Content,
-                })
+                // If content is JSON with thinking+signature, preserve both fields
+                var payload struct {
+                    Thinking  string `json:"thinking"`
+                    Signature string `json:"signature"`
+                }
+                if json.Unmarshal([]byte(msg.Content), &payload) == nil && payload.Thinking != "" {
+                    item := map[string]interface{}{
+                        "type":      "thinking",
+                        "thinking":  payload.Thinking,
+                    }
+                    if payload.Signature != "" {
+                        item["signature"] = payload.Signature
+                    }
+                    pendingAssistant = append(pendingAssistant, item)
+                } else {
+                    pendingAssistant = append(pendingAssistant, map[string]interface{}{
+                        "type":     "thinking",
+                        "thinking": msg.Content,
+                    })
+                }
                 continue
             }
             if msg.Name != "" && msg.ToolID != "" {
@@ -597,6 +632,31 @@ func convertMessages(messages []engine.Message) []map[string]interface{} {
 
     // Flush trailing assistant content
     if len(pendingAssistant) > 0 {
+        // Ensure thinking appears first if present per Anthropic requirement
+        // When both thinking and tool_use/text exist, reorder so thinking leads
+        hasThinking := false
+        for _, it := range pendingAssistant {
+            if it["type"] == "thinking" || it["type"] == "redacted_thinking" {
+                hasThinking = true
+                break
+            }
+        }
+        if hasThinking {
+            reordered := make([]map[string]interface{}, 0, len(pendingAssistant))
+            // First, all thinking-like blocks
+            for _, it := range pendingAssistant {
+                if it["type"] == "thinking" || it["type"] == "redacted_thinking" {
+                    reordered = append(reordered, it)
+                }
+            }
+            // Then, everything else in original order
+            for _, it := range pendingAssistant {
+                if it["type"] != "thinking" && it["type"] != "redacted_thinking" {
+                    reordered = append(reordered, it)
+                }
+            }
+            pendingAssistant = reordered
+        }
         result = append(result, map[string]interface{}{
             "role":    "assistant",
             "content": pendingAssistant,

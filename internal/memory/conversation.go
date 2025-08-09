@@ -1,6 +1,7 @@
 package memory
 
 import (
+    "encoding/json"
 	"time"
 )
 
@@ -79,6 +80,26 @@ func (c *Conversation) AddAssistantThinking(content string) {
         Role:      "assistant",
         Name:      "thinking",
         Content:   content,
+        Timestamp: time.Now(),
+    })
+    c.save()
+}
+
+// AddAssistantThinkingSigned records a complete thinking block along with its
+// signature in the message content as JSON, so adapters can faithfully replay
+// the thinking block with its signature.
+// Content format: {"thinking":"...","signature":"..."}
+func (c *Conversation) AddAssistantThinkingSigned(thinking string, signature string) {
+    // Store as JSON payload in Content to preserve through engine -> adapter
+    payload := map[string]string{
+        "thinking":  thinking,
+        "signature": signature,
+    }
+    b, _ := json.Marshal(payload)
+    c.messages = append(c.messages, Message{
+        Role:      "assistant",
+        Name:      "thinking",
+        Content:   string(b),
         Timestamp: time.Now(),
     })
     c.save()

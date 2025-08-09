@@ -445,6 +445,26 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
                     reasoningAccumulated = true
                     continue
                 }
+                if strings.HasPrefix(tok, "[REASONING_SIGNATURE] ") {
+                    sig := strings.TrimPrefix(tok, "[REASONING_SIGNATURE] ")
+                    // Upgrade the last thinking entry (if any) to include signature
+                    if convo != nil {
+                        convo.AddAssistantThinkingSigned("", sig)
+                    }
+                    continue
+                }
+                if strings.HasPrefix(tok, "[REASONING_JSON] ") {
+                    raw := strings.TrimPrefix(tok, "[REASONING_JSON] ")
+                    // Persist the full JSON so adapter can replay signature
+                    if convo != nil {
+                        // Try to parse and store; if parse fails, fall back to plain
+                        var tmp map[string]string
+                        if json.Unmarshal([]byte(raw), &tmp) == nil {
+                            convo.AddAssistantThinkingSigned(tmp["thinking"], tmp["signature"])
+                        }
+                    }
+                    continue
+                }
                 if strings.HasPrefix(tok, "[REASONING_RAW] ") {
                     text := strings.TrimPrefix(tok, "[REASONING_RAW] ")
                     if convo != nil {
