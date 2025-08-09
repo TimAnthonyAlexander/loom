@@ -112,13 +112,7 @@ func (c *Client) Chat(
 		return nil, errors.New("OpenAI API key not set")
 	}
 
-	// Add debug logging of the raw message history
-	fmt.Println("=== DEBUG: Message History ===")
-	for i, msg := range messages {
-		fmt.Printf("[%d] Role: %s, Name: %s, ToolID: %s, Content: %s\n",
-			i, msg.Role, msg.Name, msg.ToolID, truncateString(msg.Content, 50))
-	}
-	fmt.Println("=== End Message History ===")
+	// Removed verbose debug logging of raw message history
 
 	// Create output channel for tokens/tool calls
 	resultCh := make(chan engine.TokenOrToolCall)
@@ -127,13 +121,7 @@ func (c *Client) Chat(
 	openaiMessages := convertMessages(messages)
 	openaiTools := convertTools(tools)
 
-	// Add debug logging of the converted OpenAI messages
-	fmt.Println("=== DEBUG: OpenAI Messages ===")
-	for i, msg := range openaiMessages {
-		debugJSON, _ := json.MarshalIndent(msg, "", "  ")
-		fmt.Printf("[%d] %s\n", i, string(debugJSON))
-	}
-	fmt.Println("=== End OpenAI Messages ===")
+	// Removed verbose debug logging of converted OpenAI messages
 
 	// Prepare the request body
 	requestBody := map[string]interface{}{
@@ -233,14 +221,6 @@ func (c *Client) Chat(
 // preprocessMessagesForOpenAI rebuilds the conversation to ensure it has the correct structure for OpenAI API
 // specifically, it makes sure each tool message is preceded by an assistant message with tool_calls
 // Removed preprocessMessagesForOpenAI; we will rely on explicit assistant tool_use messages recorded by the engine
-
-// truncateString shortens a string for logging purposes
-func truncateString(s string, maxLength int) string {
-	if len(s) <= maxLength {
-		return s
-	}
-	return s[:maxLength] + "..."
-}
 
 // handleStreamingResponse processes a streaming response from the OpenAI API.
 func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch chan<- engine.TokenOrToolCall) {

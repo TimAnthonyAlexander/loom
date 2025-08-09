@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -179,9 +178,6 @@ func (c *Client) Chat(
 			Effort  string `json:"effort,omitempty"`
 			Summary string `json:"summary,omitempty"`
 		}{Effort: "medium", Summary: "auto"}
-		log.Printf("OpenAI Responses: enabling reasoning summaries for model=%s (effort=medium, summary=auto)", c.model)
-	} else {
-		log.Printf("OpenAI Responses: reasoning summaries disabled for non-reasoning model=%s", c.model)
 	}
 	if len(tools) > 0 {
 		req.Tools = convertTools(tools)
@@ -240,7 +236,6 @@ func (c *Client) Chat(
 		}
 
 		if stream {
-			log.Printf("OpenAI Responses: streaming response started for model=%s", c.model)
 			c.handleResponsesStream(ctx, resp.Body, out)
 			return
 		}
@@ -302,8 +297,7 @@ func (c *Client) handleResponsesStream(ctx context.Context, r io.Reader, out cha
 		if payload == "" || payload == "[DONE]" {
 			continue
 		}
-		// Debug: log every SSE event name we see with a short payload snippet
-		log.Printf("OpenAI Responses SSE: event=%s payload=%.160q", currentEvent, payload)
+		// Removed verbose SSE event logging
 		var ev sseEvent
 		if err := json.Unmarshal([]byte(payload), &ev); err != nil {
 			continue
@@ -320,7 +314,6 @@ func (c *Client) handleResponsesStream(ctx context.Context, r io.Reader, out cha
 			}
 		case "response.reasoning_summary.delta", "response.reasoning_summary_text.delta":
 			if ev.Delta != "" {
-				log.Printf("OpenAI Responses: reasoning_summary.delta: %.80q", ev.Delta)
 				select {
 				case <-ctx.Done():
 					return
@@ -329,7 +322,6 @@ func (c *Client) handleResponsesStream(ctx context.Context, r io.Reader, out cha
 			}
 		case "response.reasoning_summary.done", "response.reasoning_summary_text.done":
 			if ev.Text != "" {
-				log.Printf("OpenAI Responses: reasoning_summary.done: %.120q", ev.Text)
 				select {
 				case <-ctx.Done():
 					return
@@ -338,7 +330,6 @@ func (c *Client) handleResponsesStream(ctx context.Context, r io.Reader, out cha
 			}
 		case "response.reasoning.delta":
 			if ev.Delta != "" {
-				log.Printf("OpenAI Responses: reasoning.delta: %.80q", ev.Delta)
 				select {
 				case <-ctx.Done():
 					return
@@ -347,7 +338,6 @@ func (c *Client) handleResponsesStream(ctx context.Context, r io.Reader, out cha
 			}
 		case "response.reasoning.done":
 			if ev.Text != "" {
-				log.Printf("OpenAI Responses: reasoning.done: %.120q", ev.Text)
 				select {
 				case <-ctx.Done():
 					return
@@ -433,11 +423,9 @@ func (c *Client) handleResponsesNonStreaming(ctx context.Context, body []byte, o
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return
 	}
-	log.Printf("OpenAI Responses: non-stream response with %d output items", len(resp.Output))
 	for _, it := range resp.Output {
 		// Non-streaming reasoning summary
 		if it.Type == "reasoning" && len(it.Summary) > 0 {
-			log.Printf("OpenAI Responses: reasoning summary (non-stream) with %d parts", len(it.Summary))
 			for _, s := range it.Summary {
 				if s.Text != "" {
 					for _, ch := range s.Text {

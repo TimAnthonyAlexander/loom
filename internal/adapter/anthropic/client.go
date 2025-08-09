@@ -81,13 +81,7 @@ func (c *Client) Chat(
 		return nil, errors.New("Anthropic API key not set")
 	}
 
-	// Add debug logging of the raw message history (parity with OpenAI adapter)
-	fmt.Println("=== DEBUG: Message History ===")
-	for i, msg := range messages {
-		fmt.Printf("[%d] Role: %s, Name: %s, ToolID: %s, Content: %s\n",
-			i, msg.Role, msg.Name, msg.ToolID, truncateString(msg.Content, 50))
-	}
-	fmt.Println("=== End Message History ===")
+	// Removed verbose debug logging of raw message history
 
 	// Create output channel for tokens/tool calls
 	resultCh := make(chan engine.TokenOrToolCall)
@@ -122,13 +116,7 @@ func (c *Client) Chat(
 	}
 	claudeTools := convertTools(tools)
 
-	// Add debug logging of the converted Anthropic messages (parity with OpenAI adapter)
-	fmt.Println("=== DEBUG: Anthropic Messages ===")
-	for i, msg := range claudeMessages {
-		debugJSON, _ := json.MarshalIndent(msg, "", "  ")
-		fmt.Printf("[%d] %s\n", i, string(debugJSON))
-	}
-	fmt.Println("=== End Anthropic Messages ===")
+	// Removed verbose debug logging of converted Anthropic messages
 
 	// Remove provider prefix if present (e.g., "claude:" prefix)
 	modelID := strings.TrimPrefix(c.model, "claude:")
@@ -171,7 +159,7 @@ func (c *Client) Chat(
 		requestBody["system"] = systemPrompt
 	}
 
-	fmt.Printf("DEBUG: Using Anthropic model: %s (max_tokens: %d)\n", modelID, c.maxTokens)
+	// Removed debug log for model selection
 
 	// Add tools if provided
 	if len(tools) > 0 {
@@ -204,21 +192,18 @@ func (c *Client) Chat(
 			req.Header.Set("Cache-Control", "no-cache")
 			req.Header.Set("Connection", "keep-alive")
 		}
-		fmt.Printf("DEBUG: Using Anthropic API key: %s...\n", c.apiKey[:min(10, len(c.apiKey))])
+		// Removed debug log for API key
 		// Anthropic requires 'x-api-key' header, not 'Authorization'
 		req.Header.Set("x-api-key", c.apiKey)
 
 		// API version is required for Anthropic
 		req.Header.Set("anthropic-version", c.apiVersion)
-		fmt.Printf("DEBUG: Using anthropic-version: %s\n", c.apiVersion)
 
-		// Log request basics
-		fmt.Printf("Anthropic: POST %s | model=%s | stream=%v | messages=%d | tools=%d\n", c.endpoint, modelID, stream, len(claudeMessages), len(claudeTools))
+		// Removed verbose request logging
 		// Make the request
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
 			// Surface request error via token
-			fmt.Printf("Anthropic HTTP error: %v\n", err)
 			select {
 			case <-ctx.Done():
 				return
@@ -230,12 +215,9 @@ func (c *Client) Chat(
 
 		// Check response status
 		if resp.StatusCode != http.StatusOK {
-			// Log and surface non-200 status
+			// Surface non-200 status
 			errorResponse, _ := io.ReadAll(resp.Body)
 			msg := fmt.Sprintf("Anthropic API error (%d): %s", resp.StatusCode, string(errorResponse))
-			fmt.Println(msg)
-			fmt.Printf("Debug: Request sent to: %s with model: %s, max_tokens: %d\n",
-				c.endpoint, c.model, c.maxTokens)
 			select {
 			case <-ctx.Done():
 				return
@@ -244,7 +226,7 @@ func (c *Client) Chat(
 			return
 		}
 
-		fmt.Printf("Anthropic: status=%d content-type=%s\n", resp.StatusCode, resp.Header.Get("Content-Type"))
+		// Removed verbose response status logging
 		// Handle response
 		if stream {
 			c.handleStreamingResponse(ctx, resp.Body, resultCh)
@@ -257,12 +239,7 @@ func (c *Client) Chat(
 }
 
 // truncateString shortens a string for logging purposes
-func truncateString(s string, maxLength int) string {
-	if len(s) <= maxLength {
-		return s
-	}
-	return s[:maxLength] + "..."
-}
+// Removed unused truncateString helper (debug only)
 
 // handleStreamingResponse processes a streaming response from the Anthropic API.
 func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch chan<- engine.TokenOrToolCall) {
@@ -327,7 +304,7 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 		}
 
 		if err := json.Unmarshal([]byte(payload), &ev); err != nil {
-			fmt.Printf("Anthropic SSE unmarshal error: %v, raw: %s\n", err, payload)
+			// Skip malformed SSE chunk silently
 			continue
 		}
 
@@ -426,9 +403,7 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 			// Unknown/ignored events: ping, etc.
 		}
 	}
-	if err := sc.Err(); err != nil {
-		fmt.Printf("Anthropic stream scanner error: %v\n", err)
-	}
+	_ = sc.Err()
 }
 
 // handleNonStreamingResponse processes a non-streaming response from the Anthropic API.
@@ -438,8 +413,7 @@ func (c *Client) handleNonStreamingResponse(ctx context.Context, body io.Reader,
 	if err != nil {
 		return
 	}
-	// Debug: dump raw Anthropic response
-	fmt.Printf("=== DEBUG: Anthropic Raw Response ===\n%s\n=== End Anthropic Raw Response ===\n", string(respBody))
+	// Removed verbose dump of raw Anthropic response
 
 	// Parse the response per Anthropic schema
 	var resp struct {

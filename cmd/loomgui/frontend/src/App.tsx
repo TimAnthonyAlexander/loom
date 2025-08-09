@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, ReactElement, useMemo } from 'react';
-import { EventsOn, LogDebug, LogInfo } from '../wailsjs/runtime/runtime';
+import { EventsOn, LogInfo } from '../wailsjs/runtime/runtime';
 import { SendUserMessage, Approve, GetTools, SetModel, GetSettings, SaveSettings, SetWorkspace, ClearConversation, GetConversations, LoadConversation, NewConversation } from '../wailsjs/go/bridge/App';
 import * as Bridge from '../wailsjs/go/bridge/App';
 import * as AppBridge from '../wailsjs/go/bridge/App';
@@ -303,7 +303,6 @@ const App: React.FC = () => {
 
         // Listen for streaming assistant messages (final output only)
         EventsOn('assistant-msg', (content: string) => {
-            try { LogDebug(`[UI] assistant-msg len=${content?.length ?? 0}`) } catch { }
             setMessages((prev: ChatMessage[]) => {
                 const lastMessage = prev[prev.length - 1];
                 if (lastMessage && lastMessage.role === 'assistant') {

@@ -2,7 +2,6 @@ package bridge
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"os"
 	"path/filepath"
@@ -155,8 +154,7 @@ func (a *App) SetModel(model string) {
 		Endpoint: a.config.Endpoint,
 	}
 
-	// Log the model change for debugging
-	log.Printf("Switching model to %s:%s with API key %s...", provider, modelID, apiKey[:min(10, len(apiKey))])
+	// Removed verbose debug log containing API key
 
 	// Create a new LLM adapter with the updated model
 	llm, err := adapter.New(newConfig)
@@ -276,17 +274,7 @@ func (a *App) SendChat(role, text string) {
 
 // EmitAssistant sends partial assistant tokens to the UI.
 func (a *App) EmitAssistant(text string) {
-	// Debug log trimmed content to help diagnose missing reasoning UI
-	if len(text) > 0 {
-		snippet := text
-		if len(snippet) > 120 {
-			snippet = snippet[:120] + "…"
-		}
-		hasReasoning := strings.Contains(text, "[REASONING]") || strings.Contains(text, "[REASONING_DONE]")
-		log.Printf("UI.EmitAssistant: len=%d reasoning_tags=%v snippet=%q", len(text), hasReasoning, snippet)
-	} else {
-		log.Printf("UI.EmitAssistant: empty content emitted")
-	}
+	// Removed verbose debug logging for assistant content
 	if a.ctx != nil {
 		runtime.EventsEmit(a.ctx, "assistant-msg", text)
 	} else {
@@ -460,19 +448,6 @@ func (a *App) GetRules() map[string][]string {
 		ws = a.engine.Workspace()
 	}
 	user, project, _ := config.LoadRules(ws)
-	// Debug log what we loaded
-	payload := map[string]any{
-		"workspace":           ws,
-		"user_rules_count":    len(user),
-		"project_rules_count": len(project),
-		"user_rules":          user,
-		"project_rules":       project,
-	}
-	if b, err := json.Marshal(payload); err == nil {
-		log.Printf("GetRules: %s", string(b))
-	} else {
-		log.Printf("GetRules: workspace=%s user=%d project=%d", ws, len(user), len(project))
-	}
 	return map[string][]string{
 		"user":    user,
 		"project": project,

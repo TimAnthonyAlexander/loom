@@ -2,7 +2,6 @@ package adapter
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"strings"
 
@@ -66,12 +65,8 @@ func DefaultConfig() Config {
 	switch config.Provider {
 	case ProviderOpenAI:
 		config.APIKey = os.Getenv("OPENAI_API_KEY")
-		fmt.Printf("DEBUG: Selected OpenAI provider, key: %s...\n",
-			safeSubstring(config.APIKey, 10))
 	case ProviderAnthropic:
 		config.APIKey = os.Getenv("ANTHROPIC_API_KEY")
-		fmt.Printf("DEBUG: Selected Anthropic provider, key from env: %s...\n",
-			safeSubstring(config.APIKey, 10))
 	case ProviderOllama:
 		if endpoint := os.Getenv("OLLAMA_ENDPOINT"); endpoint != "" {
 			config.Endpoint = endpoint
@@ -115,8 +110,6 @@ func New(config Config) (engine.LLM, error) {
 		if config.APIKey == "" {
 			return nil, errors.New("Anthropic API key not set. Set the ANTHROPIC_API_KEY environment variable")
 		}
-		fmt.Printf("DEBUG: Creating Anthropic client with key: %s... and model: %s\n",
-			safeSubstring(config.APIKey, 10), config.Model)
 		return anthropic.New(config.APIKey, config.Model), nil
 
 	case ProviderOllama:
@@ -131,14 +124,4 @@ func New(config Config) (engine.LLM, error) {
 	}
 }
 
-// safeSubstring returns the first n characters of s, or the entire string if s is shorter than n.
-// Returns empty string if s is empty.
-func safeSubstring(s string, n int) string {
-	if s == "" {
-		return ""
-	}
-	if len(s) <= n {
-		return s
-	}
-	return s[:n]
-}
+// Removed safeSubstring helper and debug prints
