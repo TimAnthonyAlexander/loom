@@ -166,8 +166,25 @@ func (c *Client) Chat(
 		}
 	}
 
-	// Convert messages and tools to Claude format (excluding system messages)
-	claudeMessages := convertMessages(messages)
+	// Decide thinking mode BEFORE converting messages so we can include/exclude
+	// thinking blocks consistently with the request.
+	modelID := strings.TrimPrefix(c.model, "claude:")
+	modelSupportsThinking := supportsThinkingForModel(modelID)
+	mustReplayThinking := lastAssistantTurnHasThinking(messages)
+	enableThinking := modelSupportsThinking && (stream || mustReplayThinking)
+
+	// If the last assistant turn in history includes tool_use without a preceding
+	// preserved thinking block, Anthropic requires either: (a) disable thinking or
+	// (b) include the previous thinking unmodified. We choose (a) automatically
+	// to avoid 400s; the engine will still show tokens normally.
+	if enableThinking && lastAssistantTurnHasToolUseWithoutThinking(messages) {
+		enableThinking = false
+	}
+
+	// Convert messages and tools to Claude format (excluding system messages).
+	// When thinking is disabled, we must NOT include any thinking/redacted_thinking
+	// blocks in the transcript to avoid API 400 errors.
+	claudeMessages := convertMessages(messages, enableThinking)
 	// Anthropic requires the last message to be from the user. If not, append
 	// a minimal nudge from user to prompt a continuation/tool call.
 	if len(claudeMessages) == 0 {
@@ -187,9 +204,6 @@ func (c *Client) Chat(
 
 	// Removed verbose debug logging of converted Anthropic messages
 
-	// Remove provider prefix if present (e.g., "claude:" prefix)
-	modelID := strings.TrimPrefix(c.model, "claude:")
-
 	// Prepare the request body
 	// Anthropic expects model IDs like "claude-opus-4-20250514" without provider prefix
 	// Ensure max_tokens is compatible with thinking budget when streaming
@@ -204,20 +218,7 @@ func (c *Client) Chat(
 		// Honor stream flag so we can deliver incremental messages & thinking
 		"stream": stream,
 	}
-	// Enable extended thinking when allowed or required by transcript.
-	// - If streaming and model supports it → allow thinking.
-	// - If the last assistant turn has a signed thinking block → enable thinking even if not streaming (replay requirement).
-	modelSupportsThinking := supportsThinkingForModel(modelID)
-	mustReplayThinking := lastAssistantTurnHasThinking(messages)
-	enableThinking := modelSupportsThinking && (stream || mustReplayThinking)
-
-	// If the last assistant turn in history includes tool_use without a preceding
-	// preserved thinking block, Anthropic requires either: (a) disable thinking or
-	// (b) include the previous thinking unmodified. We choose (a) automatically
-	// to avoid 400s; the engine will still show tokens normally.
-	if enableThinking && lastAssistantTurnHasToolUseWithoutThinking(messages) {
-		enableThinking = false
-	}
+	// enableThinking already decided above
 
 	if enableThinking {
 		// Constrain thinking budget to always be < max_tokens and within a reasonable cap
@@ -568,7 +569,7 @@ func (c *Client) handleNonStreamingResponse(ctx context.Context, body io.Reader,
 }
 
 // convertMessages transforms engine messages to Anthropic Claude format.
-func convertMessages(messages []engine.Message) []map[string]interface{} {
+func convertMessages(messages []engine.Message, includeThinking bool) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(messages))
 
 	// We coalesce consecutive assistant messages into a single assistant message
@@ -603,7 +604,7 @@ func convertMessages(messages []engine.Message) []map[string]interface{} {
 					Thinking  string `json:"thinking"`
 					Signature string `json:"signature"`
 				}
-				if json.Unmarshal([]byte(msg.Content), &payload) == nil && payload.Thinking != "" && payload.Signature != "" {
+				if includeThinking && json.Unmarshal([]byte(msg.Content), &payload) == nil && payload.Thinking != "" && payload.Signature != "" {
 					item := map[string]interface{}{
 						"type":      "thinking",
 						"thinking":  payload.Thinking,
@@ -677,7 +678,7 @@ func convertMessages(messages []engine.Message) []map[string]interface{} {
 				break
 			}
 		}
-		if hasThinking {
+		if includeThinking && hasThinking {
 			reordered := make([]map[string]interface{}, 0, len(pendingAssistant))
 			// First, all thinking-like blocks
 			for _, it := range pendingAssistant {
