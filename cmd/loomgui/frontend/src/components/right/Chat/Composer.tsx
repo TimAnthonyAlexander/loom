@@ -1,5 +1,5 @@
-import { Stack, TextField, Button } from '@mui/material';
-import SendIcon from '@mui/icons-material/Send';
+import { Stack, TextField, IconButton } from '@mui/material';
+import { PendingRounded, SendRounded } from '@mui/icons-material';
 
 type Props = {
     input: string;
@@ -9,9 +9,16 @@ type Props = {
     onClear: () => void;
 };
 
-export default function Composer({ input, setInput, busy, onSend, onClear }: Props) {
+export default function Composer({ input, setInput, busy, onSend }: Props) {
     return (
-        <Stack direction="row" spacing={1} alignItems="flex-end">
+        <Stack
+            direction="row"
+            spacing={1}
+            alignItems="flex-end"
+            sx={{
+                position: 'relative',
+            }}
+        >
             <TextField
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -28,13 +35,25 @@ export default function Composer({ input, setInput, busy, onSend, onClear }: Pro
                 maxRows={8}
                 fullWidth
             />
-            <Button onClick={onClear} color="inherit" disabled={busy} variant="outlined">
-                Clear
-            </Button>
-            <Button onClick={onSend} disabled={busy || !input.trim()} variant="contained" endIcon={<SendIcon />}>
-                {busy ? 'Working…' : 'Send'}
-            </Button>
-        </Stack>
+            <IconButton
+                onClick={onSend}
+                disabled={busy || !input.trim()}
+                sx={{
+                    position: 'absolute',
+                    height: '100%',
+                    bottom: 5,
+                    right: 5,
+                }}
+            >
+                {busy ? (
+                    <PendingRounded
+                    />
+                ) : (
+                    <SendRounded
+                    />
+                )}
+            </IconButton>
+        </Stack >
     );
 }
 

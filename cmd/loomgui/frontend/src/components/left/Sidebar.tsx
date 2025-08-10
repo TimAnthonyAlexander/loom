@@ -84,8 +84,7 @@ export default function Sidebar(props: SidebarProps) {
 
             <Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="subtitle2">Conversations</Typography>
-                    <Button size="small" variant="outlined" onClick={onNewConversation}>New</Button>
+                    <Button size="small" variant="outlined" onClick={onNewConversation}>New Conversation</Button>
                 </Box>
             </Box>
         </Box>
