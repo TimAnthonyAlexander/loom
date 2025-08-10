@@ -29,7 +29,7 @@ func GenerateSystemPrompt(tools []tool.Schema) string {
 	toolsBlock := strings.Join(toolLines, "\n")
 
 	// Multiline prompt template
-	template := `# Loom v2 System Prompt v%s
+	template := `# Loom System Prompt v%s
 
 You are Loom, an AI assistant designed to interact with a codebase.
 

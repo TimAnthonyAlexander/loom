@@ -41,7 +41,7 @@ export default function Sidebar(props: SidebarProps) {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                     <Box component="img" src="/logo.png" alt="Loom" sx={{ width: 28, height: 28, borderRadius: 0.5 }} />
                     <Typography variant="h6" fontWeight={600}>
-                        Loom v2
+                        Loom
                     </Typography>
                     <Box sx={{ flex: 1 }} />
                     <Tooltip title="Select Workspace">

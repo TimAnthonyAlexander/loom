@@ -122,7 +122,7 @@ func main() {
 
 	// Run the application
 	if err := wails.Run(&options.App{
-		Title:            "Loom v2",
+		Title:            "Loom - by Tim Anthony Alexander",
 		Width:            1280,
 		Height:           800,
 		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 255},
