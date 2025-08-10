@@ -28,6 +28,12 @@ export default function EditorPanel({ openTabs, activeTab, onChangeActiveTab, on
         editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
             if (tab?.path) onSaveTab(tab.path);
         });
+        // Override Cmd/Ctrl+I inside Monaco to focus the chat composer instead of triggering suggestions
+        try {
+            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyI, () => {
+                try { window.dispatchEvent(new CustomEvent('loom:focus-composer')); } catch {}
+            });
+        } catch {}
         editorRef.current = editor;
         monacoRef.current = monaco;
         if (tab?.cursor) editor.setPosition({ lineNumber: tab.cursor.line, column: tab.cursor.column });

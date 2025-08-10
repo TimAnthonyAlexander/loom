@@ -57,12 +57,19 @@ export default function ChatPanel(props: Props) {
             if (cmd && key === 'i') {
                 e.preventDefault();
                 focusTokenRef.current += 1;
-                // Trigger a rerender by updating a state-likes value
                 setFocusBump(focusTokenRef.current);
             }
         };
+        const onFocusComposer = () => {
+            focusTokenRef.current += 1;
+            setFocusBump(focusTokenRef.current);
+        };
         window.addEventListener('keydown', onKeyDown);
-        return () => window.removeEventListener('keydown', onKeyDown);
+        window.addEventListener('loom:focus-composer', onFocusComposer as EventListener);
+        return () => {
+            window.removeEventListener('keydown', onKeyDown);
+            window.removeEventListener('loom:focus-composer', onFocusComposer as EventListener);
+        };
     }, []);
 
     const [focusBump, setFocusBump] = React.useState<number>(0);
