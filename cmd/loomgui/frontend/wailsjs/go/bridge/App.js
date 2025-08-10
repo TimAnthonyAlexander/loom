@@ -109,3 +109,7 @@ export function WithSettings(arg1) {
 export function WithTools(arg1) {
   return window['go']['bridge']['App']['WithTools'](arg1);
 }
+
+export function WriteWorkspaceFile(arg1) {
+  return window['go']['bridge']['App']['WriteWorkspaceFile'](arg1);
+}

@@ -12,6 +12,8 @@ import SettingsDialog from './components/dialogs/SettingsDialog';
 import RulesDialog from './components/dialogs/RulesDialog';
 import WorkspaceDialog from './components/dialogs/WorkspaceDialog';
 import { ChatMessage, ApprovalRequest, UIFileEntry, UIListDirResult, ConversationListItem, EditorTabItem } from './types/ui';
+import { guessLanguage } from './utils/language';
+import { writeFile } from './services/files';
 
 // Types moved to ./types/ui
 
@@ -280,7 +282,22 @@ const App: React.FC = () => {
             .then((res: any) => {
                 const title = (path.split('/').pop() || path);
                 const content = String(res?.content || '');
-                setOpenTabs((prev) => [...prev, { path, title, content }]);
+                const serverRev = String(res?.serverRev || '');
+                const language = guessLanguage(path);
+                setOpenTabs((prev) => [
+                    ...prev,
+                    {
+                        path,
+                        title,
+                        content,
+                        language,
+                        isDirty: false,
+                        version: 1,
+                        serverRev,
+                        cursor: { line: 1, column: 1 },
+                        scrollTop: 0,
+                    },
+                ]);
                 setActiveTab(path);
             })
             .catch(() => { });
@@ -291,6 +308,26 @@ const App: React.FC = () => {
         if (activeTab === path) {
             const remaining = openTabs.filter((t) => t.path !== path);
             setActiveTab(remaining.length ? remaining[remaining.length - 1].path : '');
+        }
+    };
+
+    // Update tab helper
+    const onUpdateTab = (path: string, patch: Partial<EditorTabItem>) => {
+        setOpenTabs((prev) => prev.map((x) => (x.path === path ? { ...x, ...patch } : x)));
+    };
+
+    // Save tab helper
+    const onSaveTab = async (path: string) => {
+        const t = openTabs.find((x) => x.path === path);
+        if (!t) return;
+        try {
+            const res = await writeFile(t.path, t.content, t.serverRev);
+            setOpenTabs((prev) =>
+                prev.map((x) => (x.path === path ? { ...x, isDirty: false, serverRev: String(res?.serverRev || '') } : x)),
+            );
+        } catch (e) {
+            // eslint-disable-next-line no-console
+            console.error('Save failed', e);
         }
     };
 
@@ -333,6 +370,8 @@ const App: React.FC = () => {
                     activeTab={activeTab}
                     onChangeActiveTab={setActiveTab}
                     onCloseTab={closeTab}
+                    onUpdateTab={onUpdateTab}
+                    onSaveTab={onSaveTab}
                 />
             </Box>
 

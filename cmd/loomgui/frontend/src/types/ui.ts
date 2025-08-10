@@ -25,10 +25,20 @@ export interface UIListDirResult {
   error?: string;
 }
 
+export type LanguageId =
+  | 'typescript' | 'javascript' | 'json' | 'yaml' | 'markdown'
+  | 'go' | 'php' | 'python' | 'css' | 'html' | 'text'
+
 export interface EditorTabItem {
   path: string;
   title: string;
   content: string;
+  language?: LanguageId;
+  isDirty?: boolean;
+  version?: number;
+  serverRev?: string;
+  cursor?: { line: number; column: number };
+  scrollTop?: number;
 }
 
 export interface ConversationListItem {

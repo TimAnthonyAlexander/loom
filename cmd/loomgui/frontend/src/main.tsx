@@ -5,6 +5,7 @@ import ErrorBoundary from './ErrorBoundary'
 import { LogError } from '../wailsjs/runtime/runtime'
 import './App.css'
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material'
+import './monaco-workers'
 
 const theme = createTheme({
     palette: {

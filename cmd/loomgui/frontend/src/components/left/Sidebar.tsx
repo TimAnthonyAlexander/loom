@@ -3,7 +3,6 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import RuleIcon from '@mui/icons-material/Rule';
 import ModelSelector from '../../ModelSelector';
 import FileExplorer from './Files/FileExplorer';
-import ConversationList from './Conversations/ConversationList';
 import { UIFileEntry, ConversationListItem } from '../../types/ui';
 
 type SidebarProps = {
@@ -33,9 +32,6 @@ export default function Sidebar(props: SidebarProps) {
         expandedDirs,
         onToggleDir,
         onOpenFile,
-        conversations,
-        currentConversationId,
-        onSelectConversation,
         onNewConversation,
     } = props;
 
@@ -91,13 +87,6 @@ export default function Sidebar(props: SidebarProps) {
                     <Typography variant="subtitle2">Conversations</Typography>
                     <Button size="small" variant="outlined" onClick={onNewConversation}>New</Button>
                 </Box>
-                <Paper variant="outlined" sx={{ p: 1 }}>
-                    <ConversationList
-                        conversations={conversations}
-                        currentConversationId={currentConversationId}
-                        onSelect={onSelectConversation}
-                    />
-                </Paper>
             </Box>
         </Box>
     );

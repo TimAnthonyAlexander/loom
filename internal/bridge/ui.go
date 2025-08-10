@@ -2,6 +2,8 @@ package bridge
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"log"
 	"os"
 	"path/filepath"
@@ -739,10 +741,11 @@ func (a *App) ListWorkspaceDir(relPath string) UIListDirResult {
 
 // UIReadFileResult is the response when reading a file for the UI viewer
 type UIReadFileResult struct {
-	Path     string `json:"path"`
-	Content  string `json:"content"`
-	Lines    int    `json:"lines"`
-	Language string `json:"language,omitempty"`
+	Path      string `json:"path"`
+	Content   string `json:"content"`
+	Lines     int    `json:"lines"`
+	Language  string `json:"language,omitempty"`
+	ServerRev string `json:"serverRev,omitempty"`
 }
 
 // ReadWorkspaceFile reads a file within the current workspace and returns its content.
@@ -791,6 +794,7 @@ func (a *App) ReadWorkspaceFile(relPath string) UIReadFileResult {
 	out.Lines = lines
 	// Simple language hint from extension
 	out.Language = detectLanguageByExt(rel)
+	out.ServerRev = computeServerRev(data)
 	return out
 }
 
@@ -819,4 +823,52 @@ func detectLanguageByExt(path string) string {
 	default:
 		return ""
 	}
+}
+
+// computeServerRev returns a short content hash for optimistic concurrency and cache-busting
+func computeServerRev(data []byte) string {
+	sum := sha1.Sum(data)
+	return hex.EncodeToString(sum[:])
+}
+
+// WriteWorkspaceFile writes content to a file within the current workspace.
+// Payload: { path: string, content: string, serverRev?: string }
+// Returns: { serverRev: string }
+func (a *App) WriteWorkspaceFile(payload map[string]string) map[string]string {
+	res := map[string]string{"serverRev": ""}
+	if a.engine == nil {
+		return res
+	}
+	root := strings.TrimSpace(a.engine.Workspace())
+	if root == "" {
+		return res
+	}
+	rel := strings.TrimSpace(payload["path"])
+	if rel == "" || rel == "." || rel == "/" {
+		return res
+	}
+	candidate := filepath.Clean(filepath.Join(root, rel))
+	absCandidate, err := filepath.Abs(candidate)
+	if err != nil {
+		return res
+	}
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return res
+	}
+	if absCandidate != absRoot && !strings.HasPrefix(absCandidate+string(os.PathSeparator), absRoot+string(os.PathSeparator)) {
+		return res
+	}
+	// Ensure parent directory exists
+	if err := os.MkdirAll(filepath.Dir(absCandidate), 0o755); err != nil {
+		return res
+	}
+	content := payload["content"]
+	// Write file
+	if err := os.WriteFile(absCandidate, []byte(content), 0o644); err != nil {
+		return res
+	}
+	// Compute and return new serverRev
+	res["serverRev"] = computeServerRev([]byte(content))
+	return res
 }

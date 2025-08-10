@@ -60,3 +60,5 @@ export function WithEngine(arg1:engine.Engine):Promise<bridge.App>;
 export function WithSettings(arg1:config.Settings):Promise<bridge.App>;
 
 export function WithTools(arg1:tool.Registry):Promise<bridge.App>;
+
+export function WriteWorkspaceFile(arg1:Record<string, string>):Promise<Record<string, string>>;

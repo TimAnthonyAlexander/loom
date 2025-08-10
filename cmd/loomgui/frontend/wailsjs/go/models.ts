@@ -96,6 +96,7 @@ export namespace bridge {
 	    content: string;
 	    lines: number;
 	    language?: string;
+	    serverRev?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new UIReadFileResult(source);
@@ -107,6 +108,7 @@ export namespace bridge {
 	        this.content = source["content"];
 	        this.lines = source["lines"];
 	        this.language = source["language"];
+	        this.serverRev = source["serverRev"];
 	    }
 	}
 
