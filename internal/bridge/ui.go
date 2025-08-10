@@ -599,6 +599,13 @@ func (a *App) NewConversation() string {
 	return id
 }
 
+// OpenFileInUI emits an event for the frontend to open the given file in the viewer
+func (a *App) OpenFileInUI(path string) {
+	if a.ctx != nil && strings.TrimSpace(path) != "" {
+		runtime.EventsEmit(a.ctx, "workspace:open_file", map[string]string{"path": path})
+	}
+}
+
 // UIFileEntry represents a single file or directory for the UI explorer
 type UIFileEntry struct {
 	Name    string `json:"name"`

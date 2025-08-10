@@ -50,6 +50,10 @@ export function NewConversation() {
   return window['go']['bridge']['App']['NewConversation']();
 }
 
+export function OpenFileInUI(arg1) {
+  return window['go']['bridge']['App']['OpenFileInUI'](arg1);
+}
+
 export function PromptApproval(arg1, arg2, arg3) {
   return window['go']['bridge']['App']['PromptApproval'](arg1, arg2, arg3);
 }

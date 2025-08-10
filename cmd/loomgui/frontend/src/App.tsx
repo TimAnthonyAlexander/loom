@@ -568,6 +568,15 @@ const App: React.FC = () => {
         );
     };
 
+    // Listen for backend requests to open a file (e.g., after read/edit tools)
+    useEffect(() => {
+        const handler = (payload: any) => {
+            const p = String(payload?.path || '').trim();
+            if (p) openFile(p);
+        };
+        EventsOn('workspace:open_file', handler);
+    }, []);
+
     return (
         <Box display="flex" height="100vh" sx={{ bgcolor: 'background.default' }}>
             {/* Left: File Navigator */}

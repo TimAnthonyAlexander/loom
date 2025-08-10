@@ -45,6 +45,8 @@ type UIBridge interface {
 	EmitReasoning(text string, done bool)
 	PromptApproval(actionID string, summary string, diff string) (approved bool)
 	SetBusy(isBusy bool)
+	// Request the UI to open a file path (relative to workspace) in the file viewer
+	OpenFileInUI(path string)
 }
 
 // ApprovalRequest tracks an outstanding approval request.
@@ -517,6 +519,28 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 				e.bridge.SendChat("system", fmt.Sprintf("[debug] Tool executed: name=%s safe=%v diffLen=%d contentLen=%d", toolCallReceived.Name, execResult.Safe, len(execResult.Diff), len(execResult.Content)))
 			}
 
+			// If the tool was file-related, hint UI to open the file
+			if e.bridge != nil {
+				// Try to extract a path field from args JSON for known tools
+				type pathArg struct {
+					Path string `json:"path"`
+				}
+				var pa pathArg
+				_ = json.Unmarshal(toolCallReceived.Args, &pa)
+				if pa.Path == "" {
+					// Some tools may use "file" key
+					var alt map[string]any
+					if json.Unmarshal(toolCallReceived.Args, &alt) == nil {
+						if v, ok := alt["file"].(string); ok && strings.TrimSpace(v) != "" {
+							pa.Path = v
+						}
+					}
+				}
+				if strings.TrimSpace(pa.Path) != "" && (toolCallReceived.Name == "read_file" || toolCallReceived.Name == "edit_file" || toolCallReceived.Name == "apply_edit") {
+					e.bridge.OpenFileInUI(pa.Path)
+				}
+			}
+
 			// Approval path returns structured result to the model
 			if !execResult.Safe {
 				approved := e.UserApproved(toolCallReceived, execResult.Diff)
@@ -596,6 +620,25 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 				if os.Getenv("LOOM_DEBUG_ENGINE") == "1" || strings.EqualFold(os.Getenv("LOOM_DEBUG_ENGINE"), "true") {
 					e.bridge.SendChat("system", fmt.Sprintf("[debug] Non-stream tool executed: name=%s safe=%v diffLen=%d contentLen=%d", toolCallReceived.Name, execResult.Safe, len(execResult.Diff), len(execResult.Content)))
 				}
+				if e.bridge != nil {
+					type pathArg struct {
+						Path string `json:"path"`
+					}
+					var pa pathArg
+					_ = json.Unmarshal(toolCallReceived.Args, &pa)
+					if pa.Path == "" {
+						var alt map[string]any
+						if json.Unmarshal(toolCallReceived.Args, &alt) == nil {
+							if v, ok := alt["file"].(string); ok && strings.TrimSpace(v) != "" {
+								pa.Path = v
+							}
+						}
+					}
+					if strings.TrimSpace(pa.Path) != "" && (toolCallReceived.Name == "read_file" || toolCallReceived.Name == "edit_file" || toolCallReceived.Name == "apply_edit") {
+						e.bridge.OpenFileInUI(pa.Path)
+					}
+				}
+
 				if !execResult.Safe {
 					approved := e.UserApproved(toolCallReceived, execResult.Diff)
 					payload := map[string]any{

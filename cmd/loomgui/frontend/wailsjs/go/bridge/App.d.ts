@@ -31,6 +31,8 @@ export function LoadConversation(arg1:string):Promise<void>;
 
 export function NewConversation():Promise<string>;
 
+export function OpenFileInUI(arg1:string):Promise<void>;
+
 export function PromptApproval(arg1:string,arg2:string,arg3:string):Promise<boolean>;
 
 export function ReadWorkspaceFile(arg1:string):Promise<bridge.UIReadFileResult>;
