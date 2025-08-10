@@ -68,8 +68,14 @@ export default function App() {
                         <img
                             src="/screenshot1.png"
                             alt="Loom screenshot"
-                            style={{ width: '100%', maxWidth: 800, borderRadius: 8, boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}
-                        />
+                            style={{
+                                width: '100%',
+                                borderRadius: 8,
+                                boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+                                objectFit: 'cover',
+                                objectPosition: 'center'
+                            }}
+                        ></img>
                     </div>
                 </div>
             </header>
