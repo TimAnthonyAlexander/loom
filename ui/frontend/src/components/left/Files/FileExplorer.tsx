@@ -215,12 +215,15 @@ export default function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOp
                             </Box>
                         );
                     }
+                    const entry = pathToEntry[item.path];
                     const isOpen = item.isDir && !!expandedDirs[item.path];
                     const isSelected = selectedPath === item.path;
                     const FileIcon = item.isDir
                         ? (isOpen ? FolderOpenIcon : FolderIcon)
                         : getFileIcon(item.name);
                     const Chevron = item.isDir ? (isOpen ? ExpandMoreIcon : ChevronRightIcon) : null;
+                    const isIgnored = !!entry?.ignored;
+                    const isHidden = !!entry?.hidden;
                     return (
                         <ListItemButton
                             key={item.path}
@@ -234,6 +237,7 @@ export default function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOp
                                 py: 0.25,
                                 pl: 0.5,
                                 pr: 1,
+                                opacity: isIgnored ? 0.65 : 1,
                                 '&.Mui-selected': {
                                     bgcolor: (t) => alpha(t.palette.primary.main, 0.12),
                                 },
@@ -242,23 +246,65 @@ export default function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOp
                         >
                             <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
                                 <Box sx={{ width: (item.depth + 1) * 12, flex: '0 0 auto' }} />
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0, width: '100%' }}>
                                     <Box sx={{ width: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary' }}>
                                         {Chevron ? <Chevron fontSize="small" /> : <span style={{ width: 18 }} />}
                                     </Box>
-                                    <ListItemIcon sx={{ minWidth: 20, color: item.isDir ? 'text.secondary' : 'text.disabled' }}>
+                                    <ListItemIcon sx={{ minWidth: 20, color: isIgnored ? 'text.disabled' : (item.isDir ? 'text.secondary' : 'text.disabled') }}>
                                         <FileIcon fontSize="small" />
                                     </ListItemIcon>
-                                    <ListItemText
-                                        primaryTypographyProps={{
-                                            fontFamily: 'ui-monospace, Menlo, monospace',
-                                            fontSize: 13,
-                                            whiteSpace: 'nowrap',
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis',
-                                        }}
-                                        primary={item.name}
-                                    />
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0, flex: 1 }}>
+                                        <ListItemText
+                                            primaryTypographyProps={{
+                                                fontFamily: 'ui-monospace, Menlo, monospace',
+                                                fontSize: 13,
+                                                whiteSpace: 'nowrap',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                color: isHidden && !isSelected ? 'text.secondary' : undefined,
+                                            }}
+                                            primary={item.name}
+                                        />
+                                        {(isIgnored || isHidden) && (
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: '0 0 auto' }}>
+                                                {isIgnored && (
+                                                    <Typography
+                                                        variant="caption"
+                                                        sx={{
+                                                            px: 0.5,
+                                                            py: 0.1,
+                                                            borderRadius: 0.5,
+                                                            bgcolor: (t) => alpha(t.palette.warning.main, 0.08),
+                                                            color: 'warning.main',
+                                                            border: (t) => `1px solid ${alpha(t.palette.warning.main, 0.3)}`,
+                                                            fontWeight: 500,
+                                                            textTransform: 'none',
+                                                        }}
+                                                    >
+                                                        ignored
+                                                    </Typography>
+                                                )}
+                                                {isHidden && (
+                                                    <Typography
+                                                        variant="caption"
+                                                        sx={{
+                                                            px: 0.5,
+                                                            py: 0.1,
+                                                            borderRadius: 0.5,
+                                                            bgcolor: (t) => alpha(t.palette.text.primary, 0.04),
+                                                            color: 'text.secondary',
+                                                            border: 1,
+                                                            borderColor: 'divider',
+                                                            fontWeight: 500,
+                                                            textTransform: 'none',
+                                                        }}
+                                                    >
+                                                        hidden
+                                                    </Typography>
+                                                )}
+                                            </Box>
+                                        )}
+                                    </Box>
                                 </Box>
                             </Box>
                         </ListItemButton>

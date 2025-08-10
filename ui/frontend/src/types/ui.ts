@@ -16,6 +16,8 @@ export interface UIFileEntry {
   is_dir: boolean;
   size?: number;
   mod_time: string;
+  ignored?: boolean;
+  hidden?: boolean;
 }
 
 export interface UIListDirResult {

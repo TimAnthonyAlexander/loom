@@ -41,6 +41,8 @@ export namespace bridge {
 	    is_dir: boolean;
 	    size?: number;
 	    mod_time: string;
+	    ignored?: boolean;
+	    hidden?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new UIFileEntry(source);
@@ -53,6 +55,8 @@ export namespace bridge {
 	        this.is_dir = source["is_dir"];
 	        this.size = source["size"];
 	        this.mod_time = source["mod_time"];
+	        this.ignored = source["ignored"];
+	        this.hidden = source["hidden"];
 	    }
 	}
 	export class UIListDirResult {

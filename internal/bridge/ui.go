@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	gitignore "github.com/go-git/go-git/v5/plumbing/format/gitignore"
 	"github.com/loom/loom/internal/adapter"
 	"github.com/loom/loom/internal/config"
 	"github.com/loom/loom/internal/engine"
@@ -28,6 +29,8 @@ type App struct {
 	busy   bool
 	// persisted settings (API keys, endpoints)
 	settings config.Settings
+	// cached gitignore matcher for current workspace
+	gitMatcher gitignore.Matcher
 }
 
 // NewApp creates a new App application struct.
@@ -398,9 +401,80 @@ func (a *App) SetWorkspace(path string) {
 	if err := config.Save(a.settings); err != nil {
 		log.Printf("Failed to persist last workspace: %v", err)
 	}
+	// Load .gitignore matcher for this workspace
+	a.gitMatcher = a.buildGitignoreMatcher(norm)
 	// After switching, log current rules snapshot for debug
 	user, project, _ := config.LoadRules(path)
 	log.Printf("SetWorkspace: loaded rules for %s -> user=%d, project=%d", path, len(user), len(project))
+}
+
+// buildGitignoreMatcher scans the workspace for .gitignore files and builds a matcher
+func (a *App) buildGitignoreMatcher(root string) gitignore.Matcher {
+	absRoot, err := filepath.Abs(strings.TrimSpace(root))
+	if err != nil || absRoot == "" {
+		return nil
+	}
+	var patterns []gitignore.Pattern
+	// Always include patterns from .git/info/exclude if present
+	readGitignoreFile := func(baseDir, filePath string) {
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			return
+		}
+		lines := strings.Split(string(data), "\n")
+		relBase, err := filepath.Rel(absRoot, baseDir)
+		if err != nil {
+			relBase = ""
+		}
+		relBase = filepath.ToSlash(relBase)
+		for _, line := range lines {
+			line = strings.TrimRight(line, "\r")
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+				continue
+			}
+			var baseSegs []string
+			if relBase != "" {
+				baseSegs = strings.Split(relBase, "/")
+			}
+			p := gitignore.ParsePattern(line, baseSegs)
+			patterns = append(patterns, p)
+		}
+	}
+
+	// Load top-level .gitignore
+	top := filepath.Join(absRoot, ".gitignore")
+	if _, err := os.Stat(top); err == nil {
+		readGitignoreFile(absRoot, top)
+	}
+	// Load .git/info/exclude if present
+	if infoExclude := filepath.Join(absRoot, ".git", "info", "exclude"); func() bool { _, err := os.Stat(infoExclude); return err == nil }() {
+		readGitignoreFile(absRoot, infoExclude)
+	}
+	// Walk to find nested .gitignore files
+	_ = filepath.WalkDir(absRoot, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		name := d.Name()
+		if d.IsDir() {
+			// Skip .git directory entirely
+			if name == ".git" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if name == ".gitignore" {
+			base := filepath.Dir(path)
+			readGitignoreFile(base, path)
+		}
+		return nil
+	})
+	if len(patterns) == 0 {
+		return nil
+	}
+	m := gitignore.NewMatcher(patterns)
+	return m
 }
 
 // normalizeWorkspacePath expands ~ and returns a cleaned absolute path
@@ -741,6 +815,9 @@ type UIFileEntry struct {
 	IsDir   bool   `json:"is_dir"`
 	Size    int64  `json:"size,omitempty"`
 	ModTime string `json:"mod_time"`
+	// Additional UI flags
+	Ignored bool `json:"ignored,omitempty"`
+	Hidden  bool `json:"hidden,omitempty"`
 }
 
 // UIListDirResult is the response for directory listings in the UI
@@ -819,15 +896,18 @@ func (a *App) ListWorkspaceDir(relPath string) UIListDirResult {
 	var dirs, files []UIFileEntry
 	for _, e := range entries {
 		name := e.Name()
-		// Skip .loom internal directory by default to reduce noise
-		if name == ".loom" {
-			continue
-		}
 		p := filepath.Join(relDisplay, name)
 		p = filepath.ToSlash(strings.TrimPrefix(p, "./"))
 		info, err := e.Info()
 		if err != nil {
 			continue
+		}
+		// Determine flags
+		isHidden := strings.HasPrefix(name, ".") && name != "." && name != ".."
+		isIgnored := false
+		if a.gitMatcher != nil {
+			segments := strings.Split(filepath.ToSlash(p), "/")
+			isIgnored = a.gitMatcher.Match(segments, e.IsDir())
 		}
 		item := UIFileEntry{
 			Name:    name,
@@ -835,6 +915,8 @@ func (a *App) ListWorkspaceDir(relPath string) UIListDirResult {
 			IsDir:   e.IsDir(),
 			Size:    info.Size(),
 			ModTime: info.ModTime().Format(time.RFC3339),
+			Ignored: isIgnored,
+			Hidden:  isHidden,
 		}
 		if e.IsDir() {
 			dirs = append(dirs, item)
