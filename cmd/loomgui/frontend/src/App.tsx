@@ -49,6 +49,28 @@ const App: React.FC = () => {
     const [openTabs, setOpenTabs] = useState<EditorTabItem[]>([]);
     const [activeTab, setActiveTab] = useState<string>('');
 
+    // Normalize workspace-relative paths so tab identity is consistent
+    const normalizeWorkspaceRelPath = (p: string): string => {
+        let s = (p || '').trim();
+        if (!s) return '';
+        // Convert backslashes to forward slashes
+        s = s.replace(/\\/g, '/');
+        // If absolute under current workspace, convert to relative
+        const ws = (workspacePath || '').replace(/\\/g, '/').trim();
+        if (ws) {
+            const wsClean = ws.endsWith('/') ? ws.slice(0, -1) : ws;
+            if (s === wsClean) s = '';
+            else if (s.startsWith(wsClean + '/')) s = s.slice(wsClean.length + 1);
+        }
+        // Remove any leading './'
+        while (s.startsWith('./')) s = s.slice(2);
+        // Collapse duplicate slashes
+        s = s.replace(/\/{2,}/g, '/');
+        // Avoid lone root
+        if (s === '/') s = '';
+        return s;
+    };
+
     const orderedConversations = useMemo(() => {
         if (!currentConversationId) return conversations;
         const idx = conversations.findIndex(c => c.id === currentConversationId);
@@ -273,21 +295,22 @@ const App: React.FC = () => {
     };
 
     const openFile = (path: string) => {
-        const exists = openTabs.find((t) => t.path === path);
+        const normPath = normalizeWorkspaceRelPath(path);
+        const exists = openTabs.find((t) => t.path === normPath);
         if (exists) {
-            setActiveTab(path);
+            setActiveTab(normPath);
             return;
         }
-        Bridge.ReadWorkspaceFile(path)
+        Bridge.ReadWorkspaceFile(normPath)
             .then((res: any) => {
-                const title = (path.split('/').pop() || path);
+                const title = (normPath.split('/').pop() || normPath);
                 const content = String(res?.content || '');
                 const serverRev = String(res?.serverRev || '');
-                const language = guessLanguage(path);
+                const language = guessLanguage(normPath);
                 setOpenTabs((prev) => [
                     ...prev,
                     {
-                        path,
+                        path: normPath,
                         title,
                         content,
                         language,
@@ -298,7 +321,7 @@ const App: React.FC = () => {
                         scrollTop: 0,
                     },
                 ]);
-                setActiveTab(path);
+                setActiveTab(normPath);
             })
             .catch(() => { });
     };
@@ -336,7 +359,7 @@ const App: React.FC = () => {
     // Listen for backend requests to open a file (e.g., after read/edit tools)
     useEffect(() => {
         const handler = (payload: any) => {
-            const p = String(payload?.path || '').trim();
+            const p = normalizeWorkspaceRelPath(String(payload?.path || ''));
             if (p) openFile(p);
         };
         EventsOn('workspace:open_file', handler);
