@@ -1,262 +1,26 @@
-import React, { useState, useEffect, useRef, ReactElement, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { EventsOn, LogInfo } from '../wailsjs/runtime/runtime';
 import { SendUserMessage, Approve, SetModel, GetSettings, SaveSettings, SetWorkspace, ClearConversation, GetConversations, LoadConversation, NewConversation } from '../wailsjs/go/bridge/App';
 import * as Bridge from '../wailsjs/go/bridge/App';
 import * as AppBridge from '../wailsjs/go/bridge/App';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import remarkBreaks from 'remark-breaks';
-import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneLight as oneLightStyle } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import ModelSelector from './ModelSelector';
-import {
-    Box,
-    Stack,
-    Typography,
-    Paper,
-    Divider,
-    List,
-    ListItem,
-    ListItemText,
-    Chip,
-    TextField,
-    Button,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    IconButton,
-    Tooltip,
-    Table as MuiTable,
-    TableCell as MuiTableCell,
-    TableRow as MuiTableRow,
-    TableContainer as MuiTableContainer,
-    Accordion,
-    AccordionSummary,
-    AccordionDetails,
-    CircularProgress,
-    Tabs,
-    Tab,
-} from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import SendIcon from '@mui/icons-material/Send';
-import SettingsIcon from '@mui/icons-material/Settings';
-import RuleIcon from '@mui/icons-material/Rule';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import CloseIcon from '@mui/icons-material/Close';
+import { Box } from '@mui/material';
+import Sidebar from './components/left/Sidebar';
+import EditorPanel from './components/center/EditorPanel';
+import ChatPanel from './components/right/Chat/ChatPanel';
+import ApprovalDialog from './components/dialogs/ApprovalDialog';
+import SettingsDialog from './components/dialogs/SettingsDialog';
+import RulesDialog from './components/dialogs/RulesDialog';
+import WorkspaceDialog from './components/dialogs/WorkspaceDialog';
+import { ChatMessage, ApprovalRequest, UIFileEntry, UIListDirResult, ConversationListItem, EditorTabItem } from './types/ui';
 
-// Custom table components using MUI Table APIs
-const CustomTable = ({ children }: any) => (
-    <MuiTableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1 }}>
-        <MuiTable size="small">{children}</MuiTable>
-    </MuiTableContainer>
-)
-
-const CustomTableRow = ({ children, ...props }: any) => (
-    <MuiTableRow {...props}>{children}</MuiTableRow>
-)
-
-const CustomTableCell = ({ children, ...props }: any) => (
-    <MuiTableCell {...props}>{children}</MuiTableCell>
-)
-
-const CustomTableHeader = ({ children, ...props }: any) => (
-    <MuiTableCell {...props} component="th">
-        {children}
-    </MuiTableCell>
-)
-
-// Error boundary for ReactMarkdown
-class MarkdownErrorBoundary extends React.Component<
-    { children: React.ReactNode },
-    { hasError: boolean; error?: Error }
-> {
-    constructor(props: { children: React.ReactNode }) {
-        super(props);
-        this.state = { hasError: false };
-    }
-
-    static getDerivedStateFromError(error: Error) {
-        return { hasError: true, error };
-    }
-
-    componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-        console.error('Markdown rendering error:', error, errorInfo);
-    }
-
-    render() {
-        if (this.state.hasError) {
-            return (
-                <div className="markdown-error">
-                    <p>Failed to render markdown content:</p>
-                    <pre>{this.state.error?.message}</pre>
-                    <details>
-                        <summary>Raw content</summary>
-                        <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.8em' }}>
-                            {typeof this.props.children === 'string' ? this.props.children : 'Content not available'}
-                        </pre>
-                    </details>
-                </div>
-            );
-        }
-
-        return this.props.children;
-    }
-}
-
-// Helper function to format diff output with MUI components
-const formatDiff = (diff: string): ReactElement => {
-    if (!diff) return (
-        <Typography variant="body2" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-            No changes
-        </Typography>
-    )
-
-    const lines = diff.split('\n')
-    let inHeader = true
-    const headerLines: string[] = []
-    const contentLines: string[] = []
-
-    for (const line of lines) {
-        if (inHeader && (line.startsWith('---') || line.startsWith('+++'))) {
-            headerLines.push(line)
-        } else if (line === '') {
-            inHeader = false
-        } else {
-            contentLines.push(line)
-        }
-    }
-
-    return (
-        <Box>
-            {headerLines.length > 0 && (
-                <Box sx={{ color: 'text.secondary', mb: 1 }}>
-                    {headerLines.map((line, i) => (
-                        <Typography
-                            key={`header-${i}`}
-                            variant="caption"
-                            component="div"
-                            sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
-                        >
-                            {line}
-                        </Typography>
-                    ))}
-                </Box>
-            )}
-            <Box>
-                {contentLines.map((line, i) => {
-                    if (line.startsWith('+')) {
-                        const match = line.match(/^(\+)(\s*\d+:\s)(.*)$/)
-                        return (
-                            <Box
-                                key={`line-${i}`}
-                                sx={{
-                                    bgcolor: 'success.light',
-                                    color: 'success.contrastText',
-                                    px: 1,
-                                    py: 0.25,
-                                    borderRadius: 0.5,
-                                    my: 0.25,
-                                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                                }}
-                            >
-                                {match ? (
-                                    <>
-                                        <Box component="span" sx={{ opacity: 0.75, mr: 1 }}>
-                                            {match[2]}
-                                        </Box>
-                                        {match[3]}
-                                    </>
-                                ) : (
-                                    line
-                                )}
-                            </Box>
-                        )
-                    }
-
-                    if (line.startsWith('-')) {
-                        const match = line.match(/^(\-)(\s*\d+:\s)(.*)$/)
-                        return (
-                            <Box
-                                key={`line-${i}`}
-                                sx={{
-                                    bgcolor: 'error.light',
-                                    color: 'error.contrastText',
-                                    px: 1,
-                                    py: 0.25,
-                                    borderRadius: 0.5,
-                                    my: 0.25,
-                                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                                }}
-                            >
-                                {match ? (
-                                    <>
-                                        <Box component="span" sx={{ opacity: 0.75, mr: 1 }}>
-                                            {match[2]}
-                                        </Box>
-                                        {match[3]}
-                                    </>
-                                ) : (
-                                    line
-                                )}
-                            </Box>
-                        )
-                    }
-
-                    if (line.match(/^\d+ line\(s\) changed$/)) {
-                        return (
-                            <Typography key={`line-${i}`} variant="caption" color="text.secondary">
-                                {line}
-                            </Typography>
-                        )
-                    }
-
-                    const match = line.match(/^(\s)(\s*\d+:\s)(.*)$/)
-                    if (match) {
-                        return (
-                            <Box key={`line-${i}`} sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                                <Box component="span" sx={{ opacity: 0.5, mr: 1 }}>
-                                    {match[2]}
-                                </Box>
-                                {match[3]}
-                            </Box>
-                        )
-                    }
-
-                    return (
-                        <Box key={`line-${i}`} sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                            {line}
-                        </Box>
-                    )
-                })}
-            </Box>
-        </Box>
-    )
-}
-
-// Define types for messages from backend
-interface ChatMessage {
-    role: string;
-    content: string;
-    id?: string;
-}
-
-interface ApprovalRequest {
-    id: string;
-    summary: string;
-    diff: string;
-}
-
-// File explorer types from backend
-interface UIFileEntry { name: string; path: string; is_dir: boolean; size?: number; mod_time: string }
-interface UIListDirResult { path: string; entries: UIFileEntry[]; is_dir: boolean; error?: string }
+// Types moved to ./types/ui
 
 const App: React.FC = () => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState('');
     const [approvalRequest, setApprovalRequest] = useState<ApprovalRequest | null>(null);
     const [currentModel, setCurrentModel] = useState<string>('');
-    const messagesEndRef = useRef<null | HTMLDivElement>(null);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
     const [busy, setBusy] = useState<boolean>(false);
     const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
     const [workspaceOpen, setWorkspaceOpen] = useState<boolean>(false);
@@ -271,7 +35,7 @@ const App: React.FC = () => {
     const [projectRules, setProjectRules] = useState<string[]>([]);
     const [newUserRule, setNewUserRule] = useState<string>('');
     const [newProjectRule, setNewProjectRule] = useState<string>('');
-    const [conversations, setConversations] = useState<{ id: string; title: string; updated_at?: string }[]>([]);
+    const [conversations, setConversations] = useState<ConversationListItem[]>([]);
     const [currentConversationId, setCurrentConversationId] = useState<string>('');
     const [reasoningText, setReasoningText] = useState<string>('');
     const [reasoningOpen, setReasoningOpen] = useState<boolean>(false);
@@ -280,20 +44,17 @@ const App: React.FC = () => {
     // File explorer state
     const [dirCache, setDirCache] = useState<Record<string, UIFileEntry[]>>({}); // key: dir path ('' for root)
     const [expandedDirs, setExpandedDirs] = useState<Record<string, boolean>>({});
-    const [openTabs, setOpenTabs] = useState<{ path: string; title: string; content: string }[]>([]);
+    const [openTabs, setOpenTabs] = useState<EditorTabItem[]>([]);
     const [activeTab, setActiveTab] = useState<string>('');
 
-    const orderedConversations = useMemo(
-        () => {
-            if (!currentConversationId) return conversations;
-            const idx = conversations.findIndex(c => c.id === currentConversationId);
-            if (idx < 0) return conversations;
-            const current = conversations[idx];
-            const rest = conversations.filter((_, i) => i !== idx);
-            return [current, ...rest];
-        },
-        [conversations, currentConversationId]
-    );
+    const orderedConversations = useMemo(() => {
+        if (!currentConversationId) return conversations;
+        const idx = conversations.findIndex(c => c.id === currentConversationId);
+        if (idx < 0) return conversations;
+        const current = conversations[idx];
+        const rest = conversations.filter((_, i) => i !== idx);
+        return [current, ...rest];
+    }, [conversations, currentConversationId]);
 
     // Track the index of the last user message to anchor the reasoning panel before the assistant reply
     const lastUserIdx = useMemo(() => {
@@ -446,13 +207,13 @@ const App: React.FC = () => {
 
     // Scroll to bottom when messages change
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
     }, [messages]);
 
     const handleSend = () => {
         if (!input.trim() || busy) return;
-
-        // Send message to backend
         SendUserMessage(input);
         setInput('');
     };
@@ -468,7 +229,8 @@ const App: React.FC = () => {
     const handleModelSelect = (model: string) => {
         setCurrentModel(model);
         SetModel(model).catch(err => {
-            console.error("Failed to set model:", err);
+            // eslint-disable-next-line no-console
+            console.error('Failed to set model:', err);
         });
     };
 
@@ -483,7 +245,7 @@ const App: React.FC = () => {
             .then((id: string) => {
                 setCurrentConversationId(id);
                 // Prepend a placeholder until next refresh
-                setConversations((prev: { id: string; title: string; updated_at?: string }[]) => [{ id, title: 'New Conversation' }, ...prev]);
+                setConversations((prev: ConversationListItem[]) => [{ id, title: 'New Conversation' }, ...prev]);
             })
             .catch(() => { });
     };
@@ -532,41 +294,7 @@ const App: React.FC = () => {
         }
     };
 
-    const renderDir = (path: string) => {
-        const key = path || '';
-        const entries = dirCache[key] || [];
-        return (
-            <List dense disablePadding>
-                {entries.map((e) => {
-                    const childKey = e.path;
-                    if (e.is_dir) {
-                        const isOpen = !!expandedDirs[childKey];
-                        return (
-                            <Box key={childKey} sx={{ pl: path ? 1.5 : 0.5 }}>
-                                <ListItem disableGutters sx={{ cursor: 'pointer' }} onClick={() => toggleDir(childKey)}>
-                                    <ListItemText primaryTypographyProps={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 13 }} primary={`${isOpen ? '▼' : '▶'} ${e.name}`} />
-                                </ListItem>
-                                {isOpen && (dirCache[childKey] ? (
-                                    <Box sx={{ pl: 1 }}>
-                                        {renderDir(childKey)}
-                                    </Box>
-                                ) : (
-                                    <Box sx={{ pl: 2, py: 0.5, color: 'text.secondary' }}>
-                                        <Typography variant="caption">Loading…</Typography>
-                                    </Box>
-                                ))}
-                            </Box>
-                        );
-                    }
-                    return (
-                        <ListItem key={childKey} disableGutters sx={{ pl: path ? 3.5 : 2, cursor: 'pointer' }} onClick={() => openFile(childKey)}>
-                            <ListItemText primaryTypographyProps={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 13 }} primary={e.name} />
-                        </ListItem>
-                    );
-                })}
-            </List>
-        );
-    };
+    // Directory tree rendering is handled by the Sidebar > FileExplorer component
 
     // Listen for backend requests to open a file (e.g., after read/edit tools)
     useEffect(() => {
@@ -579,619 +307,115 @@ const App: React.FC = () => {
 
     return (
         <Box display="flex" height="100vh" sx={{ bgcolor: 'background.default' }}>
-            {/* Left: File Navigator */}
-            <Box
-                sx={{
-                    width: 280,
-                    borderRight: 1,
-                    borderColor: 'divider',
-                    px: 2,
-                    py: 2,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 2,
-                    overflowY: 'auto',
-                }}
-            >
-                <Box sx={{ pt: 2 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                        <Box component="img" src="/logo.png" alt="Loom" sx={{ width: 28, height: 28, borderRadius: 0.5 }} />
-                        <Typography variant="h6" fontWeight={600}>
-                            Loom v2
-                        </Typography>
-                        <Box sx={{ flex: 1 }} />
-                        <Tooltip title="Select Workspace">
-                            <IconButton size="small" onClick={() => setWorkspaceOpen(true)}>
-                                <Typography variant="caption">WS</Typography>
-                            </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Rules">
-                            <IconButton size="small" onClick={() => setRulesOpen(true)}>
-                                <RuleIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Settings">
-                            <IconButton size="small" onClick={() => setSettingsOpen(true)}>
-                                <SettingsIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
-                    </Box>
-                    <Typography variant="body2" color="text.secondary">
-                        Minimal, calm, precise.
-                    </Typography>
-                </Box>
-
-                <Box>
-                    <ModelSelector onSelect={handleModelSelect} currentModel={currentModel} />
-                </Box>
-                <Box>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Files</Typography>
-                    <Paper variant="outlined" sx={{ p: 1, maxHeight: '60vh', overflowY: 'auto' }}>
-                        {renderDir('')}
-                    </Paper>
-                </Box>
-                <Box>
-                    <Typography variant="subtitle2" sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span>Conversations</span>
-                        <Button size="small" variant="outlined" onClick={handleNewConversation}>New</Button>
-                    </Typography>
-                    <Paper variant="outlined" sx={{ p: 1 }}>
-                        <List dense sx={{ width: '100%' }}>
-                            {orderedConversations.slice(0, 5).map((c: { id: string; title: string; updated_at?: string }) => (
-                                <ListItem
-                                    key={c.id}
-                                    disableGutters
-                                    onClick={() => handleSelectConversation(c.id)}
-                                    sx={{ cursor: 'pointer', bgcolor: c.id === currentConversationId ? 'action.selected' : 'transparent', borderRadius: 0.5, px: 1 }}
-                                >
-                                    <ListItemText
-                                        primary={c.title || c.id}
-                                        secondary={c.updated_at ? new Date(c.updated_at).toLocaleString() : undefined}
-                                        primaryTypographyProps={{ fontWeight: c.id === currentConversationId ? 700 : 500 }}
-                                    />
-                                </ListItem>
-                            ))}
-                            {conversations.length === 0 && (
-                                <ListItem disableGutters>
-                                    <ListItemText primary="No conversations yet" />
-                                </ListItem>
-                            )}
-                        </List>
-                    </Paper>
-                </Box>
+            {/* Left: Sidebar */}
+            <Box sx={{ width: 280, borderRight: 1, borderColor: 'divider' }}>
+                <Sidebar
+                    onOpenWorkspace={() => setWorkspaceOpen(true)}
+                    onOpenRules={() => setRulesOpen(true)}
+                    onOpenSettings={() => setSettingsOpen(true)}
+                    currentModel={currentModel}
+                    onSelectModel={handleModelSelect}
+                    dirCache={dirCache}
+                    expandedDirs={expandedDirs}
+                    onToggleDir={toggleDir}
+                    onOpenFile={openFile}
+                    conversations={orderedConversations.slice(0, 5)}
+                    currentConversationId={currentConversationId}
+                    onSelectConversation={handleSelectConversation}
+                    onNewConversation={handleNewConversation}
+                />
             </Box>
 
             {/* Center: Tabbed Editor */}
-            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, height: '100vh', borderRight: 1, borderColor: 'divider' }}>
-                <Box sx={{ px: 2, pt: 1, borderBottom: 1, borderColor: 'divider' }}>
-                    <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} variant="scrollable" scrollButtons={false} sx={{ minHeight: 36 }}>
-                        {openTabs.map((t) => (
-                            <Tab key={t.path} label={
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <span style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
-                                    <IconButton size="small" onClick={(e) => { e.stopPropagation(); closeTab(t.path); }}>
-                                        <CloseIcon fontSize="small" />
-                                    </IconButton>
-                                </Box>
-                            } value={t.path} sx={{ minHeight: 32, fontSize: 12 }} />
-                        ))}
-                    </Tabs>
-                </Box>
-                <Box sx={{ flex: 1, overflow: 'auto' }}>
-                    {activeTab ? (
-                        <Box sx={{ p: 2 }}>
-                            <Paper variant="outlined" sx={{ p: 1.5, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre', overflowX: 'auto' }}>
-                                {openTabs.find((t) => t.path === activeTab)?.content || ''}
-                            </Paper>
-                        </Box>
-                    ) : (
-                        <Box sx={{ p: 4, color: 'text.secondary' }}>
-                            <Typography variant="body2">Open a file from the left to view it here.</Typography>
-                        </Box>
-                    )}
-                </Box>
+            <Box sx={{ flex: 1 }}>
+                <EditorPanel
+                    openTabs={openTabs}
+                    activeTab={activeTab}
+                    onChangeActiveTab={setActiveTab}
+                    onCloseTab={closeTab}
+                />
             </Box>
 
             {/* Right: Chat */}
-            <Box sx={{ width: 420, display: 'flex', flexDirection: 'column', minWidth: 0, height: '100vh' }}>
-                <Box sx={{ flex: 1, overflowY: 'auto', px: 3, py: 2, minHeight: 0 }}>
-                    <Stack spacing={2}>
-                        {messages.map((msg: ChatMessage, index: number) => {
-                            const isUser = msg.role === 'user'
-                            const isSystem = msg.role === 'system'
-                            const isLastMessage = index === messages.length - 1
-                            const showSpinner = isSystem && isLastMessage && busy
+            <ChatPanel
+                messages={messages}
+                busy={busy}
+                lastUserIdx={lastUserIdx}
+                reasoningText={reasoningText}
+                reasoningOpen={reasoningOpen}
+                onToggleReasoning={setReasoningOpen}
+                input={input}
+                setInput={setInput}
+                onSend={handleSend}
+                onClear={() => { setMessages([]); ClearConversation(); }}
+                messagesEndRef={messagesEndRef}
+            />
 
-                            if (isSystem) {
-                                return (
-                                    <Box
-                                        key={index}
-                                        sx={{
-                                            p: 1.25,
-                                            borderRadius: 1.5,
-                                            border: '1px solid',
-                                            borderColor: 'divider',
-                                            bgcolor: 'grey.50',
-                                            color: 'text.secondary',
-                                        }}
-                                    >
-                                        <Stack direction="row" spacing={1.25} alignItems="flex-start">
-                                            <Box sx={{ pt: '3px' }}>
-                                                {showSpinner ? (
-                                                    <CircularProgress size={14} thickness={5} />
-                                                ) : (
-                                                    <InfoOutlinedIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
-                                                )}
-                                            </Box>
-                                            <Box sx={{ flex: 1, fontSize: '0.9rem' }}>
-                                                <MarkdownErrorBoundary>
-                                                    <ReactMarkdown
-                                                        remarkPlugins={[remarkGfm, remarkBreaks]}
-                                                        components={{
-                                                            code({ node, inline, className, children, ...props }: any) {
-                                                                const match = /language-(\w+)/.exec(className || '')
-                                                                return !inline && match ? (
-                                                                    <SyntaxHighlighter
-                                                                        style={oneLightStyle as any}
-                                                                        language={match[1]}
-                                                                        PreTag="div"
-                                                                        customStyle={{ fontSize: 12, lineHeight: 1.5 }}
-                                                                    >
-                                                                        {String(children).replace(/\n$/, '')}
-                                                                    </SyntaxHighlighter>
-                                                                ) : (
-                                                                    <Box
-                                                                        component="code"
-                                                                        className={className}
-                                                                        sx={{
-                                                                            bgcolor: 'action.hover',
-                                                                            borderRadius: 1,
-                                                                            px: 0.5,
-                                                                            py: 0.25,
-                                                                            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                                                                            fontSize: 12,
-                                                                        }}
-                                                                        {...props}
-                                                                    >
-                                                                        {children}
-                                                                    </Box>
-                                                                )
-                                                            },
-                                                            table: CustomTable,
-                                                            tr: CustomTableRow,
-                                                            td: CustomTableCell,
-                                                            th: CustomTableHeader,
-                                                        }}
-                                                    >
-                                                        {msg.content}
-                                                    </ReactMarkdown>
-                                                </MarkdownErrorBoundary>
-                                            </Box>
-                                        </Stack>
-                                    </Box>
-                                )
-                            }
-
-                            const containerProps = isUser
-                                ? { component: Box, sx: { p: 2, border: '0.1px solid #cccccc', borderRadius: 2, fontSize: '0.9rem' } }
-                                : { component: Box, sx: { py: 1, borderTop: '0.1px solid #eeeeee', borderBottom: '0.1px solid #eeeeee', fontSize: '0.9rem' } }
-
-                            return (
-                                <Box key={index} {...(containerProps as any)}>
-                                    {/* Reasoning panel shown after the last user message and before the assistant reply */}
-                                    {index === lastUserIdx && reasoningText && (
-                                        <Box sx={{ mb: 1 }}>
-                                            <Accordion
-                                                expanded={reasoningOpen}
-                                                onChange={(_, exp) => setReasoningOpen(exp)}
-                                                sx={{ boxShadow: 'none', bgcolor: 'transparent', '&:before': { display: 'none' } }}
-                                            >
-                                                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                                                    <Typography variant="subtitle2" fontWeight={600}>
-                                                        Planning / Reasoning
-                                                    </Typography>
-                                                </AccordionSummary>
-                                                <AccordionDetails>
-                                                    <MarkdownErrorBoundary>
-                                                        <Box sx={{ color: 'text.secondary', fontSize: '0.9rem' }}>
-                                                            <ReactMarkdown
-                                                                remarkPlugins={[remarkGfm, remarkBreaks]}
-                                                                components={{
-                                                                    code({ node, inline, className, children, ...props }: any) {
-                                                                        const match = /language-(\w+)/.exec(className || '')
-                                                                        return !inline && match ? (
-                                                                            <SyntaxHighlighter
-                                                                                style={oneLightStyle as any}
-                                                                                language={match[1]}
-                                                                                PreTag="div"
-                                                                                customStyle={{ fontSize: 12, lineHeight: 1.5 }}
-                                                                            >
-                                                                                {String(children).replace(/\n$/, '')}
-                                                                            </SyntaxHighlighter>
-                                                                        ) : (
-                                                                            <Box
-                                                                                component="code"
-                                                                                className={className}
-                                                                                sx={{
-                                                                                    bgcolor: 'action.hover',
-                                                                                    borderRadius: 1,
-                                                                                    px: 0.5,
-                                                                                    py: 0.25,
-                                                                                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                                                                                    fontSize: 12,
-                                                                                }}
-                                                                                {...props}
-                                                                            >
-                                                                                {children}
-                                                                            </Box>
-                                                                        )
-                                                                    },
-                                                                    table: CustomTable,
-                                                                    tr: CustomTableRow,
-                                                                    td: CustomTableCell,
-                                                                    th: CustomTableHeader,
-                                                                }}
-                                                            >
-                                                                {reasoningText}
-                                                            </ReactMarkdown>
-                                                        </Box>
-                                                    </MarkdownErrorBoundary>
-                                                </AccordionDetails>
-                                            </Accordion>
-                                        </Box>
-                                    )}
-                                    <MarkdownErrorBoundary>
-                                        <ReactMarkdown
-                                            remarkPlugins={[remarkGfm, remarkBreaks]}
-                                            components={{
-                                                code({ node, inline, className, children, ...props }: any) {
-                                                    const match = /language-(\w+)/.exec(className || '')
-                                                    return !inline && match ? (
-                                                        <SyntaxHighlighter
-                                                            style={oneLightStyle as any}
-                                                            language={match[1]}
-                                                            PreTag="div"
-                                                            customStyle={{ fontSize: 12, lineHeight: 1.5 }}
-                                                        >
-                                                            {String(children).replace(/\n$/, '')}
-                                                        </SyntaxHighlighter>
-                                                    ) : (
-                                                        <Box
-                                                            component="code"
-                                                            className={className}
-                                                            sx={{
-                                                                bgcolor: 'action.hover',
-                                                                borderRadius: 1,
-                                                                px: 0.5,
-                                                                py: 0.25,
-                                                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                                                                fontSize: 12,
-                                                            }}
-                                                            {...props}
-                                                        >
-                                                            {children}
-                                                        </Box>
-                                                    )
-                                                },
-                                                table: CustomTable,
-                                                tr: CustomTableRow,
-                                                td: CustomTableCell,
-                                                th: CustomTableHeader,
-                                            }}
-                                        >
-                                            {msg.content}
-                                        </ReactMarkdown>
-                                    </MarkdownErrorBoundary>
-                                </Box>
-                            )
-                        })}
-                        <div ref={messagesEndRef} />
-                    </Stack>
-                </Box>
-
-                {/* Composer */}
-                <Divider />
-                <Box sx={{ px: 3, py: 2 }}>
-                    <Stack direction="row" spacing={1} alignItems="flex-end">
-                        <TextField
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' && !e.shiftKey) {
-                                    e.preventDefault()
-                                    if (!busy) handleSend()
-                                }
-                            }}
-                            placeholder="Ask Loom anything…"
-                            disabled={busy}
-                            multiline
-                            minRows={1}
-                            maxRows={8}
-                            fullWidth
-                        />
-                        <Button
-                            onClick={() => {
-                                // clear UI immediately, then ask backend to clear memory
-                                setMessages([])
-                                ClearConversation()
-                            }}
-                            color="inherit"
-                            disabled={busy}
-                            variant="outlined"
-                        >
-                            Clear
-                        </Button>
-                        <Button
-                            onClick={handleSend}
-                            disabled={busy || !input.trim()}
-                            variant="contained"
-                            endIcon={<SendIcon />}
-                        >
-                            {busy ? 'Working…' : 'Send'}
-                        </Button>
-                    </Stack>
-                </Box>
-            </Box>
-
-            {/* Approval Dialog */}
-            <Dialog open={!!approvalRequest} onClose={() => setApprovalRequest(null)} maxWidth="md" fullWidth>
-                <DialogTitle>Action Requires Approval</DialogTitle>
-                <DialogContent dividers>
-                    <Typography variant="subtitle1" sx={{ mb: 2 }}>
-                        {approvalRequest?.summary}
-                    </Typography>
-                    <Box sx={{
-                        bgcolor: 'background.paper',
-                        p: 2,
-                        borderRadius: 1,
-                        border: '1px solid',
-                        borderColor: 'divider',
-                        overflow: 'auto',
-                        maxHeight: 400,
-                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                    }}>
-                        {approvalRequest && formatDiff(approvalRequest.diff)}
-                    </Box>
-                </DialogContent>
-                <DialogActions>
-                    <Button color="inherit" onClick={() => handleApproval(false)}>Reject</Button>
-                    <Button variant="contained" onClick={() => handleApproval(true)}>Approve</Button>
-                </DialogActions>
-            </Dialog>
-
-            {/* Rules Dialog */}
-            <Dialog open={rulesOpen} onClose={() => setRulesOpen(false)} maxWidth="md" fullWidth>
-                <DialogTitle>Rules</DialogTitle>
-                <DialogContent dividers>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1 }}>
-                        <Box sx={{ flex: 1 }}>
-                            <Typography variant="subtitle2" sx={{ mb: 1 }}>User Rules (apply to all projects)</Typography>
-                            <Paper variant="outlined" sx={{ p: 1 }}>
-                                <Stack spacing={1}>
-                                    {userRules.map((r: string, idx: number) => (
-                                        <Stack key={`ur-${idx}`} direction="row" spacing={1} alignItems="center">
-                                            <TextField
-                                                size="small"
-                                                fullWidth
-                                                value={r}
-                                                onChange={(e) => {
-                                                    const next = [...userRules];
-                                                    next[idx] = e.target.value;
-                                                    setUserRules(next);
-                                                }}
-                                            />
-                                            <Button color="inherit" onClick={() => setUserRules(userRules.filter((_: string, i: number) => i !== idx))}>Delete</Button>
-                                        </Stack>
-                                    ))}
-                                    <Stack direction="row" spacing={1}>
-                                        <TextField
-                                            size="small"
-                                            fullWidth
-                                            placeholder="Add a new user rule"
-                                            value={newUserRule}
-                                            onChange={(e) => setNewUserRule(e.target.value)}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter' && newUserRule.trim()) {
-                                                    setUserRules([...userRules, newUserRule.trim()]);
-                                                    setNewUserRule('');
-                                                }
-                                            }}
-                                        />
-                                        <Button
-                                            variant="outlined"
-                                            onClick={() => {
-                                                if (newUserRule.trim()) {
-                                                    setUserRules([...userRules, newUserRule.trim()]);
-                                                    setNewUserRule('');
-                                                }
-                                            }}
-                                        >Add</Button>
-                                    </Stack>
-                                </Stack>
-                            </Paper>
-                        </Box>
-                        <Box sx={{ flex: 1 }}>
-                            <Typography variant="subtitle2" sx={{ mb: 1 }}>Project Rules (saved in .loom/rules.json)</Typography>
-                            <Paper variant="outlined" sx={{ p: 1 }}>
-                                <Stack spacing={1}>
-                                    {projectRules.map((r: string, idx: number) => (
-                                        <Stack key={`pr-${idx}`} direction="row" spacing={1} alignItems="center">
-                                            <TextField
-                                                size="small"
-                                                fullWidth
-                                                value={r}
-                                                onChange={(e) => {
-                                                    const next = [...projectRules];
-                                                    next[idx] = e.target.value;
-                                                    setProjectRules(next);
-                                                }}
-                                            />
-                                            <Button color="inherit" onClick={() => setProjectRules(projectRules.filter((_: string, i: number) => i !== idx))}>Delete</Button>
-                                        </Stack>
-                                    ))}
-                                    <Stack direction="row" spacing={1}>
-                                        <TextField
-                                            size="small"
-                                            fullWidth
-                                            placeholder="Add a new project rule"
-                                            value={newProjectRule}
-                                            onChange={(e) => setNewProjectRule(e.target.value)}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter' && newProjectRule.trim()) {
-                                                    setProjectRules([...projectRules, newProjectRule.trim()]);
-                                                    setNewProjectRule('');
-                                                }
-                                            }}
-                                        />
-                                        <Button
-                                            variant="outlined"
-                                            onClick={() => {
-                                                if (newProjectRule.trim()) {
-                                                    setProjectRules([...projectRules, newProjectRule.trim()]);
-                                                    setNewProjectRule('');
-                                                }
-                                            }}
-                                        >Add</Button>
-                                    </Stack>
-                                </Stack>
-                            </Paper>
-                        </Box>
-                    </Stack>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setRulesOpen(false)} color="inherit">Close</Button>
-                    <Button
-                        variant="contained"
-                        onClick={() => {
-                            AppBridge.SaveRules({ user: userRules, project: projectRules }).finally(() => setRulesOpen(false));
-                        }}
-                    >Save</Button>
-                </DialogActions>
-            </Dialog>
-            {/* Settings Dialog */}
-            <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>Settings</DialogTitle>
-                <DialogContent dividers>
-                    <Stack spacing={2} sx={{ mt: 1 }}>
-                        <TextField
-                            label="OpenAI API Key"
-                            type="password"
-                            autoComplete="off"
-                            value={openaiKey}
-                            onChange={(e) => setOpenaiKey(e.target.value)}
-                            placeholder="sk-..."
-                            fullWidth
-                        />
-                        <TextField
-                            label="Anthropic API Key"
-                            type="password"
-                            autoComplete="off"
-                            value={anthropicKey}
-                            onChange={(e) => setAnthropicKey(e.target.value)}
-                            placeholder="sk-ant-..."
-                            fullWidth
-                        />
-                        <TextField
-                            label="Ollama Endpoint"
-                            value={ollamaEndpoint}
-                            onChange={(e) => setOllamaEndpoint(e.target.value)}
-                            placeholder="http://localhost:11434"
-                            fullWidth
-                        />
-                        <Stack direction="row" spacing={2} alignItems="center">
-                            <Tooltip title="If enabled, shell commands proposed by the model are executed without manual approval.">
-                                <Chip label="Auto-Approve Shell" />
-                            </Tooltip>
-                            <Button variant={autoApproveShell ? 'contained' : 'outlined'} onClick={() => setAutoApproveShell(!autoApproveShell)}>
-                                {autoApproveShell ? 'On' : 'Off'}
-                            </Button>
-                        </Stack>
-                        <Stack direction="row" spacing={2} alignItems="center">
-                            <Tooltip title="If enabled, file edits are applied without manual approval.">
-                                <Chip label="Auto-Approve Edits" />
-                            </Tooltip>
-                            <Button variant={autoApproveEdits ? 'contained' : 'outlined'} onClick={() => setAutoApproveEdits(!autoApproveEdits)}>
-                                {autoApproveEdits ? 'On' : 'Off'}
-                            </Button>
-                        </Stack>
-                    </Stack>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setSettingsOpen(false)} color="inherit">Close</Button>
-                    <Button
-                        variant="contained"
-                        onClick={() => {
-                            SaveSettings({
-                                openai_api_key: openaiKey,
-                                anthropic_api_key: anthropicKey,
-                                ollama_endpoint: ollamaEndpoint,
-                                auto_approve_shell: String(autoApproveShell),
-                                auto_approve_edits: String(autoApproveEdits),
-                            }).finally(() => setSettingsOpen(false));
-                        }}
-                    >
-                        Save
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
-            {/* Workspace Dialog */}
-            <Dialog open={workspaceOpen} onClose={() => setWorkspaceOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>Select Workspace</DialogTitle>
-                <DialogContent dividers>
-                    <Stack spacing={2} sx={{ mt: 1 }}>
-                        <Stack direction="row" spacing={1}>
-                            <TextField
-                                label="Workspace Path"
-                                value={workspacePath}
-                                onChange={(e) => setWorkspacePath(e.target.value)}
-                                placeholder="/path/to/project"
-                                fullWidth
-                            />
-                            <Button
-                                variant="outlined"
-                                onClick={() => {
-                                    Bridge.ChooseWorkspace().then((path: string) => {
-                                        if (path) setWorkspacePath(path);
-                                    });
-                                }}
-                            >Browse…</Button>
-                        </Stack>
-                        <Typography variant="body2" color="text.secondary">
-                            Enter a project directory. Project rules will be stored in <code>.loom/rules.json</code> under this path.
-                        </Typography>
-                    </Stack>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setWorkspaceOpen(false)} color="inherit">Cancel</Button>
-                    <Button
-                        variant="contained"
-                        onClick={() => {
-                            const p = workspacePath.trim();
-                            if (p) {
-                                SetWorkspace(p)
-                                    .then(() => AppBridge.GetRules())
-                                    .then((r: any) => {
-                                        setUserRules(Array.isArray(r?.user) ? r.user : []);
-                                        setProjectRules(Array.isArray(r?.project) ? r.project : []);
-                                        return NewConversation();
-                                    })
-                                    .then((id: string) => {
-                                        setCurrentConversationId(id);
-                                        return GetConversations();
-                                    })
-                                    .then((res: any) => {
-                                        setCurrentConversationId(res?.current_id || '');
-                                        const list = Array.isArray(res?.conversations) ? res.conversations : [];
-                                        setConversations(list.map((c: any) => ({ id: String(c.id), title: String(c.title || c.id), updated_at: String(c.updated_at || '') })));
-                                    })
-                                    .finally(() => setWorkspaceOpen(false));
-                            }
-                        }}
-                        disabled={!workspacePath.trim()}
-                    >Use</Button>
-                </DialogActions>
-            </Dialog>
+            <ApprovalDialog
+                open={!!approvalRequest}
+                summary={approvalRequest?.summary}
+                diff={approvalRequest?.diff}
+                onApprove={() => handleApproval(true)}
+                onReject={() => handleApproval(false)}
+                onClose={() => setApprovalRequest(null)}
+            />
+            <RulesDialog
+                open={rulesOpen}
+                userRules={userRules}
+                setUserRules={setUserRules}
+                projectRules={projectRules}
+                setProjectRules={setProjectRules}
+                newUserRule={newUserRule}
+                setNewUserRule={setNewUserRule}
+                newProjectRule={newProjectRule}
+                setNewProjectRule={setNewProjectRule}
+                onSave={() => { AppBridge.SaveRules({ user: userRules, project: projectRules }).finally(() => setRulesOpen(false)); }}
+                onClose={() => setRulesOpen(false)}
+            />
+            <SettingsDialog
+                open={settingsOpen}
+                openaiKey={openaiKey}
+                setOpenaiKey={setOpenaiKey}
+                anthropicKey={anthropicKey}
+                setAnthropicKey={setAnthropicKey}
+                ollamaEndpoint={ollamaEndpoint}
+                setOllamaEndpoint={setOllamaEndpoint}
+                autoApproveShell={autoApproveShell}
+                setAutoApproveShell={setAutoApproveShell}
+                autoApproveEdits={autoApproveEdits}
+                setAutoApproveEdits={setAutoApproveEdits}
+                onSave={() => { SaveSettings({ openai_api_key: openaiKey, anthropic_api_key: anthropicKey, ollama_endpoint: ollamaEndpoint, auto_approve_shell: String(autoApproveShell), auto_approve_edits: String(autoApproveEdits) }).finally(() => setSettingsOpen(false)); }}
+                onClose={() => setSettingsOpen(false)}
+            />
+            <WorkspaceDialog
+                open={workspaceOpen}
+                workspacePath={workspacePath}
+                setWorkspacePath={setWorkspacePath}
+                onBrowse={() => { Bridge.ChooseWorkspace().then((path: string) => { if (path) setWorkspacePath(path); }); }}
+                onUse={() => {
+                    const p = workspacePath.trim();
+                    if (p) {
+                        SetWorkspace(p)
+                            .then(() => AppBridge.GetRules())
+                            .then((r: any) => {
+                                setUserRules(Array.isArray(r?.user) ? r.user : []);
+                                setProjectRules(Array.isArray(r?.project) ? r.project : []);
+                                return NewConversation();
+                            })
+                            .then((id: string) => {
+                                setCurrentConversationId(id);
+                                return GetConversations();
+                            })
+                            .then((res: any) => {
+                                setCurrentConversationId(res?.current_id || '');
+                                const list = Array.isArray(res?.conversations) ? res.conversations : [];
+                                setConversations(list.map((c: any) => ({ id: String(c.id), title: String(c.title || c.id), updated_at: String(c.updated_at || '') })));
+                            })
+                            .finally(() => setWorkspaceOpen(false));
+                    }
+                }}
+                onClose={() => setWorkspaceOpen(false)}
+            />
         </Box>
     );
 };
