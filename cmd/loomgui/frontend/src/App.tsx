@@ -176,6 +176,19 @@ const App: React.FC = () => {
                     setWorkspacePath(last);
                     SetWorkspace(last)
                         .then(() => {
+                            // Reset and reload file explorer for the new workspace
+                            setDirCache({});
+                            setExpandedDirs({});
+                            setOpenTabs([]);
+                            setActiveTab('');
+                            return Bridge.ListWorkspaceDir('');
+                        })
+                        .then((res: any) => {
+                            const r = res as UIListDirResult;
+                            if (r && Array.isArray(r.entries)) {
+                                setDirCache((prev) => ({ ...prev, [r.path || '']: r.entries }));
+                                setExpandedDirs((prev) => ({ ...prev, [r.path || '']: true }));
+                            }
                             return AppBridge.GetRules();
                         })
                         .then((r: any) => {
@@ -458,7 +471,22 @@ const App: React.FC = () => {
                     const p = workspacePath.trim();
                     if (p) {
                         SetWorkspace(p)
-                            .then(() => AppBridge.GetRules())
+                            .then(() => {
+                                // Reset and reload file explorer for the new workspace
+                                setDirCache({});
+                                setExpandedDirs({});
+                                setOpenTabs([]);
+                                setActiveTab('');
+                                return Bridge.ListWorkspaceDir('');
+                            })
+                            .then((res: any) => {
+                                const r = res as UIListDirResult;
+                                if (r && Array.isArray(r.entries)) {
+                                    setDirCache((prev) => ({ ...prev, [r.path || '']: r.entries }));
+                                    setExpandedDirs((prev) => ({ ...prev, [r.path || '']: true }));
+                                }
+                                return AppBridge.GetRules();
+                            })
                             .then((r: any) => {
                                 setUserRules(Array.isArray(r?.user) ? r.user : []);
                                 setProjectRules(Array.isArray(r?.project) ? r.project : []);
