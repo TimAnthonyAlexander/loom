@@ -575,9 +575,7 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 			convo.AddAssistant(currentContent)
 			// If any tools were used earlier in this turn, nudge the model to finalize; otherwise end here
 			if toolsUsed {
-				convo.AddSystem("Reminder: Tools were used. If the objective is complete, call the finalize tool with a concise summary. If more steps are needed, call exactly one next tool.")
-				// Continue depth loop to allow further tool calls or finalize
-				continue
+				return nil
 			}
 			// Pure conversational response with no tools used — end the turn
 			return nil
@@ -666,9 +664,7 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 				e.bridge.EmitAssistant(currentContent)
 				// If tools were used in this turn, nudge to finalize; otherwise stop
 				if toolsUsed {
-					convo.AddSystem("Reminder: Tools were used. If the objective is complete, call the finalize tool with a concise summary. If more steps are needed, call exactly one next tool.")
-					// Continue depth loop; do not finalize automatically on plain content
-					continue
+					return nil
 				}
 				return nil
 			}
