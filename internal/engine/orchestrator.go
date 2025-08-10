@@ -594,6 +594,33 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 				}
 				b, _ := json.Marshal(payload)
 				convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, string(b))
+
+				// If edits are auto-approved and this was an edit proposal, immediately apply it
+				if approved && e.autoApproveEdits && toolCallReceived.Name == "edit_file" {
+					applyCall := &tool.ToolCall{ID: toolCallReceived.ID + ":apply", Name: "apply_edit", Args: toolCallReceived.Args}
+					applyResult, applyErr := e.tools.InvokeToolCall(ctx, applyCall)
+					if applyErr != nil {
+						errorMsg := fmt.Sprintf("Error executing tool %s: %v", applyCall.Name, applyErr)
+						e.bridge.SendChat("system", errorMsg)
+						// Do not add a tool_result with a synthetic tool ID; continue
+					} else {
+						// Hint UI to open the file if path present
+						if e.bridge != nil {
+							type pathArg struct {
+								Path string `json:"path"`
+							}
+							var pa pathArg
+							_ = json.Unmarshal(applyCall.Args, &pa)
+							if strings.TrimSpace(pa.Path) != "" {
+								e.bridge.OpenFileInUI(pa.Path)
+							}
+						}
+						// Inform via system chat; avoid emitting a tool_result with unmatched tool_use_id
+						if strings.TrimSpace(applyResult.Content) != "" {
+							e.bridge.SendChat("system", applyResult.Content)
+						}
+					}
+				}
 			} else {
 				// Safe tool: just return content
 				convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, execResult.Content)
@@ -689,6 +716,31 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 					}
 					b, _ := json.Marshal(payload)
 					convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, string(b))
+
+					// Auto-apply on approval in non-stream path as well
+					if approved && e.autoApproveEdits && toolCallReceived.Name == "edit_file" {
+						applyCall := &tool.ToolCall{ID: toolCallReceived.ID + ":apply", Name: "apply_edit", Args: toolCallReceived.Args}
+						applyResult, applyErr := e.tools.InvokeToolCall(ctx, applyCall)
+						if applyErr != nil {
+							errorMsg := fmt.Sprintf("Error executing tool %s: %v", applyCall.Name, applyErr)
+							e.bridge.SendChat("system", errorMsg)
+							// Avoid emitting a tool_result with a synthetic tool ID; continue
+						} else {
+							if e.bridge != nil {
+								type pathArg struct {
+									Path string `json:"path"`
+								}
+								var pa pathArg
+								_ = json.Unmarshal(applyCall.Args, &pa)
+								if strings.TrimSpace(pa.Path) != "" {
+									e.bridge.OpenFileInUI(pa.Path)
+								}
+							}
+							if strings.TrimSpace(applyResult.Content) != "" {
+								e.bridge.SendChat("system", applyResult.Content)
+							}
+						}
+					}
 				} else {
 					convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, execResult.Content)
 				}

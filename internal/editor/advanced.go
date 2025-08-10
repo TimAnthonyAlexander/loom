@@ -162,13 +162,6 @@ func ProposeAdvancedEdit(workspacePath string, req AdvancedEditRequest) (*EditPl
 					Code:    "INVALID_LINE",
 				}
 			}
-			// After last line means append at end
-			if req.Line > len(lines) {
-				return nil, ValidationError{
-					Message: "Insert position out of bounds",
-					Code:    "LINE_OOB",
-				}
-			}
 			insertion := strings.Split(req.Content, "\n")
 			insertIdx := req.Line // because it's after the given line (1-indexed)
 			if insertIdx < 0 {

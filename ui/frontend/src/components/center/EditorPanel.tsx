@@ -31,9 +31,9 @@ function EditorPanel({ openTabs, activeTab, onChangeActiveTab, onCloseTab, onUpd
         // Override Cmd/Ctrl+I inside Monaco to focus the chat composer instead of triggering suggestions
         try {
             editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyI, () => {
-                try { window.dispatchEvent(new CustomEvent('loom:focus-composer')); } catch {}
+                try { window.dispatchEvent(new CustomEvent('loom:focus-composer')); } catch { }
             });
-        } catch {}
+        } catch { }
         editorRef.current = editor;
         monacoRef.current = monaco;
         if (tab?.cursor) editor.setPosition({ lineNumber: tab.cursor.line, column: tab.cursor.column });
@@ -100,7 +100,7 @@ function EditorPanel({ openTabs, activeTab, onChangeActiveTab, onCloseTab, onUpd
                         }}
                     />
                 ) : (
-                    <Box sx={{ p: 4, color: 'text.secondary' }}>Open a file from the left to view it here.</Box>
+                    <Box sx={{ p: 4, color: 'text.secondary' }}></Box>
                 )}
             </Box>
         </Box>
