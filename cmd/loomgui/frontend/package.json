@@ -10,12 +10,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@catppuccin/vscode": "^3.17.0",
     "@emotion/react": "^11.11.4",
     "@emotion/styled": "^11.11.5",
     "@monaco-editor/react": "^4.7.0",
     "@mui/icons-material": "^5.15.20",
     "@mui/material": "^5.15.20",
     "monaco-editor": "^0.52.2",
+    "monaco-themes": "^0.4.6",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-markdown": "^9.0.1",

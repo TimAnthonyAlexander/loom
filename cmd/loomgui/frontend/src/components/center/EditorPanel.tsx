@@ -17,6 +17,11 @@ export default function EditorPanel({ openTabs, activeTab, onChangeActiveTab, on
     const tab = openTabs.find((t) => t.path === activeTab);
 
     const handleMount: OnMount = (editor, monaco) => {
+        import('../../themes/mocha_converted.json').then((data: any) => {
+            monaco.editor.defineTheme('catppuccin-mocha', data);
+            monaco.editor.setTheme('catppuccin-mocha');
+        });
+
         editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
             if (tab?.path) onSaveTab(tab.path);
         });
@@ -58,7 +63,6 @@ export default function EditorPanel({ openTabs, activeTab, onChangeActiveTab, on
                 {tab ? (
                     <Editor
                         height="100%"
-                        theme="vs-dark"
                         defaultLanguage={language}
                         language={language}
                         value={tab.content}
@@ -71,7 +75,7 @@ export default function EditorPanel({ openTabs, activeTab, onChangeActiveTab, on
                             lineNumbers: 'on',
                             automaticLayout: true,
                             renderWhitespace: 'selection',
-                            tabSize: 2,
+                            tabSize: 4,
                             insertSpaces: true,
                             smoothScrolling: true,
                             scrollBeyondLastLine: false,

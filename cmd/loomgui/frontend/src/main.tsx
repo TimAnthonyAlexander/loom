@@ -10,8 +10,16 @@ import './monaco-workers'
 const theme = createTheme({
     palette: {
         mode: 'dark',
-        primary: { main: '#0A84FF' },
-        background: { default: '#0B0D12', paper: '#121417' },
+        // Catppuccin Mocha core palette
+        primary: { main: '#cba6f7', contrastText: '#11111b' }, // mauve
+        secondary: { main: '#89b4fa' }, // blue
+        background: { default: '#1e1e2e', paper: '#181825' },
+        text: { primary: '#cdd6f4', secondary: '#a6adc8' },
+        divider: '#313244',
+        error: { main: '#f38ba8' },
+        warning: { main: '#fab387' },
+        info: { main: '#89b4fa' },
+        success: { main: '#a6e3a1' },
     },
     shape: { borderRadius: 12 },
     typography: {
@@ -19,15 +27,41 @@ const theme = createTheme({
             "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'",
     },
     components: {
+        MuiCssBaseline: {
+            styleOverrides: {
+                body: {
+                    backgroundColor: '#1e1e2e',
+                    color: '#cdd6f4',
+                },
+            },
+        },
         MuiButton: {
-            styleOverrides: { root: { textTransform: 'none' } },
+            styleOverrides: {
+                root: { textTransform: 'none' },
+                containedPrimary: {
+                    backgroundColor: '#cba6f7',
+                    color: '#11111b',
+                    '&:hover': { backgroundColor: '#dec7fa' },
+                },
+                outlined: {
+                    borderColor: '#cba6f7',
+                },
+            },
         },
         MuiPaper: {
             styleOverrides: {
                 root: {
-                    boxShadow:
-                        '0 1px 2px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.6)',
+                    backgroundImage: 'none',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.6)',
                 },
+            },
+        },
+        MuiDivider: {
+            styleOverrides: { root: { borderColor: '#313244' } },
+        },
+        MuiTooltip: {
+            styleOverrides: {
+                tooltip: { backgroundColor: '#313244', color: '#cdd6f4' },
             },
         },
     },
