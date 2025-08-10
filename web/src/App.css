@@ -1,15 +1,17 @@
 /* Navigation */
 .nav {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  backdrop-filter: saturate(140%) blur(10px);
-  background: linear-gradient(180deg, rgba(11,13,18,0.85), rgba(11,13,18,0.55));
-  border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    backdrop-filter: saturate(140%) blur(10px);
+    background: linear-gradient(180deg, rgba(11,13,18,0.85), rgba(11,13,18,0.55));
+    border-bottom: 1px solid var(--border);
+    padding-left: 8px;
+    padding-right: 8px;
 }
 .nav-inner { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; }
 .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; letter-spacing: -0.01em; }
-.brand img { width: 28px; height: 28px; border-radius: 6px; }
+.brand img { width: 28px; height: 28px; border-radius: 6px }
 .nav-links { display: flex; gap: 14px; align-items: center; }
 
 /* Hero */
@@ -34,7 +36,7 @@
 .feature { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 28px; align-items: center; }
 .feature.reverse { grid-template-columns: 0.9fr 1.1fr; }
 @media (max-width: 900px) {
-  .feature, .feature.reverse { grid-template-columns: 1fr; }
+    .feature, .feature.reverse { grid-template-columns: 1fr; }
 }
 .feature .visual { border:1px solid var(--border); border-radius: 14px; overflow: hidden; background: #0e1422; box-shadow: var(--shadow); }
 .feature .visual img { display:block; width: 100%; }

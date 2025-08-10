@@ -40,9 +40,6 @@ export default function App() {
                     </div>
                     <div className="nav-links">
                         <a href="#top" className="muted">Home</a>
-                        <a href="#features" className="muted">Features</a>
-                        <a href="#security" className="muted">Security</a>
-                        <a href="https://github.com/TimAnthonyAlexander/loom" className="muted">Docs</a>
                         <a href="https://github.com/TimAnthonyAlexander/loom/releases/latest" className="btn primary">Download</a>
                     </div>
                 </div>
@@ -189,8 +186,9 @@ Wails + Vite with live reload
                 </div>
             </section>
 
-            {/* Under the hood */}
-            <section className="section" id="under-the-hood">
+            <section className="section" id="under-the-hood"
+                style={{ maxWidth: '100vw' }}
+            >
                 <div className="container grid grid-2">
                     <div>
                         <h2>Under the hood</h2>
@@ -204,10 +202,11 @@ Wails + Vite with live reload
                     <div className="card">
                         <pre>
                             <code>{`tools: [
-  read_file(), search_code(), list_dir(),
-  edit_file() → approval → apply_edit(),
-  run_shell() → approval → apply_shell(),
-  http_request(), finalize()
+  search_code(),
+  edit_file(),
+  run_shell(),
+  http_request(), 
+  finalize(),
 ]`}</code>
                         </pre>
                     </div>
@@ -215,7 +214,9 @@ Wails + Vite with live reload
             </section>
 
             {/* Security */}
-            <section id="security" className="section">
+            <section id="security" className="section"
+                style={{ maxWidth: '100vw' }}
+            >
                 <div className="container grid grid-2">
                     <div>
                         <h2>Security & privacy</h2>
@@ -231,11 +232,11 @@ Wails + Vite with live reload
                         <pre>
                             <code>{`// Approvals‑first
 onProposedEdit(diff) {
-  showDiffApprovalDialog(diff)
+  promptApproval(diff)
 }
 
 onProposedCommand(cmd) {
-  showCommandApprovalDialog(cmd)
+  promptApproval(cmd)
 }`}</code>
                         </pre>
                     </div>
