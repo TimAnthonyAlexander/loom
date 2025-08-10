@@ -22,6 +22,10 @@ export function EmitReasoning(arg1, arg2) {
   return window['go']['bridge']['App']['EmitReasoning'](arg1, arg2);
 }
 
+export function FindFiles(arg1, arg2, arg3) {
+  return window['go']['bridge']['App']['FindFiles'](arg1, arg2, arg3);
+}
+
 export function GetConversations() {
   return window['go']['bridge']['App']['GetConversations']();
 }
@@ -68,6 +72,10 @@ export function SaveRules(arg1) {
 
 export function SaveSettings(arg1) {
   return window['go']['bridge']['App']['SaveSettings'](arg1);
+}
+
+export function SearchCode(arg1, arg2, arg3) {
+  return window['go']['bridge']['App']['SearchCode'](arg1, arg2, arg3);
 }
 
 export function SendChat(arg1, arg2) {

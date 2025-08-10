@@ -11,6 +11,7 @@ import ApprovalDialog from './components/dialogs/ApprovalDialog';
 import SettingsDialog from './components/dialogs/SettingsDialog';
 import RulesDialog from './components/dialogs/RulesDialog';
 import WorkspaceDialog from './components/dialogs/WorkspaceDialog';
+import SearchDialog from './components/dialogs/SearchDialog';
 import { ChatMessage, ApprovalRequest, UIFileEntry, UIListDirResult, ConversationListItem, EditorTabItem } from './types/ui';
 import { guessLanguage } from './utils/language';
 import { writeFile } from './services/files';
@@ -42,6 +43,8 @@ const App: React.FC = () => {
     const [reasoningText, setReasoningText] = useState<string>('');
     const [reasoningOpen, setReasoningOpen] = useState<boolean>(false);
     const collapseTimerRef = useRef<number | null>(null);
+    const [searchOpen, setSearchOpen] = useState<boolean>(false);
+    const [searchMode, setSearchMode] = useState<'files' | 'text'>('files');
 
     // File explorer state
     const [dirCache, setDirCache] = useState<Record<string, UIFileEntry[]>>({}); // key: dir path ('' for root)
@@ -307,11 +310,14 @@ const App: React.FC = () => {
         if (!dirCache[key]) loadDir(key);
     };
 
-    const openFile = (path: string) => {
+    const openFile = (path: string, line?: number, column?: number) => {
         const normPath = normalizeWorkspaceRelPath(path);
         const exists = openTabs.find((t) => t.path === normPath);
         if (exists) {
             setActiveTab(normPath);
+            if (typeof line === 'number' && typeof column === 'number') {
+                onUpdateTab(normPath, { cursor: { line, column } });
+            }
             return;
         }
         Bridge.ReadWorkspaceFile(normPath)
@@ -330,7 +336,7 @@ const App: React.FC = () => {
                         isDirty: false,
                         version: 1,
                         serverRev,
-                        cursor: { line: 1, column: 1 },
+                        cursor: typeof line === 'number' && typeof column === 'number' ? { line, column } : { line: 1, column: 1 },
                         scrollTop: 0,
                     },
                 ]);
@@ -376,6 +382,26 @@ const App: React.FC = () => {
             if (p) openFile(p);
         };
         EventsOn('workspace:open_file', handler);
+    }, []);
+
+    // Global shortcuts: Cmd+P (quick open files), Cmd+Shift+F (text search)
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            const isMac = navigator.platform.toLowerCase().includes('mac');
+            const cmd = isMac ? e.metaKey : e.ctrlKey;
+            const key = e.key.toLowerCase();
+            if (cmd && key === 'p' && !e.shiftKey) {
+                e.preventDefault();
+                setSearchMode('files');
+                setSearchOpen(true);
+            } else if (cmd && key === 'f' && e.shiftKey) {
+                e.preventDefault();
+                setSearchMode('text');
+                setSearchOpen(true);
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
     }, []);
 
     return (
@@ -505,6 +531,15 @@ const App: React.FC = () => {
                     }
                 }}
                 onClose={() => setWorkspaceOpen(false)}
+            />
+            <SearchDialog
+                open={searchOpen}
+                initialMode={searchMode}
+                onClose={() => setSearchOpen(false)}
+                onOpenFile={(p, line, col) => {
+                    setSearchOpen(false);
+                    if (p) openFile(p, line, col);
+                }}
             />
         </Box>
     );

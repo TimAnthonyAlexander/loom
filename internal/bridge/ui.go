@@ -608,6 +608,122 @@ func (a *App) OpenFileInUI(path string) {
 	}
 }
 
+// SearchCode searches for text within files in the current workspace optionally scoped by a file glob.
+// Returns a list of matches with relative paths and line information. If engine/workspace not set, returns empty result.
+func (a *App) SearchCode(query string, filePattern string, maxResults int) []map[string]interface{} {
+	out := []map[string]interface{}{}
+	if a.engine == nil {
+		return out
+	}
+	root := strings.TrimSpace(a.engine.Workspace())
+	if root == "" || strings.TrimSpace(query) == "" {
+		return out
+	}
+	idx := indexer.NewRipgrepIndexer(root)
+	res, err := idx.Search(query, filePattern, maxResults)
+	if err != nil || res == nil {
+		return out
+	}
+	for _, m := range res.Matches {
+		out = append(out, map[string]interface{}{
+			"path":        filepath.ToSlash(m.Path),
+			"line_number": m.LineNum,
+			"line_text":   m.LineText,
+			"start_char":  m.StartChar,
+			"end_char":    m.EndChar,
+		})
+	}
+	return out
+}
+
+// FindFiles returns up to maxResults files under the optional subdir that match the provided pattern.
+// The pattern uses filepath.Match semantics applied to both the base name and the workspace-relative path.
+// Common noisy directories are skipped (node_modules, .git, vendor, dist, build, .loom).
+func (a *App) FindFiles(filePattern string, subdir string, maxResults int) []string {
+	var results []string
+	if a.engine == nil {
+		return results
+	}
+	root := strings.TrimSpace(a.engine.Workspace())
+	if root == "" {
+		return results
+	}
+	start := filepath.Clean(filepath.Join(root, strings.TrimSpace(subdir)))
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return results
+	}
+	absStart, err := filepath.Abs(start)
+	if err != nil {
+		return results
+	}
+	// Ensure start is within workspace
+	if absStart != absRoot && !strings.HasPrefix(absStart+string(os.PathSeparator), absRoot+string(os.PathSeparator)) {
+		absStart = absRoot
+	}
+
+	// Normalized ignore set
+	ignoreDirs := map[string]struct{}{
+		".git":         {},
+		"node_modules": {},
+		"vendor":       {},
+		"dist":         {},
+		"build":        {},
+		".loom":        {},
+	}
+
+	add := func(rel string) bool {
+		results = append(results, filepath.ToSlash(rel))
+		if maxResults > 0 && len(results) >= maxResults {
+			return true
+		}
+		return false
+	}
+
+	// Helper to test pattern against base name and relative path
+	matches := func(relPath string) bool {
+		if strings.TrimSpace(filePattern) == "" {
+			return true
+		}
+		base := filepath.Base(relPath)
+		if ok, _ := filepath.Match(filePattern, base); ok {
+			return true
+		}
+		if ok, _ := filepath.Match(filePattern, relPath); ok {
+			return true
+		}
+		// Fallback: case-insensitive substring on base
+		return strings.Contains(strings.ToLower(base), strings.ToLower(filePattern))
+	}
+
+	_ = filepath.WalkDir(absStart, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		name := d.Name()
+		if d.IsDir() {
+			if _, skip := ignoreDirs[name]; skip {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		// Only files
+		rel, err := filepath.Rel(absRoot, path)
+		if err != nil {
+			return nil
+		}
+		rel = filepath.ToSlash(rel)
+		if matches(rel) {
+			if add(rel) {
+				return filepath.SkipDir
+			}
+		}
+		return nil
+	})
+
+	return results
+}
+
 // UIFileEntry represents a single file or directory for the UI explorer
 type UIFileEntry struct {
 	Name    string `json:"name"`

@@ -17,6 +17,8 @@ export function EmitAssistant(arg1:string):Promise<void>;
 
 export function EmitReasoning(arg1:string,arg2:boolean):Promise<void>;
 
+export function FindFiles(arg1:string,arg2:string,arg3:number):Promise<Array<string>>;
+
 export function GetConversations():Promise<Record<string, any>>;
 
 export function GetRules():Promise<Record<string, Array<string>>>;
@@ -40,6 +42,8 @@ export function ReadWorkspaceFile(arg1:string):Promise<bridge.UIReadFileResult>;
 export function SaveRules(arg1:Record<string, Array<string>>):Promise<void>;
 
 export function SaveSettings(arg1:Record<string, string>):Promise<void>;
+
+export function SearchCode(arg1:string,arg2:string,arg3:number):Promise<Array<Record<string, any>>>;
 
 export function SendChat(arg1:string,arg2:string):Promise<void>;
 

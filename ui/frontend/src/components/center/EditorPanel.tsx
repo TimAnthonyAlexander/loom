@@ -2,6 +2,7 @@ import { Box, Tabs, Tab, IconButton } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { EditorTabItem } from '../../types/ui';
 import Editor, { OnMount } from '@monaco-editor/react';
+import React from 'react';
 import { guessLanguage } from '../../utils/language';
 
 type Props = {
@@ -15,6 +16,8 @@ type Props = {
 
 export default function EditorPanel({ openTabs, activeTab, onChangeActiveTab, onCloseTab, onUpdateTab, onSaveTab }: Props) {
     const tab = openTabs.find((t) => t.path === activeTab);
+    const editorRef = React.useRef<any>(null);
+    const monacoRef = React.useRef<any>(null);
 
     const handleMount: OnMount = (editor, monaco) => {
         import('../../themes/mocha_converted.json').then((data: any) => {
@@ -25,9 +28,18 @@ export default function EditorPanel({ openTabs, activeTab, onChangeActiveTab, on
         editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
             if (tab?.path) onSaveTab(tab.path);
         });
+        editorRef.current = editor;
+        monacoRef.current = monaco;
         if (tab?.cursor) editor.setPosition({ lineNumber: tab.cursor.line, column: tab.cursor.column });
         setTimeout(() => editor.focus(), 0);
     };
+
+    React.useEffect(() => {
+        const editor = editorRef.current;
+        if (!editor || !tab?.cursor) return;
+        editor.setPosition({ lineNumber: tab.cursor.line, column: tab.cursor.column });
+        editor.revealPositionInCenter({ lineNumber: tab.cursor.line, column: tab.cursor.column });
+    }, [tab?.cursor?.line, tab?.cursor?.column, tab?.path]);
 
     const handleChange = (value?: string) => {
         if (!tab) return;
