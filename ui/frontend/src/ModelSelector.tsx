@@ -36,6 +36,8 @@ function ModelSelector({ onSelect, currentModel }: ModelSelectorProps) {
             { id: 'ollama:llama3:8b', name: 'Llama 3 (8B)', provider: 'ollama', group: 'Fast' },
             { id: 'ollama:mistral:7b', name: 'Mistral (7B)', provider: 'ollama', group: 'Fast' },
 
+            { id: 'openai:gpt-4.1-mini', name: 'GPT-4.1-mini', provider: 'openai', group: 'Cheap' },
+            { id: 'openai:gpt-4.1-nano', name: 'GPT-4.1-nano', provider: 'openai', group: 'Cheap' },
             { id: 'ollama:qwen3:8b', name: 'Qwen3 (8B)', provider: 'ollama', group: 'Cheap' },
             { id: 'ollama:gemma3:12b', name: 'Gemma3 (12B)', provider: 'ollama', group: 'Cheap' },
             { id: 'ollama:llama3.1:8b', name: 'Llama 3.1 (8B)', provider: 'ollama', group: 'Cheap' },
@@ -56,6 +58,8 @@ function ModelSelector({ onSelect, currentModel }: ModelSelectorProps) {
             { id: 'openai:o4-mini', name: 'o4-mini', provider: 'openai' },
             { id: 'openai:o3', name: 'o3', provider: 'openai' },
             { id: 'openai:o3-mini', name: 'o3', provider: 'openai' },
+            { id: 'openai:gpt-4.1-mini', name: 'GPT-4.1-mini', provider: 'openai', group: 'openai' },
+            { id: 'openai:gpt-4.1-nano', name: 'GPT-4.1-nano', provider: 'openai', group: 'openai' },
 
             { id: 'ollama:llama3.1:8b', name: 'Llama 3.1 (8B)', provider: 'ollama' },
             { id: 'ollama:llama3:8b', name: 'Llama 3 (8B)', provider: 'ollama' },
