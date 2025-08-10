@@ -39,10 +39,10 @@ export default function App() {
                         <span>Loom</span>
                     </div>
                     <div className="nav-links">
-                        <a href="#why" className="muted">Why Loom</a>
+                        <a href="#top" className="muted">Home</a>
                         <a href="#features" className="muted">Features</a>
                         <a href="#security" className="muted">Security</a>
-                        <a href="#getting-started" className="muted">Docs</a>
+                        <a href="https://github.com/TimAnthonyAlexander/loom" className="muted">Docs</a>
                         <a href="https://github.com/TimAnthonyAlexander/loom/releases/latest" className="btn primary">Download</a>
                     </div>
                 </div>
@@ -61,7 +61,7 @@ export default function App() {
                     </p>
                     <div className="cta">
                         <a href="https://github.com/TimAnthonyAlexander/loom/releases/latest" className="btn primary">Download Loom</a>
-                        <a href="#getting-started" className="btn ghost">Read the Docs</a>
+                        <a href="https://github.com/TimAnthonyAlexander/loom" className="btn ghost">Read the Docs</a>
                     </div>
 
                     <div className="hero-visual">
@@ -123,18 +123,8 @@ export default function App() {
                     {/* 1 */}
                     <div className="feature">
                         <div>
-                            <h2>Explore and understand your codebase</h2>
+                            <h2>Explore your codebase</h2>
                             <p>Semantic search powered by ripgrep. Ask Loom questions, jump to exact lines, and navigate dependencies without losing focus.</p>
-                            <div style={{ marginTop: 14 }} className="card">
-                                <pre>
-                                    <code>{`// Ask Loom
-"Where are user roles checked in the auth layer?"
-
-// Answer → precise file+line references, ready to open.
-/internal/auth/roles.go:112
-/ui/frontend/src/components/Guard.tsx:41`}</code>
-                                </pre>
-                            </div>
                         </div>
                         <div className="visual">
                             <img src="/screenshot1.png" alt="Monaco editor with search results" />
@@ -142,7 +132,11 @@ export default function App() {
                     </div>
 
                     {/* 2 */}
-                    <div className="feature reverse">
+                    <div className="feature">
+                        <div>
+                            <h2>Precise, minimal edits</h2>
+                            <p>Review side‑by‑side diffs. Approve and apply with one click — keeping control in your hands.</p>
+                        </div>
                         <div className="visual">
                             <pre>
                                 <code>{`// Precise, minimal edits
@@ -154,10 +148,6 @@ export default function App() {
 Approve → Apply → Done.`}</code>
                             </pre>
                         </div>
-                        <div>
-                            <h2>Precise, minimal edits</h2>
-                            <p>Review side‑by‑side diffs. Approve and apply with one click — keeping control in your hands.</p>
-                        </div>
                     </div>
 
                     {/* 3 */}
@@ -165,15 +155,6 @@ Approve → Apply → Done.`}</code>
                         <div>
                             <h2>Run commands, safely</h2>
                             <p>Need a migration, build, or quick script? Loom proposes shell commands, shows you exactly what will run, and executes only with your permission.</p>
-                            <div style={{ marginTop: 14 }} className="card">
-                                <pre>
-                                    <code>{`run_shell: {
-  command: "npm run build",
-  cwd: "ui/frontend",
-  timeout: 60
-}`}</code>
-                                </pre>
-                            </div>
                         </div>
                         <div className="visual">
                             <pre>
@@ -183,23 +164,6 @@ Wails + Vite with live reload
 ✔ frontend: running
 → open http://localhost:5173`}</code>
                             </pre>
-                        </div>
-                    </div>
-
-                    {/* 4 */}
-                    <div className="feature reverse">
-                        <div className="visual">
-                            <pre>
-                                <code>{`Models
-- openai:gpt-5
-- claude:claude-opus-4-20250514
-- ollama:llama3.1:8b
-…`}</code>
-                            </pre>
-                        </div>
-                        <div>
-                            <h2>Multi‑provider, multi‑model</h2>
-                            <p>Choose from GPT‑5, Claude Opus, local Ollama models, and more. Loom adapts to your workflow — no single‑vendor lock‑in.</p>
                         </div>
                     </div>
 
@@ -293,7 +257,7 @@ onProposedCommand(cmd) {
                     <div className="roadmap">
                         <div className="card">Multi‑file refactors</div>
                         <div className="card">Vector‑powered recall</div>
-                        <div className="card">Granular approvals & audit logs</div>
+                        <div className="card">Granular approvals</div>
                         <div className="card">Custom theming</div>
                     </div>
                 </div>
@@ -305,8 +269,8 @@ onProposedCommand(cmd) {
                     <h2>Ready to build faster — safely?</h2>
                     <p className="hero-sub">Get Loom and keep your workflow local, precise, and under control.</p>
                     <div className="cta">
-                        <a className="btn primary" href="#">Download for macOS</a>
-                        <a className="btn ghost" href="#getting-started">Read the Docs</a>
+                        <a className="btn primary" href="https://github.com/TimAnthonyAlexander/loom/releases/latest">Download for Free</a>
+                        <a className="btn ghost" href="https://github.com/TimAnthonyAlexander/loom">Read the Docs</a>
                     </div>
                 </div>
             </section>
@@ -317,10 +281,7 @@ onProposedCommand(cmd) {
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                         <div className="brand"><img src="/logo.png" alt="Loom" /><span>Loom</span></div>
                         <nav className="nav-links" style={{ padding: 0 }}>
-                            <a href="#getting-started">Docs</a>
-                            <a href="#">GitHub</a>
-                            <a href="#privacy">Privacy</a>
-                            <a href="#contact">Contact</a>
+                            <a href="https://github.com/TimAnthonyAlexander/loom">GitHub</a>
                         </nav>
                     </div>
                     <p className="muted" style={{ marginTop: 12 }}>Loom is open for contributions. See our GitHub.</p>
