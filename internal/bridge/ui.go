@@ -598,3 +598,218 @@ func (a *App) NewConversation() string {
 	}
 	return id
 }
+
+// UIFileEntry represents a single file or directory for the UI explorer
+type UIFileEntry struct {
+	Name    string `json:"name"`
+	Path    string `json:"path"` // path relative to the workspace root
+	IsDir   bool   `json:"is_dir"`
+	Size    int64  `json:"size,omitempty"`
+	ModTime string `json:"mod_time"`
+}
+
+// UIListDirResult is the response for directory listings in the UI
+type UIListDirResult struct {
+	Path    string        `json:"path"` // normalized relative path from workspace root
+	Entries []UIFileEntry `json:"entries"`
+	IsDir   bool          `json:"is_dir"`
+	Error   string        `json:"error,omitempty"`
+}
+
+// ListWorkspaceDir lists files/directories within the current workspace.
+// If relPath is empty or ".", the workspace root is used.
+func (a *App) ListWorkspaceDir(relPath string) UIListDirResult {
+	res := UIListDirResult{Path: "", Entries: []UIFileEntry{}, IsDir: true}
+	// Ensure engine and workspace are available
+	if a.engine == nil {
+		res.Error = "engine not initialized"
+		return res
+	}
+	root := strings.TrimSpace(a.engine.Workspace())
+	if root == "" {
+		res.Error = "workspace not set"
+		return res
+	}
+
+	// Resolve path
+	rel := strings.TrimSpace(relPath)
+	if rel == "" || rel == "." || rel == "/" {
+		rel = ""
+	}
+	// Prevent attempts to escape workspace via ..
+	joined := filepath.Clean(filepath.Join(root, rel))
+	// Normalize and ensure within workspace
+	absJoined, err := filepath.Abs(joined)
+	if err != nil {
+		res.Error = err.Error()
+		return res
+	}
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		res.Error = err.Error()
+		return res
+	}
+	// Ensure absJoined is within absRoot
+	if absJoined != absRoot && !strings.HasPrefix(absJoined+string(os.PathSeparator), absRoot+string(os.PathSeparator)) {
+		res.Error = "path outside workspace"
+		return res
+	}
+
+	// Determine relative display path
+	relDisplay, err := filepath.Rel(absRoot, absJoined)
+	if err != nil || relDisplay == "." {
+		relDisplay = ""
+	}
+	res.Path = filepath.ToSlash(relDisplay)
+
+	fi, err := os.Stat(absJoined)
+	if err != nil {
+		res.Error = err.Error()
+		return res
+	}
+	if !fi.IsDir() {
+		// If a file was targeted, set IsDir=false and return no entries
+		res.IsDir = false
+		return res
+	}
+
+	// Read directory entries
+	entries, err := os.ReadDir(absJoined)
+	if err != nil {
+		res.Error = err.Error()
+		return res
+	}
+
+	// Build listing: show directories first, then files, both sorted by name
+	var dirs, files []UIFileEntry
+	for _, e := range entries {
+		name := e.Name()
+		// Skip .loom internal directory by default to reduce noise
+		if name == ".loom" {
+			continue
+		}
+		p := filepath.Join(relDisplay, name)
+		p = filepath.ToSlash(strings.TrimPrefix(p, "./"))
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		item := UIFileEntry{
+			Name:    name,
+			Path:    p,
+			IsDir:   e.IsDir(),
+			Size:    info.Size(),
+			ModTime: info.ModTime().Format(time.RFC3339),
+		}
+		if e.IsDir() {
+			dirs = append(dirs, item)
+		} else {
+			files = append(files, item)
+		}
+	}
+	// Simple name sort without importing sort.Slice for minimal diff
+	// We'll append in two passes with a naive insertion order by name
+	// Since determinism is helpful, use a basic bubble-like pass
+	for i := 0; i < len(dirs); i++ {
+		for j := i + 1; j < len(dirs); j++ {
+			if strings.ToLower(dirs[j].Name) < strings.ToLower(dirs[i].Name) {
+				dirs[i], dirs[j] = dirs[j], dirs[i]
+			}
+		}
+	}
+	for i := 0; i < len(files); i++ {
+		for j := i + 1; j < len(files); j++ {
+			if strings.ToLower(files[j].Name) < strings.ToLower(files[i].Name) {
+				files[i], files[j] = files[j], files[i]
+			}
+		}
+	}
+	res.Entries = make([]UIFileEntry, 0, len(dirs)+len(files))
+	res.Entries = append(res.Entries, dirs...)
+	res.Entries = append(res.Entries, files...)
+	return res
+}
+
+// UIReadFileResult is the response when reading a file for the UI viewer
+type UIReadFileResult struct {
+	Path     string `json:"path"`
+	Content  string `json:"content"`
+	Lines    int    `json:"lines"`
+	Language string `json:"language,omitempty"`
+}
+
+// ReadWorkspaceFile reads a file within the current workspace and returns its content.
+func (a *App) ReadWorkspaceFile(relPath string) UIReadFileResult {
+	out := UIReadFileResult{Path: "", Content: "", Lines: 0}
+	if a.engine == nil {
+		return out
+	}
+	root := strings.TrimSpace(a.engine.Workspace())
+	if root == "" {
+		return out
+	}
+	rel := strings.TrimSpace(relPath)
+	if rel == "" || rel == "." || rel == "/" {
+		return out
+	}
+	candidate := filepath.Clean(filepath.Join(root, rel))
+	absCandidate, err := filepath.Abs(candidate)
+	if err != nil {
+		return out
+	}
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return out
+	}
+	if absCandidate != absRoot && !strings.HasPrefix(absCandidate+string(os.PathSeparator), absRoot+string(os.PathSeparator)) {
+		return out
+	}
+	data, err := os.ReadFile(absCandidate)
+	if err != nil {
+		return out
+	}
+	content := string(data)
+	// Count lines quickly
+	lines := 0
+	for i := 0; i < len(content); i++ {
+		if content[i] == '\n' {
+			lines++
+		}
+	}
+	if len(content) > 0 && content[len(content)-1] != '\n' {
+		lines++
+	}
+	out.Path = filepath.ToSlash(rel)
+	out.Content = content
+	out.Lines = lines
+	// Simple language hint from extension
+	out.Language = detectLanguageByExt(rel)
+	return out
+}
+
+// detectLanguageByExt is a minimal helper for UI display purposes only
+func detectLanguageByExt(path string) string {
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".go":
+		return "go"
+	case ".ts":
+		return "typescript"
+	case ".tsx":
+		return "tsx"
+	case ".js":
+		return "javascript"
+	case ".jsx":
+		return "jsx"
+	case ".json":
+		return "json"
+	case ".md":
+		return "markdown"
+	case ".css":
+		return "css"
+	case ".html":
+		return "html"
+	default:
+		return ""
+	}
+}

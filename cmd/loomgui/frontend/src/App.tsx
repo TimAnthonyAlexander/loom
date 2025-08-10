@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, ReactElement, useMemo } from 'react';
 import { EventsOn, LogInfo } from '../wailsjs/runtime/runtime';
-import { SendUserMessage, Approve, GetTools, SetModel, GetSettings, SaveSettings, SetWorkspace, ClearConversation, GetConversations, LoadConversation, NewConversation } from '../wailsjs/go/bridge/App';
+import { SendUserMessage, Approve, SetModel, GetSettings, SaveSettings, SetWorkspace, ClearConversation, GetConversations, LoadConversation, NewConversation } from '../wailsjs/go/bridge/App';
 import * as Bridge from '../wailsjs/go/bridge/App';
 import * as AppBridge from '../wailsjs/go/bridge/App';
 import ReactMarkdown from 'react-markdown';
@@ -35,12 +35,15 @@ import {
     AccordionSummary,
     AccordionDetails,
     CircularProgress,
+    Tabs,
+    Tab,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SendIcon from '@mui/icons-material/Send';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RuleIcon from '@mui/icons-material/Rule';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import CloseIcon from '@mui/icons-material/Close';
 
 // Custom table components using MUI Table APIs
 const CustomTable = ({ children }: any) => (
@@ -244,17 +247,14 @@ interface ApprovalRequest {
     diff: string;
 }
 
-interface Tool {
-    name: string;
-    description: string;
-    safe: boolean;
-}
+// File explorer types from backend
+interface UIFileEntry { name: string; path: string; is_dir: boolean; size?: number; mod_time: string }
+interface UIListDirResult { path: string; entries: UIFileEntry[]; is_dir: boolean; error?: string }
 
 const App: React.FC = () => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState('');
     const [approvalRequest, setApprovalRequest] = useState<ApprovalRequest | null>(null);
-    const [tools, setTools] = useState<Tool[]>([]);
     const [currentModel, setCurrentModel] = useState<string>('');
     const messagesEndRef = useRef<null | HTMLDivElement>(null);
     const [busy, setBusy] = useState<boolean>(false);
@@ -276,6 +276,12 @@ const App: React.FC = () => {
     const [reasoningText, setReasoningText] = useState<string>('');
     const [reasoningOpen, setReasoningOpen] = useState<boolean>(false);
     const collapseTimerRef = useRef<number | null>(null);
+
+    // File explorer state
+    const [dirCache, setDirCache] = useState<Record<string, UIFileEntry[]>>({}); // key: dir path ('' for root)
+    const [expandedDirs, setExpandedDirs] = useState<Record<string, boolean>>({});
+    const [openTabs, setOpenTabs] = useState<{ path: string; title: string; content: string }[]>([]);
+    const [activeTab, setActiveTab] = useState<string>('');
 
     const orderedConversations = useMemo(
         () => {
@@ -372,16 +378,6 @@ const App: React.FC = () => {
             setBusy(!!isBusy);
         });
 
-        // Get available tools
-        GetTools().then((fetchedTools: Record<string, any>[]) => {
-            const typedTools: Tool[] = fetchedTools.map(tool => ({
-                name: tool.name || '',
-                description: tool.description || '',
-                safe: Boolean(tool.safe)
-            }));
-            setTools(typedTools);
-        });
-
         // Load settings
         GetSettings()
             .then((s: any) => {
@@ -436,6 +432,16 @@ const App: React.FC = () => {
                 setProjectRules(Array.isArray(r?.project) ? r.project : []);
             })
             .catch(() => { });
+        // Initial file tree
+        Bridge.ListWorkspaceDir('')
+            .then((res: any) => {
+                const r = res as UIListDirResult;
+                if (r && Array.isArray(r.entries)) {
+                    setDirCache((prev) => ({ ...prev, [r.path || '']: r.entries }));
+                    setExpandedDirs((prev) => ({ ...prev, [r.path || '']: true }));
+                }
+            })
+            .catch(() => { });
     }, []);
 
     // Scroll to bottom when messages change
@@ -482,19 +488,99 @@ const App: React.FC = () => {
             .catch(() => { });
     };
 
+    // File explorer helpers
+    const loadDir = (path: string) => {
+        const key = path || '';
+        if (dirCache[key]) return;
+        Bridge.ListWorkspaceDir(key)
+            .then((res: any) => {
+                const r = res as UIListDirResult;
+                if (r && Array.isArray(r.entries)) {
+                    setDirCache((prev) => ({ ...prev, [r.path || key]: r.entries }));
+                }
+            })
+            .catch(() => { });
+    };
+
+    const toggleDir = (path: string) => {
+        const key = path || '';
+        setExpandedDirs((prev) => ({ ...prev, [key]: !prev[key] }));
+        if (!dirCache[key]) loadDir(key);
+    };
+
+    const openFile = (path: string) => {
+        const exists = openTabs.find((t) => t.path === path);
+        if (exists) {
+            setActiveTab(path);
+            return;
+        }
+        Bridge.ReadWorkspaceFile(path)
+            .then((res: any) => {
+                const title = (path.split('/').pop() || path);
+                const content = String(res?.content || '');
+                setOpenTabs((prev) => [...prev, { path, title, content }]);
+                setActiveTab(path);
+            })
+            .catch(() => { });
+    };
+
+    const closeTab = (path: string) => {
+        setOpenTabs((prev) => prev.filter((t) => t.path !== path));
+        if (activeTab === path) {
+            const remaining = openTabs.filter((t) => t.path !== path);
+            setActiveTab(remaining.length ? remaining[remaining.length - 1].path : '');
+        }
+    };
+
+    const renderDir = (path: string) => {
+        const key = path || '';
+        const entries = dirCache[key] || [];
+        return (
+            <List dense disablePadding>
+                {entries.map((e) => {
+                    const childKey = e.path;
+                    if (e.is_dir) {
+                        const isOpen = !!expandedDirs[childKey];
+                        return (
+                            <Box key={childKey} sx={{ pl: path ? 1.5 : 0.5 }}>
+                                <ListItem disableGutters sx={{ cursor: 'pointer' }} onClick={() => toggleDir(childKey)}>
+                                    <ListItemText primaryTypographyProps={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 13 }} primary={`${isOpen ? '▼' : '▶'} ${e.name}`} />
+                                </ListItem>
+                                {isOpen && (dirCache[childKey] ? (
+                                    <Box sx={{ pl: 1 }}>
+                                        {renderDir(childKey)}
+                                    </Box>
+                                ) : (
+                                    <Box sx={{ pl: 2, py: 0.5, color: 'text.secondary' }}>
+                                        <Typography variant="caption">Loading…</Typography>
+                                    </Box>
+                                ))}
+                            </Box>
+                        );
+                    }
+                    return (
+                        <ListItem key={childKey} disableGutters sx={{ pl: path ? 3.5 : 2, cursor: 'pointer' }} onClick={() => openFile(childKey)}>
+                            <ListItemText primaryTypographyProps={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 13 }} primary={e.name} />
+                        </ListItem>
+                    );
+                })}
+            </List>
+        );
+    };
+
     return (
         <Box display="flex" height="100vh" sx={{ bgcolor: 'background.default' }}>
-            {/* Sidebar */}
+            {/* Left: File Navigator */}
             <Box
                 sx={{
-                    width: 320,
+                    width: 280,
                     borderRight: 1,
                     borderColor: 'divider',
-                    px: 3,
-                    py: 3,
+                    px: 2,
+                    py: 2,
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 3,
+                    gap: 2,
                     overflowY: 'auto',
                 }}
             >
@@ -529,13 +615,18 @@ const App: React.FC = () => {
                 <Box>
                     <ModelSelector onSelect={handleModelSelect} currentModel={currentModel} />
                 </Box>
-
+                <Box>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Files</Typography>
+                    <Paper variant="outlined" sx={{ p: 1, maxHeight: '60vh', overflowY: 'auto' }}>
+                        {renderDir('')}
+                    </Paper>
+                </Box>
                 <Box>
                     <Typography variant="subtitle2" sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span>Conversations</span>
                         <Button size="small" variant="outlined" onClick={handleNewConversation}>New</Button>
                     </Typography>
-                    <Paper variant="outlined" sx={{ p: 1, mb: 2 }}>
+                    <Paper variant="outlined" sx={{ p: 1 }}>
                         <List dense sx={{ width: '100%' }}>
                             {orderedConversations.slice(0, 5).map((c: { id: string; title: string; updated_at?: string }) => (
                                 <ListItem
@@ -559,38 +650,42 @@ const App: React.FC = () => {
                         </List>
                     </Paper>
                 </Box>
+            </Box>
 
-                <Box>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                        Tools ({tools.length})
-                    </Typography>
-                    <Paper variant="outlined" sx={{ p: 1 }}>
-                        <List dense sx={{ width: '100%' }}>
-                            {tools.map((tool: Tool) => (
-                                <ListItem key={tool.name} disableGutters secondaryAction={
-                                    <Chip
-                                        size="small"
-                                        label={tool.safe ? 'Safe' : 'Approval'}
-                                        color={tool.safe ? 'success' : 'warning'}
-                                        variant={tool.safe ? 'outlined' : 'filled'}
-                                    />
-                                }>
-                                    <ListItemText
-                                        primary={tool.name}
-                                        secondary={tool.description}
-                                        primaryTypographyProps={{ fontWeight: 600 }}
-                                    />
-                                </ListItem>
-                            ))}
-                        </List>
-                    </Paper>
+            {/* Center: Tabbed Editor */}
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, height: '100vh', borderRight: 1, borderColor: 'divider' }}>
+                <Box sx={{ px: 2, pt: 1, borderBottom: 1, borderColor: 'divider' }}>
+                    <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} variant="scrollable" scrollButtons={false} sx={{ minHeight: 36 }}>
+                        {openTabs.map((t) => (
+                            <Tab key={t.path} label={
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <span style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
+                                    <IconButton size="small" onClick={(e) => { e.stopPropagation(); closeTab(t.path); }}>
+                                        <CloseIcon fontSize="small" />
+                                    </IconButton>
+                                </Box>
+                            } value={t.path} sx={{ minHeight: 36 }} />
+                        ))}
+                    </Tabs>
+                </Box>
+                <Box sx={{ flex: 1, overflow: 'auto' }}>
+                    {activeTab ? (
+                        <Box sx={{ p: 2 }}>
+                            <Paper variant="outlined" sx={{ p: 2, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', whiteSpace: 'pre', overflowX: 'auto' }}>
+                                {openTabs.find((t) => t.path === activeTab)?.content || ''}
+                            </Paper>
+                        </Box>
+                    ) : (
+                        <Box sx={{ p: 4, color: 'text.secondary' }}>
+                            <Typography variant="body2">Open a file from the left to view it here.</Typography>
+                        </Box>
+                    )}
                 </Box>
             </Box>
 
-            {/* Main */}
-            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, height: '100vh' }}>
-                {/* Chat */}
-                <Box sx={{ flex: 1, overflowY: 'auto', px: 4, py: 3, minHeight: 0 }}>
+            {/* Right: Chat */}
+            <Box sx={{ width: 420, display: 'flex', flexDirection: 'column', minWidth: 0, height: '100vh' }}>
+                <Box sx={{ flex: 1, overflowY: 'auto', px: 3, py: 2, minHeight: 0 }}>
                     <Stack spacing={2}>
                         {messages.map((msg: ChatMessage, index: number) => {
                             const isUser = msg.role === 'user'

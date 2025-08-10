@@ -38,6 +38,10 @@ export function GetTools() {
   return window['go']['bridge']['App']['GetTools']();
 }
 
+export function ListWorkspaceDir(arg1) {
+  return window['go']['bridge']['App']['ListWorkspaceDir'](arg1);
+}
+
 export function LoadConversation(arg1) {
   return window['go']['bridge']['App']['LoadConversation'](arg1);
 }
@@ -48,6 +52,10 @@ export function NewConversation() {
 
 export function PromptApproval(arg1, arg2, arg3) {
   return window['go']['bridge']['App']['PromptApproval'](arg1, arg2, arg3);
+}
+
+export function ReadWorkspaceFile(arg1) {
+  return window['go']['bridge']['App']['ReadWorkspaceFile'](arg1);
 }
 
 export function SaveRules(arg1) {

@@ -35,6 +35,80 @@ export namespace bridge {
 	
 	    }
 	}
+	export class UIFileEntry {
+	    name: string;
+	    path: string;
+	    is_dir: boolean;
+	    size?: number;
+	    mod_time: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UIFileEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.is_dir = source["is_dir"];
+	        this.size = source["size"];
+	        this.mod_time = source["mod_time"];
+	    }
+	}
+	export class UIListDirResult {
+	    path: string;
+	    entries: UIFileEntry[];
+	    is_dir: boolean;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UIListDirResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.entries = this.convertValues(source["entries"], UIFileEntry);
+	        this.is_dir = source["is_dir"];
+	        this.error = source["error"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class UIReadFileResult {
+	    path: string;
+	    content: string;
+	    lines: number;
+	    language?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UIReadFileResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.content = source["content"];
+	        this.lines = source["lines"];
+	        this.language = source["language"];
+	    }
+	}
 
 }
 
