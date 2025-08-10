@@ -1,34 +1,17 @@
 Modern, code-aware, desktop AI assistant with an extensible tool system, built with Go (Wails) and React (Vite) using Material UI. Loom is a ground‑up rewrite of Loom v1 focused on simplicity, extensibility, reliability, and a calm, content‑centric UX.
 
-> Loom has come so far, that I've started developing Loom features with Loom itself.
-- Tim Anthony Alexander
-
-![Loom Screenshot](screenshot1.png)
-
-## Table of contents
-- Overview
-- Key features
-- Architecture
-- Directory structure
-- Getting started
-- Running and building
-- Configuration
-- Using Loom
-- Tools and approvals
-- Model adapters
-- Memory and indexing
-- Security considerations
-- Troubleshooting
-- Roadmap
-- Contributing
-- License
-
 ## Overview
 Loom pairs a Go orchestrator and tooling layer with a modern React UI. It’s designed for iterative coding assistance on local projects with first‑class support for:
 - Semantically exploring code
 - Precise, minimal file edits with human approval
 - Streaming responses, reasoning snippets, and tool calls
 - Clean separation between engine, adapters, tools, and UI
+
+## Screenshots
+
+
+![Loom Screenshot](screenshot1.png)
+![Loom Screenshot](screenshot2.png)
 
 ## Key features
 - Desktop app via Wails: native windowing, compact packaging, and system integration
