@@ -46,14 +46,14 @@ Loom v2 pairs a Go orchestrator and tooling layer with a modern React UI. It’s
 - Reasoning view: transient, collapsible stream of model reasoning summaries
 
 ## Architecture
-- Frontend (`cmd/loomgui/frontend/`)
+- Frontend (`ui/frontend/`)
   - Vite + React 18 + TypeScript
   - Material UI components and Catppuccin theme for Monaco
   - Markdown rendering with code highlighting
   - Streaming message updates via Wails events
   - Approval dialog with diff formatting
 
-- Backend (`cmd/loomgui/main.go` and `internal/*`)
+- Backend (`ui/main.go` and `internal/*`)
   - Wails app bootstraps engine, tools, adapters, and memory
   - Engine orchestrates model calls and tool invocations
   - Tool registry declares available capabilities and safety
@@ -62,7 +62,7 @@ Loom v2 pairs a Go orchestrator and tooling layer with a modern React UI. It’s
   - Indexer performs fast code search via ripgrep
 
 ## Directory structure
-- `cmd/loomgui/` — Wails app (Go) and frontend
+- `ui/` — Wails app (Go) and frontend
 - `internal/` — engine, adapters, tools, memory, indexer, config
 - `Makefile` — common dev/build tasks
 
@@ -95,7 +95,7 @@ This will:
   ```
 - Frontend only (Vite dev server):
   ```bash
-  cd cmd/loomgui/frontend && npm run dev
+  cd ui/frontend && npm run dev
   ```
 - Frontend + backend HMR split (Vite + Wails):
   ```bash
@@ -137,7 +137,7 @@ Two rule sets influence model behavior:
 Access Rules from the sidebar. The app normalizes and persists rule arrays.
 
 ### Model selection
-The UI exposes a curated, static selector. Entries are of the form `provider:model_id` and grouped by provider. Current set mirrors `cmd/loomgui/frontend/src/ModelSelector.tsx`:
+The UI exposes a curated, static selector. Entries are of the form `provider:model_id` and grouped by provider. Current set mirrors `ui/frontend/src/ModelSelector.tsx`:
 
 ```ts
 { id: 'openai:gpt-5', name: 'GPT 5', provider: 'openai' },
@@ -179,7 +179,7 @@ The backend parses `provider:model_id` (see `internal/adapter/models.go`) and sw
   - Cmd/Ctrl+S saves the active file
 
 ## Tools and approvals
-Tools are registered in `cmd/loomgui/main.go` and implemented under `internal/tool/`:
+Tools are registered in `ui/main.go` and implemented under `internal/tool/`:
 - `read_file`: Safe, read‑only file access
 - `search_code`: Ripgrep‑backed search
 - `list_dir`: Enumerate directories

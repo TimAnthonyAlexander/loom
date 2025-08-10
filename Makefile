@@ -1,5 +1,5 @@
 WAILS_BIN := $(shell go env GOPATH)/bin/wails
-APP_DIR := cmd/loomgui
+APP_DIR := ui
 FRONTEND_DIR := $(APP_DIR)/frontend
 LINUX_BUILDER_FILE := Dockerfile.linux
 BUILD_DIR := $(APP_DIR)/build/bin
@@ -181,7 +181,7 @@ build-linux-arm64: prepare-linux-arm64
 .PHONY: dev-hmr
 dev-hmr:
 	cd $(FRONTEND_DIR) && npm run dev & \
-	cd $(APP_DIR) && $(WAILS) dev -s -frontenddevserverurl http://localhost:5173 -reloaddirs ../../internal
+	cd $(APP_DIR) && $(WAILS) dev -s -frontenddevserverurl http://localhost:5173 -reloaddirs ../internal
 
 .PHONY: build-linux-all
 build-linux-all: build-linux-amd64 build-linux-arm64
