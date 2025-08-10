@@ -53,15 +53,18 @@ export default function App() {
                 <div className="container center">
                     <p className="pill" style={{ marginBottom: 16 }}>Desktop • Code‑aware • Approvals‑first</p>
                     <h1>
-                        Loom — <strong>Your code‑aware AI assistant</strong>, on your desktop.
+                        Loom — <strong>Your code‑aware AI assistant</strong>
                     </h1>
                     <p className="hero-sub">
                         Build, refactor, and explore your projects with an AI that understands your codebase, respects your approvals,
                         and integrates into your workflow — no cloud lock‑in.
                     </p>
+                    <p>
+                        Use your own API keys or a local model. It's up to you.
+                    </p>
                     <div className="cta">
                         <a href="https://github.com/TimAnthonyAlexander/loom/releases/latest" className="btn primary">Download Loom</a>
-                        <a href="https://github.com/TimAnthonyAlexander/loom" className="btn ghost">Read the Docs</a>
+                        <a href="https://github.com/TimAnthonyAlexander/loom" className="btn ghost">Source on GitHub</a>
                     </div>
 
                     <div className="hero-visual">
