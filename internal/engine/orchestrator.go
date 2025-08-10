@@ -336,9 +336,6 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 			if len(title) > 50 {
 				title = title[:50] + "…"
 			}
-			if label := e.GetModelLabel(); label != "" {
-				title = title + " — " + label
-			}
 			_ = e.memory.SetConversationTitle(currentID, title)
 		}
 	}

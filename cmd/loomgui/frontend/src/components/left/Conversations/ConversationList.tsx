@@ -20,7 +20,14 @@ export default function ConversationList({ conversations, currentConversationId,
                     <ListItemText
                         primary={c.title || c.id}
                         secondary={c.updated_at ? new Date(c.updated_at).toLocaleString() : undefined}
-                        primaryTypographyProps={{ fontWeight: c.id === currentConversationId ? 700 : 500 }}
+                        primaryTypographyProps={{
+                            fontWeight: c.id === currentConversationId ? 700 : 500,
+                            fontSize: '0.8rem',
+                        }}
+                        secondaryTypographyProps={{
+                            color: 'text.secondary',
+                            fontSize: '0.7rem',
+                        }}
                     />
                 </ListItem>
             ))}
