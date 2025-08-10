@@ -326,6 +326,11 @@ const App: React.FC = () => {
         if (!dirCache[key]) loadDir(key);
     }, [dirCache]);
 
+    // Update tab helper
+    const onUpdateTab = useCallback((path: string, patch: Partial<EditorTabItem>) => {
+        setOpenTabs((prev) => prev.map((x) => (x.path === path ? { ...x, ...patch } : x)));
+    }, []);
+
     const openFile = useCallback((path: string, line?: number, column?: number) => {
         const normPath = normalizeWorkspaceRelPath(path);
         // Deduplicate existing tabs (case-insensitive)
@@ -385,10 +390,6 @@ const App: React.FC = () => {
         });
     }, []);
 
-    // Update tab helper
-    const onUpdateTab = useCallback((path: string, patch: Partial<EditorTabItem>) => {
-        setOpenTabs((prev) => prev.map((x) => (x.path === path ? { ...x, ...patch } : x)));
-    }, []);
 
     // Save tab helper
     const onSaveTab = useCallback(async (path: string) => {
@@ -474,7 +475,7 @@ const App: React.FC = () => {
                                     const language = guessLanguage(p);
                                     setOpenTabs((prev) => prev.map((t) => t.path === p ? { ...t, content, serverRev, language, isDirty: false } : t));
                                 })
-                                .catch(() => {});
+                                .catch(() => { });
                         }
                     }}
                     onCloseTab={closeTab}
