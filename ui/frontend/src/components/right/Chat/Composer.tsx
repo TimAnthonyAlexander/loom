@@ -1,3 +1,4 @@
+import React from 'react';
 import { Stack, TextField, IconButton } from '@mui/material';
 import { PendingRounded, SendRounded } from '@mui/icons-material';
 
@@ -7,9 +8,19 @@ type Props = {
     busy: boolean;
     onSend: () => void;
     onClear: () => void;
+    // When this number changes, focus the input
+    focusToken?: number;
 };
 
-export default function Composer({ input, setInput, busy, onSend }: Props) {
+export default function Composer({ input, setInput, busy, onSend, focusToken }: Props) {
+    const inputRef = React.useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+
+    React.useEffect(() => {
+        if (focusToken === undefined) return;
+        try {
+            inputRef.current?.focus();
+        } catch {}
+    }, [focusToken]);
     return (
         <Stack
             direction="row"
@@ -22,6 +33,7 @@ export default function Composer({ input, setInput, busy, onSend }: Props) {
             <TextField
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
+                inputRef={inputRef as any}
                 onKeyDown={(e) => {
                     if ((e as any).key === 'Enter' && !(e as any).shiftKey) {
                         e.preventDefault();

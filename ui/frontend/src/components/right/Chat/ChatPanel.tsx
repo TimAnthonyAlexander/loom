@@ -47,6 +47,26 @@ export default function ChatPanel(props: Props) {
         onSelectModel,
     } = props;
 
+    const focusTokenRef = React.useRef<number>(0);
+
+    React.useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            const isMac = navigator.platform.toLowerCase().includes('mac');
+            const cmd = isMac ? e.metaKey : e.ctrlKey;
+            const key = e.key.toLowerCase();
+            if (cmd && key === 'i') {
+                e.preventDefault();
+                focusTokenRef.current += 1;
+                // Trigger a rerender by updating a state-likes value
+                setFocusBump(focusTokenRef.current);
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, []);
+
+    const [focusBump, setFocusBump] = React.useState<number>(0);
+
     return (
         <Box sx={{ minWidth: 420, width: '20%', display: 'flex', flexDirection: 'column', height: '100vh' }}>
             <Box
@@ -90,7 +110,7 @@ export default function ChatPanel(props: Props) {
             </Box>
             <Divider />
             <Box sx={{ px: 3, py: 2 }}>
-                <Composer input={input} setInput={setInput} busy={busy} onSend={onSend} onClear={onClear} />
+                <Composer input={input} setInput={setInput} busy={busy} onSend={onSend} onClear={onClear} focusToken={focusBump} />
             </Box>
         </Box>
     );
