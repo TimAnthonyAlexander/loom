@@ -424,7 +424,13 @@ const App: React.FC = () => {
                 <EditorPanel
                     openTabs={openTabs}
                     activeTab={activeTab}
-                    onChangeActiveTab={setActiveTab}
+                    onChangeActiveTab={(p: string) => {
+                        setActiveTab(p);
+                        // Hint backend about active editor file to refresh UI Context for the next turn
+                        if (p) {
+                            Bridge.ReadWorkspaceFile(p).catch(() => {});
+                        }
+                    }}
                     onCloseTab={closeTab}
                     onUpdateTab={onUpdateTab}
                     onSaveTab={onSaveTab}

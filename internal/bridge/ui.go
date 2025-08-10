@@ -611,11 +611,11 @@ func (a *App) OpenFileInUI(path string) {
 // UpdateEditorContext records the active editor file and cursor position from the UI.
 // The path should be workspace-relative using forward slashes.
 func (a *App) UpdateEditorContext(path string, line int, column int) {
-    if a.engine == nil {
-        return
-    }
-    p := filepath.ToSlash(strings.TrimSpace(path))
-    a.engine.SetEditorContext(p, line, column)
+	if a.engine == nil {
+		return
+	}
+	p := filepath.ToSlash(strings.TrimSpace(path))
+	a.engine.SetEditorContext(p, line, column)
 }
 
 // SearchCode searches for text within files in the current workspace optionally scoped by a file glob.
@@ -921,6 +921,10 @@ func (a *App) ReadWorkspaceFile(relPath string) UIReadFileResult {
 	// Simple language hint from extension
 	out.Language = detectLanguageByExt(rel)
 	out.ServerRev = computeServerRev(data)
+	// Update engine editor context to reflect the file currently opened in the UI
+	if a.engine != nil {
+		a.engine.SetEditorContext(out.Path, 1, 1)
+	}
 	return out
 }
 
