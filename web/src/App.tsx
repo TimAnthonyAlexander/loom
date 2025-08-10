@@ -65,7 +65,11 @@ export default function App() {
                     </div>
 
                     <div className="hero-visual">
-                        <img src="/screenshot1.png" alt="Loom screenshot" />
+                        <img
+                            src="/screenshot1.png"
+                            alt="Loom screenshot"
+                            style={{ width: '100%', maxWidth: 800, borderRadius: 8, boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}
+                        />
                     </div>
                 </div>
             </header>
