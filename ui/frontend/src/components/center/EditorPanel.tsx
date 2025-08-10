@@ -14,7 +14,7 @@ type Props = {
     onSaveTab: (path: string) => Promise<void>;
 };
 
-export default function EditorPanel({ openTabs, activeTab, onChangeActiveTab, onCloseTab, onUpdateTab, onSaveTab }: Props) {
+function EditorPanel({ openTabs, activeTab, onChangeActiveTab, onCloseTab, onUpdateTab, onSaveTab }: Props) {
     const tab = openTabs.find((t) => t.path === activeTab);
     const editorRef = React.useRef<any>(null);
     const monacoRef = React.useRef<any>(null);
@@ -106,5 +106,16 @@ export default function EditorPanel({ openTabs, activeTab, onChangeActiveTab, on
         </Box>
     );
 }
+
+export default React.memo(EditorPanel, (prev, next) => {
+    return (
+        prev.activeTab === next.activeTab &&
+        prev.openTabs === next.openTabs &&
+        prev.onChangeActiveTab === next.onChangeActiveTab &&
+        prev.onCloseTab === next.onCloseTab &&
+        prev.onUpdateTab === next.onUpdateTab &&
+        prev.onSaveTab === next.onSaveTab
+    );
+});
 
 

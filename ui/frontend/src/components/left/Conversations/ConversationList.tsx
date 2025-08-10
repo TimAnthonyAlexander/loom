@@ -1,3 +1,4 @@
+import React from 'react';
 import { List, ListItem, ListItemText } from '@mui/material';
 import { ConversationListItem } from '../../../types/ui';
 
@@ -7,7 +8,7 @@ type Props = {
     onSelect: (id: string) => void;
 };
 
-export default function ConversationList({ conversations, currentConversationId, onSelect }: Props) {
+function ConversationListComponent({ conversations, currentConversationId, onSelect }: Props) {
     return (
         <List dense sx={{ width: '100%' }}>
             {conversations.map((c) => (
@@ -39,5 +40,7 @@ export default function ConversationList({ conversations, currentConversationId,
         </List>
     );
 }
+
+export default React.memo(ConversationListComponent);
 
 

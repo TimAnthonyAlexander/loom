@@ -31,7 +31,7 @@ type Props = {
     rootPath?: string;
 };
 
-export default function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOpenFile, rootPath = '' }: Props) {
+function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOpenFile, rootPath = '' }: Props) {
     // Build a flattened list of the visible items for rendering and keyboard navigation
     type VisibleItem = {
         type: 'entry' | 'loading';
@@ -73,7 +73,7 @@ export default function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOp
         return { items, pathToEntry };
     };
 
-    const { items: visibleItems, pathToEntry } = buildVisible(rootPath);
+    const { items: visibleItems, pathToEntry } = React.useMemo(() => buildVisible(rootPath), [dirCache, expandedDirs, rootPath]);
 
     const getParentPath = (fullPath: string) => {
         const idx = fullPath.lastIndexOf('/');
@@ -314,5 +314,7 @@ export default function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOp
         </Box>
     );
 }
+
+export default React.memo(FileExplorer);
 
 

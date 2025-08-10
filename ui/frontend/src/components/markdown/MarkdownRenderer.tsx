@@ -1,3 +1,4 @@
+import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -36,7 +37,7 @@ type MarkdownRendererProps = {
     children: string;
 };
 
-export default function MarkdownRenderer({ children }: MarkdownRendererProps) {
+function MarkdownRendererComponent({ children }: MarkdownRendererProps) {
     return (
         <ReactMarkdown
             remarkPlugins={[remarkGfm, remarkBreaks]}
@@ -102,5 +103,7 @@ export default function MarkdownRenderer({ children }: MarkdownRendererProps) {
         </ReactMarkdown>
     );
 }
+
+export default React.memo(MarkdownRendererComponent);
 
 

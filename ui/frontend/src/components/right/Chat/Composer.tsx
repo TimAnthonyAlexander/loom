@@ -12,7 +12,7 @@ type Props = {
     focusToken?: number;
 };
 
-export default function Composer({ input, setInput, busy, onSend, focusToken }: Props) {
+function ComposerComponent({ input, setInput, busy, onSend, focusToken }: Props) {
     const inputRef = React.useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
 
     React.useEffect(() => {
@@ -68,5 +68,14 @@ export default function Composer({ input, setInput, busy, onSend, focusToken }: 
         </Stack >
     );
 }
+
+export default React.memo(ComposerComponent, (prev, next) => {
+    return (
+        prev.input === next.input &&
+        prev.busy === next.busy &&
+        prev.onSend === next.onSend &&
+        prev.focusToken === next.focusToken
+    );
+});
 
 

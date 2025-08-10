@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { EventsOn, LogInfo } from '../wailsjs/runtime/runtime';
 import { SendUserMessage, Approve, SetModel, GetSettings, SaveSettings, SetWorkspace, ClearConversation, GetConversations, LoadConversation, NewConversation } from '../wailsjs/go/bridge/App';
 import * as Bridge from '../wailsjs/go/bridge/App';
@@ -20,7 +20,7 @@ import { writeFile } from './services/files';
 
 const App: React.FC = () => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
-    const [input, setInput] = useState('');
+    // Chat input lives inside ChatPanel to avoid global rerenders on keystrokes
     const [approvalRequest, setApprovalRequest] = useState<ApprovalRequest | null>(null);
     const [currentModel, setCurrentModel] = useState<string>('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -252,11 +252,10 @@ const App: React.FC = () => {
         }
     }, [messages]);
 
-    const handleSend = () => {
-        if (!input.trim() || busy) return;
-        SendUserMessage(input);
-        setInput('');
-    };
+    const handleSend = useCallback((text: string) => {
+        if (!text.trim() || busy) return;
+        SendUserMessage(text);
+    }, [busy]);
 
     const handleApproval = (approved: boolean) => {
         if (approvalRequest) {
@@ -304,13 +303,13 @@ const App: React.FC = () => {
             .catch(() => { });
     };
 
-    const toggleDir = (path: string) => {
+    const toggleDir = useCallback((path: string) => {
         const key = path || '';
         setExpandedDirs((prev) => ({ ...prev, [key]: !prev[key] }));
         if (!dirCache[key]) loadDir(key);
-    };
+    }, [dirCache]);
 
-    const openFile = (path: string, line?: number, column?: number) => {
+    const openFile = useCallback((path: string, line?: number, column?: number) => {
         const normPath = normalizeWorkspaceRelPath(path);
         const exists = openTabs.find((t) => t.path === normPath);
         if (exists) {
@@ -343,23 +342,23 @@ const App: React.FC = () => {
                 setActiveTab(normPath);
             })
             .catch(() => { });
-    };
+    }, [openTabs, workspacePath]);
 
-    const closeTab = (path: string) => {
+    const closeTab = useCallback((path: string) => {
         setOpenTabs((prev) => prev.filter((t) => t.path !== path));
         if (activeTab === path) {
             const remaining = openTabs.filter((t) => t.path !== path);
             setActiveTab(remaining.length ? remaining[remaining.length - 1].path : '');
         }
-    };
+    }, [activeTab, openTabs]);
 
     // Update tab helper
-    const onUpdateTab = (path: string, patch: Partial<EditorTabItem>) => {
+    const onUpdateTab = useCallback((path: string, patch: Partial<EditorTabItem>) => {
         setOpenTabs((prev) => prev.map((x) => (x.path === path ? { ...x, ...patch } : x)));
-    };
+    }, []);
 
     // Save tab helper
-    const onSaveTab = async (path: string) => {
+    const onSaveTab = useCallback(async (path: string) => {
         const t = openTabs.find((x) => x.path === path);
         if (!t) return;
         try {
@@ -371,7 +370,7 @@ const App: React.FC = () => {
             // eslint-disable-next-line no-console
             console.error('Save failed', e);
         }
-    };
+    }, [openTabs]);
 
     // Directory tree rendering is handled by the Sidebar > FileExplorer component
 
@@ -426,7 +425,6 @@ const App: React.FC = () => {
                     activeTab={activeTab}
                     onChangeActiveTab={(p: string) => {
                         setActiveTab(p);
-                        // Hint backend about active editor file to refresh UI Context for the next turn
                         if (p) {
                             Bridge.ReadWorkspaceFile(p).catch(() => {});
                         }
@@ -445,8 +443,6 @@ const App: React.FC = () => {
                 reasoningText={reasoningText}
                 reasoningOpen={reasoningOpen}
                 onToggleReasoning={setReasoningOpen}
-                input={input}
-                setInput={setInput}
                 onSend={handleSend}
                 onClear={() => { setMessages([]); ClearConversation(); }}
                 messagesEndRef={messagesEndRef}

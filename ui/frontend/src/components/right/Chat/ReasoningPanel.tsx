@@ -1,3 +1,4 @@
+import React from 'react';
 import { Box, Typography, Accordion, AccordionSummary, AccordionDetails } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import MarkdownRenderer from '../../markdown/MarkdownRenderer';
@@ -9,7 +10,7 @@ type Props = {
     onToggle: (open: boolean) => void;
 };
 
-export default function ReasoningPanel({ text, open, onToggle }: Props) {
+function ReasoningPanelComponent({ text, open, onToggle }: Props) {
     if (!text) return null;
     return (
         <Box sx={{ mb: 1 }}>
@@ -34,5 +35,7 @@ export default function ReasoningPanel({ text, open, onToggle }: Props) {
         </Box>
     );
 }
+
+export default React.memo(ReasoningPanelComponent);
 
 

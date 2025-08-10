@@ -1,3 +1,4 @@
+import React from 'react';
 import { Box, Typography, IconButton, Tooltip, Paper } from '@mui/material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RuleIcon from '@mui/icons-material/Rule';
@@ -14,7 +15,7 @@ type SidebarProps = {
     onOpenFile: (path: string) => void;
 };
 
-export default function Sidebar(props: SidebarProps) {
+function Sidebar(props: SidebarProps) {
     const {
         onOpenWorkspace,
         onOpenRules,
@@ -91,5 +92,7 @@ export default function Sidebar(props: SidebarProps) {
         </Box>
     );
 }
+
+export default React.memo(Sidebar);
 
 

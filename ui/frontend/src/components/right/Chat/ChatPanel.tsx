@@ -13,9 +13,7 @@ type Props = {
     reasoningText: string;
     reasoningOpen: boolean;
     onToggleReasoning: (open: boolean) => void;
-    input: string;
-    setInput: (val: string) => void;
-    onSend: () => void;
+    onSend: (text: string) => void;
     onClear: () => void;
     messagesEndRef: React.RefObject<HTMLDivElement>;
     onNewConversation: () => void;
@@ -26,7 +24,7 @@ type Props = {
     onSelectModel: (model: string) => void;
 };
 
-export default function ChatPanel(props: Props) {
+function ChatPanelComponent(props: Props) {
     const {
         messages,
         busy,
@@ -34,8 +32,6 @@ export default function ChatPanel(props: Props) {
         reasoningText,
         reasoningOpen,
         onToggleReasoning,
-        input,
-        setInput,
         onSend,
         onClear,
         messagesEndRef,
@@ -48,6 +44,7 @@ export default function ChatPanel(props: Props) {
     } = props;
 
     const focusTokenRef = React.useRef<number>(0);
+    const [localInput, setLocalInput] = React.useState<string>('');
 
     React.useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
@@ -117,10 +114,44 @@ export default function ChatPanel(props: Props) {
             </Box>
             <Divider />
             <Box sx={{ px: 3, py: 2 }}>
-                <Composer input={input} setInput={setInput} busy={busy} onSend={onSend} onClear={onClear} focusToken={focusBump} />
+                <Composer
+                    input={localInput}
+                    setInput={setLocalInput}
+                    busy={busy}
+                    onSend={() => {
+                        const text = localInput;
+                        if (!text.trim() || busy) return;
+                        onSend(text);
+                        setLocalInput('');
+                    }}
+                    onClear={() => {
+                        setLocalInput('');
+                        onClear();
+                    }}
+                    focusToken={focusBump}
+                />
             </Box>
         </Box>
     );
 }
+
+export default React.memo(ChatPanelComponent, (prev, next) => {
+    return (
+        prev.messages === next.messages &&
+        prev.busy === next.busy &&
+        prev.lastUserIdx === next.lastUserIdx &&
+        prev.reasoningText === next.reasoningText &&
+        prev.reasoningOpen === next.reasoningOpen &&
+        prev.onSend === next.onSend &&
+        prev.onClear === next.onClear &&
+        prev.messagesEndRef === next.messagesEndRef &&
+        prev.onNewConversation === next.onNewConversation &&
+        prev.conversations === next.conversations &&
+        prev.currentConversationId === next.currentConversationId &&
+        prev.onSelectConversation === next.onSelectConversation &&
+        prev.currentModel === next.currentModel &&
+        prev.onSelectModel === next.onSelectModel
+    );
+});
 
 
