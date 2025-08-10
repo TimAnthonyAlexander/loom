@@ -303,6 +303,23 @@ const App: React.FC = () => {
             .catch(() => { });
     };
 
+    const reloadFile = useCallback((path: string) => {
+        const normPath = normalizeWorkspaceRelPath(path);
+        if (!normPath) return;
+        Bridge.ReadWorkspaceFile(normPath)
+            .then((res: any) => {
+                const content = String(res?.content || '');
+                const serverRev = String(res?.serverRev || '');
+                const language = guessLanguage(normPath);
+                setOpenTabs((prev) => prev.map((t) =>
+                    t.path.toLowerCase() === normPath.toLowerCase()
+                        ? { ...t, content, serverRev, language, isDirty: false }
+                        : t
+                ));
+            })
+            .catch(() => { });
+    }, [workspacePath]);
+
     const toggleDir = useCallback((path: string) => {
         const key = path || '';
         setExpandedDirs((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -311,12 +328,27 @@ const App: React.FC = () => {
 
     const openFile = useCallback((path: string, line?: number, column?: number) => {
         const normPath = normalizeWorkspaceRelPath(path);
-        const exists = openTabs.find((t) => t.path === normPath);
-        if (exists) {
-            setActiveTab(normPath);
-            if (typeof line === 'number' && typeof column === 'number') {
-                onUpdateTab(normPath, { cursor: { line, column } });
+        // Deduplicate existing tabs (case-insensitive)
+        setOpenTabs((prev) => {
+            const seen: Record<string, boolean> = {};
+            const result: EditorTabItem[] = [];
+            for (const t of prev) {
+                const key = t.path.toLowerCase();
+                if (!seen[key]) {
+                    seen[key] = true;
+                    result.push(t);
+                }
             }
+            return result;
+        });
+        const exists = openTabs.find((t) => t.path.toLowerCase() === normPath.toLowerCase());
+        if (exists) {
+            setActiveTab(exists.path);
+            if (typeof line === 'number' && typeof column === 'number') {
+                onUpdateTab(exists.path, { cursor: { line, column } });
+            }
+            // Always reload on explicit open to reflect any external edits
+            reloadFile(exists.path);
             return;
         }
         Bridge.ReadWorkspaceFile(normPath)
@@ -325,9 +357,9 @@ const App: React.FC = () => {
                 const content = String(res?.content || '');
                 const serverRev = String(res?.serverRev || '');
                 const language = guessLanguage(normPath);
-                setOpenTabs((prev) => [
-                    ...prev,
-                    {
+                setOpenTabs((prev) => {
+                    const next = prev.filter((t) => t.path.toLowerCase() !== normPath.toLowerCase());
+                    next.push({
                         path: normPath,
                         title,
                         content,
@@ -337,20 +369,21 @@ const App: React.FC = () => {
                         serverRev,
                         cursor: typeof line === 'number' && typeof column === 'number' ? { line, column } : { line: 1, column: 1 },
                         scrollTop: 0,
-                    },
-                ]);
+                    });
+                    return next;
+                });
                 setActiveTab(normPath);
             })
             .catch(() => { });
-    }, [openTabs, workspacePath]);
+    }, [openTabs, workspacePath, onUpdateTab, reloadFile]);
 
     const closeTab = useCallback((path: string) => {
-        setOpenTabs((prev) => prev.filter((t) => t.path !== path));
-        if (activeTab === path) {
-            const remaining = openTabs.filter((t) => t.path !== path);
-            setActiveTab(remaining.length ? remaining[remaining.length - 1].path : '');
-        }
-    }, [activeTab, openTabs]);
+        setOpenTabs((prev) => {
+            const filtered = prev.filter((t) => t.path !== path);
+            setActiveTab((current) => (current === path ? (filtered.length ? filtered[filtered.length - 1].path : '') : current));
+            return filtered;
+        });
+    }, []);
 
     // Update tab helper
     const onUpdateTab = useCallback((path: string, patch: Partial<EditorTabItem>) => {
@@ -378,7 +411,15 @@ const App: React.FC = () => {
     useEffect(() => {
         const handler = (payload: any) => {
             const p = normalizeWorkspaceRelPath(String(payload?.path || ''));
-            if (p) openFile(p);
+            if (!p) return;
+            const exists = openTabs.find((t) => t.path.toLowerCase() === p.toLowerCase());
+            if (exists) {
+                // If already open (e.g., after an edit), reload content and focus the tab
+                reloadFile(p);
+                setActiveTab(exists.path);
+            } else {
+                openFile(p);
+            }
         };
         EventsOn('workspace:open_file', handler);
     }, []);
@@ -426,7 +467,14 @@ const App: React.FC = () => {
                     onChangeActiveTab={(p: string) => {
                         setActiveTab(p);
                         if (p) {
-                            Bridge.ReadWorkspaceFile(p).catch(() => {});
+                            Bridge.ReadWorkspaceFile(p)
+                                .then((res: any) => {
+                                    const content = String(res?.content || '');
+                                    const serverRev = String(res?.serverRev || '');
+                                    const language = guessLanguage(p);
+                                    setOpenTabs((prev) => prev.map((t) => t.path === p ? { ...t, content, serverRev, language, isDirty: false } : t));
+                                })
+                                .catch(() => {});
                         }
                     }}
                     onCloseTab={closeTab}
