@@ -6,27 +6,27 @@
   width: 100%;
   padding: 8px;
   border-radius: 4px;
-  border: 1px solid #ccc;
-  background-color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background-color: #111418;
   font-size: 14px;
-  color: #333;
+  color: #e5e7eb;
 }
 
 .model-selector select:focus {
   outline: none;
-  border-color: #0078d7;
-  box-shadow: 0 0 0 2px rgba(0, 120, 215, 0.2);
+  border-color: #0A84FF;
+  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.25);
 }
 
 /* Provider-specific styling */
 .model-selector option[value^="openai"] {
-  background-color: #f0f8ff;
+  background-color: #0f141a;
 }
 
 .model-selector option[value^="claude"] {
-  background-color: #fff0f5;
+  background-color: #151018;
 }
 
 .model-selector option[value^="ollama"] {
-  background-color: #f5f5f5;
+  background-color: #0f0f0f;
 }

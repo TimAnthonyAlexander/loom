@@ -52,7 +52,8 @@ export default function ChatPanel(props: Props) {
                     alignItems: 'center',
                     justifyContent: 'center',
                     p: 2,
-                    borderBottom: '1px solid #e0e0e0',
+                    borderBottom: 1,
+                    borderColor: 'divider',
                 }}
             >
                 <Button

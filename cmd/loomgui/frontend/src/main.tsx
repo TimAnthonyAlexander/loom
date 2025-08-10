@@ -9,9 +9,9 @@ import './monaco-workers'
 
 const theme = createTheme({
     palette: {
-        mode: 'light',
+        mode: 'dark',
         primary: { main: '#0A84FF' },
-        background: { default: '#F8F9FB', paper: '#FFFFFF' },
+        background: { default: '#0B0D12', paper: '#121417' },
     },
     shape: { borderRadius: 12 },
     typography: {
@@ -26,7 +26,7 @@ const theme = createTheme({
             styleOverrides: {
                 root: {
                     boxShadow:
-                        '0 1px 2px rgba(16,24,40,0.06), 0 1px 3px rgba(16,24,40,0.1)',
+                        '0 1px 2px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.6)',
                 },
             },
         },

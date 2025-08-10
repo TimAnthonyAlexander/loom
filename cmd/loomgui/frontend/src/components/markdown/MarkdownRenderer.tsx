@@ -2,7 +2,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneLight as oneLightStyle } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { oneDark as oneDarkStyle } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import {
     Box,
     Paper,
@@ -45,7 +45,7 @@ export default function MarkdownRenderer({ children }: MarkdownRendererProps) {
                     const match = /language-(\w+)/.exec(className || '');
                     return !inline && match ? (
                         <SyntaxHighlighter
-                            style={oneLightStyle as any}
+                            style={oneDarkStyle as any}
                             language={match[1]}
                             PreTag="div"
                             customStyle={{ fontSize: 12, lineHeight: 1.5 }}

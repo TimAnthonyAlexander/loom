@@ -58,6 +58,7 @@ export default function EditorPanel({ openTabs, activeTab, onChangeActiveTab, on
                 {tab ? (
                     <Editor
                         height="100%"
+                        theme="vs-dark"
                         defaultLanguage={language}
                         language={language}
                         value={tab.content}
