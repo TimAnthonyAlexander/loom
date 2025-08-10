@@ -36,7 +36,7 @@ export default function Sidebar(props: SidebarProps) {
     } = props;
 
     return (
-        <Box sx={{ px: 2, py: 2, display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto' }}>
+        <Box sx={{ px: 1, py: 1, display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto' }}>
             <Box sx={{ pt: 2 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                     <Box component="img" src="/logo.png" alt="Loom" sx={{ width: 28, height: 28, borderRadius: 0.5 }} />
@@ -71,7 +71,7 @@ export default function Sidebar(props: SidebarProps) {
 
             <Box>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>Files</Typography>
-                <Paper variant="outlined" sx={{ p: 1, maxHeight: '60vh', overflowY: 'auto' }}>
+                <Paper variant="outlined" sx={{ p: 0.2, maxHeight: '60vh', overflowY: 'auto' }}>
                     <FileExplorer
                         dirCache={dirCache}
                         expandedDirs={expandedDirs}
