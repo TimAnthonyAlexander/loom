@@ -93,12 +93,10 @@ window.addEventListener('unhandledrejection', (event) => {
 });
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
-    <React.StrictMode>
-        <ThemeProvider theme={theme}>
-            <CssBaseline />
-            <ErrorBoundary>
-                <App />
-            </ErrorBoundary>
-        </ThemeProvider>
-    </React.StrictMode>,
+    <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <ErrorBoundary>
+            <App />
+        </ErrorBoundary>
+    </ThemeProvider>
 )
