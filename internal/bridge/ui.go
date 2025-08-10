@@ -608,6 +608,16 @@ func (a *App) OpenFileInUI(path string) {
 	}
 }
 
+// UpdateEditorContext records the active editor file and cursor position from the UI.
+// The path should be workspace-relative using forward slashes.
+func (a *App) UpdateEditorContext(path string, line int, column int) {
+    if a.engine == nil {
+        return
+    }
+    p := filepath.ToSlash(strings.TrimSpace(path))
+    a.engine.SetEditorContext(p, line, column)
+}
+
 // SearchCode searches for text within files in the current workspace optionally scoped by a file glob.
 // Returns a list of matches with relative paths and line information. If engine/workspace not set, returns empty result.
 func (a *App) SearchCode(query string, filePattern string, maxResults int) []map[string]interface{} {

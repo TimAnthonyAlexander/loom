@@ -74,6 +74,12 @@ type Engine struct {
 	autoApproveEdits bool
 	// model label like "openai:gpt-4o" for titling
 	currentModelLabel string
+    // latest editor context as reported by the UI (workspace-relative path)
+    editorCtx struct {
+        Path   string
+        Line   int
+        Column int
+    }
 }
 
 // LLM is an interface to abstract different language model providers.
@@ -169,6 +175,36 @@ func (e *Engine) GetModelLabel() string {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.currentModelLabel
+}
+
+// SetEditorContext records the user's currently viewed file and cursor position.
+// The path should be workspace-relative using forward slashes.
+func (e *Engine) SetEditorContext(path string, line, column int) {
+    e.mu.Lock()
+    defer e.mu.Unlock()
+    e.editorCtx.Path = strings.TrimSpace(path)
+    if line < 1 {
+        line = 1
+    }
+    if column < 1 {
+        column = 1
+    }
+    e.editorCtx.Line = line
+    e.editorCtx.Column = column
+}
+
+// formatEditorContext returns a single-line hint about the user's current editor state.
+func (e *Engine) formatEditorContext() string {
+    e.mu.RLock()
+    defer e.mu.RUnlock()
+    if strings.TrimSpace(e.editorCtx.Path) == "" {
+        return ""
+    }
+    // If line/column are not set, still provide the file context
+    if e.editorCtx.Line <= 0 || e.editorCtx.Column <= 0 {
+        return fmt.Sprintf("The user is currently viewing the file %s.", e.editorCtx.Path)
+    }
+    return fmt.Sprintf("The user is currently viewing the file %s at line %d, column %d. Use this information if useful to the user request.", e.editorCtx.Path, e.editorCtx.Line, e.editorCtx.Column)
 }
 
 // ListConversations returns summaries for available conversations.
@@ -319,11 +355,15 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 			break
 		}
 	}
-	if !hasSystem {
-		// Load dynamic rules and inject into system prompt
-		userRules, projectRules, _ := config.LoadRules(e.workspaceDir)
-		convo.AddSystem(GenerateSystemPromptWithRules(toolSchemas, userRules, projectRules))
-	}
+    if !hasSystem {
+        // Load dynamic rules and inject into system prompt
+        userRules, projectRules, _ := config.LoadRules(e.workspaceDir)
+        base := GenerateSystemPromptWithRules(toolSchemas, userRules, projectRules)
+        if ui := strings.TrimSpace(e.formatEditorContext()); ui != "" {
+            base = strings.TrimSpace(base) + "\n\nUI Context:\n- " + ui
+        }
+        convo.AddSystem(base)
+    }
 
 	// Add latest user message
 	convo.AddUser(userMsg)

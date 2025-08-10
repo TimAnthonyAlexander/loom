@@ -3,6 +3,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import { EditorTabItem } from '../../types/ui';
 import Editor, { OnMount } from '@monaco-editor/react';
 import React from 'react';
+import * as Bridge from '../../../wailsjs/go/bridge/App';
 import { guessLanguage } from '../../utils/language';
 
 type Props = {
@@ -18,6 +19,11 @@ export default function EditorPanel({ openTabs, activeTab, onChangeActiveTab, on
     const tab = openTabs.find((t) => t.path === activeTab);
     const editorRef = React.useRef<any>(null);
     const monacoRef = React.useRef<any>(null);
+    const pathRef = React.useRef<string>('');
+
+    React.useEffect(() => {
+        pathRef.current = tab?.path || '';
+    }, [tab?.path]);
 
     const handleMount: OnMount = (editor, monaco) => {
         import('../../themes/mocha_converted.json').then((data: any) => {
@@ -32,6 +38,23 @@ export default function EditorPanel({ openTabs, activeTab, onChangeActiveTab, on
         monacoRef.current = monaco;
         if (tab?.cursor) editor.setPosition({ lineNumber: tab.cursor.line, column: tab.cursor.column });
         setTimeout(() => editor.focus(), 0);
+        // Report initial cursor position to backend
+        try {
+            const pos = editor.getPosition();
+            if (tab?.path && pos) {
+                Bridge.UpdateEditorContext(tab.path, pos.lineNumber, pos.column).catch(() => {});
+            }
+        } catch {}
+        // Subscribe to cursor changes to keep backend context fresh
+        try {
+            editor.onDidChangeCursorPosition(() => {
+                const pos = editor.getPosition();
+                const p = pathRef.current;
+                if (p && pos) {
+                    Bridge.UpdateEditorContext(p, pos.lineNumber, pos.column).catch(() => {});
+                }
+            });
+        } catch {}
     };
 
     React.useEffect(() => {
@@ -39,6 +62,13 @@ export default function EditorPanel({ openTabs, activeTab, onChangeActiveTab, on
         if (!editor || !tab?.cursor) return;
         editor.setPosition({ lineNumber: tab.cursor.line, column: tab.cursor.column });
         editor.revealPositionInCenter({ lineNumber: tab.cursor.line, column: tab.cursor.column });
+        // Notify backend when active tab changes
+        try {
+            const pos = editor.getPosition();
+            if (tab?.path && pos) {
+                Bridge.UpdateEditorContext(tab.path, pos.lineNumber, pos.column).catch(() => {});
+            }
+        } catch {}
     }, [tab?.cursor?.line, tab?.cursor?.column, tab?.path]);
 
     const handleChange = (value?: string) => {

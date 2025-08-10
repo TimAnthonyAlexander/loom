@@ -55,6 +55,8 @@ export function SetModel(arg1:string):Promise<void>;
 
 export function SetWorkspace(arg1:string):Promise<void>;
 
+export function UpdateEditorContext(arg1:string,arg2:number,arg3:number):Promise<void>;
+
 export function WithConfig(arg1:adapter.Config):Promise<bridge.App>;
 
 export function WithContext(arg1:context.Context):Promise<bridge.App>;

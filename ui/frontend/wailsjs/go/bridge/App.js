@@ -98,6 +98,10 @@ export function SetWorkspace(arg1) {
   return window['go']['bridge']['App']['SetWorkspace'](arg1);
 }
 
+export function UpdateEditorContext(arg1, arg2, arg3) {
+  return window['go']['bridge']['App']['UpdateEditorContext'](arg1, arg2, arg3);
+}
+
 export function WithConfig(arg1) {
   return window['go']['bridge']['App']['WithConfig'](arg1);
 }
