@@ -356,10 +356,6 @@ const App: React.FC = () => {
                     expandedDirs={expandedDirs}
                     onToggleDir={toggleDir}
                     onOpenFile={openFile}
-                    conversations={orderedConversations.slice(0, 5)}
-                    currentConversationId={currentConversationId}
-                    onSelectConversation={handleSelectConversation}
-                    onNewConversation={handleNewConversation}
                 />
             </Box>
 
@@ -388,6 +384,10 @@ const App: React.FC = () => {
                 onSend={handleSend}
                 onClear={() => { setMessages([]); ClearConversation(); }}
                 messagesEndRef={messagesEndRef}
+                onNewConversation={handleNewConversation}
+                conversations={orderedConversations}
+                currentConversationId={currentConversationId}
+                onSelectConversation={handleSelectConversation}
             />
 
             <ApprovalDialog

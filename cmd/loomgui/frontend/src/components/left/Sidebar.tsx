@@ -1,9 +1,9 @@
-import { Box, Typography, IconButton, Tooltip, Paper, Button } from '@mui/material';
+import { Box, Typography, IconButton, Tooltip, Paper } from '@mui/material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RuleIcon from '@mui/icons-material/Rule';
 import ModelSelector from '../../ModelSelector';
 import FileExplorer from './Files/FileExplorer';
-import { UIFileEntry, ConversationListItem } from '../../types/ui';
+import { UIFileEntry } from '../../types/ui';
 
 type SidebarProps = {
     onOpenWorkspace: () => void;
@@ -15,10 +15,6 @@ type SidebarProps = {
     expandedDirs: Record<string, boolean>;
     onToggleDir: (path: string) => void;
     onOpenFile: (path: string) => void;
-    conversations: ConversationListItem[];
-    currentConversationId: string;
-    onSelectConversation: (id: string) => void;
-    onNewConversation: () => void;
 };
 
 export default function Sidebar(props: SidebarProps) {
@@ -32,7 +28,6 @@ export default function Sidebar(props: SidebarProps) {
         expandedDirs,
         onToggleDir,
         onOpenFile,
-        onNewConversation,
     } = props;
 
     return (
@@ -80,12 +75,6 @@ export default function Sidebar(props: SidebarProps) {
                         rootPath=""
                     />
                 </Paper>
-            </Box>
-
-            <Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                    <Button size="small" variant="outlined" onClick={onNewConversation}>New Conversation</Button>
-                </Box>
             </Box>
         </Box>
     );
