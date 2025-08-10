@@ -381,7 +381,7 @@ const App: React.FC = () => {
     return (
         <Box display="flex" height="100vh" sx={{ bgcolor: 'background.default' }}>
             {/* Left: Sidebar */}
-            <Box sx={{ width: 280, borderRight: 1, borderColor: 'divider' }}>
+            <Box sx={{ minWidth: 280, width: '14%', borderRight: 1, borderColor: 'divider' }}>
                 <Sidebar
                     onOpenWorkspace={() => setWorkspaceOpen(true)}
                     onOpenRules={() => setRulesOpen(true)}

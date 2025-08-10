@@ -41,6 +41,28 @@ export default function MarkdownRenderer({ children }: MarkdownRendererProps) {
         <ReactMarkdown
             remarkPlugins={[remarkGfm, remarkBreaks]}
             components={{
+                ul({ children, ...props }: any) {
+                    return (
+                        <Box
+                            component="ul"
+                            sx={{ listStylePosition: 'inside', pl: 3, ml: 0, my: 0.5 }}
+                            {...props}
+                        >
+                            {children}
+                        </Box>
+                    );
+                },
+                ol({ children, ...props }: any) {
+                    return (
+                        <Box
+                            component="ol"
+                            sx={{ listStylePosition: 'inside', pl: 3, ml: 0, my: 0.5 }}
+                            {...props}
+                        >
+                            {children}
+                        </Box>
+                    );
+                },
                 code({ inline, className, children, ...props }: any) {
                     const match = /language-(\w+)/.exec(className || '');
                     return !inline && match ? (

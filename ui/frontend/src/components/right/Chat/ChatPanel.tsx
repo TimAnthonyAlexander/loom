@@ -48,7 +48,7 @@ export default function ChatPanel(props: Props) {
     } = props;
 
     return (
-        <Box sx={{ width: 420, display: 'flex', flexDirection: 'column', minWidth: 0, height: '100vh' }}>
+        <Box sx={{ minWidth: 420, width: '20%', display: 'flex', flexDirection: 'column', height: '100vh' }}>
             <Box
                 sx={{
                     width: '100%',
