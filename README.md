@@ -1,6 +1,9 @@
-Modern, code-aware, desktop AI assistant with an extensible tool system, built with Go (Wails) and React (Vite) using Material UI. Loom v2 is a ground‑up rewrite of Loom v1 focused on simplicity, extensibility, reliability, and a calm, content‑centric UX.
+Modern, code-aware, desktop AI assistant with an extensible tool system, built with Go (Wails) and React (Vite) using Material UI. Loom is a ground‑up rewrite of Loom v1 focused on simplicity, extensibility, reliability, and a calm, content‑centric UX.
 
-![Loom v2 Screenshot](screenshot1.png)
+> Loom has come so far, that I've started developing Loom features with Loom itself.
+- Tim Anthony Alexander
+
+![Loom Screenshot](screenshot1.png)
 
 ## Table of contents
 - Overview
