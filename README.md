@@ -2,7 +2,7 @@
 
 ## By Tim Anthony Alexander
 
-Modern, code-aware, desktop AI assistant with an extensible tool system, built with Go (Wails) and React (Vite) using Material UI. Loom v2 is a ground-up rewrite of Loom v1 focused on simplicity, extensibility, reliability, and a calm, content‑centric UX.
+Modern, code-aware, desktop AI assistant with an extensible tool system, built with Go (Wails) and React (Vite) using Material UI. Loom v2 is a ground‑up rewrite of Loom v1 focused on simplicity, extensibility, reliability, and a calm, content‑centric UX.
 
 ![Loom v2 Screenshot](screenshot1.png)
 
@@ -19,7 +19,6 @@ Modern, code-aware, desktop AI assistant with an extensible tool system, built w
 - Model adapters
 - Memory and indexing
 - Security considerations
-- Migrating from Loom v1
 - Troubleshooting
 - Roadmap
 - Contributing
@@ -29,26 +28,28 @@ Modern, code-aware, desktop AI assistant with an extensible tool system, built w
 Loom v2 pairs a Go orchestrator and tooling layer with a modern React UI. It’s designed for iterative coding assistance on local projects with first‑class support for:
 - Semantically exploring code
 - Precise, minimal file edits with human approval
-- Streaming responses and tool calls
+- Streaming responses, reasoning snippets, and tool calls
 - Clean separation between engine, adapters, tools, and UI
 
 ## Key features
 - Desktop app via Wails: native windowing, compact packaging, and system integration
-- Material UI: minimalist, content-forward interface with full-width conversational flow
+- Material UI: minimalist, content‑forward interface with a calm visual rhythm
 - Tool registry: explicit tool registration with schemas and safety flags
-- Providers: OpenAI and Anthropic Claude adapters
-- Semantic search: ripgrep-backed search with structured results
+- Providers: OpenAI, Anthropic Claude, and local Ollama adapters
+- Semantic search: ripgrep‑backed search with structured results
 - Safe editing: proposed edits with diff preview and explicit approval before apply
-- Project memory: workspace-scoped persistence for stable, predictable state
-- Shell execution: safe command execution with stdout/stderr capture and workspace confinement
-- Auto-approval: configurable automatic approval for edits and shell commands
-- Rules system: user and project-specific rules for consistent AI behavior
+- Project memory: workspace‑scoped persistence for stable, predictable state
+- Shell execution: propose/approve/execute commands with stdout/stderr capture; cwd confined to the workspace
+- Auto‑approval: optional automatic approval for edits and shell commands
+- Rules system: user and project‑specific rules for consistent AI behavior
+- Tabbed editor: Monaco with theme, Cmd/Ctrl+S to save, and file explorer
+- Reasoning view: transient, collapsible stream of model reasoning summaries
 
 ## Architecture
 - Frontend (`cmd/loomgui/frontend/`)
   - Vite + React 18 + TypeScript
-  - Material UI theme and components
-  - Markdown rendering with syntax highlighting
+  - Material UI components and Catppuccin theme for Monaco
+  - Markdown rendering with code highlighting
   - Streaming message updates via Wails events
   - Approval dialog with diff formatting
 
@@ -56,9 +57,14 @@ Loom v2 pairs a Go orchestrator and tooling layer with a modern React UI. It’s
   - Wails app bootstraps engine, tools, adapters, and memory
   - Engine orchestrates model calls and tool invocations
   - Tool registry declares available capabilities and safety
-  - Adapters implement provider-specific chat semantics
+  - Adapters implement provider‑specific chat semantics
   - Memory stores project data under the workspace path
   - Indexer performs fast code search via ripgrep
+
+## Directory structure
+- `cmd/loomgui/` — Wails app (Go) and frontend
+- `internal/` — engine, adapters, tools, memory, indexer, config
+- `Makefile` — common dev/build tasks
 
 ## Getting started
 Prerequisites:
@@ -79,51 +85,59 @@ This will:
 - Ensure ripgrep is available (installs via Homebrew on macOS if missing)
 
 ## Running and building
-- Development (full app with Wails reload):
+- Development (full app with Wails live reload):
   ```bash
   make dev
   ```
-- Debug (Wails with DevTools):
+- Debug (Wails with extra logging):
   ```bash
   make debug
   ```
 - Frontend only (Vite dev server):
   ```bash
-  make frontend-dev
+  cd cmd/loomgui/frontend && npm run dev
+  ```
+- Frontend + backend HMR split (Vite + Wails):
+  ```bash
+  make dev-hmr
   ```
 - Build (current platform):
   ```bash
   make build
   ```
 - Platform builds:
-  - `make build-macos` (universal)
-  - `make build-windows`
-  - `make build-linux`
+  - macOS universal: `make build-macos-universal`
+  - macOS per‑arch: `make build-macos-amd64`, `make build-macos-arm64`
+  - Windows: `make build-windows`
+  - Linux: `make build-linux-all` (or `build-linux-amd64` / `build-linux-arm64`)
 
 ## Configuration
-Loom configures an LLM adapter via the adapter factory (`internal/adapter/factory.go` through `adapter.DefaultConfig()`), and will gracefully fall back to OpenAI if another provider cannot be initialized.
+Loom configures an LLM adapter via the adapter factory (`internal/adapter/factory.go`) with conservative defaults (OpenAI `gpt-4o`).
 
-Environment variables:
-- OpenAI: `OPENAI_API_KEY` (required to use OpenAI)
-- Anthropic: `ANTHROPIC_API_KEY` (required to use Claude)
+API keys and endpoints are managed in‑app via Settings and persisted to `~/.loom/settings.json`. By design, the app prefers persisted settings over environment variables.
 
-The backend default OpenAI fallback model is `gpt-4o`. The active model can be set at runtime from the UI.
+- OpenAI: set your key in Settings (stored as `openai_api_key`)
+- Anthropic: set your key in Settings (stored as `anthropic_api_key`)
+- Ollama: set endpoint in Settings (stored as `ollama_endpoint`), e.g. `http://localhost:11434/v1/chat/completions`
 
 ### Settings
-Loom persists user settings including API keys, workspace paths, and feature flags:
-- **Auto-approve Shell**: When enabled, shell commands are executed without manual approval
-- **Auto-approve Edits**: When enabled, file edits are applied without manual approval
-- Settings are stored in the OS-specific user config directory under `loom/settings.json`
+Settings include:
+- Last workspace path and last selected model (`provider:model_id`)
+- Feature flags:
+  - Auto‑approve Shell
+  - Auto‑approve Edits
+
+Settings are saved to `~/.loom/settings.json` with restrictive permissions.
 
 ### Rules
-Loom supports two types of rules that influence AI behavior:
-- **User Rules**: Global rules that apply to all projects, stored in user config
-- **Project Rules**: Workspace-specific rules stored in `.loom/rules.json` within each project
+Two rule sets influence model behavior:
+- User Rules: global (stored at `~/.loom/rules.json`)
+- Project Rules: workspace‑specific (stored at `<workspace>/.loom/rules.json`)
 
-Rules are accessible via the Rules button in the UI and can be edited inline.
+Access Rules from the sidebar. The app normalizes and persists rule arrays.
 
 ### Model selection
-The frontend exposes a curated, static model selector. Entries are of the form `provider:model_id` and grouped by provider. The current set is exactly:
+The UI exposes a curated, static selector. Entries are of the form `provider:model_id` and grouped by provider. Current set mirrors `cmd/loomgui/frontend/src/ModelSelector.tsx`:
 
 ```ts
 { id: 'openai:gpt-5', name: 'GPT 5', provider: 'openai' },
@@ -148,95 +162,81 @@ The frontend exposes a curated, static model selector. Entries are of the form `
 { id: 'ollama:deepseek-r1:70b', name: 'DeepSeek R1 (70B)', provider: 'ollama' },
 ```
 
-The backend parses model strings as `provider:model_id` (see `internal/adapter/models.go`) and maps the provider prefix to the corresponding adapter.
+The backend parses `provider:model_id` (see `internal/adapter/models.go`) and switches adapters accordingly.
 
 ## Using Loom
-- Model selection: in the left sidebar, select a model via the MUI Autocomplete. The selection is sent to the backend (`SetModel`) and becomes the active model.
-- Conversation flow:
-  - Messages are full width.
-  - User messages are lightly bordered to distinguish the author.
-  - Assistant and system messages flow together with minimal separation.
-  - Code blocks are syntax highlighted; tables render via Material UI components.
-- Streaming:
-  - The UI listens to Wails events:
-    - `chat:new`: new messages
-    - `assistant-msg`: streaming assistant content
-    - `task:prompt`: approval request with diff
-    - `system:busy`: UI busy state
- - Approvals:
-   - For actions that require approval (e.g., applying file edits), a dialog presents a summary and a formatted diff. Choose Approve or Reject.
-   - Auto-approval settings can bypass manual approval for shell commands and file edits
+- Workspace: choose a workspace on first launch or via the sidebar. The file explorer and Monaco editor reflect the active workspace.
+- Model selection: in the Chat panel header, pick a model. The choice is persisted and sent to the backend (`SetModel`).
+- Conversations:
+  - Start a new conversation from the Chat panel
+  - Recent conversations appear when the thread is empty; select to load
+  - Clearing chat creates a fresh conversation
+- Messages and streaming:
+  - Events: `chat:new`, `assistant-msg` (assistant stream), `assistant-reasoning` (reasoning stream), `task:prompt` (approval), `system:busy`
+  - Reasoning stream shows transient summaries; it auto‑collapses after completion
+- Editor:
+  - Tabs for opened files; close with the tab close button
+  - Cmd/Ctrl+S saves the active file
 
 ## Tools and approvals
-Tools are registered in the backend via `registerTools` (see `cmd/loomgui/main.go`) and defined under `internal/tool/`. Typical tools include:
-- `read_file`: Safe, read-only file access
-- `search_code`: Ripgrep-backed search
-- `edit_file`: Propose an edit (requires approval)
-- `apply_edit`: Apply an approved edit
+Tools are registered in `cmd/loomgui/main.go` and implemented under `internal/tool/`:
+- `read_file`: Safe, read‑only file access
+- `search_code`: Ripgrep‑backed search
 - `list_dir`: Enumerate directories
-- `run_shell`: Propose a shell command (requires approval)
+- `edit_file`: Propose a precise change (CREATE/REPLACE/INSERT/DELETE/SEARCH_REPLACE) — requires approval
+- `apply_edit`: Apply an approved edit
+- `run_shell`: Propose a shell command — requires approval
 - `apply_shell`: Execute an approved shell command
-- `finalize`: Final summary to conclude workflows
+- `http_request`: Perform HTTP calls to dev servers/APIs
+- `finalize`: Emit a concise final summary and end the loop
 
-Each tool is described by a schema and flagged as Safe or Requires approval. Destructive actions require explicit user approval in the UI before execution, unless auto-approval is enabled.
+Destructive actions require explicit user approval in the UI before execution, unless auto‑approval is enabled in Settings.
 
-### Shell Commands
-Shell commands support:
+### Shell commands
+Supported:
 - Direct binary execution or shell interpretation (`sh -c`)
-- Working directory specification (confined to workspace)
+- Working directory confined to the workspace (CWD validation)
 - Timeout limits (default 60s, max 600s)
-- Full output capture (stdout, stderr, exit code, duration)
-- Path safety: commands cannot escape the workspace directory
+- Full output capture: stdout, stderr, exit code, duration
+
+Note: commands are not sandboxed; only the working directory is confined.
 
 ## Model adapters
 - OpenAI (`internal/adapter/openai`)
-  - Chat completions with tool calls
-  - Streaming support with careful tool-call assembly
-  - Temperature guarded for reasoning models
+  - Chat/Responses API with tool calls and streaming
+  - Emits reasoning summaries on supported models (o3/o4/gpt‑5)
 - Anthropic (`internal/adapter/anthropic`)
   - Messages API with tool use
-  - Non-streaming by default for reliability; streaming handler scaffold present
 - Ollama (`internal/adapter/ollama`)
-  - Local model execution with Ollama CLI
-  - Supports both chat and tool calls, depending on model
+  - Local model execution via HTTP endpoint
 
-Adapters convert engine messages to provider-specific payloads and parse streaming/tool-call responses back into engine events.
+Adapters convert engine messages to provider‑specific payloads and parse streaming/tool‑call responses back into engine events.
 
 ## Memory and indexing
 - Project memory (`internal/memory`)
-  - Workspace‑scoped key/value store rooted at the normalized workspace path
-  - Helpers for conversation persistence and namespaced keys per project
+  - Workspace‑scoped key/value store rooted under `~/.loom/projects`
+  - Conversation persistence, titles, summaries, and cleanup of empty threads
 - Indexer (`internal/indexer/ripgrep.go`)
   - Ripgrep JSON parsing with relative path normalization
   - Ignores common directories: `node_modules`, `.git`, `dist`, `build`, `vendor`
 
 ## Security considerations
-- Tool safety: destructive tools require explicit approval; the UI cannot apply edits without approval.
-- Path handling: tools operate within the workspace root; path escapes are disallowed by design.
-- Secrets: prompts and engine heuristics avoid echoing secrets verbatim; treat credentials as redacted.
-- Shell execution: commands are confined to the workspace directory and subject to timeout limits
-- Auto-approval: when enabled, bypasses manual approval - use with caution
-
-## What changed in v2:
-- Entirely rewritten.
-- UI/UX: rebuilt with Material UI; content-first, minimalist aesthetic
-- Engine: streamlined orchestration and explicit tool schemas
-- Adapters: clear mapping via `provider:model_id`; easier model selection
-- Edits: consistent propose → approve → apply workflow with structured diffs
-- Memory: workspace-scoped storage for predictable persistence
+- Tool safety: destructive tools require explicit approval (unless auto‑approval is on)
+- Path/CWD handling: tools operate within the workspace; CWD escapes are disallowed
+- Secrets: avoid echoing credentials verbatim; treat them as redacted
+- Shell execution: subject to timeouts; not sandboxed beyond CWD validation
 
 ## Troubleshooting
-- No output / stalls: verify API keys and network access
-  - OpenAI: ensure `OPENAI_API_KEY` is exported
-  - Anthropic: ensure `ANTHROPIC_API_KEY` is exported
-- Models not working: ensure the selected provider is configured and reachable
+- “No model configured” message: open Settings to set your API key and select a model
+- OpenAI/Anthropic errors: verify keys in Settings and network access
 - ripgrep missing: run `make deps` or install `rg` manually
+- Streaming stalls: temporarily disable streaming by retrying internally; check logs if persisted
 
 ## Roadmap
-- Expanded toolset (multi-file edits, refactors)
-- Richer memory (summaries, vector-backed recall)
+- Expanded toolset (multi‑file edits, refactors)
+- Richer memory (summaries, vector‑backed recall)
 - Granular approvals and audit trail
-- Improved Anthropic streaming
+- Improved provider streaming and robustness
 - Theming toggle and accessibility refinements
 
 ## Contributing
