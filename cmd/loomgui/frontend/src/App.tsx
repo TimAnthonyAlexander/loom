@@ -673,14 +673,14 @@ const App: React.FC = () => {
                                         <CloseIcon fontSize="small" />
                                     </IconButton>
                                 </Box>
-                            } value={t.path} sx={{ minHeight: 36 }} />
+                            } value={t.path} sx={{ minHeight: 32, fontSize: 12 }} />
                         ))}
                     </Tabs>
                 </Box>
                 <Box sx={{ flex: 1, overflow: 'auto' }}>
                     {activeTab ? (
                         <Box sx={{ p: 2 }}>
-                            <Paper variant="outlined" sx={{ p: 2, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', whiteSpace: 'pre', overflowX: 'auto' }}>
+                            <Paper variant="outlined" sx={{ p: 1.5, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre', overflowX: 'auto' }}>
                                 {openTabs.find((t) => t.path === activeTab)?.content || ''}
                             </Paper>
                         </Box>
@@ -723,7 +723,7 @@ const App: React.FC = () => {
                                                     <InfoOutlinedIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
                                                 )}
                                             </Box>
-                                            <Box sx={{ flex: 1 }}>
+                                            <Box sx={{ flex: 1, fontSize: '0.9rem' }}>
                                                 <MarkdownErrorBoundary>
                                                     <ReactMarkdown
                                                         remarkPlugins={[remarkGfm, remarkBreaks]}
@@ -735,6 +735,7 @@ const App: React.FC = () => {
                                                                         style={oneLightStyle as any}
                                                                         language={match[1]}
                                                                         PreTag="div"
+                                                                        customStyle={{ fontSize: 12, lineHeight: 1.5 }}
                                                                     >
                                                                         {String(children).replace(/\n$/, '')}
                                                                     </SyntaxHighlighter>
@@ -748,6 +749,7 @@ const App: React.FC = () => {
                                                                             px: 0.5,
                                                                             py: 0.25,
                                                                             fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                                                            fontSize: 12,
                                                                         }}
                                                                         {...props}
                                                                     >
@@ -771,8 +773,8 @@ const App: React.FC = () => {
                             }
 
                             const containerProps = isUser
-                                ? { component: Box, sx: { p: 2, border: '0.1px solid #cccccc', borderRadius: 2 } }
-                                : { component: Box, sx: { py: 1, borderTop: '0.1px solid #eeeeee', borderBottom: '0.1px solid #eeeeee' } }
+                                ? { component: Box, sx: { p: 2, border: '0.1px solid #cccccc', borderRadius: 2, fontSize: '0.9rem' } }
+                                : { component: Box, sx: { py: 1, borderTop: '0.1px solid #eeeeee', borderBottom: '0.1px solid #eeeeee', fontSize: '0.9rem' } }
 
                             return (
                                 <Box key={index} {...(containerProps as any)}>
@@ -791,7 +793,7 @@ const App: React.FC = () => {
                                                 </AccordionSummary>
                                                 <AccordionDetails>
                                                     <MarkdownErrorBoundary>
-                                                        <Box sx={{ color: 'text.secondary' }}>
+                                                        <Box sx={{ color: 'text.secondary', fontSize: '0.9rem' }}>
                                                             <ReactMarkdown
                                                                 remarkPlugins={[remarkGfm, remarkBreaks]}
                                                                 components={{
@@ -802,6 +804,7 @@ const App: React.FC = () => {
                                                                                 style={oneLightStyle as any}
                                                                                 language={match[1]}
                                                                                 PreTag="div"
+                                                                                customStyle={{ fontSize: 12, lineHeight: 1.5 }}
                                                                             >
                                                                                 {String(children).replace(/\n$/, '')}
                                                                             </SyntaxHighlighter>
@@ -815,6 +818,7 @@ const App: React.FC = () => {
                                                                                     px: 0.5,
                                                                                     py: 0.25,
                                                                                     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                                                                    fontSize: 12,
                                                                                 }}
                                                                                 {...props}
                                                                             >
@@ -847,6 +851,7 @@ const App: React.FC = () => {
                                                             style={oneLightStyle as any}
                                                             language={match[1]}
                                                             PreTag="div"
+                                                            customStyle={{ fontSize: 12, lineHeight: 1.5 }}
                                                         >
                                                             {String(children).replace(/\n$/, '')}
                                                         </SyntaxHighlighter>
@@ -860,6 +865,7 @@ const App: React.FC = () => {
                                                                 px: 0.5,
                                                                 py: 0.25,
                                                                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                                                fontSize: 12,
                                                             }}
                                                             {...props}
                                                         >
