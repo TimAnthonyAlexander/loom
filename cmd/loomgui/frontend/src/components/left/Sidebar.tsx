@@ -1,7 +1,6 @@
 import { Box, Typography, IconButton, Tooltip, Paper } from '@mui/material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RuleIcon from '@mui/icons-material/Rule';
-import ModelSelector from '../../ModelSelector';
 import FileExplorer from './Files/FileExplorer';
 import { UIFileEntry } from '../../types/ui';
 
@@ -27,7 +26,17 @@ export default function Sidebar(props: SidebarProps) {
     } = props;
 
     return (
-        <Box sx={{ px: 1, py: 1, display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto' }}>
+        <Box
+            sx={{
+                px: 1,
+                py: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 2,
+                overflowY: 'auto',
+                height: '100%',
+            }}
+        >
             <Box sx={{ pt: 4 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                     <Box component="img" src="/logo.png" alt="Loom" sx={{ width: 28, height: 28, borderRadius: 0.5 }} />
@@ -53,7 +62,11 @@ export default function Sidebar(props: SidebarProps) {
                 </Box>
             </Box>
 
-            <Box>
+            <Box
+                sx={{
+                    height: '100%',
+                }}
+            >
                 <Paper variant="outlined" sx={{ overflowY: 'auto', height: '100%', }}>
                     <FileExplorer
                         dirCache={dirCache}
