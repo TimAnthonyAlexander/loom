@@ -43,6 +43,11 @@ Loom pairs a Go orchestrator and tooling layer with a modern React UI. It’s de
   - Memory stores project data under the workspace path
   - Indexer performs fast code search via ripgrep
 
+- Website (`web/`) https://loom-assistant.de
+  - Vite + React 18 + TypeScript
+  - Material UI components
+  - Marketing and Landing Page
+
 ## Directory structure
 - `ui/` — Wails app (Go) and frontend
 - `internal/` — engine, adapters, tools, memory, indexer, config
