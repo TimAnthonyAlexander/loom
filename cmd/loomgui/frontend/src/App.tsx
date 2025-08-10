@@ -350,8 +350,6 @@ const App: React.FC = () => {
                     onOpenWorkspace={() => setWorkspaceOpen(true)}
                     onOpenRules={() => setRulesOpen(true)}
                     onOpenSettings={() => setSettingsOpen(true)}
-                    currentModel={currentModel}
-                    onSelectModel={handleModelSelect}
                     dirCache={dirCache}
                     expandedDirs={expandedDirs}
                     onToggleDir={toggleDir}
@@ -388,6 +386,8 @@ const App: React.FC = () => {
                 conversations={orderedConversations}
                 currentConversationId={currentConversationId}
                 onSelectConversation={handleSelectConversation}
+                currentModel={currentModel}
+                onSelectModel={handleModelSelect}
             />
 
             <ApprovalDialog

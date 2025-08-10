@@ -1,5 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { Autocomplete, TextField, Chip, Box, Typography } from '@mui/material';
+import { useState, useEffect, Fragment } from 'react';
+import {
+    Box,
+    Chip,
+    FormControl,
+    InputLabel,
+    ListSubheader,
+    MenuItem,
+    Select,
+    SelectChangeEvent,
+    Typography,
+} from '@mui/material';
 
 interface ModelOption {
     id: string;
@@ -12,9 +22,9 @@ interface ModelSelectorProps {
     currentModel?: string;
 }
 
-const ModelSelector: React.FC<ModelSelectorProps> = ({ onSelect, currentModel }) => {
-    const [models, setModels] = useState<ModelOption[]>([])
-    const [selected, setSelected] = useState<string>(currentModel || '')
+function ModelSelector({ onSelect, currentModel }: ModelSelectorProps) {
+    const [models, setModels] = useState<ModelOption[]>([]);
+    const [selected, setSelected] = useState<string>(currentModel || '');
 
     useEffect(() => {
         const availableModels: ModelOption[] = [
@@ -38,45 +48,78 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onSelect, currentModel })
             { id: 'ollama:gemma3:12b', name: 'Gemma3 (12B)', provider: 'ollama' },
             { id: 'ollama:mistral:7b', name: 'Mistral (7B)', provider: 'ollama' },
             { id: 'ollama:deepseek-r1:70b', name: 'DeepSeek R1 (70B)', provider: 'ollama' },
-        ]
-
-        setModels(availableModels)
-        // Do not auto-select a default; wait for persisted currentModel or user selection
-        // If parent passes a currentModel later, it will be applied in the next effect
-    }, [currentModel, onSelect])
+        ];
+        setModels(availableModels);
+    }, []);
 
     useEffect(() => {
-        if (currentModel) setSelected(currentModel)
-    }, [currentModel])
+        if (currentModel) setSelected(currentModel);
+    }, [currentModel]);
 
-    const value = models.find((m) => m.id === selected) || null
+    const providersOrder = ['openai', 'claude', 'ollama'];
+    const grouped = providersOrder
+        .map(p => [p, models.filter(m => m.provider === p)] as const)
+        .filter(([_, arr]) => arr.length > 0);
+
+    const handleChange = (e: SelectChangeEvent<string>) => {
+        const id = e.target.value;
+        setSelected(id);
+        if (id) onSelect(id);
+    };
 
     return (
-        <Autocomplete
-            size="small"
-            options={models}
-            value={value}
-            onChange={(_, option) => {
-                const id = option?.id || ''
-                setSelected(id)
-                if (id) onSelect(id)
-            }}
-            groupBy={(option) => option.provider}
-            getOptionLabel={(option) => option.name}
-            renderOption={(props, option) => (
-                <Box component="li" {...props} key={option.id} sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                    <Typography variant="body2" sx={{ flex: 1 }}>
-                        {option.name}
-                    </Typography>
-                    <Chip size="small" label={option.provider} variant="outlined" />
-                </Box>
-            )}
-            renderInput={(params) => (
-                <TextField {...params} label="Model" placeholder="Select a model" />
-            )}
-            isOptionEqualToValue={(opt, val) => opt.id === val.id}
-        />
-    )
+        <FormControl size="small" sx={{ minWidth: 220 }}>
+            <InputLabel id="model-select-label">Model</InputLabel>
+            <Select
+                labelId="model-select-label"
+                label="Model"
+                value={selected}
+                onChange={handleChange}
+                renderValue={(val) => {
+                    const opt = models.find(m => m.id === val);
+                    if (!opt) return '';
+                    return (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="body2">{opt.name}</Typography>
+                            <Chip size="small" label={opt.provider} variant="outlined" />
+                        </Box>
+                    );
+                }}
+                MenuProps={{ PaperProps: { sx: { maxHeight: 420 } } }}
+                sx={{
+                    borderRadius: 2,
+                    '& .MuiSelect-select': { display: 'flex', alignItems: 'center', gap: 1 },
+                }}
+            >
+                {grouped.map(([provider, items]) => (
+                    <Fragment
+                        key={provider}
+                    >
+                        <ListSubheader
+                            sx={{
+                                lineHeight: 2.2,
+                                fontWeight: 600,
+                                textTransform: 'uppercase',
+                                borderBottom: '1px solid #e0e0e0',
+                                marginBottom: 2,
+                                py: 1,
+                            }}
+                        >
+                            {provider}
+                        </ListSubheader>
+                        {items.map(opt => (
+                            <MenuItem key={opt.id} value={opt.id} selected={opt.id === selected}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                                    <Typography variant="body2" sx={{ flex: 1 }}>{opt.name}</Typography>
+                                    <Chip size="small" label={opt.provider} variant="outlined" />
+                                </Box>
+                            </MenuItem>
+                        ))}
+                    </Fragment>
+                ))}
+            </Select>
+        </FormControl>
+    );
 }
 
 export default ModelSelector;

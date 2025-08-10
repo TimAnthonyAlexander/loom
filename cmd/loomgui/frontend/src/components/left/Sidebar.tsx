@@ -9,8 +9,6 @@ type SidebarProps = {
     onOpenWorkspace: () => void;
     onOpenRules: () => void;
     onOpenSettings: () => void;
-    currentModel: string;
-    onSelectModel: (model: string) => void;
     dirCache: Record<string, UIFileEntry[]>;
     expandedDirs: Record<string, boolean>;
     onToggleDir: (path: string) => void;
@@ -22,8 +20,6 @@ export default function Sidebar(props: SidebarProps) {
         onOpenWorkspace,
         onOpenRules,
         onOpenSettings,
-        currentModel,
-        onSelectModel,
         dirCache,
         expandedDirs,
         onToggleDir,
@@ -32,7 +28,7 @@ export default function Sidebar(props: SidebarProps) {
 
     return (
         <Box sx={{ px: 1, py: 1, display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto' }}>
-            <Box sx={{ pt: 2 }}>
+            <Box sx={{ pt: 4 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                     <Box component="img" src="/logo.png" alt="Loom" sx={{ width: 28, height: 28, borderRadius: 0.5 }} />
                     <Typography variant="h6" fontWeight={600}>
@@ -55,18 +51,10 @@ export default function Sidebar(props: SidebarProps) {
                         </IconButton>
                     </Tooltip>
                 </Box>
-                <Typography variant="body2" color="text.secondary">
-                    Minimal, calm, precise.
-                </Typography>
             </Box>
 
             <Box>
-                <ModelSelector onSelect={onSelectModel} currentModel={currentModel} />
-            </Box>
-
-            <Box>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>Files</Typography>
-                <Paper variant="outlined" sx={{ p: 0.2, maxHeight: '60vh', overflowY: 'auto' }}>
+                <Paper variant="outlined" sx={{ overflowY: 'auto', height: '100%', }}>
                     <FileExplorer
                         dirCache={dirCache}
                         expandedDirs={expandedDirs}

@@ -4,6 +4,7 @@ import MessageList from './MessageList';
 import Composer from './Composer';
 import { ChatMessage, ConversationListItem } from '../../../types/ui';
 import ConversationList from '@/components/left/Conversations/ConversationList';
+import ModelSelector from '@/ModelSelector';
 
 type Props = {
     messages: ChatMessage[];
@@ -21,6 +22,8 @@ type Props = {
     conversations: ConversationListItem[];
     currentConversationId: string;
     onSelectConversation: (id: string) => void;
+    currentModel: string;
+    onSelectModel: (model: string) => void;
 };
 
 export default function ChatPanel(props: Props) {
@@ -40,6 +43,8 @@ export default function ChatPanel(props: Props) {
         conversations,
         currentConversationId,
         onSelectConversation,
+        currentModel,
+        onSelectModel,
     } = props;
 
     return (
@@ -48,9 +53,8 @@ export default function ChatPanel(props: Props) {
                 sx={{
                     width: '100%',
                     display: 'flex',
-                    flexDirection: 'column',
                     alignItems: 'center',
-                    justifyContent: 'center',
+                    justifyContent: 'space-between',
                     p: 2,
                     borderBottom: 1,
                     borderColor: 'divider',
@@ -63,6 +67,8 @@ export default function ChatPanel(props: Props) {
                 >
                     New Conversation
                 </Button>
+                <ModelSelector onSelect={onSelectModel} currentModel={currentModel} />
+
             </Box>
             <Box sx={{ flex: 1, overflowY: 'auto', px: 3, py: 2, minHeight: 0 }}>
                 <MessageList

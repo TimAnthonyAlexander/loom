@@ -178,6 +178,11 @@ build-linux-arm64: prepare-linux-arm64
 	mkdir -p $(DIST_DIR)
 	mv "$(BUILD_DIR)/Loom" "$(DIST_DIR)/$(APP_NAME)-linux-arm64"
 
+.PHONY: dev-hmr
+dev-hmr:
+	cd $(FRONTEND_DIR) && npm run dev & \
+	cd $(APP_DIR) && $(WAILS) dev -s -frontenddevserverurl http://localhost:5173 
+
 .PHONY: build-linux-all
 build-linux-all: build-linux-amd64 build-linux-arm64
 
