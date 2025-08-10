@@ -199,7 +199,7 @@ export default function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOp
             onKeyDown={handleKeyDown}
             sx={{
                 outline: 'none',
-                height: '100%',
+                flex: 1,
                 borderRadius: 1,
                 '&:focus': {
                     boxShadow: (t) => `inset 0 0 0 1px ${alpha(t.palette.primary.main, 0.4)}`,
