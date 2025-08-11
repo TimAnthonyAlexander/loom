@@ -72,6 +72,32 @@ func (a *App) WithSettings(s config.Settings) *App {
 // WithContext sets the Wails context for the UI bridge.
 func (a *App) WithContext(ctx context.Context) *App {
 	a.ctx = ctx
+	// Subscribe to frontend attachment updates so we don't rely on regenerated bindings
+	runtime.EventsOn(a.ctx, "chat:set_attachments", func(optionalData ...interface{}) {
+		if a.engine == nil {
+			return
+		}
+		// optionalData may be [paths] or a varargs of strings; handle both
+		var paths []string
+		if len(optionalData) == 1 {
+			if v, ok := optionalData[0].([]string); ok {
+				paths = v
+			} else if arr, ok := optionalData[0].([]interface{}); ok {
+				for _, x := range arr {
+					if s, ok := x.(string); ok {
+						paths = append(paths, s)
+					}
+				}
+			}
+		} else if len(optionalData) > 1 {
+			for _, x := range optionalData {
+				if s, ok := x.(string); ok {
+					paths = append(paths, s)
+				}
+			}
+		}
+		a.engine.SetAttachedFiles(paths)
+	})
 	return a
 }
 

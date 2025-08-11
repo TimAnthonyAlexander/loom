@@ -5,6 +5,15 @@ import MarkdownRenderer from '../../markdown/MarkdownRenderer';
 import MarkdownErrorBoundary from '../../markdown/MarkdownErrorBoundary';
 import ReasoningPanel from './ReasoningPanel';
 import { ChatMessage } from '../../../types/ui';
+// Remove attachment blocks from display while keeping them in message payloads
+function filterAttachments(text: string): string {
+    if (!text) return text;
+    try {
+        return text.replace(/<attachments>[\s\S]*?<\/attachments>/g, '').trim();
+    } catch {
+        return text;
+    }
+}
 
 type Props = {
     messages: ChatMessage[];
@@ -82,7 +91,7 @@ const MessageItem = React.memo(function MessageItem({
                 <ReasoningPanel text={reasoningText} open={reasoningOpen} onToggle={onToggleReasoning} />
             )}
             <MarkdownErrorBoundary>
-                <MarkdownRenderer>{msg.content}</MarkdownRenderer>
+                <MarkdownRenderer>{filterAttachments(msg.content)}</MarkdownRenderer>
             </MarkdownErrorBoundary>
         </Box>
     );

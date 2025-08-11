@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Button, Divider, Typography, Popover, TextField, List, ListItemButton, ListItemText } from '@mui/material';
 import * as AppBridge from '../../../../wailsjs/go/bridge/App';
+import * as Bridge from '../../../../wailsjs/go/bridge/App';
 import MessageList from './MessageList';
 import Composer from './Composer';
 import { ChatMessage, ConversationListItem } from '../../../types/ui';
@@ -131,8 +132,12 @@ function ChatPanelComponent(props: Props) {
     // Push attachments to backend so the engine can inject previews
     React.useEffect(() => {
         try {
-            (AppBridge as any).SetAttachments?.(attachments);
-        } catch {}
+            if ((AppBridge as any).SetAttachments) {
+                (AppBridge as any).SetAttachments(attachments);
+            } else if ((window as any).wails?.EventsEmit) {
+                (window as any).wails.EventsEmit('chat:set_attachments', attachments);
+            }
+        } catch { }
     }, [attachments]);
 
     return (
@@ -192,10 +197,30 @@ function ChatPanelComponent(props: Props) {
                     input={localInput}
                     setInput={setLocalInput}
                     busy={busy}
-                    onSend={() => {
+                    onSend={async () => {
                         const text = localInput;
                         if (!text.trim() || busy) return;
-                        onSend(text);
+                        let augmented = text;
+                        if (attachments.length > 0) {
+                            // Fetch first 50 lines for each attachment
+                            const previews = await Promise.all(
+                                attachments.map(async (p) => {
+                                    try {
+                                        const res: any = await Bridge.ReadWorkspaceFile(p);
+                                        const content = String(res?.content || '');
+                                        const lines = content.split('\n').slice(0, 50).join('\n');
+                                        const name = p.split('/').pop() || p;
+                                        return `- ${name} — ${p}\n  The user attached this file for additional context. Use it if relevant.\n  First 50 lines:\n` + lines.split('\n').map((l: string) => `    ${l}`).join('\n');
+                                    } catch {
+                                        const name = p.split('/').pop() || p;
+                                        return `- ${name} — ${p}\n  (unreadable)`;
+                                    }
+                                })
+                            );
+                            const block = `<attachments>\nAttachments:\n${previews.join('\n')}\n</attachments>`;
+                            augmented = `${text}\n\n${block}`;
+                        }
+                        onSend(augmented);
                         setLocalInput('');
                     }}
                     onClear={() => {

@@ -402,7 +402,7 @@ const App: React.FC = () => {
                 // Prepend a placeholder until next refresh
                 setConversations((prev: ConversationListItem[]) => [{ id, title: 'New Conversation' }, ...prev]);
                 // Clear composer attachments explicitly only on new conversation
-                try { (window as any).dispatchEvent(new Event('loom:clear-attachments')); } catch {}
+                try { (window as any).dispatchEvent(new Event('loom:clear-attachments')); } catch { }
             })
             .catch(() => { });
     };
@@ -594,7 +594,9 @@ const App: React.FC = () => {
             const isMac = navigator.platform.toLowerCase().includes('mac');
             const cmd = isMac ? e.metaKey : e.ctrlKey;
             const key = e.key.toLowerCase();
-            if (cmd && key === 'p' && !e.shiftKey) {
+            const option = isMac ? e.altKey : e.ctrlKey;
+
+            if (cmd && key === 'p' && !option) {
                 e.preventDefault();
                 setSearchMode('files');
                 setSearchOpen(true);
@@ -602,10 +604,11 @@ const App: React.FC = () => {
                 e.preventDefault();
                 setSearchMode('text');
                 setSearchOpen(true);
-            } else if (cmd && key === 'p' && e.shiftKey) {
+            } else if (cmd && option && (key == 'π' || key === 'p')) {
+                console.log(key);
                 e.preventDefault();
                 // Broadcast to ChatPanel/Composer to open attachment popup
-                try { (window as any).dispatchEvent(new Event('loom:open-attach')); } catch {}
+                try { (window as any).dispatchEvent(new Event('loom:open-attach')); } catch { }
             }
         };
         window.addEventListener('keydown', onKeyDown);

@@ -63,6 +63,8 @@ export function SendChat(arg1:string,arg2:string):Promise<void>;
 
 export function SendUserMessage(arg1:string):Promise<void>;
 
+export function SetAttachments(arg1:Array<string>):Promise<void>;
+
 export function SetBusy(arg1:boolean):Promise<void>;
 
 export function SetModel(arg1:string):Promise<void>;

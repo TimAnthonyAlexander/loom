@@ -450,10 +450,7 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 		if ui := strings.TrimSpace(e.formatEditorContext()); ui != "" {
 			engineMessages = append(engineMessages, Message{Role: "system", Content: "UI Context: " + ui})
 		}
-		// Append attachments context (file path, name, first 50 lines) as a transient system hint
-		if att := strings.TrimSpace(e.formatAttachmentsContext()); att != "" {
-			engineMessages = append(engineMessages, Message{Role: "system", Content: att})
-		}
+		// No longer inject attachments as system context; they are appended to the user message on send
 
 		// Call the LLM with the conversation history (+ transient UI hint)
 		stream, err := adapter.Chat(ctx, engineMessages, convertSchemas(tools), true)

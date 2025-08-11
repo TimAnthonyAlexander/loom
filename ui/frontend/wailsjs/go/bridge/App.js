@@ -114,6 +114,10 @@ export function SendUserMessage(arg1) {
   return window['go']['bridge']['App']['SendUserMessage'](arg1);
 }
 
+export function SetAttachments(arg1) {
+  return window['go']['bridge']['App']['SetAttachments'](arg1);
+}
+
 export function SetBusy(arg1) {
   return window['go']['bridge']['App']['SetBusy'](arg1);
 }

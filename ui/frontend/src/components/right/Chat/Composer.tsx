@@ -1,5 +1,5 @@
 import React from 'react';
-import { Stack, TextField, IconButton, Chip, Tooltip, Box } from '@mui/material';
+import { Stack, TextField, IconButton, Chip, Box } from '@mui/material';
 import { PendingRounded, SendRounded, AttachFileRounded, CloseRounded } from '@mui/icons-material';
 
 type Props = {
@@ -26,11 +26,13 @@ function ComposerComponent({ input, setInput, busy, onSend, focusToken, attachme
             inputRef.current?.focus();
         } catch { }
     }, [focusToken]);
+
     React.useEffect(() => {
         if (onAttachButtonRef) {
             onAttachButtonRef(attachBtnRef.current);
         }
     }, [onAttachButtonRef]);
+
     return (
         <Box>
             {!!attachments.length && (
