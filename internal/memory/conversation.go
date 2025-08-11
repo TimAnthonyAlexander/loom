@@ -1,7 +1,7 @@
 package memory
 
 import (
-    "encoding/json"
+	"encoding/json"
 	"time"
 )
 
@@ -76,13 +76,13 @@ func (c *Conversation) AddAssistant(content string) {
 // AddAssistantThinking records an assistant thinking block so it can be
 // preserved across tool calls for providers that require it (e.g., Anthropic).
 func (c *Conversation) AddAssistantThinking(content string) {
-    c.messages = append(c.messages, Message{
-        Role:      "assistant",
-        Name:      "thinking",
-        Content:   content,
-        Timestamp: time.Now(),
-    })
-    c.save()
+	c.messages = append(c.messages, Message{
+		Role:      "assistant",
+		Name:      "thinking",
+		Content:   content,
+		Timestamp: time.Now(),
+	})
+	c.save()
 }
 
 // AddAssistantThinkingSigned records a complete thinking block along with its
@@ -90,19 +90,19 @@ func (c *Conversation) AddAssistantThinking(content string) {
 // the thinking block with its signature.
 // Content format: {"thinking":"...","signature":"..."}
 func (c *Conversation) AddAssistantThinkingSigned(thinking string, signature string) {
-    // Store as JSON payload in Content to preserve through engine -> adapter
-    payload := map[string]string{
-        "thinking":  thinking,
-        "signature": signature,
-    }
-    b, _ := json.Marshal(payload)
-    c.messages = append(c.messages, Message{
-        Role:      "assistant",
-        Name:      "thinking",
-        Content:   string(b),
-        Timestamp: time.Now(),
-    })
-    c.save()
+	// Store as JSON payload in Content to preserve through engine -> adapter
+	payload := map[string]string{
+		"thinking":  thinking,
+		"signature": signature,
+	}
+	b, _ := json.Marshal(payload)
+	c.messages = append(c.messages, Message{
+		Role:      "assistant",
+		Name:      "thinking",
+		Content:   string(b),
+		Timestamp: time.Now(),
+	})
+	c.save()
 }
 
 // AddTool adds a tool message to the conversation.

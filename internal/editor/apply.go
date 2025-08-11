@@ -16,8 +16,8 @@ func Summary(plan *EditPlan) string {
 		return fmt.Sprintf("Delete File: %s", filepath.Base(plan.FilePath))
 	} else {
 		lineCount := plan.ChangedLines.EndLine - plan.ChangedLines.StartLine + 1
-		return fmt.Sprintf("Edit File: %s (Lines %d-%d, %d lines affected)", 
-			filepath.Base(plan.FilePath), plan.ChangedLines.StartLine, 
+		return fmt.Sprintf("Edit File: %s (Lines %d-%d, %d lines affected)",
+			filepath.Base(plan.FilePath), plan.ChangedLines.StartLine,
 			plan.ChangedLines.EndLine, lineCount)
 	}
 }

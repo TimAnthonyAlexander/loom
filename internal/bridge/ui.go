@@ -12,8 +12,8 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
-	"unicode"
 	"time"
+	"unicode"
 
 	gitignore "github.com/go-git/go-git/v5/plumbing/format/gitignore"
 	"github.com/loom/loom/internal/adapter"
@@ -1089,36 +1089,36 @@ func (a *App) FindFiles(filePattern string, subdir string, maxResults int) []str
 // normalizeForFuzzy removes spaces and punctuation, keeping only letters and digits.
 // It also collapses consecutive separators and leaves result in lower-case.
 func normalizeForFuzzy(s string) string {
-    if s == "" {
-        return ""
-    }
-    var b strings.Builder
-    b.Grow(len(s))
-    for _, r := range s {
-        if unicode.IsLetter(r) || unicode.IsDigit(r) {
-            // keep alphanumerics
-            b.WriteRune(unicode.ToLower(r))
-        }
-        // ignore everything else (spaces, punctuation, path separators, underscores, dashes, dots)
-    }
-    return b.String()
+	if s == "" {
+		return ""
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			// keep alphanumerics
+			b.WriteRune(unicode.ToLower(r))
+		}
+		// ignore everything else (spaces, punctuation, path separators, underscores, dashes, dots)
+	}
+	return b.String()
 }
 
 // isSubsequence returns true if small is a subsequence of big (chars in order, not necessarily contiguous)
 func isSubsequence(small, big string) bool {
-    if small == "" {
-        return true
-    }
-    if big == "" {
-        return false
-    }
-    i := 0
-    for j := 0; j < len(big) && i < len(small); j++ {
-        if small[i] == big[j] {
-            i++
-        }
-    }
-    return i == len(small)
+	if small == "" {
+		return true
+	}
+	if big == "" {
+		return false
+	}
+	i := 0
+	for j := 0; j < len(big) && i < len(small); j++ {
+		if small[i] == big[j] {
+			i++
+		}
+	}
+	return i == len(small)
 }
 
 // UIFileEntry represents a single file or directory for the UI explorer

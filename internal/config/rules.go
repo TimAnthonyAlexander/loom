@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,7 +28,6 @@ func LoadRules(workspacePath string) (userRules []string, projectRules []string,
 	// Normalize: trim whitespace and drop empty
 	userRules = normalizeRules(u)
 	projectRules = normalizeRules(p)
-	log.Printf("LoadRules: workspace=%s user=%d project=%d", workspacePath, len(userRules), len(projectRules))
 	return userRules, projectRules, nil
 }
 
@@ -45,11 +43,6 @@ func SaveUserRules(rules []string) error {
 	normalized := normalizeRules(rules)
 	if err := writeRulesFile(path, normalized); err != nil {
 		return err
-	}
-	log.Printf("SaveUserRules: saved %d rules to %s", len(normalized), path)
-	// Read back for verification
-	if rb, err := readRulesFile(path); err == nil {
-		log.Printf("SaveUserRules: file now has %d rules", len(rb))
 	}
 	return nil
 }
@@ -71,11 +64,6 @@ func SaveProjectRules(workspacePath string, rules []string) error {
 	normalized := normalizeRules(rules)
 	if err := writeRulesFile(path, normalized); err != nil {
 		return err
-	}
-	log.Printf("SaveProjectRules: saved %d rules to %s", len(normalized), path)
-	// Read back for verification
-	if rb, err := readRulesFile(path); err == nil {
-		log.Printf("SaveProjectRules: file now has %d rules", len(rb))
 	}
 	return nil
 }
@@ -106,7 +94,6 @@ func loadProjectRules(workspacePath string) ([]string, error) {
 		workspacePath = abs
 	}
 	path := filepath.Join(workspacePath, ".loom", "rules.json")
-	log.Printf("loadProjectRules: reading %s", path)
 	return readRulesFile(path)
 }
 
@@ -114,22 +101,18 @@ func readRulesFile(path string) ([]string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			log.Printf("readRulesFile: file not found: %s", path)
 			return []string{}, os.ErrNotExist
 		}
-		log.Printf("readRulesFile: error reading %s: %v", path, err)
 		return nil, err
 	}
 	// Expect a simple JSON array of strings
 	var rules []string
 	if len(data) == 0 {
-		log.Printf("readRulesFile: empty file: %s", path)
 		return []string{}, nil
 	}
 	if err := json.Unmarshal(data, &rules); err != nil {
 		return nil, fmt.Errorf("failed to parse rules file '%s': %w", path, err)
 	}
-	log.Printf("readRulesFile: loaded %d rules from %s", len(rules), path)
 	return rules, nil
 }
 
