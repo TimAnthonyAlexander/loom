@@ -100,6 +100,10 @@ function Sidebar(props: SidebarProps) {
             <Box sx={{ mt: 1, mb: 2 }}>
                 <Paper variant="outlined" sx={{ px: 1.5, py: 1, cursor: 'pointer' }} onClick={onOpenCosts}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
+                        <Typography variant="caption" color="text.secondary">Total</Typography>
+                        <Typography variant="caption" fontWeight={600}>${((totalInUSD + totalOutUSD) || 0).toFixed(2)}</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                         <Typography variant="caption" color="text.secondary">In</Typography>
                         <Typography variant="caption" fontWeight={600}>${(totalInUSD || 0).toFixed(2)}</Typography>
                     </Box>
