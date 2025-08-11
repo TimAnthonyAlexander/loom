@@ -130,9 +130,7 @@ func main() {
 	m := menu.NewMenu()
 	// App menu (About/Hide/Quit on macOS)
 	m.Append(menu.AppMenu())
-	// Edit menu (Undo/Redo/Cut/Copy/Paste)
-	m.Append(menu.EditMenu())
-	// File menu
+	// File menu first
 	fileMenu := m.AddSubmenu("File")
 	fileMenu.AddText("New Conversation", keys.CmdOrCtrl("N"), func(_ *menu.CallbackData) {
 		if appCtx == nil {
@@ -180,6 +178,8 @@ func main() {
 		}
 		runtime.EventsEmit(appCtx, "menu:file:close_tab")
 	})
+	// Edit menu (Undo/Redo/Cut/Copy/Paste)
+	m.Append(menu.EditMenu())
 
 	if err := wails.Run(&options.App{
 		Title:            "Loom - by Tim Anthony Alexander",
