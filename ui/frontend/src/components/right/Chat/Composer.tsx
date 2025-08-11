@@ -76,7 +76,12 @@ function ComposerComponent({ input, setInput, busy, onSend, focusToken, attachme
                     ref={attachBtnRef}
                     onClick={(e) => onOpenAttach?.(e.currentTarget)}
                     disabled={busy}
-                    sx={{ position: 'absolute', bottom: 5, right: 44 }}
+                    sx={{
+                        position: 'absolute',
+                        bottom: 0,
+                        right: 44,
+                        height: '100%',
+                    }}
                 >
                     <AttachFileRounded />
                 </IconButton>
@@ -86,7 +91,7 @@ function ComposerComponent({ input, setInput, busy, onSend, focusToken, attachme
                     sx={{
                         position: 'absolute',
                         height: '100%',
-                        bottom: 5,
+                        bottom: 0,
                         right: 5,
                     }}
                 >
