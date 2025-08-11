@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime/debug"
 	"strings"
 	"time"
 	"unicode"
@@ -167,7 +166,6 @@ func (a *App) SetModel(model string) {
 	// Parse the model string to get provider and model ID
 	provider, modelID, err := adapter.GetProviderFromModel(model)
 	if err != nil {
-		log.Printf("Failed to parse model string: %v", err)
 		return
 	}
 
@@ -197,7 +195,6 @@ func (a *App) SetModel(model string) {
 	}
 	a.settings.LastModel = providerPrefix + ":" + modelID
 	if err := config.Save(a.settings); err != nil {
-		log.Printf("Failed to persist last model: %v", err)
 	}
 
 	// Update the configuration
@@ -211,7 +208,6 @@ func (a *App) SetModel(model string) {
 	// Create a new LLM adapter with the updated model
 	llm, err := adapter.New(newConfig)
 	if err != nil {
-		log.Printf("Failed to create new LLM adapter: %v", err)
 		return
 	}
 
@@ -239,7 +235,6 @@ func (a *App) ensureSettingsLoaded() {
 func (a *App) applyAndSaveSettings(s config.Settings) {
 	// Persist to disk
 	if err := config.Save(s); err != nil {
-		log.Printf("Failed to save settings: %v", err)
 		return
 	}
 
@@ -267,7 +262,6 @@ func (a *App) applyAndSaveSettings(s config.Settings) {
 	if updatedConfig != a.config {
 		llm, err := adapter.New(updatedConfig)
 		if err != nil {
-			log.Printf("Failed to apply new settings to LLM: %v", err)
 			return
 		}
 		if a.engine != nil {
@@ -286,7 +280,6 @@ func (a *App) applyAndSaveSettings(s config.Settings) {
 func (a *App) SendChat(role, text string) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("Panic in SendChat: %v\n%s", r, debug.Stack())
 		}
 	}()
 
@@ -499,7 +492,6 @@ func (a *App) SetWorkspace(path string) {
 	}
 	// Normalize provided path: expand ~ and make absolute/clean
 	norm := normalizeWorkspacePath(path)
-	log.Printf("SetWorkspace: switching to %s (normalized: %s)", path, norm)
 	// Update engine workspace
 	if a.engine != nil {
 		a.engine.WithWorkspace(norm)
@@ -514,32 +506,23 @@ func (a *App) SetWorkspace(path string) {
 		// For correctness, try to re-register using the same helpers.
 		// Note: we rely on tool package Register* functions.
 		if err := tool.RegisterReadFile(newRegistry, norm); err != nil {
-			log.Printf("Failed to register read_file tool for new workspace: %v", err)
 		}
 		idx := indexer.NewRipgrepIndexer(norm)
 		if err := tool.RegisterSearchCode(newRegistry, idx); err != nil {
-			log.Printf("Failed to register search_code tool for new workspace: %v", err)
 		}
 		if err := tool.RegisterEditFile(newRegistry, norm); err != nil {
-			log.Printf("Failed to register edit_file tool for new workspace: %v", err)
 		}
 		if err := tool.RegisterApplyEdit(newRegistry, norm); err != nil {
-			log.Printf("Failed to register apply_edit tool for new workspace: %v", err)
 		}
 		if err := tool.RegisterListDir(newRegistry, norm); err != nil {
-			log.Printf("Failed to register list_dir tool for new workspace: %v", err)
 		}
 		if err := tool.RegisterFinalize(newRegistry); err != nil {
-			log.Printf("Failed to register finalize tool for new workspace: %v", err)
 		}
 		if err := tool.RegisterRunShell(newRegistry, norm); err != nil {
-			log.Printf("Failed to register run_shell tool for new workspace: %v", err)
 		}
 		if err := tool.RegisterApplyShell(newRegistry, norm); err != nil {
-			log.Printf("Failed to register apply_shell tool for new workspace: %v", err)
 		}
 		if err := tool.RegisterHTTPRequest(newRegistry); err != nil {
-			log.Printf("Failed to register http_request tool for new workspace: %v", err)
 		}
 		a.tools = newRegistry
 		if a.engine != nil {
@@ -550,13 +533,11 @@ func (a *App) SetWorkspace(path string) {
 	a.ensureSettingsLoaded()
 	a.settings.LastWorkspace = norm
 	if err := config.Save(a.settings); err != nil {
-		log.Printf("Failed to persist last workspace: %v", err)
 	}
 	// Load .gitignore matcher for this workspace
 	a.gitMatcher = a.buildGitignoreMatcher(norm)
 	// After switching, log current rules snapshot for debug
-	user, project, _ := config.LoadRules(path)
-	log.Printf("SetWorkspace: loaded rules for %s -> user=%d, project=%d", path, len(user), len(project))
+	config.LoadRules(path)
 }
 
 // buildGitignoreMatcher scans the workspace for .gitignore files and builds a matcher
@@ -667,9 +648,7 @@ func (a *App) GetRules() map[string][]string {
 func (a *App) SaveRules(payload map[string][]string) {
 	// Save user rules
 	if userRules, ok := payload["user"]; ok {
-		log.Printf("SaveRules: saving %d user rules", len(userRules))
 		if err := config.SaveUserRules(userRules); err != nil {
-			log.Printf("Failed to save user rules: %v", err)
 		}
 	}
 	// Save project rules
@@ -679,11 +658,8 @@ func (a *App) SaveRules(payload map[string][]string) {
 			wp = a.engine.Workspace()
 		}
 		if wp == "" {
-			log.Printf("SaveRules: cannot save project rules: workspace not set")
 		} else {
-			log.Printf("SaveRules: saving %d project rules to workspace=%s", len(projectRules), wp)
 			if err := config.SaveProjectRules(wp, projectRules); err != nil {
-				log.Printf("Failed to save project rules: %v", err)
 			}
 		}
 	}
@@ -735,14 +711,12 @@ func (a *App) OpenProjectDataDir() {
 // ChooseWorkspace opens a native directory picker and returns the selected path.
 func (a *App) ChooseWorkspace() string {
 	if a.ctx == nil {
-		log.Printf("ChooseWorkspace: context not initialized")
 		return ""
 	}
 	dir, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
 		Title: "Select Workspace",
 	})
 	if err != nil {
-		log.Printf("ChooseWorkspace error: %v", err)
 		return ""
 	}
 	if dir == "" {
@@ -892,7 +866,6 @@ func (a *App) LoadConversation(id string) {
 		return
 	}
 	if err := a.engine.SetCurrentConversationID(id); err != nil {
-		log.Printf("LoadConversation: %v", err)
 		return
 	}
 	// Clear UI then replay messages
@@ -901,7 +874,6 @@ func (a *App) LoadConversation(id string) {
 	}
 	msgs, err := a.engine.GetConversation(id)
 	if err != nil {
-		log.Printf("LoadConversation: failed to get conversation %s: %v", id, err)
 		return
 	}
 	for _, m := range msgs {
