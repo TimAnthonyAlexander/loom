@@ -16,11 +16,16 @@ import (
 	"github.com/loom/loom/internal/memory"
 	"github.com/loom/loom/internal/tool"
 	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/menu"
+	"github.com/wailsapp/wails/v2/pkg/menu/keys"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+var appCtx context.Context
 
 //go:embed frontend/dist
 var assets embed.FS
@@ -121,6 +126,61 @@ func main() {
 	eng.SetBridge(app)
 
 	// Run the application
+	// Build the application menu
+	m := menu.NewMenu()
+	// App menu (About/Hide/Quit on macOS)
+	m.Append(menu.AppMenu())
+	// Edit menu (Undo/Redo/Cut/Copy/Paste)
+	m.Append(menu.EditMenu())
+	// File menu
+	fileMenu := m.AddSubmenu("File")
+	fileMenu.AddText("New Conversation", keys.CmdOrCtrl("N"), func(_ *menu.CallbackData) {
+		if appCtx == nil {
+			return
+		}
+		runtime.EventsEmit(appCtx, "menu:file:new_conversation")
+	})
+	fileMenu.AddSeparator()
+	fileMenu.AddText("Open Workspace…", keys.CmdOrCtrl("O"), func(_ *menu.CallbackData) {
+		if appCtx == nil {
+			return
+		}
+		// Let the frontend open its workspace dialog to handle full UI refresh logic
+		runtime.EventsEmit(appCtx, "menu:file:open_workspace")
+	})
+	openFileAccel, _ := keys.Parse("CmdOrCtrl+Shift+O")
+	fileMenu.AddText("Open File…", openFileAccel, func(_ *menu.CallbackData) {
+		if appCtx == nil {
+			return
+		}
+		// Native picker, then instruct UI to open the file
+		path, err := runtime.OpenFileDialog(appCtx, runtime.OpenDialogOptions{Title: "Open File"})
+		if err == nil && strings.TrimSpace(path) != "" {
+			// Reuse existing UI handler for opening files
+			runtime.EventsEmit(appCtx, "workspace:open_file", map[string]string{"path": path})
+		}
+	})
+	fileMenu.AddSeparator()
+	fileMenu.AddText("Save", keys.CmdOrCtrl("S"), func(_ *menu.CallbackData) {
+		if appCtx == nil {
+			return
+		}
+		runtime.EventsEmit(appCtx, "menu:file:save")
+	})
+	saveAsAccel, _ := keys.Parse("CmdOrCtrl+Shift+S")
+	fileMenu.AddText("Save As…", saveAsAccel, func(_ *menu.CallbackData) {
+		if appCtx == nil {
+			return
+		}
+		runtime.EventsEmit(appCtx, "menu:file:save_as")
+	})
+	fileMenu.AddText("Close Tab", keys.CmdOrCtrl("W"), func(_ *menu.CallbackData) {
+		if appCtx == nil {
+			return
+		}
+		runtime.EventsEmit(appCtx, "menu:file:close_tab")
+	})
+
 	if err := wails.Run(&options.App{
 		Title:            "Loom - by Tim Anthony Alexander",
 		Width:            1280,
@@ -129,6 +189,7 @@ func main() {
 		OnStartup: func(ctx context.Context) {
 			// Set the Wails context in the app
 			app.WithContext(ctx)
+			appCtx = ctx
 		},
 		Bind: []interface{}{
 			app,
@@ -136,6 +197,7 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
+		Menu: m,
 		// Platform-specific options
 		Mac: &mac.Options{
 			TitleBar: mac.TitleBarHiddenInset(),

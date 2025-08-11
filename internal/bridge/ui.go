@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -555,6 +556,62 @@ func (a *App) ChooseWorkspace() string {
 		return ""
 	}
 	return dir
+}
+
+// ChooseSaveFile opens a native save file dialog and returns the selected path relative to the current workspace.
+// If the selected file is outside the workspace or on error, returns an empty string.
+func (a *App) ChooseSaveFile(suggestedName string) string {
+	if a.ctx == nil || a.engine == nil {
+		return ""
+	}
+	root := strings.TrimSpace(a.engine.Workspace())
+	if root == "" {
+		return ""
+	}
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return ""
+	}
+	// Use suggestedName if provided, otherwise blank
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:                      "Save As",
+		DefaultDirectory:           absRoot,
+		DefaultFilename:            strings.TrimSpace(suggestedName),
+		ShowHiddenFiles:            false,
+		CanCreateDirectories:       true,
+		TreatPackagesAsDirectories: false,
+	})
+	if err != nil || strings.TrimSpace(path) == "" {
+		return ""
+	}
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return ""
+	}
+	// Ensure within workspace
+	if absPath != absRoot && !strings.HasPrefix(absPath+string(os.PathSeparator), absRoot+string(os.PathSeparator)) {
+		// Disallow saving outside workspace for now
+		return ""
+	}
+	// Manual overwrite confirmation for Wails v2.10
+	if _, statErr := os.Stat(absPath); statErr == nil {
+		resp, derr := runtime.MessageDialog(a.ctx, runtime.MessageDialogOptions{
+			Type:          runtime.WarningDialog,
+			Title:         "File exists",
+			Message:       fmt.Sprintf("Overwrite '%s'?", filepath.Base(absPath)),
+			Buttons:       []string{"Overwrite", "Cancel"},
+			DefaultButton: "Overwrite",
+			CancelButton:  "Cancel",
+		})
+		if derr != nil || resp != "Overwrite" {
+			return ""
+		}
+	}
+	rel, err := filepath.Rel(absRoot, absPath)
+	if err != nil {
+		return ""
+	}
+	return filepath.ToSlash(rel)
 }
 
 // SetBusy updates the busy state and notifies the frontend to enable/disable inputs

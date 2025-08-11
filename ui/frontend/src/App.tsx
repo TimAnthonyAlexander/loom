@@ -243,6 +243,7 @@ const App: React.FC = () => {
                 }
             })
             .catch(() => { });
+
     }, []);
 
     // Scroll to bottom when messages change
@@ -405,6 +406,51 @@ const App: React.FC = () => {
             console.error('Save failed', e);
         }
     }, [openTabs]);
+
+    // Keep latest state in refs for menu handlers
+    const activeTabRef = useRef<string>(activeTab);
+    useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
+    const openTabsRef = useRef<EditorTabItem[]>(openTabs);
+    useEffect(() => { openTabsRef.current = openTabs; }, [openTabs]);
+
+    // Native menu events (registered once; read latest state from refs)
+    useEffect(() => {
+        EventsOn('menu:file:save', () => {
+            const p = activeTabRef.current;
+            if (p) onSaveTab(p);
+        });
+        EventsOn('menu:file:save_as', async () => {
+            try {
+                const current = openTabsRef.current.find((t) => t.path === activeTabRef.current);
+                if (!current) return;
+                const suggested = current.title || (current.path.split('/').pop() || '');
+                const chooser = (AppBridge as any).ChooseSaveFile as undefined | ((s: string) => Promise<string>);
+                if (!chooser) return;
+                const newPath: string = await chooser(suggested);
+                if (!newPath) return;
+                const res = await writeFile(newPath, current.content, current.serverRev);
+                setOpenTabs((prev) => {
+                    const filtered = prev.filter((t) => t.path.toLowerCase() !== newPath.toLowerCase() || t.path === activeTabRef.current);
+                    return filtered.map((t) =>
+                        t.path === activeTabRef.current
+                            ? { ...t, path: newPath, title: (newPath.split('/').pop() || newPath), isDirty: false, serverRev: String(res?.serverRev || '') }
+                            : t
+                    );
+                });
+                setActiveTab(newPath);
+            } catch { }
+        });
+        EventsOn('menu:file:close_tab', () => {
+            const p = activeTabRef.current;
+            if (p) closeTab(p);
+        });
+        EventsOn('menu:file:open_workspace', () => {
+            setWorkspaceOpen(true);
+        });
+        EventsOn('menu:file:new_conversation', () => {
+            handleNewConversation();
+        });
+    }, [onSaveTab, closeTab, handleNewConversation]);
 
     // Directory tree rendering is handled by the Sidebar > FileExplorer component
 

@@ -6,6 +6,10 @@ export function Approve(arg1, arg2) {
   return window['go']['bridge']['App']['Approve'](arg1, arg2);
 }
 
+export function ChooseSaveFile(arg1) {
+  return window['go']['bridge']['App']['ChooseSaveFile'](arg1);
+}
+
 export function ChooseWorkspace() {
   return window['go']['bridge']['App']['ChooseWorkspace']();
 }

@@ -9,6 +9,8 @@ import {tool} from '../models';
 
 export function Approve(arg1:string,arg2:boolean):Promise<void>;
 
+export function ChooseSaveFile(arg1:string):Promise<string>;
+
 export function ChooseWorkspace():Promise<string>;
 
 export function ClearConversation():Promise<void>;
