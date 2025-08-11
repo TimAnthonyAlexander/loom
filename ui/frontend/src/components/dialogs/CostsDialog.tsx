@@ -32,9 +32,8 @@ type CostsDialogProps = {
 
 const currency = (v: number) => `$${(v || 0).toFixed(2)}`;
 
-const CostsDialog: React.FC<CostsDialogProps> = ({ open, onClose, totalInUSD, totalOutUSD, totalInTokens, totalOutTokens, perProvider, perModel, gTotalInUSD, gTotalOutUSD, gTotalInTokens, gTotalOutTokens, gPerProvider, gPerModel }) => {
+const CostsDialog: React.FC<CostsDialogProps> = ({ open, onClose, totalInUSD, totalOutUSD, gTotalInUSD, gTotalOutUSD, gTotalInTokens, gTotalOutTokens, gPerProvider, gPerModel }) => {
     const totalUSD = (totalInUSD || 0) + (totalOutUSD || 0);
-    const totalTokens = (totalInTokens || 0) + (totalOutTokens || 0);
     const gTotalUSD = (gTotalInUSD || 0) + (gTotalOutUSD || 0);
     const gTotalTokens = (gTotalInTokens || 0) + (gTotalOutTokens || 0);
 
