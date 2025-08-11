@@ -206,6 +206,15 @@ function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOpenFile, rootPat
                 },
             }}
         >
+            <Typography
+                variant="subtitle2"
+                fontWeight={600}
+                sx={{
+                    p: 1,
+                }}
+            >
+                File Explorer
+            </Typography>
             <List dense disablePadding>
                 {visibleItems.map((item) => {
                     if (item.type === 'loading') {

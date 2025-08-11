@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Button, Divider } from '@mui/material';
+import { Box, Button, Divider, Typography } from '@mui/material';
 import MessageList from './MessageList';
 import Composer from './Composer';
 import { ChatMessage, ConversationListItem } from '../../../types/ui';
@@ -92,7 +92,6 @@ function ChatPanelComponent(props: Props) {
                     New Conversation
                 </Button>
                 <ModelSelector onSelect={onSelectModel} currentModel={currentModel} />
-
             </Box>
             <Box sx={{ flex: 1, overflowY: 'auto', px: 3, py: 2, minHeight: 0 }}>
                 <MessageList
@@ -105,11 +104,22 @@ function ChatPanelComponent(props: Props) {
                     messagesEndRef={messagesEndRef}
                 />
                 {messages.length === 0 &&
-                    <ConversationList
-                        conversations={conversations}
-                        currentConversationId={currentConversationId}
-                        onSelect={onSelectConversation}
-                    />
+                    <Box>
+                        <Typography
+                            variant="subtitle2"
+                            fontWeight={600}
+                            sx={{
+                                p: 1,
+                            }}
+                        >
+                            Past Conversations
+                        </Typography>
+                        <ConversationList
+                            conversations={conversations}
+                            currentConversationId={currentConversationId}
+                            onSelect={onSelectConversation}
+                        />
+                    </Box>
                 }
             </Box>
             <Divider />
