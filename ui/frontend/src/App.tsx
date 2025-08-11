@@ -395,7 +395,7 @@ const App: React.FC = () => {
         LoadConversation(id).catch(() => { });
     };
 
-    const handleNewConversation = () => {
+    const handleNewConversation = useCallback(() => {
         NewConversation()
             .then((id: string) => {
                 setCurrentConversationId(id);
@@ -405,7 +405,7 @@ const App: React.FC = () => {
                 try { (window as any).dispatchEvent(new Event('loom:clear-attachments')); } catch { }
             })
             .catch(() => { });
-    };
+    }, []);
 
     // File explorer helpers
     const loadDir = (path: string) => {
@@ -529,12 +529,19 @@ const App: React.FC = () => {
     useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
     const openTabsRef = useRef<EditorTabItem[]>(openTabs);
     useEffect(() => { openTabsRef.current = openTabs; }, [openTabs]);
+    // Also keep latest callbacks in refs to avoid re-registering listeners
+    const onSaveTabRef = useRef(onSaveTab);
+    useEffect(() => { onSaveTabRef.current = onSaveTab; }, [onSaveTab]);
+    const closeTabRef = useRef(closeTab);
+    useEffect(() => { closeTabRef.current = closeTab; }, [closeTab]);
+    const handleNewConversationRef = useRef(handleNewConversation);
+    useEffect(() => { handleNewConversationRef.current = handleNewConversation; }, [handleNewConversation]);
 
     // Native menu events (registered once; read latest state from refs)
     useEffect(() => {
         EventsOn('menu:file:save', () => {
             const p = activeTabRef.current;
-            if (p) onSaveTab(p);
+            if (p && onSaveTabRef.current) onSaveTabRef.current(p);
         });
         EventsOn('menu:file:save_as', async () => {
             try {
@@ -559,15 +566,15 @@ const App: React.FC = () => {
         });
         EventsOn('menu:file:close_tab', () => {
             const p = activeTabRef.current;
-            if (p) closeTab(p);
+            if (p && closeTabRef.current) closeTabRef.current(p);
         });
         EventsOn('menu:file:open_workspace', () => {
             setWorkspaceOpen(true);
         });
         EventsOn('menu:file:new_conversation', () => {
-            handleNewConversation();
+            if (handleNewConversationRef.current) handleNewConversationRef.current();
         });
-    }, [onSaveTab, closeTab, handleNewConversation]);
+    }, []);
 
     // Directory tree rendering is handled by the Sidebar > FileExplorer component
 
