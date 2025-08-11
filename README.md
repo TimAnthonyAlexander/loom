@@ -25,6 +25,7 @@ Loom pairs a Go orchestrator and tooling layer with a modern React UI. It’s de
 - Rules system: user and project‑specific rules for consistent AI behavior
 - Tabbed editor: Monaco with theme, Cmd/Ctrl+S to save, and file explorer
 - Reasoning view: transient, collapsible stream of model reasoning summaries
+- Cost tracking: See all tokens spent on which project, model, input/output
 
 ## Architecture
 - Frontend (`ui/frontend/`)
@@ -50,6 +51,7 @@ Loom pairs a Go orchestrator and tooling layer with a modern React UI. It’s de
 ## Directory structure
 - `ui/` — Wails app (Go) and frontend
 - `internal/` — engine, adapters, tools, memory, indexer, config
+- `web/` — website (marketing, landing page)
 - `Makefile` — common dev/build tasks
 
 ## Getting started
@@ -73,19 +75,11 @@ This will:
 ## Running and building
 - Development (full app with Wails live reload):
   ```bash
-  make dev
-  ```
-- Debug (Wails with extra logging):
-  ```bash
-  make debug
+  make dev-hmr
   ```
 - Frontend only (Vite dev server):
   ```bash
   cd ui/frontend && npm run dev
-  ```
-- Frontend + backend HMR split (Vite + Wails):
-  ```bash
-  make dev-hmr
   ```
 - Build (current platform):
   ```bash
@@ -93,12 +87,12 @@ This will:
   ```
 - Platform builds:
   - macOS universal: `make build-macos-universal`
-  - macOS per‑arch: `make build-macos-amd64`, `make build-macos-arm64`
+  - macOS per‑arch: `make build-macos-amd64` (intel), `make build-macos-arm64` (apple silicon)
   - Windows: `make build-windows`
   - Linux: `make build-linux-all` (or `build-linux-amd64` / `build-linux-arm64`)
 
 ## Configuration
-Loom configures an LLM adapter via the adapter factory (`internal/adapter/factory.go`) with conservative defaults (OpenAI `gpt-4o`).
+Loom configures an LLM adapter via the adapter factory (`internal/adapter/factory.go`) with conservative defaults
 
 API keys and endpoints are managed in‑app via Settings and persisted to `~/.loom/settings.json`. By design, the app prefers persisted settings over environment variables.
 
@@ -155,6 +149,7 @@ The backend parses `provider:model_id` (see `internal/adapter/models.go`) and sw
 - Model selection: in the Chat panel header, pick a model. The choice is persisted and sent to the backend (`SetModel`).
 - Conversations:
   - Start a new conversation from the Chat panel
+  - Attach files to the message using the Attach Button or CTRL+ALT+P (CMD+OPTION+P on macOS)
   - Recent conversations appear when the thread is empty; select to load
   - Clearing chat creates a fresh conversation
 - Messages and streaming:
