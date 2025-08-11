@@ -54,6 +54,10 @@ const CostsDialog: React.FC<CostsDialogProps> = ({ open, onClose, totalInUSD, to
                     <Typography>Out</Typography>
                     <Typography>{(totalOutTokens || 0).toLocaleString()}</Typography>
                 </Box>
+                <Box display="flex" justifyContent="space-between">
+                    <Typography variant="subtitle1">Total</Typography>
+                    <Typography variant="subtitle1" fontWeight={600}>{totalTokens}</Typography>
+                </Box>
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="subtitle2" gutterBottom>By Provider</Typography>
                 {Object.entries(perProvider || {}).map(([prov, v]) => (
