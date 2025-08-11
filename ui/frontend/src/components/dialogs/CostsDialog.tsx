@@ -16,14 +16,17 @@ type CostsDialogProps = {
   onClose: () => void;
   totalInUSD: number;
   totalOutUSD: number;
-  perProvider: Record<string, { inUSD: number; outUSD: number; totalUSD: number }>;
+  totalInTokens: number;
+  totalOutTokens: number;
+  perProvider: Record<string, { inUSD: number; outUSD: number; totalUSD: number; inTokens: number; outTokens: number; totalTokens: number }>;
   perModel: Record<string, { provider: string; inUSD: number; outUSD: number; totalUSD: number }>;
 };
 
 const currency = (v: number) => `$${(v || 0).toFixed(2)}`;
 
-const CostsDialog: React.FC<CostsDialogProps> = ({ open, onClose, totalInUSD, totalOutUSD, perProvider, perModel }) => {
+const CostsDialog: React.FC<CostsDialogProps> = ({ open, onClose, totalInUSD, totalOutUSD, totalInTokens, totalOutTokens, perProvider, perModel }) => {
   const totalUSD = (totalInUSD || 0) + (totalOutUSD || 0);
+  const totalTokens = (totalInTokens || 0) + (totalOutTokens || 0);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -42,11 +45,27 @@ const CostsDialog: React.FC<CostsDialogProps> = ({ open, onClose, totalInUSD, to
           <Typography>{currency(totalOutUSD)}</Typography>
         </Box>
         <Divider sx={{ my: 2 }} />
+        <Typography variant="subtitle2" gutterBottom>Tokens</Typography>
+        <Box display="flex" justifyContent="space-between" sx={{ color: 'text.secondary' }}>
+          <Typography>In</Typography>
+          <Typography>{(totalInTokens || 0).toLocaleString()}</Typography>
+        </Box>
+        <Box display="flex" justifyContent="space-between" sx={{ color: 'text.secondary' }}>
+          <Typography>Out</Typography>
+          <Typography>{(totalOutTokens || 0).toLocaleString()}</Typography>
+        </Box>
+        <Divider sx={{ my: 2 }} />
         <Typography variant="subtitle2" gutterBottom>By Provider</Typography>
         {Object.entries(perProvider || {}).map(([prov, v]) => (
-          <Box key={prov} display="flex" justifyContent="space-between" sx={{ mb: 0.5 }}>
-            <Typography sx={{ textTransform: 'capitalize' }}>{prov}</Typography>
-            <Typography>{currency(v.totalUSD || 0)}</Typography>
+          <Box key={prov} sx={{ mb: 1 }}>
+            <Box display="flex" justifyContent="space-between">
+              <Typography sx={{ textTransform: 'capitalize' }}>{prov}</Typography>
+              <Typography>{currency(v.totalUSD || 0)}</Typography>
+            </Box>
+            <Box display="flex" justifyContent="space-between" sx={{ color: 'text.secondary' }}>
+              <Typography variant="caption">Tokens In/Out</Typography>
+              <Typography variant="caption">{(v.inTokens || 0).toLocaleString()} / {(v.outTokens || 0).toLocaleString()}</Typography>
+            </Box>
           </Box>
         ))}
         <Divider sx={{ my: 2 }} />

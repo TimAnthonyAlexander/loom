@@ -31,6 +31,8 @@ export function GetSettings():Promise<Record<string, string>>;
 
 export function GetTools():Promise<Array<Record<string, any>>>;
 
+export function GetUsage():Promise<Record<string, any>>;
+
 export function ListWorkspaceDir(arg1:string):Promise<bridge.UIListDirResult>;
 
 export function LoadConversation(arg1:string):Promise<void>;
@@ -42,6 +44,8 @@ export function OpenFileInUI(arg1:string):Promise<void>;
 export function PromptApproval(arg1:string,arg2:string,arg3:string):Promise<boolean>;
 
 export function ReadWorkspaceFile(arg1:string):Promise<bridge.UIReadFileResult>;
+
+export function ResetUsage():Promise<void>;
 
 export function SaveRules(arg1:Record<string, Array<string>>):Promise<void>;
 

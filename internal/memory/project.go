@@ -292,3 +292,98 @@ func generateProjectID(path string) string {
 	hash := sha256.Sum256([]byte(path))
 	return hex.EncodeToString(hash[:])[:16] // Use first 16 chars of hash
 }
+
+// UsageTotals holds cumulative usage and costs for a project/workspace.
+type UsageTotals struct {
+	TotalInTokens  int64                          `json:"total_in_tokens"`
+	TotalOutTokens int64                          `json:"total_out_tokens"`
+	TotalInUSD     float64                        `json:"total_in_usd"`
+	TotalOutUSD    float64                        `json:"total_out_usd"`
+	PerProvider    map[string]ProviderUsageTotals `json:"per_provider"`
+	PerModel       map[string]ModelUsageTotals    `json:"per_model"`
+}
+
+type ProviderUsageTotals struct {
+	InTokens    int64   `json:"in_tokens"`
+	OutTokens   int64   `json:"out_tokens"`
+	TotalTokens int64   `json:"total_tokens"`
+	InUSD       float64 `json:"in_usd"`
+	OutUSD      float64 `json:"out_usd"`
+	TotalUSD    float64 `json:"total_usd"`
+}
+
+type ModelUsageTotals struct {
+	Provider    string  `json:"provider"`
+	InTokens    int64   `json:"in_tokens"`
+	OutTokens   int64   `json:"out_tokens"`
+	TotalTokens int64   `json:"total_tokens"`
+	InUSD       float64 `json:"in_usd"`
+	OutUSD      float64 `json:"out_usd"`
+	TotalUSD    float64 `json:"total_usd"`
+}
+
+// AddUsage increments usage totals for the project.
+func (p *Project) AddUsage(provider string, model string, inTokens, outTokens int64, inUSD, outUSD float64) error {
+	if p == nil {
+		return nil
+	}
+	var totals UsageTotals
+	if p.Has("usage/aggregates") {
+		_ = p.Get("usage/aggregates", &totals)
+	}
+	if totals.PerProvider == nil {
+		totals.PerProvider = make(map[string]ProviderUsageTotals)
+	}
+	if totals.PerModel == nil {
+		totals.PerModel = make(map[string]ModelUsageTotals)
+	}
+	totals.TotalInTokens += inTokens
+	totals.TotalOutTokens += outTokens
+	totals.TotalInUSD += inUSD
+	totals.TotalOutUSD += outUSD
+
+	pp := totals.PerProvider[provider]
+	pp.InTokens += inTokens
+	pp.OutTokens += outTokens
+	pp.TotalTokens += inTokens + outTokens
+	pp.InUSD += inUSD
+	pp.OutUSD += outUSD
+	pp.TotalUSD += inUSD + outUSD
+	totals.PerProvider[provider] = pp
+
+	pm := totals.PerModel[model]
+	pm.Provider = provider
+	pm.InTokens += inTokens
+	pm.OutTokens += outTokens
+	pm.TotalTokens += inTokens + outTokens
+	pm.InUSD += inUSD
+	pm.OutUSD += outUSD
+	pm.TotalUSD += inUSD + outUSD
+	totals.PerModel[model] = pm
+
+	return p.Set("usage/aggregates", totals)
+}
+
+// GetUsage returns current persisted usage totals; returns zero-values if none present.
+func (p *Project) GetUsage() UsageTotals {
+	var totals UsageTotals
+	if p == nil {
+		return totals
+	}
+	_ = p.Get("usage/aggregates", &totals)
+	if totals.PerProvider == nil {
+		totals.PerProvider = make(map[string]ProviderUsageTotals)
+	}
+	if totals.PerModel == nil {
+		totals.PerModel = make(map[string]ModelUsageTotals)
+	}
+	return totals
+}
+
+// ResetUsage clears all persisted usage totals.
+func (p *Project) ResetUsage() error {
+	if p == nil {
+		return nil
+	}
+	return p.Delete("usage/aggregates")
+}

@@ -126,6 +126,22 @@ func (e *Engine) WithMemory(project *memory.Project) *Engine {
 	return e
 }
 
+// GetUsage exposes persisted usage totals for the current project.
+func (e *Engine) GetUsage() memory.UsageTotals {
+	if e.memory == nil {
+		return memory.UsageTotals{}
+	}
+	return e.memory.GetUsage()
+}
+
+// ResetUsage clears persisted usage for the current project.
+func (e *Engine) ResetUsage() error {
+	if e.memory == nil {
+		return nil
+	}
+	return e.memory.ResetUsage()
+}
+
 // WithWorkspace sets the workspace directory path for the engine.
 func (e *Engine) WithWorkspace(path string) *Engine {
 	e.workspaceDir = path
@@ -509,10 +525,14 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 							}
 						}
 					}
+					// Compute costs via config table
+					inUSD, outUSD, totalUSD := config.CostUSDParts(model, inTok, outTok)
 					if e.bridge != nil {
-						// Compute costs via config table
-						inUSD, outUSD, totalUSD := config.CostUSDParts(model, inTok, outTok)
 						e.bridge.EmitBilling(provider, model, inTok, outTok, inUSD, outUSD, totalUSD)
+					}
+					// Persist usage to project memory per workspace
+					if e.memory != nil {
+						_ = e.memory.AddUsage(provider, model, inTok, outTok, inUSD, outUSD)
 					}
 					// Do not append to assistant text
 					continue

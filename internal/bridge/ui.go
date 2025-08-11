@@ -328,6 +328,63 @@ func (a *App) GetSettings() map[string]string {
 	}
 }
 
+// GetUsage returns persisted usage aggregates for the current workspace.
+func (a *App) GetUsage() map[string]interface{} {
+	result := map[string]interface{}{
+		"total_in_tokens":  0,
+		"total_out_tokens": 0,
+		"total_in_usd":     0.0,
+		"total_out_usd":    0.0,
+		"per_provider":     map[string]interface{}{},
+		"per_model":        map[string]interface{}{},
+	}
+	if a.engine == nil {
+		return result
+	}
+	if a.engine != nil {
+		totals := a.engine.GetUsage()
+		// Convert to plain maps for JS bridge
+		perProv := map[string]interface{}{}
+		for k, v := range totals.PerProvider {
+			perProv[k] = map[string]interface{}{
+				"inTokens":    v.InTokens,
+				"outTokens":   v.OutTokens,
+				"totalTokens": v.TotalTokens,
+				"inUSD":       v.InUSD,
+				"outUSD":      v.OutUSD,
+				"totalUSD":    v.TotalUSD,
+			}
+		}
+		perModel := map[string]interface{}{}
+		for k, v := range totals.PerModel {
+			perModel[k] = map[string]interface{}{
+				"provider":    v.Provider,
+				"inTokens":    v.InTokens,
+				"outTokens":   v.OutTokens,
+				"totalTokens": v.TotalTokens,
+				"inUSD":       v.InUSD,
+				"outUSD":      v.OutUSD,
+				"totalUSD":    v.TotalUSD,
+			}
+		}
+		result["total_in_tokens"] = totals.TotalInTokens
+		result["total_out_tokens"] = totals.TotalOutTokens
+		result["total_in_usd"] = totals.TotalInUSD
+		result["total_out_usd"] = totals.TotalOutUSD
+		result["per_provider"] = perProv
+		result["per_model"] = perModel
+	}
+	return result
+}
+
+// ResetUsage clears persisted usage for the current workspace.
+func (a *App) ResetUsage() {
+	if a.engine == nil {
+		return
+	}
+	_ = a.engine.ResetUsage()
+}
+
 // SaveSettings saves settings provided by the frontend.
 func (a *App) SaveSettings(settings map[string]string) {
 	// Merge with existing settings to avoid wiping fields (e.g. last_workspace) when omitted by the UI

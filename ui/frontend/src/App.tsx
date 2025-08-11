@@ -49,7 +49,9 @@ const App: React.FC = () => {
     const [costsOpen, setCostsOpen] = useState<boolean>(false);
     const [totalInUSD, setTotalInUSD] = useState<number>(0);
     const [totalOutUSD, setTotalOutUSD] = useState<number>(0);
-    const [perProvider, setPerProvider] = useState<Record<string, { inUSD: number; outUSD: number; totalUSD: number }>>({});
+    const [totalInTokens, setTotalInTokens] = useState<number>(0);
+    const [totalOutTokens, setTotalOutTokens] = useState<number>(0);
+    const [perProvider, setPerProvider] = useState<Record<string, { inUSD: number; outUSD: number; totalUSD: number; inTokens: number; outTokens: number; totalTokens: number }>>({});
     const [perModel, setPerModel] = useState<Record<string, { provider: string; inUSD: number; outUSD: number; totalUSD: number }>>({});
     const [searchMode, setSearchMode] = useState<'files' | 'text'>('files');
 
@@ -169,14 +171,25 @@ const App: React.FC = () => {
             const model = String(payload?.model || '');
             const inUSD = Number(payload?.in_usd || 0);
             const outUSD = Number(payload?.out_usd || 0);
+            const inTokens = Number(payload?.in_tokens || 0);
+            const outTokens = Number(payload?.out_tokens || 0);
             // Totals
             setTotalInUSD(prev => prev + inUSD);
             setTotalOutUSD(prev => prev + outUSD);
+            setTotalInTokens(prev => prev + inTokens);
+            setTotalOutTokens(prev => prev + outTokens);
             // Per provider
             setPerProvider(prev => {
-                const cur = prev[provider] || { inUSD: 0, outUSD: 0, totalUSD: 0 };
+                const cur = prev[provider] || { inUSD: 0, outUSD: 0, totalUSD: 0, inTokens: 0, outTokens: 0, totalTokens: 0 };
                 const next = { ...prev };
-                next[provider] = { inUSD: cur.inUSD + inUSD, outUSD: cur.outUSD + outUSD, totalUSD: cur.totalUSD + inUSD + outUSD };
+                next[provider] = {
+                    inUSD: cur.inUSD + inUSD,
+                    outUSD: cur.outUSD + outUSD,
+                    totalUSD: cur.totalUSD + inUSD + outUSD,
+                    inTokens: cur.inTokens + inTokens,
+                    outTokens: cur.outTokens + outTokens,
+                    totalTokens: cur.totalTokens + inTokens + outTokens,
+                };
                 return next;
             });
             // Per model
@@ -258,11 +271,42 @@ const App: React.FC = () => {
             })
             .catch(() => { });
 
-        // Load rules
+        // Load rules and persisted usage aggregates
         AppBridge.GetRules()
             .then((r: any) => {
                 setUserRules(Array.isArray(r?.user) ? r.user : []);
                 setProjectRules(Array.isArray(r?.project) ? r.project : []);
+                return AppBridge.GetUsage();
+            })
+            .then((u: any) => {
+                const perProv = (u?.per_provider || {}) as Record<string, any>;
+                const perMod = (u?.per_model || {}) as Record<string, any>;
+                setTotalInUSD(Number(u?.total_in_usd || 0));
+                setTotalOutUSD(Number(u?.total_out_usd || 0));
+                setTotalInTokens(Number(u?.total_in_tokens || 0));
+                setTotalOutTokens(Number(u?.total_out_tokens || 0));
+                const provAgg: Record<string, { inUSD: number; outUSD: number; totalUSD: number; inTokens: number; outTokens: number; totalTokens: number }> = {};
+                Object.entries(perProv).forEach(([k, v]: any) => {
+                    provAgg[k] = {
+                        inUSD: Number(v?.inUSD || 0),
+                        outUSD: Number(v?.outUSD || 0),
+                        totalUSD: Number(v?.totalUSD || 0),
+                        inTokens: Number(v?.inTokens || 0),
+                        outTokens: Number(v?.outTokens || 0),
+                        totalTokens: Number(v?.totalTokens || 0),
+                    };
+                });
+                setPerProvider(provAgg);
+                const modelAgg: Record<string, { provider: string; inUSD: number; outUSD: number; totalUSD: number }> = {};
+                Object.entries(perMod).forEach(([k, v]: any) => {
+                    modelAgg[k] = {
+                        provider: String(v?.provider || ''),
+                        inUSD: Number(v?.inUSD || 0),
+                        outUSD: Number(v?.outUSD || 0),
+                        totalUSD: Number(v?.totalUSD || 0),
+                    };
+                });
+                setPerModel(modelAgg);
             })
             .catch(() => { });
         // Initial file tree
@@ -678,6 +722,8 @@ const App: React.FC = () => {
                 onClose={() => setCostsOpen(false)}
                 totalInUSD={totalInUSD}
                 totalOutUSD={totalOutUSD}
+                totalInTokens={totalInTokens}
+                totalOutTokens={totalOutTokens}
                 perProvider={perProvider}
                 perModel={perModel}
             />

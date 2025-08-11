@@ -50,6 +50,10 @@ export function GetTools() {
   return window['go']['bridge']['App']['GetTools']();
 }
 
+export function GetUsage() {
+  return window['go']['bridge']['App']['GetUsage']();
+}
+
 export function ListWorkspaceDir(arg1) {
   return window['go']['bridge']['App']['ListWorkspaceDir'](arg1);
 }
@@ -72,6 +76,10 @@ export function PromptApproval(arg1, arg2, arg3) {
 
 export function ReadWorkspaceFile(arg1) {
   return window['go']['bridge']['App']['ReadWorkspaceFile'](arg1);
+}
+
+export function ResetUsage() {
+  return window['go']['bridge']['App']['ResetUsage']();
 }
 
 export function SaveRules(arg1) {
