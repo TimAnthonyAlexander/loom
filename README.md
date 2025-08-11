@@ -10,8 +10,7 @@ Loom pairs a Go orchestrator and tooling layer with a modern React UI. It’s de
 ## Screenshots
 
 
-![Loom Screenshot](screenshot1.png)
-![Loom Screenshot](screenshot2.png)
+![Loom Screenshot](screenshot_.png)
 
 ## Key features
 - Desktop app via Wails: native windowing, compact packaging, and system integration
