@@ -12,11 +12,13 @@ type Props = {
     focusToken?: number;
     attachments?: string[];
     onRemoveAttachment?: (path: string) => void;
-    onOpenAttach?: () => void;
+    onOpenAttach?: (anchorEl: HTMLElement | null) => void;
+    onAttachButtonRef?: (el: HTMLElement | null) => void;
 };
 
-function ComposerComponent({ input, setInput, busy, onSend, focusToken, attachments = [], onRemoveAttachment, onOpenAttach }: Props) {
+function ComposerComponent({ input, setInput, busy, onSend, focusToken, attachments = [], onRemoveAttachment, onOpenAttach, onAttachButtonRef }: Props) {
     const inputRef = React.useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+    const attachBtnRef = React.useRef<HTMLButtonElement | null>(null);
 
     React.useEffect(() => {
         if (focusToken === undefined) return;
@@ -24,6 +26,11 @@ function ComposerComponent({ input, setInput, busy, onSend, focusToken, attachme
             inputRef.current?.focus();
         } catch { }
     }, [focusToken]);
+    React.useEffect(() => {
+        if (onAttachButtonRef) {
+            onAttachButtonRef(attachBtnRef.current);
+        }
+    }, [onAttachButtonRef]);
     return (
         <Box>
             {!!attachments.length && (
@@ -63,13 +70,14 @@ function ComposerComponent({ input, setInput, busy, onSend, focusToken, attachme
                     maxRows={8}
                     fullWidth
                 />
-                <Tooltip title="Attach files (Cmd/Ctrl+Shift+P)" placement="left">
-                    <span>
-                        <IconButton onClick={onOpenAttach} disabled={busy} sx={{ position: 'absolute', bottom: 5, right: 44 }}>
-                            <AttachFileRounded />
-                        </IconButton>
-                    </span>
-                </Tooltip>
+                <IconButton
+                    ref={attachBtnRef}
+                    onClick={(e) => onOpenAttach?.(e.currentTarget)}
+                    disabled={busy}
+                    sx={{ position: 'absolute', bottom: 5, right: 44 }}
+                >
+                    <AttachFileRounded />
+                </IconButton>
                 <IconButton
                     onClick={onSend}
                     disabled={busy || !input.trim()}

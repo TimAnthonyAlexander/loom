@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Button, Divider, Typography, Dialog, DialogTitle, DialogContent, TextField, List, ListItemButton, ListItemText } from '@mui/material';
+import { Box, Button, Divider, Typography, Popover, TextField, List, ListItemButton, ListItemText } from '@mui/material';
 import * as AppBridge from '../../../../wailsjs/go/bridge/App';
 import MessageList from './MessageList';
 import Composer from './Composer';
@@ -77,6 +77,7 @@ function ChatPanelComponent(props: Props) {
     const [attachQuery, setAttachQuery] = React.useState<string>('');
     const [attachResults, setAttachResults] = React.useState<string[]>([]);
     const [attachIndex, setAttachIndex] = React.useState<number>(0);
+    const [attachAnchor, setAttachAnchor] = React.useState<HTMLElement | null>(null);
 
     // Clear attachments when backend emits chat:clear
     React.useEffect(() => {
@@ -204,55 +205,60 @@ function ChatPanelComponent(props: Props) {
                     focusToken={focusBump}
                     attachments={attachments}
                     onRemoveAttachment={(p) => setAttachments((prev) => prev.filter((x) => x !== p))}
-                    onOpenAttach={() => setAttachOpen(true)}
+                    onOpenAttach={(el) => { setAttachAnchor(el); setAttachOpen(true); }}
+                    onAttachButtonRef={(el) => setAttachAnchor(el)}
                 />
             </Box>
-            <Dialog open={attachOpen} onClose={() => setAttachOpen(false)} fullWidth maxWidth="sm">
-                <DialogTitle>Attach file</DialogTitle>
-                <DialogContent>
-                    <TextField
-                        autoFocus
-                        fullWidth
-                        placeholder="Type to fuzzy find…"
-                        value={attachQuery}
-                        onChange={(e) => setAttachQuery(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                const item = attachResults[attachIndex];
-                                if (item) {
-                                    setAttachments((prev) => (prev.includes(item) ? prev : [...prev, item]));
-                                    setAttachOpen(false);
-                                    setAttachQuery('');
-                                }
-                            } else if (e.key === 'ArrowDown') {
-                                e.preventDefault();
-                                setAttachIndex((i) => Math.min(Math.max(attachResults.length - 1, 0), i + 1));
-                            } else if (e.key === 'ArrowUp') {
-                                e.preventDefault();
-                                setAttachIndex((i) => Math.max(0, i - 1));
+            <Popover
+                open={attachOpen}
+                anchorEl={attachAnchor}
+                onClose={() => setAttachOpen(false)}
+                anchorOrigin={{ vertical: 'top', horizontal: 'left' }}
+                transformOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                PaperProps={{ sx: { p: 1, width: 420 } }}
+            >
+                <TextField
+                    autoFocus
+                    fullWidth
+                    placeholder="Type to fuzzy find…"
+                    value={attachQuery}
+                    onChange={(e) => setAttachQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            const item = attachResults[attachIndex];
+                            if (item) {
+                                setAttachments((prev) => (prev.includes(item) ? prev : [...prev, item]));
+                                setAttachOpen(false);
+                                setAttachQuery('');
                             }
-                        }}
-                        size="small"
-                        sx={{ mb: 1 }}
-                    />
-                    <List dense sx={{ maxHeight: 320, overflowY: 'auto' }}>
-                        {attachResults.map((p, idx) => (
-                            <ListItemButton
-                                key={p}
-                                selected={idx === attachIndex}
-                                onMouseEnter={() => setAttachIndex(idx)}
-                                onClick={() => {
-                                    setAttachments((prev) => (prev.includes(p) ? prev : [...prev, p]));
-                                    setAttachOpen(false);
-                                    setAttachQuery('');
-                                }}
-                            >
-                                <ListItemText primaryTypographyProps={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 13 }} primary={p} />
-                            </ListItemButton>
-                        ))}
-                    </List>
-                </DialogContent>
-            </Dialog>
+                        } else if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            setAttachIndex((i) => Math.min(Math.max(attachResults.length - 1, 0), i + 1));
+                        } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            setAttachIndex((i) => Math.max(0, i - 1));
+                        }
+                    }}
+                    size="small"
+                    sx={{ mb: 1 }}
+                />
+                <List dense sx={{ maxHeight: 320, overflowY: 'auto' }}>
+                    {attachResults.map((p, idx) => (
+                        <ListItemButton
+                            key={p}
+                            selected={idx === attachIndex}
+                            onMouseEnter={() => setAttachIndex(idx)}
+                            onClick={() => {
+                                setAttachments((prev) => (prev.includes(p) ? prev : [...prev, p]));
+                                setAttachOpen(false);
+                                setAttachQuery('');
+                            }}
+                        >
+                            <ListItemText primaryTypographyProps={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 13 }} primary={p} />
+                        </ListItemButton>
+                    ))}
+                </List>
+            </Popover>
         </Box>
     );
 }
