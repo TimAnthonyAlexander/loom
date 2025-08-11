@@ -343,6 +343,11 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 	}
 	blocks := make(map[int]*blockState)
 	currentEvent := ""
+	// Track usage for billing: input once at message_start, output cumulative on message_delta
+	var inputTokens int64
+	var outputTokens int64
+	// Normalize model id (strip provider prefix if present)
+	normalizedModel := strings.TrimPrefix(c.model, "claude:")
 
 	for sc.Scan() {
 		line := sc.Text()
@@ -398,7 +403,18 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 
 		switch currentEvent {
 		case "message_start":
-			// No action
+			// Capture input tokens from usage if present
+			var v struct {
+				Type    string `json:"type"`
+				Message struct {
+					Usage *struct {
+						InputTokens int64 `json:"input_tokens"`
+					} `json:"usage"`
+				} `json:"message"`
+			}
+			if err := json.Unmarshal([]byte(payload), &v); err == nil && v.Message.Usage != nil {
+				inputTokens = v.Message.Usage.InputTokens
+			}
 		case "content_block_start":
 			bs := &blockState{}
 			if ev.ContentBlock != nil {
@@ -492,9 +508,24 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 			}
 			delete(blocks, ev.Index)
 		case "message_delta":
-			// We could look at stop_reason here, but content_block_stop handles tool_use
-			_ = ev.MessageDelta
+			// Capture cumulative output tokens if present
+			var d struct {
+				Type  string `json:"type"`
+				Usage *struct {
+					OutputTokens int64 `json:"output_tokens"`
+				} `json:"usage"`
+			}
+			if err := json.Unmarshal([]byte(payload), &d); err == nil && d.Usage != nil {
+				outputTokens = d.Usage.OutputTokens
+			}
 		case "message_stop":
+			// End of assistant turn — emit usage marker for engine to compute costs/UI
+			usage := fmt.Sprintf("[USAGE] provider=anthropic model=%s in=%d out=%d", normalizedModel, inputTokens, outputTokens)
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- engine.TokenOrToolCall{Token: usage}:
+			}
 			// End of assistant turn
 			return
 		case "error":

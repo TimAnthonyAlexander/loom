@@ -288,6 +288,23 @@ func (a *App) EmitReasoning(text string, done bool) {
 	}
 }
 
+// EmitBilling sends a usage/cost event to the UI. Provider should be a short id like "openai" or "anthropic".
+// Model is the provider's model id (e.g., "gpt-4.1", "claude-3-5-sonnet-20241022").
+func (a *App) EmitBilling(provider string, model string, inTokens int64, outTokens int64, inUSD float64, outUSD float64, totalUSD float64) {
+	if a.ctx != nil {
+		payload := map[string]interface{}{
+			"provider":   provider,
+			"model":      model,
+			"in_tokens":  inTokens,
+			"out_tokens": outTokens,
+			"in_usd":     inUSD,
+			"out_usd":    outUSD,
+			"total_usd":  totalUSD,
+		}
+		runtime.EventsEmit(a.ctx, "billing:usage", payload)
+	}
+}
+
 // GetSettings exposes persisted settings to the frontend.
 func (a *App) GetSettings() map[string]string {
 	a.ensureSettingsLoaded()

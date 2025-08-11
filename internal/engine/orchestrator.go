@@ -43,6 +43,8 @@ type UIBridge interface {
 	SendChat(role, text string)
 	EmitAssistant(text string)
 	EmitReasoning(text string, done bool)
+	// EmitBilling notifies the UI of per-request usage and costs in USD
+	EmitBilling(provider string, model string, inTokens int64, outTokens int64, inUSD float64, outUSD float64, totalUSD float64)
 	PromptApproval(actionID string, summary string, diff string) (approved bool)
 	SetBusy(isBusy bool)
 	// Request the UI to open a file path (relative to workspace) in the file viewer
@@ -458,33 +460,63 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 				// Any activity observed; no action needed
 
 				if item.ToolCall != nil {
-					// Got a tool call
+					// Got a tool call; record it but continue reading the stream until completion so we can capture usage
 					// Guard against empty tool names from partial/ambiguous streams
 					if item.ToolCall.Name == "" {
-						// Ignore and continue reading tokens; likely a partial stream
 						if os.Getenv("LOOM_DEBUG_ENGINE") == "1" || strings.EqualFold(os.Getenv("LOOM_DEBUG_ENGINE"), "true") {
 							e.bridge.SendChat("system", "[debug] Received partial tool call with empty name; continuing to read stream")
 						}
 						continue
 					}
-					if os.Getenv("LOOM_DEBUG_ENGINE") == "1" || strings.EqualFold(os.Getenv("LOOM_DEBUG_ENGINE"), "true") {
-						e.bridge.SendChat("system", fmt.Sprintf("[debug] Tool call received: id=%s name=%s argsLen=%d", item.ToolCall.ID, item.ToolCall.Name, len(item.ToolCall.Args)))
+					if toolCallReceived == nil {
+						if os.Getenv("LOOM_DEBUG_ENGINE") == "1" || strings.EqualFold(os.Getenv("LOOM_DEBUG_ENGINE"), "true") {
+							e.bridge.SendChat("system", fmt.Sprintf("[debug] Tool call received: id=%s name=%s argsLen=%d", item.ToolCall.ID, item.ToolCall.Name, len(item.ToolCall.Args)))
+						}
+						toolCallReceived = &tool.ToolCall{
+							ID:   item.ToolCall.ID,
+							Name: item.ToolCall.Name,
+							Args: item.ToolCall.Args,
+						}
+						// Record the assistant tool_use in conversation for Anthropic
+						if convo != nil {
+							convo.AddAssistantToolUse(toolCallReceived.Name, toolCallReceived.ID, string(toolCallReceived.Args))
+						}
 					}
-					toolCallReceived = &tool.ToolCall{
-						ID:   item.ToolCall.ID,
-						Name: item.ToolCall.Name,
-						Args: item.ToolCall.Args,
-					}
-					// Record the assistant tool_use in conversation for Anthropic
-					if convo != nil {
-						// Args is json.RawMessage
-						convo.AddAssistantToolUse(toolCallReceived.Name, toolCallReceived.ID, string(toolCallReceived.Args))
-					}
-					break StreamLoop
+					continue
 				}
 
 				// Got a token
 				tok := item.Token
+				if strings.HasPrefix(tok, "[USAGE] ") {
+					// Parse provider/model/in/out from token and emit billing event
+					// Format: [USAGE] provider=xxx model=yyy in=N out=M
+					usage := strings.TrimPrefix(tok, "[USAGE] ")
+					var provider, model string
+					var inTok, outTok int64
+					fields := strings.Fields(usage)
+					for _, f := range fields {
+						if strings.HasPrefix(f, "provider=") {
+							provider = strings.TrimPrefix(f, "provider=")
+						} else if strings.HasPrefix(f, "model=") {
+							model = strings.TrimPrefix(f, "model=")
+						} else if strings.HasPrefix(f, "in=") {
+							if v, err := strconv.ParseInt(strings.TrimPrefix(f, "in="), 10, 64); err == nil {
+								inTok = v
+							}
+						} else if strings.HasPrefix(f, "out=") {
+							if v, err := strconv.ParseInt(strings.TrimPrefix(f, "out="), 10, 64); err == nil {
+								outTok = v
+							}
+						}
+					}
+					if e.bridge != nil {
+						// Compute costs via config table
+						inUSD, outUSD, totalUSD := config.CostUSDParts(model, inTok, outTok)
+						e.bridge.EmitBilling(provider, model, inTok, outTok, inUSD, outUSD, totalUSD)
+					}
+					// Do not append to assistant text
+					continue
+				}
 				if strings.HasPrefix(tok, "[REASONING] ") {
 					text := strings.TrimPrefix(tok, "[REASONING] ")
 					// Show incremental reasoning to the UI but do not persist until the block ends

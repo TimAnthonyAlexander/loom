@@ -9,6 +9,9 @@ type SidebarProps = {
     onOpenWorkspace: () => void;
     onOpenRules: () => void;
     onOpenSettings: () => void;
+    onOpenCosts: () => void;
+    totalInUSD: number;
+    totalOutUSD: number;
     dirCache: Record<string, UIFileEntry[]>;
     expandedDirs: Record<string, boolean>;
     onToggleDir: (path: string) => void;
@@ -20,6 +23,9 @@ function Sidebar(props: SidebarProps) {
         onOpenWorkspace,
         onOpenRules,
         onOpenSettings,
+        onOpenCosts,
+        totalInUSD,
+        totalOutUSD,
         dirCache,
         expandedDirs,
         onToggleDir,
@@ -87,6 +93,20 @@ function Sidebar(props: SidebarProps) {
                         onOpenFile={onOpenFile}
                         rootPath=""
                     />
+                </Paper>
+            </Box>
+
+            {/* Bottom: Costs summary */}
+            <Box sx={{ mt: 1, mb: 2 }}>
+                <Paper variant="outlined" sx={{ px: 1.5, py: 1, cursor: 'pointer' }} onClick={onOpenCosts}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
+                        <Typography variant="caption" color="text.secondary">In</Typography>
+                        <Typography variant="caption" fontWeight={600}>${(totalInUSD || 0).toFixed(2)}</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography variant="caption" color="text.secondary">Out</Typography>
+                        <Typography variant="caption" fontWeight={600}>${(totalOutUSD || 0).toFixed(2)}</Typography>
+                    </Box>
                 </Paper>
             </Box>
         </Box>

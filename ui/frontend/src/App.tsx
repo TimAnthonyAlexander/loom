@@ -10,6 +10,7 @@ import ChatPanel from './components/right/Chat/ChatPanel';
 import ApprovalDialog from './components/dialogs/ApprovalDialog';
 import SettingsDialog from './components/dialogs/SettingsDialog';
 import RulesDialog from './components/dialogs/RulesDialog';
+import CostsDialog from './components/dialogs/CostsDialog';
 import WorkspaceDialog from './components/dialogs/WorkspaceDialog';
 import SearchDialog from './components/dialogs/SearchDialog';
 import { ChatMessage, ApprovalRequest, UIFileEntry, UIListDirResult, ConversationListItem, EditorTabItem } from './types/ui';
@@ -44,6 +45,12 @@ const App: React.FC = () => {
     const [reasoningOpen, setReasoningOpen] = useState<boolean>(false);
     const collapseTimerRef = useRef<number | null>(null);
     const [searchOpen, setSearchOpen] = useState<boolean>(false);
+    // Billing state
+    const [costsOpen, setCostsOpen] = useState<boolean>(false);
+    const [totalInUSD, setTotalInUSD] = useState<number>(0);
+    const [totalOutUSD, setTotalOutUSD] = useState<number>(0);
+    const [perProvider, setPerProvider] = useState<Record<string, { inUSD: number; outUSD: number; totalUSD: number }>>({});
+    const [perModel, setPerModel] = useState<Record<string, { provider: string; inUSD: number; outUSD: number; totalUSD: number }>>({});
     const [searchMode, setSearchMode] = useState<'files' | 'text'>('files');
 
     // File explorer state
@@ -154,6 +161,31 @@ const App: React.FC = () => {
                     setConversations(list.map((c: any) => ({ id: String(c.id), title: String(c.title || c.id), updated_at: String(c.updated_at || '') })));
                 })
                 .catch(() => { });
+        });
+
+        // Listen for billing events from backend
+        EventsOn('billing:usage', (payload: any) => {
+            const provider = String(payload?.provider || '').toLowerCase();
+            const model = String(payload?.model || '');
+            const inUSD = Number(payload?.in_usd || 0);
+            const outUSD = Number(payload?.out_usd || 0);
+            // Totals
+            setTotalInUSD(prev => prev + inUSD);
+            setTotalOutUSD(prev => prev + outUSD);
+            // Per provider
+            setPerProvider(prev => {
+                const cur = prev[provider] || { inUSD: 0, outUSD: 0, totalUSD: 0 };
+                const next = { ...prev };
+                next[provider] = { inUSD: cur.inUSD + inUSD, outUSD: cur.outUSD + outUSD, totalUSD: cur.totalUSD + inUSD + outUSD };
+                return next;
+            });
+            // Per model
+            setPerModel(prev => {
+                const cur = prev[model] || { provider, inUSD: 0, outUSD: 0, totalUSD: 0 };
+                const next = { ...prev } as any;
+                next[model] = { provider, inUSD: cur.inUSD + inUSD, outUSD: cur.outUSD + outUSD, totalUSD: cur.totalUSD + inUSD + outUSD };
+                return next;
+            });
         });
 
         // Listen for approval requests
@@ -499,6 +531,9 @@ const App: React.FC = () => {
                     onOpenWorkspace={() => setWorkspaceOpen(true)}
                     onOpenRules={() => setRulesOpen(true)}
                     onOpenSettings={() => setSettingsOpen(true)}
+                    onOpenCosts={() => setCostsOpen(true)}
+                    totalInUSD={totalInUSD}
+                    totalOutUSD={totalOutUSD}
                     dirCache={dirCache}
                     expandedDirs={expandedDirs}
                     onToggleDir={toggleDir}
@@ -637,6 +672,14 @@ const App: React.FC = () => {
                     setSearchOpen(false);
                     if (p) openFile(p, line, col);
                 }}
+            />
+            <CostsDialog
+                open={costsOpen}
+                onClose={() => setCostsOpen(false)}
+                totalInUSD={totalInUSD}
+                totalOutUSD={totalOutUSD}
+                perProvider={perProvider}
+                perModel={perModel}
             />
         </Box>
     );

@@ -22,6 +22,10 @@ export function EmitAssistant(arg1) {
   return window['go']['bridge']['App']['EmitAssistant'](arg1);
 }
 
+export function EmitBilling(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
+  return window['go']['bridge']['App']['EmitBilling'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
+}
+
 export function EmitReasoning(arg1, arg2) {
   return window['go']['bridge']['App']['EmitReasoning'](arg1, arg2);
 }

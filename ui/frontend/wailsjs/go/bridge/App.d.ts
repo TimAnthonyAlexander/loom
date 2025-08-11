@@ -17,6 +17,8 @@ export function ClearConversation():Promise<void>;
 
 export function EmitAssistant(arg1:string):Promise<void>;
 
+export function EmitBilling(arg1:string,arg2:string,arg3:number,arg4:number,arg5:number,arg6:number,arg7:number):Promise<void>;
+
 export function EmitReasoning(arg1:string,arg2:boolean):Promise<void>;
 
 export function FindFiles(arg1:string,arg2:string,arg3:number):Promise<Array<string>>;

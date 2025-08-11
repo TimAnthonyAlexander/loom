@@ -596,7 +596,7 @@ func (c *Client) handleResponsesStream(ctx context.Context, r io.Reader, out cha
 							case <-ctx.Done():
 								return
 							case out <- engine.TokenOrToolCall{ToolCall: tc}:
-								return
+								// Do not return; continue reading until response.completed to capture usage
 							}
 						}
 					}
@@ -643,7 +643,7 @@ func (c *Client) handleResponsesStream(ctx context.Context, r io.Reader, out cha
 				case <-ctx.Done():
 					return
 				case out <- engine.TokenOrToolCall{ToolCall: tc}:
-					return
+					// Continue scanning to reach response.completed for usage
 				}
 			}
 			// If nothing assembled, continue to wait for response.completed
@@ -784,11 +784,25 @@ func (c *Client) handleResponsesStream(ctx context.Context, r io.Reader, out cha
 				case <-ctx.Done():
 					return
 				case out <- engine.TokenOrToolCall{ToolCall: tc}:
-					return
+					// Continue to also emit usage below
 				}
 			}
-			if c.debug {
-				c.debugf("response.completed reached with no valid tool calls to emit")
+			// Try to parse usage from the embedded response and emit a usage marker
+			if len(ev.Response) > 0 {
+				var r struct {
+					Usage *struct {
+						InputTokens  int64 `json:"input_tokens"`
+						OutputTokens int64 `json:"output_tokens"`
+					} `json:"usage"`
+				}
+				if json.Unmarshal(ev.Response, &r) == nil && r.Usage != nil {
+					usage := fmt.Sprintf("[USAGE] provider=openai model=%s in=%d out=%d", c.model, r.Usage.InputTokens, r.Usage.OutputTokens)
+					select {
+					case <-ctx.Done():
+						return
+					case out <- engine.TokenOrToolCall{Token: usage}:
+					}
+				}
 			}
 			return
 		case "response.error":
