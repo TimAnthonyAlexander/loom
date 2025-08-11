@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+	"unicode"
 	"time"
 
 	gitignore "github.com/go-git/go-git/v5/plumbing/format/gitignore"
@@ -1013,20 +1014,48 @@ func (a *App) FindFiles(filePattern string, subdir string, maxResults int) []str
 		return false
 	}
 
-	// Helper to test pattern against base name and relative path
+	// Precompute normalized query variants for fuzzy matching
+	trimmedPattern := strings.TrimSpace(filePattern)
+	patternLower := strings.ToLower(trimmedPattern)
+	patternFuzzy := normalizeForFuzzy(patternLower)
+
+	// Helper to test pattern against base name and relative path with fuzzy rules
 	matches := func(relPath string) bool {
-		if strings.TrimSpace(filePattern) == "" {
+		if trimmedPattern == "" {
 			return true
 		}
 		base := filepath.Base(relPath)
-		if ok, _ := filepath.Match(filePattern, base); ok {
+		baseLower := strings.ToLower(base)
+		relLower := strings.ToLower(relPath)
+
+		// 1) glob-like exact matching against base and rel
+		if ok, _ := filepath.Match(trimmedPattern, base); ok {
 			return true
 		}
-		if ok, _ := filepath.Match(filePattern, relPath); ok {
+		if ok, _ := filepath.Match(trimmedPattern, relPath); ok {
 			return true
 		}
-		// Fallback: case-insensitive substring on base
-		return strings.Contains(strings.ToLower(base), strings.ToLower(filePattern))
+
+		// 2) simple substring on lowercased base and path
+		if patternLower != "" && (strings.Contains(baseLower, patternLower) || strings.Contains(relLower, patternLower)) {
+			return true
+		}
+
+		// 3) fuzzy normalization: ignore spaces/punctuation and case
+		if patternFuzzy == "" {
+			return true
+		}
+		baseFuzzy := normalizeForFuzzy(baseLower)
+		relFuzzy := normalizeForFuzzy(relLower)
+		if strings.Contains(baseFuzzy, patternFuzzy) || strings.Contains(relFuzzy, patternFuzzy) {
+			return true
+		}
+
+		// 4) subsequence match (characters in order) to tolerate small gaps/typos
+		if isSubsequence(patternFuzzy, baseFuzzy) || isSubsequence(patternFuzzy, relFuzzy) {
+			return true
+		}
+		return false
 	}
 
 	_ = filepath.WalkDir(absStart, func(path string, d os.DirEntry, err error) error {
@@ -1055,6 +1084,41 @@ func (a *App) FindFiles(filePattern string, subdir string, maxResults int) []str
 	})
 
 	return results
+}
+
+// normalizeForFuzzy removes spaces and punctuation, keeping only letters and digits.
+// It also collapses consecutive separators and leaves result in lower-case.
+func normalizeForFuzzy(s string) string {
+    if s == "" {
+        return ""
+    }
+    var b strings.Builder
+    b.Grow(len(s))
+    for _, r := range s {
+        if unicode.IsLetter(r) || unicode.IsDigit(r) {
+            // keep alphanumerics
+            b.WriteRune(unicode.ToLower(r))
+        }
+        // ignore everything else (spaces, punctuation, path separators, underscores, dashes, dots)
+    }
+    return b.String()
+}
+
+// isSubsequence returns true if small is a subsequence of big (chars in order, not necessarily contiguous)
+func isSubsequence(small, big string) bool {
+    if small == "" {
+        return true
+    }
+    if big == "" {
+        return false
+    }
+    i := 0
+    for j := 0; j < len(big) && i < len(small); j++ {
+        if small[i] == big[j] {
+            i++
+        }
+    }
+    return i == len(small)
 }
 
 // UIFileEntry represents a single file or directory for the UI explorer
