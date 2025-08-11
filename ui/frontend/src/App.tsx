@@ -53,6 +53,13 @@ const App: React.FC = () => {
     const [totalOutTokens, setTotalOutTokens] = useState<number>(0);
     const [perProvider, setPerProvider] = useState<Record<string, { inUSD: number; outUSD: number; totalUSD: number; inTokens: number; outTokens: number; totalTokens: number }>>({});
     const [perModel, setPerModel] = useState<Record<string, { provider: string; inUSD: number; outUSD: number; totalUSD: number }>>({});
+    // Global usage
+    const [gTotalInUSD, setGTotalInUSD] = useState<number>(0);
+    const [gTotalOutUSD, setGTotalOutUSD] = useState<number>(0);
+    const [gTotalInTokens, setGTotalInTokens] = useState<number>(0);
+    const [gTotalOutTokens, setGTotalOutTokens] = useState<number>(0);
+    const [gPerProvider, setGPerProvider] = useState<Record<string, { inUSD: number; outUSD: number; totalUSD: number; inTokens: number; outTokens: number; totalTokens: number }>>({});
+    const [gPerModel, setGPerModel] = useState<Record<string, { provider: string; inUSD: number; outUSD: number; totalUSD: number }>>({});
     const [searchMode, setSearchMode] = useState<'files' | 'text'>('files');
 
     // File explorer state
@@ -307,6 +314,38 @@ const App: React.FC = () => {
                     };
                 });
                 setPerModel(modelAgg);
+                // Load global usage as well
+                return AppBridge.GetGlobalUsage();
+            })
+            .then((g: any) => {
+                const perProv = (g?.per_provider || {}) as Record<string, any>;
+                const perMod = (g?.per_model || {}) as Record<string, any>;
+                setGTotalInUSD(Number(g?.total_in_usd || 0));
+                setGTotalOutUSD(Number(g?.total_out_usd || 0));
+                setGTotalInTokens(Number(g?.total_in_tokens || 0));
+                setGTotalOutTokens(Number(g?.total_out_tokens || 0));
+                const provAgg: Record<string, { inUSD: number; outUSD: number; totalUSD: number; inTokens: number; outTokens: number; totalTokens: number }> = {};
+                Object.entries(perProv).forEach(([k, v]: any) => {
+                    provAgg[k] = {
+                        inUSD: Number(v?.inUSD || 0),
+                        outUSD: Number(v?.outUSD || 0),
+                        totalUSD: Number(v?.totalUSD || 0),
+                        inTokens: Number(v?.inTokens || 0),
+                        outTokens: Number(v?.outTokens || 0),
+                        totalTokens: Number(v?.totalTokens || 0),
+                    };
+                });
+                setGPerProvider(provAgg);
+                const modelAgg: Record<string, { provider: string; inUSD: number; outUSD: number; totalUSD: number }> = {};
+                Object.entries(perMod).forEach(([k, v]: any) => {
+                    modelAgg[k] = {
+                        provider: String(v?.provider || ''),
+                        inUSD: Number(v?.inUSD || 0),
+                        outUSD: Number(v?.outUSD || 0),
+                        totalUSD: Number(v?.totalUSD || 0),
+                    };
+                });
+                setGPerModel(modelAgg);
             })
             .catch(() => { });
         // Initial file tree
@@ -726,6 +765,12 @@ const App: React.FC = () => {
                 totalOutTokens={totalOutTokens}
                 perProvider={perProvider}
                 perModel={perModel}
+                gTotalInUSD={gTotalInUSD}
+                gTotalOutUSD={gTotalOutUSD}
+                gTotalInTokens={gTotalInTokens}
+                gTotalOutTokens={gTotalOutTokens}
+                gPerProvider={gPerProvider}
+                gPerModel={gPerModel}
             />
         </Box>
     );
