@@ -1,4 +1,5 @@
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Stack, TextField, Tooltip, Chip } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Stack, TextField, Tooltip, Chip, Link } from '@mui/material';
+import { OpenProjectDataDir } from '../../../wailsjs/go/bridge/App';
 
 type Props = {
     open: boolean;
@@ -41,6 +42,11 @@ export default function SettingsDialog(props: Props) {
                     <TextField label="OpenAI API Key" type="password" autoComplete="off" value={openaiKey} onChange={(e) => setOpenaiKey(e.target.value)} placeholder="sk-..." fullWidth />
                     <TextField label="Anthropic API Key" type="password" autoComplete="off" value={anthropicKey} onChange={(e) => setAnthropicKey(e.target.value)} placeholder="sk-ant-..." fullWidth />
                     <TextField label="Ollama Endpoint" value={ollamaEndpoint} onChange={(e) => setOllamaEndpoint(e.target.value)} placeholder="http://localhost:11434" fullWidth />
+                    <Stack direction="row" spacing={2} alignItems="center">
+                        <Link component="button" underline="hover" onClick={() => OpenProjectDataDir()}>
+                            Open project data folder
+                        </Link>
+                    </Stack>
                     <Stack direction="row" spacing={2} alignItems="center">
                         <Tooltip title="If enabled, shell commands proposed by the model are executed without manual approval.">
                             <Chip label="Auto-Approve Shell" />

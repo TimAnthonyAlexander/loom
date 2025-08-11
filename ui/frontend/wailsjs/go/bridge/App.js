@@ -38,6 +38,10 @@ export function GetConversations() {
   return window['go']['bridge']['App']['GetConversations']();
 }
 
+export function GetGlobalUsage() {
+  return window['go']['bridge']['App']['GetGlobalUsage']();
+}
+
 export function GetRules() {
   return window['go']['bridge']['App']['GetRules']();
 }
@@ -70,12 +74,20 @@ export function OpenFileInUI(arg1) {
   return window['go']['bridge']['App']['OpenFileInUI'](arg1);
 }
 
+export function OpenProjectDataDir() {
+  return window['go']['bridge']['App']['OpenProjectDataDir']();
+}
+
 export function PromptApproval(arg1, arg2, arg3) {
   return window['go']['bridge']['App']['PromptApproval'](arg1, arg2, arg3);
 }
 
 export function ReadWorkspaceFile(arg1) {
   return window['go']['bridge']['App']['ReadWorkspaceFile'](arg1);
+}
+
+export function ResetGlobalUsage() {
+  return window['go']['bridge']['App']['ResetGlobalUsage']();
 }
 
 export function ResetUsage() {

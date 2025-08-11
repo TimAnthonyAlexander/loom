@@ -3,10 +3,12 @@ package bridge
 import (
 	"context"
 	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime/debug"
 	"strings"
@@ -338,9 +340,6 @@ func (a *App) GetUsage() map[string]interface{} {
 		"per_provider":     map[string]interface{}{},
 		"per_model":        map[string]interface{}{},
 	}
-	if a.engine == nil {
-		return result
-	}
 	if a.engine != nil {
 		totals := a.engine.GetUsage()
 		// Convert to plain maps for JS bridge
@@ -383,6 +382,47 @@ func (a *App) ResetUsage() {
 		return
 	}
 	_ = a.engine.ResetUsage()
+}
+
+// GetGlobalUsage returns the global usage aggregates stored under ~/.loom/usages/aggregates.json
+func (a *App) GetGlobalUsage() map[string]interface{} {
+	g := config.GetGlobalUsage()
+	perProv := map[string]interface{}{}
+	for k, v := range g.PerProvider {
+		perProv[k] = map[string]interface{}{
+			"inTokens":    v.InTokens,
+			"outTokens":   v.OutTokens,
+			"totalTokens": v.TotalTokens,
+			"inUSD":       v.InUSD,
+			"outUSD":      v.OutUSD,
+			"totalUSD":    v.TotalUSD,
+		}
+	}
+	perModel := map[string]interface{}{}
+	for k, v := range g.PerModel {
+		perModel[k] = map[string]interface{}{
+			"provider":    v.Provider,
+			"inTokens":    v.InTokens,
+			"outTokens":   v.OutTokens,
+			"totalTokens": v.TotalTokens,
+			"inUSD":       v.InUSD,
+			"outUSD":      v.OutUSD,
+			"totalUSD":    v.TotalUSD,
+		}
+	}
+	return map[string]interface{}{
+		"total_in_tokens":  g.TotalInTokens,
+		"total_out_tokens": g.TotalOutTokens,
+		"total_in_usd":     g.TotalInUSD,
+		"total_out_usd":    g.TotalOutUSD,
+		"per_provider":     perProv,
+		"per_model":        perModel,
+	}
+}
+
+// ResetGlobalUsage clears global usage aggregates.
+func (a *App) ResetGlobalUsage() {
+	_ = config.ResetGlobalUsage()
 }
 
 // SaveSettings saves settings provided by the frontend.
@@ -611,6 +651,49 @@ func (a *App) SaveRules(payload map[string][]string) {
 			}
 		}
 	}
+}
+
+// OpenProjectDataDir opens the per-project data directory in the system file browser.
+// Path format: $HOME/.loom/projects/<projectID>
+func (a *App) OpenProjectDataDir() {
+	if a.ctx == nil {
+		return
+	}
+	// Resolve current workspace
+	ws := ""
+	if a.engine != nil {
+		ws = strings.TrimSpace(a.engine.Workspace())
+	}
+	if ws == "" {
+		return
+	}
+	// Normalize to absolute path
+	absWS, err := filepath.Abs(ws)
+	if err != nil {
+		return
+	}
+	// Compute project ID (first 16 hex chars of sha256 of workspace path)
+	sum := sha256.Sum256([]byte(absWS))
+	projectID := hex.EncodeToString(sum[:])[:16]
+	// Build ~/.loom/projects/<id>
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	dir := filepath.Join(home, ".loom", "projects", projectID)
+	// Ensure directory exists so opening doesn't 404
+	_ = os.MkdirAll(dir, 0o755)
+	// Try to open the directory in the system file manager
+	openers := [][]string{{"open", dir}, {"xdg-open", dir}, {"explorer", dir}}
+	for _, cmd := range openers {
+		c := exec.Command(cmd[0], cmd[1:]...)
+		if err := c.Start(); err == nil {
+			return
+		}
+	}
+	// Fallback: open as file:// URL in the browser
+	url := "file://" + filepath.ToSlash(dir)
+	runtime.BrowserOpenURL(a.ctx, url)
 }
 
 // ChooseWorkspace opens a native directory picker and returns the selected path.

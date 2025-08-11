@@ -530,10 +530,11 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 					if e.bridge != nil {
 						e.bridge.EmitBilling(provider, model, inTok, outTok, inUSD, outUSD, totalUSD)
 					}
-					// Persist usage to project memory per workspace
+					// Persist usage to project memory per workspace and to global store
 					if e.memory != nil {
 						_ = e.memory.AddUsage(provider, model, inTok, outTok, inUSD, outUSD)
 					}
+					_ = config.AddGlobalUsage(provider, model, inTok, outTok, inUSD, outUSD)
 					// Do not append to assistant text
 					continue
 				}
