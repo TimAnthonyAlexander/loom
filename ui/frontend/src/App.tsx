@@ -401,6 +401,8 @@ const App: React.FC = () => {
                 setCurrentConversationId(id);
                 // Prepend a placeholder until next refresh
                 setConversations((prev: ConversationListItem[]) => [{ id, title: 'New Conversation' }, ...prev]);
+                // Clear composer attachments explicitly only on new conversation
+                try { (window as any).dispatchEvent(new Event('loom:clear-attachments')); } catch {}
             })
             .catch(() => { });
     };
@@ -586,7 +588,7 @@ const App: React.FC = () => {
         EventsOn('workspace:open_file', handler);
     }, []);
 
-    // Global shortcuts: Cmd+P (quick open files), Cmd+Shift+F (text search)
+    // Global shortcuts: Cmd+P (quick open files), Cmd+Shift+F (text search), Cmd+Shift+P (attach file)
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
             const isMac = navigator.platform.toLowerCase().includes('mac');
@@ -600,6 +602,10 @@ const App: React.FC = () => {
                 e.preventDefault();
                 setSearchMode('text');
                 setSearchOpen(true);
+            } else if (cmd && key === 'p' && e.shiftKey) {
+                e.preventDefault();
+                // Broadcast to ChatPanel/Composer to open attachment popup
+                try { (window as any).dispatchEvent(new Event('loom:open-attach')); } catch {}
             }
         };
         window.addEventListener('keydown', onKeyDown);

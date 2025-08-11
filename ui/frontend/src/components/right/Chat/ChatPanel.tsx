@@ -1,5 +1,6 @@
 import React from 'react';
-import { Box, Button, Divider, Typography } from '@mui/material';
+import { Box, Button, Divider, Typography, Dialog, DialogTitle, DialogContent, TextField, List, ListItemButton, ListItemText } from '@mui/material';
+import * as AppBridge from '../../../../wailsjs/go/bridge/App';
 import MessageList from './MessageList';
 import Composer from './Composer';
 import { ChatMessage, ConversationListItem } from '../../../types/ui';
@@ -71,6 +72,68 @@ function ChatPanelComponent(props: Props) {
 
     const [focusBump, setFocusBump] = React.useState<number>(0);
 
+    const [attachments, setAttachments] = React.useState<string[]>([]);
+    const [attachOpen, setAttachOpen] = React.useState<boolean>(false);
+    const [attachQuery, setAttachQuery] = React.useState<string>('');
+    const [attachResults, setAttachResults] = React.useState<string[]>([]);
+    const [attachIndex, setAttachIndex] = React.useState<number>(0);
+
+    // Clear attachments when backend emits chat:clear
+    React.useEffect(() => {
+        const handler = () => setAttachments([]);
+        const fn = () => handler();
+        (window as any).wails?.EventsOn?.('chat:clear', fn);
+        // Also listen to our local event bus for safety
+        window.addEventListener('loom:clear-attachments', handler as EventListener);
+        return () => {
+            window.removeEventListener('loom:clear-attachments', handler as EventListener);
+        };
+    }, []);
+
+    // Open attach popup via global shortcut broadcast from App
+    React.useEffect(() => {
+        const handler = () => setAttachOpen(true);
+        window.addEventListener('loom:open-attach', handler as EventListener);
+        return () => window.removeEventListener('loom:open-attach', handler as EventListener);
+    }, []);
+
+    // Debounce helper for attachQuery
+    const useDebounced = (value: string, delayMs: number) => {
+        const [debounced, setDebounced] = React.useState(value);
+        React.useEffect(() => {
+            const t = setTimeout(() => setDebounced(value), delayMs);
+            return () => clearTimeout(t);
+        }, [value, delayMs]);
+        return debounced;
+    };
+    const debouncedQuery = useDebounced(attachQuery, 150);
+
+    // Query filenames using backend FindFiles
+    React.useEffect(() => {
+        if (!attachOpen) return;
+                        if (!debouncedQuery.trim()) { setAttachResults([]); setAttachIndex(0); return; }
+        (AppBridge as any).FindFiles(debouncedQuery, '', 200)
+            .then((list: any) => {
+                const arr = Array.isArray(list) ? (list as string[]) : [];
+                                // Deduplicate and filter out directories (best-effort; FindFiles returns files)
+                                const seen: Record<string, boolean> = {};
+                                const dedup = arr.filter((p) => {
+                                    const k = String(p).toLowerCase();
+                                    if (seen[k]) return false; seen[k] = true; return true;
+                                });
+                                setAttachResults(dedup);
+                setAttachIndex(0);
+            })
+            .catch(() => setAttachResults([]));
+    }, [attachOpen, debouncedQuery]);
+
+    // Push attachments to backend so the engine can inject previews
+    React.useEffect(() => {
+        try {
+            (AppBridge as any).SetAttachments?.(attachments);
+        } catch {}
+    }, [attachments]);
+
     return (
         <Box sx={{ minWidth: 420, width: '20%', display: 'flex', flexDirection: 'column', height: '100vh' }}>
             <Box
@@ -139,8 +202,57 @@ function ChatPanelComponent(props: Props) {
                         onClear();
                     }}
                     focusToken={focusBump}
+                    attachments={attachments}
+                    onRemoveAttachment={(p) => setAttachments((prev) => prev.filter((x) => x !== p))}
+                    onOpenAttach={() => setAttachOpen(true)}
                 />
             </Box>
+            <Dialog open={attachOpen} onClose={() => setAttachOpen(false)} fullWidth maxWidth="sm">
+                <DialogTitle>Attach file</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        autoFocus
+                        fullWidth
+                        placeholder="Type to fuzzy find…"
+                        value={attachQuery}
+                        onChange={(e) => setAttachQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                const item = attachResults[attachIndex];
+                                if (item) {
+                                    setAttachments((prev) => (prev.includes(item) ? prev : [...prev, item]));
+                                    setAttachOpen(false);
+                                    setAttachQuery('');
+                                }
+                            } else if (e.key === 'ArrowDown') {
+                                e.preventDefault();
+                                setAttachIndex((i) => Math.min(Math.max(attachResults.length - 1, 0), i + 1));
+                            } else if (e.key === 'ArrowUp') {
+                                e.preventDefault();
+                                setAttachIndex((i) => Math.max(0, i - 1));
+                            }
+                        }}
+                        size="small"
+                        sx={{ mb: 1 }}
+                    />
+                    <List dense sx={{ maxHeight: 320, overflowY: 'auto' }}>
+                        {attachResults.map((p, idx) => (
+                            <ListItemButton
+                                key={p}
+                                selected={idx === attachIndex}
+                                onMouseEnter={() => setAttachIndex(idx)}
+                                onClick={() => {
+                                    setAttachments((prev) => (prev.includes(p) ? prev : [...prev, p]));
+                                    setAttachOpen(false);
+                                    setAttachQuery('');
+                                }}
+                            >
+                                <ListItemText primaryTypographyProps={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 13 }} primary={p} />
+                            </ListItemButton>
+                        ))}
+                    </List>
+                </DialogContent>
+            </Dialog>
         </Box>
     );
 }

@@ -84,6 +84,15 @@ func (a *App) SendUserMessage(message string) {
 	}
 }
 
+// SetAttachments receives a list of workspace-relative file paths from the UI
+// and forwards them to the engine to be injected into the system prompt context.
+func (a *App) SetAttachments(paths []string) {
+	if a.engine == nil {
+		return
+	}
+	a.engine.SetAttachedFiles(paths)
+}
+
 // ClearConversation clears the current conversation in the engine/memory and emits a UI event to clear local state.
 func (a *App) ClearConversation() {
 	if a.engine != nil {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -82,6 +83,8 @@ type Engine struct {
 		Line   int
 		Column int
 	}
+	// list of workspace-relative file paths attached by the user for extra context
+	attachedFiles []string
 }
 
 // LLM is an interface to abstract different language model providers.
@@ -275,6 +278,10 @@ func (e *Engine) NewConversation() string {
 	id := e.memory.CreateNewConversation()
 	// Immediately remove any non-current empty conversations
 	e.memory.CleanupEmptyConversations(id)
+	// Clear any attached files for the new conversation
+	e.mu.Lock()
+	e.attachedFiles = nil
+	e.mu.Unlock()
 	return id
 }
 
@@ -285,6 +292,10 @@ func (e *Engine) ClearConversation() {
 		// Remove any non-current conversations with no user messages immediately
 		e.memory.CleanupEmptyConversations(newID)
 	}
+	// Clearing the conversation should also clear composer attachments
+	e.mu.Lock()
+	e.attachedFiles = nil
+	e.mu.Unlock()
 	if e.bridge != nil {
 		e.bridge.SendChat("system", "Conversation cleared.")
 	}
@@ -438,6 +449,10 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 		// Append up-to-date UI editor context as a transient system hint for this turn
 		if ui := strings.TrimSpace(e.formatEditorContext()); ui != "" {
 			engineMessages = append(engineMessages, Message{Role: "system", Content: "UI Context: " + ui})
+		}
+		// Append attachments context (file path, name, first 50 lines) as a transient system hint
+		if att := strings.TrimSpace(e.formatAttachmentsContext()); att != "" {
+			engineMessages = append(engineMessages, Message{Role: "system", Content: att})
 		}
 
 		// Call the LLM with the conversation history (+ transient UI hint)
@@ -1010,4 +1025,103 @@ func (e *Engine) requestApproval(call *ToolCall) bool {
 	// Wait for response
 	approved := <-responseCh
 	return approved
+}
+
+// SetAttachedFiles stores the list of workspace-relative files attached by the user.
+// Paths are normalized to forward slashes and trimmed. Empty entries are ignored.
+func (e *Engine) SetAttachedFiles(paths []string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	normalized := make([]string, 0, len(paths))
+	for _, p := range paths {
+		s := strings.TrimSpace(p)
+		if s == "" {
+			continue
+		}
+		s = strings.ReplaceAll(s, "\\", "/")
+		// Remove any leading ./
+		for strings.HasPrefix(s, "./") {
+			s = strings.TrimPrefix(s, "./")
+		}
+		normalized = append(normalized, s)
+	}
+	e.attachedFiles = normalized
+}
+
+// formatAttachmentsContext returns a system message block describing attachments
+// and including the first 50 lines of each file. This is transient per turn and
+// not persisted in conversation memory.
+func (e *Engine) formatAttachmentsContext() string {
+	e.mu.RLock()
+	files := append([]string(nil), e.attachedFiles...)
+	root := strings.TrimSpace(e.workspaceDir)
+	e.mu.RUnlock()
+	if len(files) == 0 || root == "" {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("Attachments:\n")
+	for _, rel := range files {
+		// Resolve to absolute path and ensure it is within workspace
+		// Ensure forward slashes in rel
+		relUnix := strings.ReplaceAll(strings.TrimSpace(rel), "\\", "/")
+		if relUnix == "" {
+			continue
+		}
+		// Safe join
+		absRoot, err1 := os.Getwd()
+		_ = err1 // silence static analysis; we'll recompute below anyway
+		// Build absolute paths using filepath to avoid path traversal
+		absRoot, _ = filepath.Abs(root)
+		absJoined, _ := filepath.Abs(filepath.Clean(filepath.Join(absRoot, relUnix)))
+		// Validate within workspace
+		if absJoined != absRoot && !strings.HasPrefix(absJoined+string(os.PathSeparator), absRoot+string(os.PathSeparator)) {
+			// Skip paths outside workspace
+			continue
+		}
+		// Read file content
+		data, err := os.ReadFile(absJoined)
+		name := filepath.Base(relUnix)
+		if err != nil {
+			b.WriteString("- ")
+			b.WriteString(name)
+			b.WriteString(" — ")
+			b.WriteString(relUnix)
+			b.WriteString("\n  (unreadable: ")
+			b.WriteString(err.Error())
+			b.WriteString(")\n")
+			continue
+		}
+		// Take first 50 lines
+		preview := firstNLines(string(data), 50)
+		b.WriteString("- ")
+		b.WriteString(name)
+		b.WriteString(" — ")
+		b.WriteString(relUnix)
+		b.WriteString("\n  The user attached this file for additional context. Use it if relevant.\n")
+		b.WriteString("  First 50 lines:\n")
+		// Indent preview lines slightly to keep prompt tidy without Markdown fences
+		for _, line := range strings.Split(preview, "\n") {
+			b.WriteString("    ")
+			b.WriteString(line)
+			b.WriteString("\n")
+		}
+	}
+	out := strings.TrimSpace(b.String())
+	if out == "" {
+		return ""
+	}
+	return out
+}
+
+// firstNLines returns the first n lines from s without trailing newline trimming.
+func firstNLines(s string, n int) string {
+	if n <= 0 || s == "" {
+		return ""
+	}
+	lines := strings.Split(s, "\n")
+	if len(lines) > n {
+		lines = lines[:n]
+	}
+	return strings.Join(lines, "\n")
 }
