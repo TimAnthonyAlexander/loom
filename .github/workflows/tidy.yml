@@ -1,0 +1,20 @@
+name: Go mod tidy guard
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  tidy-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go mod tidy
+      - name: Fail if go.mod/go.sum changed
+        run: |
+          git diff --exit-code -- go.mod go.sum || \
+          (echo "Run 'go mod tidy' and commit changes." && exit 1)

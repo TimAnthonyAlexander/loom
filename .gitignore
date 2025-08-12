@@ -58,3 +58,5 @@ docs.txt
 
 # Pre-commit
 .secrets.baseline
+codeql-db
+
