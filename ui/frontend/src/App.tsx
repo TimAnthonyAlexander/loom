@@ -631,8 +631,8 @@ const App: React.FC = () => {
                     onOpenRules={() => setRulesOpen(true)}
                     onOpenSettings={() => setSettingsOpen(true)}
                     onOpenCosts={() => setCostsOpen(true)}
-                    totalInUSD={totalInUSD}
-                    totalOutUSD={totalOutUSD}
+                    totalInUSD={gTotalInUSD}
+                    totalOutUSD={gTotalOutUSD}
                     dirCache={dirCache}
                     expandedDirs={expandedDirs}
                     onToggleDir={toggleDir}
