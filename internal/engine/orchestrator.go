@@ -387,7 +387,8 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 	if !hasSystem {
 		// Load dynamic rules and inject into system prompt
 		userRules, projectRules, _ := config.LoadRules(e.workspaceDir)
-		base := GenerateSystemPromptWithRules(toolSchemas, userRules, projectRules)
+		mems := loadUserMemoriesForPrompt()
+		base := GenerateSystemPromptWithRules(toolSchemas, userRules, projectRules, mems)
 		if ui := strings.TrimSpace(e.formatEditorContext()); ui != "" {
 			base = strings.TrimSpace(base) + "\n\nUI Context:\n- " + ui
 		}
@@ -1121,4 +1122,40 @@ func firstNLines(s string, n int) string {
 		lines = lines[:n]
 	}
 	return strings.Join(lines, "\n")
+}
+
+// loadUserMemoriesForPrompt reads ~/.loom/memories.json and returns entries for prompt injection.
+func loadUserMemoriesForPrompt() []MemoryEntry {
+	type mem struct {
+		ID   string `json:"id"`
+		Text string `json:"text"`
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	path := filepath.Join(home, ".loom", "memories.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var list []mem
+	if json.Unmarshal(data, &list) == nil {
+		out := make([]MemoryEntry, 0, len(list))
+		for _, it := range list {
+			out = append(out, MemoryEntry{ID: strings.TrimSpace(it.ID), Text: strings.TrimSpace(it.Text)})
+		}
+		return out
+	}
+	var wrapper struct {
+		Memories []mem `json:"memories"`
+	}
+	if json.Unmarshal(data, &wrapper) == nil && wrapper.Memories != nil {
+		out := make([]MemoryEntry, 0, len(wrapper.Memories))
+		for _, it := range wrapper.Memories {
+			out = append(out, MemoryEntry{ID: strings.TrimSpace(it.ID), Text: strings.TrimSpace(it.Text)})
+		}
+		return out
+	}
+	return nil
 }

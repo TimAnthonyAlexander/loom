@@ -253,6 +253,11 @@ func registerTools(registry *tool.Registry, workspacePath string) {
 	if err := tool.RegisterHTTPRequest(registry); err != nil {
 		log.Printf("Failed to register http_request tool: %v", err)
 	}
+
+	// Memories tool (user-scoped)
+	if err := tool.RegisterMemories(registry); err != nil {
+		log.Printf("Failed to register memories tool: %v", err)
+	}
 }
 
 // normalizeWorkspacePath expands a leading ~ and returns a cleaned absolute path

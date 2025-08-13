@@ -524,6 +524,8 @@ func (a *App) SetWorkspace(path string) {
 		}
 		if err := tool.RegisterHTTPRequest(newRegistry); err != nil {
 		}
+		if err := tool.RegisterMemories(newRegistry); err != nil {
+		}
 		a.tools = newRegistry
 		if a.engine != nil {
 			a.engine.WithRegistry(newRegistry)
