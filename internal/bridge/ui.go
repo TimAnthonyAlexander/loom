@@ -20,6 +20,7 @@ import (
 	"github.com/loom/loom/internal/config"
 	"github.com/loom/loom/internal/engine"
 	"github.com/loom/loom/internal/indexer"
+	"github.com/loom/loom/internal/mcp"
 	"github.com/loom/loom/internal/tool"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -35,6 +36,10 @@ type App struct {
 	settings config.Settings
 	// cached gitignore matcher for current workspace
 	gitMatcher gitignore.Matcher
+	// mcp manager persisted across SetWorkspace calls to avoid double startups
+	mcpManager *mcp.Manager
+	// debounce timestamp for SetWorkspace to coalesce rapid calls
+	lastWorkspaceSet time.Time
 }
 
 // NewApp creates a new App application struct.
@@ -578,6 +583,13 @@ func (a *App) SetWorkspace(path string) {
 	}
 	// Normalize provided path: expand ~ and make absolute/clean
 	norm := normalizeWorkspacePath(path)
+	// Debounce rapid calls (e.g., HMR) within 400ms
+	now := time.Now()
+	if now.Sub(a.lastWorkspaceSet) < 400*time.Millisecond && a.engine != nil && a.engine.Workspace() == norm {
+		a.lastWorkspaceSet = now
+		return
+	}
+	a.lastWorkspaceSet = now
 	// Update engine workspace
 	if a.engine != nil {
 		a.engine.WithWorkspace(norm)
@@ -612,6 +624,61 @@ func (a *App) SetWorkspace(path string) {
 		}
 		if err := tool.RegisterMemories(newRegistry); err != nil {
 		}
+		// Register MCP tools asynchronously so workspace switch doesn't block
+		if norm != "" {
+			go func(ws string, reg *tool.Registry) {
+				cfgs, err := config.LoadProjectMCP(ws)
+				if err != nil {
+					return
+				}
+				if len(cfgs) == 0 {
+					return
+				}
+				// Reuse existing manager to avoid duplicate startups
+				if a.mcpManager == nil {
+					a.mcpManager = mcp.NewManager()
+				}
+				if err := a.mcpManager.Start(cfgs); err != nil {
+					return
+				}
+				// Give the MCP servers a brief moment to finish init
+				time.Sleep(500 * time.Millisecond)
+				toolsets, err := a.mcpManager.ListTools()
+				if err != nil {
+					return
+				}
+				for alias, tools := range toolsets {
+					serverCfg := cfgs[alias]
+					timeout := time.Duration(serverCfg.TimeoutSec) * time.Second
+					if timeout == 0 {
+						timeout = 60 * time.Second
+					}
+					for _, t := range tools {
+						server := alias
+						toolName := t.Name
+						safe := serverCfg.Safe
+						name := sanitizeToolName("mcp_" + server + "__" + toolName)
+						_ = reg.Register(tool.Definition{
+							Name:        name,
+							Description: t.Description,
+							JSONSchema:  t.InputSchema,
+							Safe:        safe,
+							Handler: func(ctx context.Context, raw json.RawMessage) (interface{}, error) {
+								out, err := a.mcpManager.Call(server, toolName, raw, timeout)
+								if err != nil {
+									return "Error: " + err.Error(), nil
+								}
+								return out, nil
+							},
+						})
+					}
+				}
+				// Notify frontend that tools changed (optional hook)
+				if a.ctx != nil {
+					runtime.EventsEmit(a.ctx, "system:tools_updated")
+				}
+			}(norm, newRegistry)
+		}
 		a.tools = newRegistry
 		if a.engine != nil {
 			a.engine.WithRegistry(newRegistry)
@@ -626,6 +693,92 @@ func (a *App) SetWorkspace(path string) {
 	a.gitMatcher = a.buildGitignoreMatcher(norm)
 	// After switching, log current rules snapshot for debug
 	config.LoadRules(path)
+}
+
+// sanitizeToolName keeps [a-zA-Z0-9_] and maps others to '_'
+func sanitizeToolName(s string) string {
+	b := make([]rune, 0, len(s))
+	for _, r := range s {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' {
+			b = append(b, r)
+		} else {
+			b = append(b, '_')
+		}
+	}
+	return string(b)
+}
+
+// ReloadMCP re-reads <workspace>/.loom/mcp.json and rebuilds the registry (core + MCP)
+func (a *App) ReloadMCP() {
+	if a.engine == nil {
+		return
+	}
+	ws := strings.TrimSpace(a.engine.Workspace())
+	if ws == "" {
+		return
+	}
+	newRegistry := tool.NewRegistry().WithUI(a)
+	// re-register core tools similar to SetWorkspace
+	if err := tool.RegisterReadFile(newRegistry, ws); err != nil {
+	}
+	idx := indexer.NewRipgrepIndexer(ws)
+	if err := tool.RegisterSearchCode(newRegistry, idx); err != nil {
+	}
+	if err := tool.RegisterEditFile(newRegistry, ws); err != nil {
+	}
+	if err := tool.RegisterApplyEdit(newRegistry, ws); err != nil {
+	}
+	if err := tool.RegisterListDir(newRegistry, ws); err != nil {
+	}
+	if err := tool.RegisterFinalize(newRegistry); err != nil {
+	}
+	if err := tool.RegisterRunShell(newRegistry, ws); err != nil {
+	}
+	if err := tool.RegisterApplyShell(newRegistry, ws); err != nil {
+	}
+	if err := tool.RegisterHTTPRequest(newRegistry); err != nil {
+	}
+	if err := tool.RegisterMemories(newRegistry); err != nil {
+	}
+	// Add MCP tools
+	if cfgs, err := config.LoadProjectMCP(ws); err == nil && len(cfgs) > 0 {
+		mgr := mcp.NewManager()
+		if mgr.Start(cfgs) == nil {
+			if toolsets, err := mgr.ListTools(); err == nil {
+				for alias, tools := range toolsets {
+					serverCfg := cfgs[alias]
+					timeout := time.Duration(serverCfg.TimeoutSec) * time.Second
+					if timeout == 0 {
+						timeout = 60 * time.Second
+					}
+					for _, t := range tools {
+						server := alias
+						toolName := t.Name
+						safe := serverCfg.Safe
+						name := sanitizeToolName("mcp_" + server + "__" + toolName)
+						_ = newRegistry.Register(tool.Definition{
+							Name:        name,
+							Description: t.Description,
+							JSONSchema:  t.InputSchema,
+							Safe:        safe,
+							Handler: func(ctx context.Context, raw json.RawMessage) (interface{}, error) {
+								out, err := mgr.Call(server, toolName, raw, timeout)
+								if err != nil {
+									return "Error: " + err.Error(), nil
+								}
+								return out, nil
+							},
+						})
+					}
+				}
+			}
+		}
+	}
+
+	a.tools = newRegistry
+	if a.engine != nil {
+		a.engine.WithRegistry(newRegistry)
+	}
 }
 
 // buildGitignoreMatcher scans the workspace for .gitignore files and builds a matcher

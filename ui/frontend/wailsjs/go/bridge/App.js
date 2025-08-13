@@ -94,6 +94,10 @@ export function ReadWorkspaceFile(arg1) {
   return window['go']['bridge']['App']['ReadWorkspaceFile'](arg1);
 }
 
+export function ReloadMCP() {
+  return window['go']['bridge']['App']['ReloadMCP']();
+}
+
 export function ResetGlobalUsage() {
   return window['go']['bridge']['App']['ResetGlobalUsage']();
 }

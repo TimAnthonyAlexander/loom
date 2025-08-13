@@ -53,6 +53,8 @@ export function PromptApproval(arg1:string,arg2:string,arg3:string):Promise<bool
 
 export function ReadWorkspaceFile(arg1:string):Promise<bridge.UIReadFileResult>;
 
+export function ReloadMCP():Promise<void>;
+
 export function ResetGlobalUsage():Promise<void>;
 
 export function ResetUsage():Promise<void>;
