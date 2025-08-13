@@ -73,6 +73,16 @@ function ChatPanelComponent(props: Props) {
 
     const [focusBump, setFocusBump] = React.useState<number>(0);
 
+    // When LLM finishes (busy goes from true -> false), refocus the composer
+    const prevBusyRef = React.useRef<boolean>(busy);
+    React.useEffect(() => {
+        if (prevBusyRef.current && !busy) {
+            focusTokenRef.current += 1;
+            setFocusBump(focusTokenRef.current);
+        }
+        prevBusyRef.current = busy;
+    }, [busy]);
+
     const [attachments, setAttachments] = React.useState<string[]>([]);
     const [attachOpen, setAttachOpen] = React.useState<boolean>(false);
     const [attachQuery, setAttachQuery] = React.useState<string>('');
