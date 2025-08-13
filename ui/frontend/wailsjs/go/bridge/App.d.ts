@@ -15,6 +15,8 @@ export function ChooseWorkspace():Promise<string>;
 
 export function ClearConversation():Promise<void>;
 
+export function DeleteMemory(arg1:string):Promise<boolean>;
+
 export function EmitAssistant(arg1:string):Promise<void>;
 
 export function EmitBilling(arg1:string,arg2:string,arg3:number,arg4:number,arg5:number,arg6:number,arg7:number):Promise<void>;
@@ -26,6 +28,8 @@ export function FindFiles(arg1:string,arg2:string,arg3:number):Promise<Array<str
 export function GetConversations():Promise<Record<string, any>>;
 
 export function GetGlobalUsage():Promise<Record<string, any>>;
+
+export function GetMemories():Promise<Array<Record<string, string>>>;
 
 export function GetRules():Promise<Record<string, Array<string>>>;
 

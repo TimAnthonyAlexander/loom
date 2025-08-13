@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -452,6 +453,91 @@ func (a *App) GetGlobalUsage() map[string]interface{} {
 // ResetGlobalUsage clears global usage aggregates.
 func (a *App) ResetGlobalUsage() {
 	_ = config.ResetGlobalUsage()
+}
+
+// GetMemories returns the user-scoped memories from ~/.loom/memories.json
+func (a *App) GetMemories() []map[string]string {
+	type memoryItem struct {
+		ID   string `json:"id"`
+		Text string `json:"text"`
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return []map[string]string{}
+	}
+	path := filepath.Join(home, ".loom", "memories.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return []map[string]string{}
+	}
+	var list []memoryItem
+	if json.Unmarshal(data, &list) != nil {
+		var wrapper struct {
+			Memories []memoryItem `json:"memories"`
+		}
+		if json.Unmarshal(data, &wrapper) == nil && wrapper.Memories != nil {
+			list = wrapper.Memories
+		} else {
+			return []map[string]string{}
+		}
+	}
+	out := make([]map[string]string, 0, len(list))
+	for _, m := range list {
+		out = append(out, map[string]string{"id": m.ID, "text": m.Text})
+	}
+	return out
+}
+
+// DeleteMemory removes a memory by id and persists the change.
+func (a *App) DeleteMemory(id string) bool {
+	if strings.TrimSpace(id) == "" {
+		return false
+	}
+	type memoryItem struct {
+		ID   string `json:"id"`
+		Text string `json:"text"`
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+	dir := filepath.Join(home, ".loom")
+	_ = os.MkdirAll(dir, 0o755)
+	path := filepath.Join(dir, "memories.json")
+	data, err := os.ReadFile(path)
+	var list []memoryItem
+	if err == nil {
+		if json.Unmarshal(data, &list) != nil {
+			var wrapper struct {
+				Memories []memoryItem `json:"memories"`
+			}
+			if json.Unmarshal(data, &wrapper) == nil && wrapper.Memories != nil {
+				list = wrapper.Memories
+			}
+		}
+	}
+	// Filter
+	next := make([]memoryItem, 0, len(list))
+	removed := false
+	for _, m := range list {
+		if m.ID == id {
+			removed = true
+			continue
+		}
+		next = append(next, m)
+	}
+	if !removed {
+		return false
+	}
+	// Save as array form
+	bytes, err := json.MarshalIndent(next, "", "  ")
+	if err != nil {
+		return false
+	}
+	if err := os.WriteFile(path, bytes, 0o644); err != nil {
+		return false
+	}
+	return true
 }
 
 // SaveSettings saves settings provided by the frontend.

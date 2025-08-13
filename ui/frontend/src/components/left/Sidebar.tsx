@@ -2,12 +2,14 @@ import React from 'react';
 import { Box, Typography, IconButton, Tooltip, Paper } from '@mui/material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RuleIcon from '@mui/icons-material/Rule';
+import MemoryIcon from '@mui/icons-material/BookmarkBorder';
 import FileExplorer from './Files/FileExplorer';
 import { UIFileEntry } from '../../types/ui';
 
 type SidebarProps = {
     onOpenWorkspace: () => void;
     onOpenRules: () => void;
+    onOpenMemories?: () => void;
     onOpenSettings: () => void;
     onOpenCosts: () => void;
     totalInUSD: number;
@@ -23,6 +25,7 @@ function Sidebar(props: SidebarProps) {
         onOpenWorkspace,
         onOpenRules,
         onOpenSettings,
+        onOpenMemories,
         onOpenCosts,
         totalInUSD,
         totalOutUSD,
@@ -59,6 +62,11 @@ function Sidebar(props: SidebarProps) {
                     <Tooltip title="Rules">
                         <IconButton size="small" onClick={onOpenRules}>
                             <RuleIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Memories">
+                        <IconButton size="small" onClick={onOpenMemories}>
+                            <MemoryIcon fontSize="small" />
                         </IconButton>
                     </Tooltip>
                     <Tooltip title="Settings">

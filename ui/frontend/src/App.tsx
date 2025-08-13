@@ -13,6 +13,7 @@ import RulesDialog from './components/dialogs/RulesDialog';
 import CostsDialog from './components/dialogs/CostsDialog';
 import WorkspaceDialog from './components/dialogs/WorkspaceDialog';
 import SearchDialog from './components/dialogs/SearchDialog';
+import MemoriesDialog from './components/dialogs/MemoriesDialog';
 import { ChatMessage, ApprovalRequest, UIFileEntry, UIListDirResult, ConversationListItem, EditorTabItem } from './types/ui';
 import { guessLanguage } from './utils/language';
 import { writeFile } from './services/files';
@@ -35,6 +36,7 @@ const App: React.FC = () => {
     const [autoApproveShell, setAutoApproveShell] = useState<boolean>(false);
     const [autoApproveEdits, setAutoApproveEdits] = useState<boolean>(false);
     const [rulesOpen, setRulesOpen] = useState<boolean>(false);
+    const [memoriesOpen, setMemoriesOpen] = useState<boolean>(false);
     const [userRules, setUserRules] = useState<string[]>([]);
     const [projectRules, setProjectRules] = useState<string[]>([]);
     const [newUserRule, setNewUserRule] = useState<string>('');
@@ -629,6 +631,7 @@ const App: React.FC = () => {
                 <Sidebar
                     onOpenWorkspace={() => setWorkspaceOpen(true)}
                     onOpenRules={() => setRulesOpen(true)}
+                    onOpenMemories={() => setMemoriesOpen(true)}
                     onOpenSettings={() => setSettingsOpen(true)}
                     onOpenCosts={() => setCostsOpen(true)}
                     totalInUSD={gTotalInUSD}
@@ -704,6 +707,7 @@ const App: React.FC = () => {
                 onSave={() => { AppBridge.SaveRules({ user: userRules, project: projectRules }).finally(() => setRulesOpen(false)); }}
                 onClose={() => setRulesOpen(false)}
             />
+            <MemoriesDialog open={memoriesOpen} onClose={() => setMemoriesOpen(false)} />
             <SettingsDialog
                 open={settingsOpen}
                 openaiKey={openaiKey}

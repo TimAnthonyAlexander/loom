@@ -18,6 +18,10 @@ export function ClearConversation() {
   return window['go']['bridge']['App']['ClearConversation']();
 }
 
+export function DeleteMemory(arg1) {
+  return window['go']['bridge']['App']['DeleteMemory'](arg1);
+}
+
 export function EmitAssistant(arg1) {
   return window['go']['bridge']['App']['EmitAssistant'](arg1);
 }
@@ -40,6 +44,10 @@ export function GetConversations() {
 
 export function GetGlobalUsage() {
   return window['go']['bridge']['App']['GetGlobalUsage']();
+}
+
+export function GetMemories() {
+  return window['go']['bridge']['App']['GetMemories']();
 }
 
 export function GetRules() {
