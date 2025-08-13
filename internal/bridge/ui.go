@@ -1050,14 +1050,6 @@ func (a *App) PromptApproval(actionID, summary, diff string) bool {
 	return false // Placeholder return, actual approval handled asynchronously
 }
 
-// min returns the smaller of a and b
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func boolToStr(b bool) string {
 	if b {
 		return "true"

@@ -11,11 +11,6 @@ type Model struct {
 	ID             string // e.g., "claude-opus-4-20250514", "gpt-4.1", "llama3.1:8b"
 }
 
-// String returns the formatted model string with provider prefix
-func (m Model) String() string {
-	return fmt.Sprintf("%s:%s", m.ProviderPrefix, m.ID)
-}
-
 // ParseModel parses a model string in the format "provider:model_id"
 func ParseModel(modelString string) (Model, error) {
 	parts := strings.SplitN(modelString, ":", 2)

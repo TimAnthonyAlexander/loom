@@ -41,13 +41,6 @@ func NewRipgrepIndexer(workspacePath string) *RipgrepIndexer {
 	}
 }
 
-// SetRipgrepPath sets a custom path to the ripgrep executable.
-func (rg *RipgrepIndexer) SetRipgrepPath(path string) {
-	rg.mu.Lock()
-	defer rg.mu.Unlock()
-	rg.rgPath = path
-}
-
 // Search performs a code search using ripgrep.
 func (rg *RipgrepIndexer) Search(query string, filePattern string, maxResults int) (*RipgrepResult, error) {
 	rg.mu.Lock()

@@ -184,6 +184,72 @@ Supported:
 
 Note: commands are not sandboxed; only the working directory is confined.
 
+## MCP (Model Context Protocol)
+
+Loom can connect to external MCP servers over stdio to expose additional tools (e.g., Jira, Confluence, Git, cloud APIs). MCP tools appear alongside built-in tools and obey Loom’s approval model.
+
+### How it works
+	•	Transport: stdio with newline-delimited JSON (one JSON object per line). Servers must write logs to stderr only; stdout is reserved for JSON.
+	•	Handshake: Loom sends one initialize, waits for the server’s result, then sends notifications/initialized, and finally lists tools via tools/list.
+	•	Discovery: tools from each server are namespaced by server alias.
+
+### Enable servers
+
+Create a project config at <workspace>/.loom/mcp.json:
+
+```
+{
+  "mcpServers": {
+    "mcp-atlassian-jira": {
+      "command": "uvx",
+      "args": [
+        "mcp-atlassian",
+        "--read-only",
+        "--jira-url=https://your-domain.atlassian.net/",
+        "--jira-username=${JIRA_USER}",
+        "--jira-token=${JIRA_TOKEN}"
+      ],
+      "env": {
+        "PYTHONUNBUFFERED": "1"
+      }
+    }
+  }
+}
+```
+
+Secrets are read from the environment; don’t commit them. Loom canonicalizes this config and starts one process per alias. It won’t restart if the config is unchanged.
+
+### Minimal setup
+
+#### macOS: install uv once (Python package runner)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+#### Warm the MCP package cache (avoids first-run latency)
+uvx mcp-atlassian --help
+
+### Runtime behavior
+	•	Loom starts each server once, performs the MCP handshake, then calls tools/list.
+	•	If a server is slow or still authenticating, Loom waits (long-lived initializer) and surfaces any errors in logs.
+	•	Tool calls use tools/call with the server’s declared JSON schema.
+
+### Example: Atlassian (read-only)
+
+The Atlassian MCP exposes tools like jira_get_issue, jira_search, confluence_search (exact set depends on the server). Keep --read-only unless you explicitly want write actions.
+
+#### Troubleshooting
+	•	“0 servers with tools”: the handshake didn’t finish. Verify the server writes JSON on stdout (newline-terminated) and logs to stderr.
+	•	Timeouts on first run: pre-warm with uvx <server> --help, or increase the server init timeout in Loom settings.
+	•	Duplicate starts: Loom debounces and hashes config; ensure you’re not rewriting .loom/mcp.json on every save.
+	•	Atlassian auth: confirm JIRA_USER and JIRA_TOKEN (or Confluence PAT) are valid and not expired.
+
+#### Security notes
+	•	Treat MCP servers as code with your privileges. Prefer read-only flags and least-privilege tokens.
+	•	All destructive tools still require Loom approval unless you enable auto-approval (not recommended for external servers).
+
+### Removing a server
+
+Delete its entry from .loom/mcp.json (or the file). Loom detects the change and stops the process.
+
 ## Model adapters
 - OpenAI (`internal/adapter/openai`)
   - Chat/Responses API with tool calls and streaming
