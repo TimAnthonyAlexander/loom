@@ -21,14 +21,23 @@ type ProjectMCP struct {
 	MCPServers map[string]MCPServerConfig `json:"mcpServers"`
 }
 
-// LoadProjectMCP loads MCP server configuration from <workspace>/.loom/mcp.json.
-// If the file is missing, it returns an empty map without error.
+// LoadProjectMCP loads MCP server configuration from the workspace.
+// It first prefers <workspace>/.loom/mcp.json and, if absent, falls back to <workspace>/.cursor/mcp.json.
+// If neither file exists, it returns an empty map without error.
 func LoadProjectMCP(workspace string) (map[string]MCPServerConfig, error) {
 	ws := filepath.Clean(stringsTrimSpaceSafe(workspace))
 	if ws == "" {
 		return map[string]MCPServerConfig{}, errors.New("workspace path is empty")
 	}
-	path := filepath.Join(ws, ".loom", "mcp.json")
+
+	path, findErr := FindProjectMCPPath(ws)
+	if findErr != nil {
+		if errors.Is(findErr, os.ErrNotExist) {
+			return map[string]MCPServerConfig{}, nil
+		}
+		return map[string]MCPServerConfig{}, findErr
+	}
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -47,6 +56,29 @@ func LoadProjectMCP(workspace string) (map[string]MCPServerConfig, error) {
 		return map[string]MCPServerConfig{}, nil
 	}
 	return cfg.MCPServers, nil
+}
+
+// FindProjectMCPPath returns the first existing MCP config path for a workspace.
+// Preference order:
+//  1. <workspace>/.loom/mcp.json
+//  2. <workspace>/.cursor/mcp.json
+//
+// If none exist, returns os.ErrNotExist.
+func FindProjectMCPPath(workspace string) (string, error) {
+	ws := filepath.Clean(stringsTrimSpaceSafe(workspace))
+	if ws == "" {
+		return "", errors.New("workspace path is empty")
+	}
+	candidates := []string{
+		filepath.Join(ws, ".loom", "mcp.json"),
+		filepath.Join(ws, ".cursor", "mcp.json"),
+	}
+	for _, p := range candidates {
+		if info, err := os.Stat(p); err == nil && !info.IsDir() {
+			return p, nil
+		}
+	}
+	return "", os.ErrNotExist
 }
 
 // stringsTrimSpaceSafe is a tiny helper to avoid importing strings directly here

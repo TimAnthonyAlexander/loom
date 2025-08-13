@@ -268,10 +268,10 @@ func registerTools(registry *tool.Registry, workspacePath string) {
 
 // registerMCPTools loads <workspace>/.loom/mcp.json, starts servers, and registers their tools
 func registerMCPTools(registry *tool.Registry, workspacePath string) error {
-	// Log where we are looking for project MCP config
-	confPath := filepath.Join(workspacePath, ".loom", "mcp.json")
-	if _, statErr := os.Stat(confPath); statErr != nil {
-		log.Printf("[mcp] no project MCP config at %s (err=%v)", confPath, statErr)
+	// Log where we are looking for project MCP config (supports .loom and .cursor)
+	confPath, err := config.FindProjectMCPPath(workspacePath)
+	if err != nil {
+		log.Printf("[mcp] no project MCP config found in .loom/ or .cursor/ (workspace=%s, err=%v)", workspacePath, err)
 	} else {
 		log.Printf("[mcp] found project MCP config at %s", confPath)
 	}
