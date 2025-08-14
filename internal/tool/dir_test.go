@@ -40,7 +40,7 @@ func TestListDir_BasicAndFile(t *testing.T) {
 	if len(lr.Entries) != 2 {
 		t.Fatalf("unexpected entries count: %d", len(lr.Entries))
 	}
-	if !(lr.Entries[0].IsDir && lr.Entries[0].Name == "sub") {
+	if !lr.Entries[0].IsDir || lr.Entries[0].Name != "sub" {
 		t.Fatalf("expected first entry to be sub dir: %+v", lr.Entries[0])
 	}
 	if lr.Entries[1].IsDir || lr.Entries[1].Name != "file.txt" {

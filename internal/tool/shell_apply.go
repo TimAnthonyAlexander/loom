@@ -147,10 +147,3 @@ func applyShell(parentCtx context.Context, workspacePath string, args ApplyShell
 	}
 	return result, nil
 }
-
-// withContext rebinds cmd to use the provided context if not already constructed with it.
-func withContext(cmd *exec.Cmd, ctx context.Context) *exec.Cmd {
-	// exec.CommandContext already set the context; nothing to do here.
-	// Function kept for parity/clarity.
-	return cmd
-}

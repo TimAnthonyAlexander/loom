@@ -132,7 +132,7 @@ func performHTTPRequest(parentCtx context.Context, args HTTPRequestArgs) (*HTTPR
 			DurationMs: int(duration / time.Millisecond),
 		}, nil
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Read response body (unbounded; assumes dev/local APIs)
 	data, readErr := io.ReadAll(resp.Body)

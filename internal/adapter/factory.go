@@ -49,7 +49,7 @@ func New(config Config) (engine.LLM, error) {
 	switch config.Provider {
 	case ProviderOpenAI:
 		if config.APIKey == "" {
-			return nil, errors.New("OpenAI API key not set. Set it in Settings.")
+			return nil, errors.New("openai API key not set; set it in Settings")
 		}
 		// Prefer Responses API for o-series and gpt-5 models, or when explicitly requested
 		useResponses := false
@@ -65,7 +65,7 @@ func New(config Config) (engine.LLM, error) {
 
 	case ProviderAnthropic:
 		if config.APIKey == "" {
-			return nil, errors.New("Anthropic API key not set. Set it in Settings.")
+			return nil, errors.New("anthropic API key not set; set it in Settings")
 		}
 		return anthropic.New(config.APIKey, config.Model), nil
 

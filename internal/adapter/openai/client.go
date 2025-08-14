@@ -188,7 +188,7 @@ func (c *Client) Chat(
 			}
 			return
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		// Check response status
 		if resp.StatusCode != http.StatusOK {

@@ -17,10 +17,9 @@ type Message struct {
 
 // Conversation manages a single conversation thread with the LLM.
 type Conversation struct {
-	project   *Project
-	id        string
-	messages  []Message
-	summaries []string // Optional summaries of previous message chunks
+	project  *Project
+	id       string
+	messages []Message
 }
 
 // NewConversation creates a new conversation.

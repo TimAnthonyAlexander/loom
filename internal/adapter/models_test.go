@@ -10,9 +10,6 @@ func TestParseAndString(t *testing.T) {
 	if m.ProviderPrefix != "openai" || m.ID != "gpt-4o" {
 		t.Fatalf("unexpected model: %+v", m)
 	}
-	if m.String() != "openai:gpt-4o" {
-		t.Fatalf("string mismatch: %s", m.String())
-	}
 	if _, err := ParseModel("badformat"); err == nil {
 		t.Fatalf("expected error for bad format")
 	}

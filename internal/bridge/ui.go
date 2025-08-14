@@ -20,6 +20,7 @@ import (
 	"github.com/loom/loom/internal/config"
 	"github.com/loom/loom/internal/engine"
 	"github.com/loom/loom/internal/indexer"
+	"github.com/loom/loom/internal/mcp"
 	"github.com/loom/loom/internal/tool"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -35,6 +36,10 @@ type App struct {
 	settings config.Settings
 	// cached gitignore matcher for current workspace
 	gitMatcher gitignore.Matcher
+	// mcp manager persisted across SetWorkspace calls to avoid double startups
+	mcpManager *mcp.Manager
+	// debounce timestamp for SetWorkspace to coalesce rapid calls
+	lastWorkspaceSet time.Time
 }
 
 // NewApp creates a new App application struct.
@@ -195,8 +200,7 @@ func (a *App) SetModel(model string) {
 		providerPrefix = string(provider)
 	}
 	a.settings.LastModel = providerPrefix + ":" + modelID
-	if err := config.Save(a.settings); err != nil {
-	}
+	_ = config.Save(a.settings)
 
 	// Update the configuration
 	newConfig := adapter.Config{
@@ -235,9 +239,7 @@ func (a *App) ensureSettingsLoaded() {
 // applyAndSaveSettings persists the provided settings and applies them to the current engine if applicable.
 func (a *App) applyAndSaveSettings(s config.Settings) {
 	// Persist to disk
-	if err := config.Save(s); err != nil {
-		return
-	}
+	_ = config.Save(s)
 
 	// Update in-memory settings
 	a.settings = s
@@ -279,10 +281,7 @@ func (a *App) applyAndSaveSettings(s config.Settings) {
 
 // SendChat emits a chat message to the UI.
 func (a *App) SendChat(role, text string) {
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
+	defer func() { _ = recover() }()
 
 	// Create a chat message
 	message := map[string]interface{}{
@@ -578,6 +577,13 @@ func (a *App) SetWorkspace(path string) {
 	}
 	// Normalize provided path: expand ~ and make absolute/clean
 	norm := normalizeWorkspacePath(path)
+	// Debounce rapid calls (e.g., HMR) within 400ms
+	now := time.Now()
+	if now.Sub(a.lastWorkspaceSet) < 400*time.Millisecond && a.engine != nil && a.engine.Workspace() == norm {
+		a.lastWorkspaceSet = now
+		return
+	}
+	a.lastWorkspaceSet = now
 	// Update engine workspace
 	if a.engine != nil {
 		a.engine.WithWorkspace(norm)
@@ -591,26 +597,69 @@ func (a *App) SetWorkspace(path string) {
 		// In this context, we expect the Registry to already contain tools registered at startup.
 		// For correctness, try to re-register using the same helpers.
 		// Note: we rely on tool package Register* functions.
-		if err := tool.RegisterReadFile(newRegistry, norm); err != nil {
-		}
+		_ = tool.RegisterReadFile(newRegistry, norm)
 		idx := indexer.NewRipgrepIndexer(norm)
-		if err := tool.RegisterSearchCode(newRegistry, idx); err != nil {
-		}
-		if err := tool.RegisterEditFile(newRegistry, norm); err != nil {
-		}
-		if err := tool.RegisterApplyEdit(newRegistry, norm); err != nil {
-		}
-		if err := tool.RegisterListDir(newRegistry, norm); err != nil {
-		}
-		if err := tool.RegisterFinalize(newRegistry); err != nil {
-		}
-		if err := tool.RegisterRunShell(newRegistry, norm); err != nil {
-		}
-		if err := tool.RegisterApplyShell(newRegistry, norm); err != nil {
-		}
-		if err := tool.RegisterHTTPRequest(newRegistry); err != nil {
-		}
-		if err := tool.RegisterMemories(newRegistry); err != nil {
+		_ = tool.RegisterSearchCode(newRegistry, idx)
+		_ = tool.RegisterEditFile(newRegistry, norm)
+		_ = tool.RegisterApplyEdit(newRegistry, norm)
+		_ = tool.RegisterListDir(newRegistry, norm)
+		_ = tool.RegisterFinalize(newRegistry)
+		_ = tool.RegisterRunShell(newRegistry, norm)
+		_ = tool.RegisterApplyShell(newRegistry, norm)
+		_ = tool.RegisterHTTPRequest(newRegistry)
+		_ = tool.RegisterMemories(newRegistry)
+		// Register MCP tools asynchronously so workspace switch doesn't block
+		if norm != "" {
+			go func(ws string, reg *tool.Registry) {
+				cfgs, err := config.LoadProjectMCP(ws)
+				if err != nil {
+					return
+				}
+				if len(cfgs) == 0 {
+					return
+				}
+				// Reuse existing manager to avoid duplicate startups
+				if a.mcpManager == nil {
+					a.mcpManager = mcp.NewManager()
+				}
+				if err := a.mcpManager.Start(cfgs); err != nil {
+					return
+				}
+				toolsets, err := a.mcpManager.ListTools()
+				if err != nil {
+					return
+				}
+				for alias, tools := range toolsets {
+					serverCfg := cfgs[alias]
+					timeout := time.Duration(serverCfg.TimeoutSec) * time.Second
+					if timeout == 0 {
+						timeout = 60 * time.Second
+					}
+					for _, t := range tools {
+						server := alias
+						toolName := t.Name
+						safe := serverCfg.Safe
+						name := tool.SanitizeToolName("mcp_" + server + "__" + toolName)
+						_ = reg.Register(tool.Definition{
+							Name:        name,
+							Description: t.Description,
+							JSONSchema:  t.InputSchema,
+							Safe:        safe,
+							Handler: func(ctx context.Context, raw json.RawMessage) (interface{}, error) {
+								out, err := a.mcpManager.Call(server, toolName, raw, timeout)
+								if err != nil {
+									return "Error: " + err.Error(), nil
+								}
+								return out, nil
+							},
+						})
+					}
+				}
+				// Notify frontend that tools changed (optional hook)
+				if a.ctx != nil {
+					runtime.EventsEmit(a.ctx, "system:tools_updated")
+				}
+			}(norm, newRegistry)
 		}
 		a.tools = newRegistry
 		if a.engine != nil {
@@ -620,12 +669,78 @@ func (a *App) SetWorkspace(path string) {
 	// Persist as last workspace
 	a.ensureSettingsLoaded()
 	a.settings.LastWorkspace = norm
-	if err := config.Save(a.settings); err != nil {
-	}
+	_ = config.Save(a.settings)
 	// Load .gitignore matcher for this workspace
 	a.gitMatcher = a.buildGitignoreMatcher(norm)
 	// After switching, log current rules snapshot for debug
-	config.LoadRules(path)
+	_, _, _ = config.LoadRules(path)
+}
+
+// (removed) sanitizeToolName: use tool.SanitizeToolName directly where needed
+
+// ReloadMCP re-reads <workspace>/.loom/mcp.json and rebuilds the registry (core + MCP)
+func (a *App) ReloadMCP() {
+	if a.engine == nil {
+		return
+	}
+	ws := strings.TrimSpace(a.engine.Workspace())
+	if ws == "" {
+		return
+	}
+	newRegistry := tool.NewRegistry().WithUI(a)
+	// re-register core tools similar to SetWorkspace
+	_ = tool.RegisterReadFile(newRegistry, ws)
+	idx := indexer.NewRipgrepIndexer(ws)
+	_ = tool.RegisterSearchCode(newRegistry, idx)
+	_ = tool.RegisterEditFile(newRegistry, ws)
+	_ = tool.RegisterApplyEdit(newRegistry, ws)
+	_ = tool.RegisterListDir(newRegistry, ws)
+	_ = tool.RegisterFinalize(newRegistry)
+	_ = tool.RegisterRunShell(newRegistry, ws)
+	_ = tool.RegisterApplyShell(newRegistry, ws)
+	_ = tool.RegisterHTTPRequest(newRegistry)
+	_ = tool.RegisterMemories(newRegistry)
+	// Add MCP tools
+	if cfgs, err := config.LoadProjectMCP(ws); err == nil && len(cfgs) > 0 {
+		if a.mcpManager == nil {
+			a.mcpManager = mcp.NewManager()
+		}
+		if a.mcpManager.Start(cfgs) == nil {
+			if toolsets, err := a.mcpManager.ListTools(); err == nil {
+				for alias, tools := range toolsets {
+					serverCfg := cfgs[alias]
+					timeout := time.Duration(serverCfg.TimeoutSec) * time.Second
+					if timeout == 0 {
+						timeout = 60 * time.Second
+					}
+					for _, t := range tools {
+						server := alias
+						toolName := t.Name
+						safe := serverCfg.Safe
+						name := tool.SanitizeToolName("mcp_" + server + "__" + toolName)
+						_ = newRegistry.Register(tool.Definition{
+							Name:        name,
+							Description: t.Description,
+							JSONSchema:  t.InputSchema,
+							Safe:        safe,
+							Handler: func(ctx context.Context, raw json.RawMessage) (interface{}, error) {
+								out, err := a.mcpManager.Call(server, toolName, raw, timeout)
+								if err != nil {
+									return "Error: " + err.Error(), nil
+								}
+								return out, nil
+							},
+						})
+					}
+				}
+			}
+		}
+	}
+
+	a.tools = newRegistry
+	if a.engine != nil {
+		a.engine.WithRegistry(newRegistry)
+	}
 }
 
 // buildGitignoreMatcher scans the workspace for .gitignore files and builds a matcher
@@ -736,8 +851,7 @@ func (a *App) GetRules() map[string][]string {
 func (a *App) SaveRules(payload map[string][]string) {
 	// Save user rules
 	if userRules, ok := payload["user"]; ok {
-		if err := config.SaveUserRules(userRules); err != nil {
-		}
+		_ = config.SaveUserRules(userRules)
 	}
 	// Save project rules
 	if projectRules, ok := payload["project"]; ok {
@@ -745,10 +859,8 @@ func (a *App) SaveRules(payload map[string][]string) {
 		if a.engine != nil {
 			wp = a.engine.Workspace()
 		}
-		if wp == "" {
-		} else {
-			if err := config.SaveProjectRules(wp, projectRules); err != nil {
-			}
+		if wp != "" {
+			_ = config.SaveProjectRules(wp, projectRules)
 		}
 	}
 }
@@ -897,14 +1009,6 @@ func (a *App) PromptApproval(actionID, summary, diff string) bool {
 	return false // Placeholder return, actual approval handled asynchronously
 }
 
-// min returns the smaller of a and b
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func boolToStr(b bool) string {
 	if b {
 		return "true"
@@ -967,6 +1071,18 @@ func (a *App) LoadConversation(id string) {
 	for _, m := range msgs {
 		// Hide system and tool messages from the chat view when loading history
 		if m.Role == "system" || m.Role == "tool" {
+			continue
+		}
+		// Also hide assistant messages that were used for internal steps (thinking/tool_use)
+		// Live chat does not render these JSON payloads, so skip them on replay as well.
+		if m.Role == "assistant" && (strings.TrimSpace(m.Name) != "" || strings.TrimSpace(m.ToolID) != "") {
+			// If this was a persisted thinking block, optionally surface it via reasoning panel
+			if m.Name == "thinking" {
+				var payload map[string]string
+				if json.Unmarshal([]byte(m.Content), &payload) == nil {
+					a.EmitReasoning(payload["thinking"], true)
+				}
+			}
 			continue
 		}
 		a.SendChat(m.Role, m.Content)

@@ -147,7 +147,7 @@ func (c *Client) Chat(
 	stream bool,
 ) (<-chan engine.TokenOrToolCall, error) {
 	if c.apiKey == "" {
-		return nil, errors.New("Anthropic API key not set")
+		return nil, errors.New("anthropic API key not set")
 	}
 
 	// Removed verbose debug logging of raw message history
@@ -298,7 +298,7 @@ func (c *Client) Chat(
 			}
 			return
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		// Check response status
 		if resp.StatusCode != http.StatusOK {
@@ -734,28 +734,13 @@ func convertMessages(messages []engine.Message, includeThinking bool) []map[stri
 	return result
 }
 
-// convertRole maps standard roles to Claude roles.
-func convertRole(role string) string {
-	switch role {
-	case "assistant":
-		return "assistant"
-	case "function", "tool":
-		// Anthropic expects tool results to be sent from the user
-		return "user"
-	case "system":
-		return "system"
-	default:
-		return "user"
-	}
-}
-
 // convertTools transforms engine tool schemas to Anthropic Claude format.
 func convertTools(tools []engine.ToolSchema) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(tools))
 
 	for _, tool := range tools {
-		var properties interface{} = tool.Schema["properties"]
-		var required interface{} = tool.Schema["required"]
+		properties := tool.Schema["properties"]
+		required := tool.Schema["required"]
 		claudeTool := map[string]interface{}{
 			"name":        tool.Name,
 			"description": tool.Description,
@@ -771,50 +756,6 @@ func convertTools(tools []engine.ToolSchema) []map[string]interface{} {
 	}
 
 	return result
-}
-
-// mockResponse is a placeholder for testing that simulates Claude responses.
-func mockResponse(ctx context.Context, ch chan<- engine.TokenOrToolCall) {
-	// Simulate some text tokens
-	tokens := []string{"Hello", " there", "!", " I'm", " Claude", " and", " I'm", " ready", " to", " help", " you", " with", " coding", "."}
-
-	for _, token := range tokens {
-		select {
-		case <-ctx.Done():
-			return
-		case ch <- engine.TokenOrToolCall{Token: token}:
-			// Successfully sent token
-		}
-	}
-
-	// Simulate a tool call
-	var args json.RawMessage
-	if err := json.Unmarshal([]byte(`{"path": "README.md"}`), &args); err != nil {
-		// Just skip the tool call if we can't parse it
-		return
-	}
-
-	select {
-	case <-ctx.Done():
-		return
-	case ch <- engine.TokenOrToolCall{
-		ToolCall: &engine.ToolCall{
-			ID:     "mock-tool-call-1",
-			Name:   "read_file",
-			Args:   args,
-			IsSafe: true,
-		},
-	}:
-		// Successfully sent tool call
-	}
-}
-
-// min returns the smaller of two integers
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 // supportsThinkingForModel returns whether the Anthropic model supports the

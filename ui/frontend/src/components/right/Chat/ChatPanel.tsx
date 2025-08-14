@@ -90,6 +90,44 @@ function ChatPanelComponent(props: Props) {
     const [attachIndex, setAttachIndex] = React.useState<number>(0);
     const [attachAnchor, setAttachAnchor] = React.useState<HTMLElement | null>(null);
 
+    // MCP tools browser state
+    const [toolsOpen, setToolsOpen] = React.useState<boolean>(false);
+    const [toolsAnchor, setToolsAnchor] = React.useState<HTMLElement | null>(null);
+    const [toolSearch, setToolSearch] = React.useState<string>('');
+    const [mcpTools, setMcpTools] = React.useState<Record<string, { name: string; description: string }[]>>({});
+
+    // Load MCP tools from backend and keep them updated when the backend refreshes
+    React.useEffect(() => {
+        const load = async () => {
+            try {
+                const all: any = await (Bridge as any).GetTools();
+                const groups: Record<string, { name: string; description: string }[]> = {};
+                if (Array.isArray(all)) {
+                    for (const t of all) {
+                        const n = String(t?.name || '');
+                        if (!n.startsWith('mcp_')) continue;
+                        const rest = n.slice(4);
+                        const idx = rest.indexOf('__');
+                        if (idx < 0) continue;
+                        const server = rest.slice(0, idx);
+                        const toolName = rest.slice(idx + 2);
+                        if (!groups[server]) groups[server] = [];
+                        groups[server].push({ name: `${server}__${toolName}`, description: String(t?.description || '') });
+                    }
+                }
+                setMcpTools(groups);
+            } catch {
+                setMcpTools({});
+            }
+        };
+        load();
+        const onUpdate = () => load();
+        try { (window as any).wails?.EventsOn?.('system:tools_updated', onUpdate); } catch (err) { console.warn('tools_updated subscribe failed', err); }
+        return () => {
+            try { (window as any).wails?.EventsOff?.('system:tools_updated'); } catch (err) { console.warn('tools_updated unsubscribe failed', err); }
+        };
+    }, []);
+
     // Clear attachments when backend emits chat:clear
     React.useEffect(() => {
         const handler = () => setAttachments([]);
@@ -123,17 +161,17 @@ function ChatPanelComponent(props: Props) {
     // Query filenames using backend FindFiles
     React.useEffect(() => {
         if (!attachOpen) return;
-                        if (!debouncedQuery.trim()) { setAttachResults([]); setAttachIndex(0); return; }
+        if (!debouncedQuery.trim()) { setAttachResults([]); setAttachIndex(0); return; }
         (AppBridge as any).FindFiles(debouncedQuery, '', 200)
             .then((list: any) => {
                 const arr = Array.isArray(list) ? (list as string[]) : [];
-                                // Deduplicate and filter out directories (best-effort; FindFiles returns files)
-                                const seen: Record<string, boolean> = {};
-                                const dedup = arr.filter((p) => {
-                                    const k = String(p).toLowerCase();
-                                    if (seen[k]) return false; seen[k] = true; return true;
-                                });
-                                setAttachResults(dedup);
+                // Deduplicate and filter out directories (best-effort; FindFiles returns files)
+                const seen: Record<string, boolean> = {};
+                const dedup = arr.filter((p) => {
+                    const k = String(p).toLowerCase();
+                    if (seen[k]) return false; seen[k] = true; return true;
+                });
+                setAttachResults(dedup);
                 setAttachIndex(0);
             })
             .catch(() => setAttachResults([]));
@@ -151,7 +189,7 @@ function ChatPanelComponent(props: Props) {
     }, [attachments]);
 
     return (
-        <Box sx={{ minWidth: 420, width: '20%', display: 'flex', flexDirection: 'column', height: '100vh' }}>
+        <Box sx={{ minWidth: 420, width: '100%', display: 'flex', flexDirection: 'column', height: '100vh' }}>
             <Box
                 sx={{
                     width: '100%',
@@ -200,6 +238,13 @@ function ChatPanelComponent(props: Props) {
                         />
                     </Box>
                 }
+                <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={(e) => { setToolsAnchor(e.currentTarget); setToolsOpen(true); }}
+                >
+                    MCP Tools
+                </Button>
             </Box>
             <Divider />
             <Box sx={{ px: 3, py: 2 }}>
@@ -293,6 +338,68 @@ function ChatPanelComponent(props: Props) {
                         </ListItemButton>
                     ))}
                 </List>
+            </Popover>
+            <Popover
+                open={toolsOpen}
+                anchorEl={toolsAnchor}
+                onClose={() => setToolsOpen(false)}
+                anchorOrigin={{ vertical: 'top', horizontal: 'left' }}
+                transformOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                PaperProps={{ sx: { p: 1, width: 460 } }}
+            >
+                <TextField
+                    autoFocus
+                    fullWidth
+                    placeholder="Search MCP tools…"
+                    value={toolSearch}
+                    onChange={(e) => setToolSearch(e.target.value)}
+                    size="small"
+                    sx={{ mb: 1 }}
+                />
+                <Box sx={{ maxHeight: 360, overflowY: 'auto', pr: 1 }}>
+                    {Object.keys(mcpTools).length === 0 && (
+                        <Typography variant="body2" sx={{ px: 1, py: 0.5 }} color="text.secondary">
+                            No MCP tools discovered yet.
+                        </Typography>
+                    )}
+                    {Object.entries(mcpTools).map(([server, tools]) => {
+                        const filtered = tools.filter((t) => {
+                            const q = toolSearch.trim().toLowerCase();
+                            if (!q) return true;
+                            return (
+                                server.toLowerCase().includes(q) ||
+                                t.name.toLowerCase().includes(q) ||
+                                t.description.toLowerCase().includes(q)
+                            );
+                        });
+                        if (filtered.length === 0) return null;
+                        return (
+                            <Box key={server} sx={{ mb: 1.5 }}>
+                                <Typography variant="subtitle2" fontWeight={700} sx={{ px: 1, py: 0.5 }}>
+                                    {server.replace(/_/g, '-')} ({filtered.length})
+                                </Typography>
+                                <List dense sx={{ pt: 0, pb: 0 }}>
+                                    {filtered.map((t) => (
+                                        <ListItemButton
+                                            key={t.name}
+                                            onClick={() => {
+                                                const mention = `@mcp_${t.name}`;
+                                                setLocalInput((prev) => `${prev ? prev + '\n' : ''}${mention} {}`);
+                                                setToolsOpen(false);
+                                            }}
+                                        >
+                                            <ListItemText
+                                                primaryTypographyProps={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 13 }}
+                                                primary={t.name}
+                                                secondary={t.description}
+                                            />
+                                        </ListItemButton>
+                                    ))}
+                                </List>
+                            </Box>
+                        );
+                    })}
+                </Box>
             </Popover>
         </Box>
     );

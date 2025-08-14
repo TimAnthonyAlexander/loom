@@ -40,12 +40,6 @@ func main() {
 		log.Fatalf("Failed to get current directory: %v", err)
 	}
 
-	// Create a new tool registry
-	registry := tool.NewRegistry()
-
-	// Register basic tools (would be expanded later)
-	registerTools(registry, workspacePath)
-
 	// Create LLM adapter using factory
 	configAdapter := adapter.DefaultConfig()
 
@@ -99,6 +93,11 @@ func main() {
 		}
 	}
 
+	// Create a new tool registry AFTER final workspace is resolved
+	registry := tool.NewRegistry()
+	// Register core tools for the resolved workspace
+	registerTools(registry, workspacePath)
+
 	// Create the engine and configure it
 	eng := engine.New(llm, nil)
 	eng.WithRegistry(registry)
@@ -124,6 +123,10 @@ func main() {
 
 	// Connect the engine to the bridge
 	eng.SetBridge(app)
+
+	// Centralize MCP setup via the bridge so we don't double-start servers later
+	// This will rebuild the registry (core + MCP) and wire it into the engine.
+	app.SetWorkspace(workspacePath)
 
 	// Run the application
 	// Build the application menu
@@ -259,6 +262,8 @@ func registerTools(registry *tool.Registry, workspacePath string) {
 		log.Printf("Failed to register memories tool: %v", err)
 	}
 }
+
+// (removed) sanitizeToolName: use tool.SanitizeToolName directly where needed
 
 // normalizeWorkspacePath expands a leading ~ and returns a cleaned absolute path
 func normalizeWorkspacePath(p string) string {
