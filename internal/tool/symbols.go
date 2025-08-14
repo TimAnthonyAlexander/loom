@@ -48,9 +48,9 @@ type ContextPack struct {
 
 // RegisterSymbols registers all symbol tools.
 func RegisterSymbols(registry *Registry, svc *symbols.Service) error {
-	// symbols.search
+	// symbols_search
 	if err := registry.Register(Definition{
-		Name:        "symbols.search",
+		Name:        "symbols_search",
 		Description: "Search indexed project symbols by name or doc excerpt",
 		Safe:        true,
 		JSONSchema: map[string]any{
@@ -75,9 +75,9 @@ func RegisterSymbols(registry *Registry, svc *symbols.Service) error {
 		return err
 	}
 
-	// symbols.def
+	// symbols_def
 	if err := registry.Register(Definition{
-		Name:        "symbols.def",
+		Name:        "symbols_def",
 		Description: "Get a symbol card by id",
 		Safe:        true,
 		JSONSchema: map[string]any{
@@ -96,9 +96,9 @@ func RegisterSymbols(registry *Registry, svc *symbols.Service) error {
 		return err
 	}
 
-	// symbols.refs
+	// symbols_refs
 	if err := registry.Register(Definition{
-		Name:        "symbols.refs",
+		Name:        "symbols_refs",
 		Description: "Find reference/call/import sites for a symbol",
 		Safe:        true,
 		JSONSchema: map[string]any{
@@ -117,9 +117,9 @@ func RegisterSymbols(registry *Registry, svc *symbols.Service) error {
 		return err
 	}
 
-	// symbols.neighborhood
+	// symbols_neighborhood
 	if err := registry.Register(Definition{
-		Name:        "symbols.neighborhood",
+		Name:        "symbols_neighborhood",
 		Description: "Get a small code slice around the symbol definition",
 		Safe:        true,
 		JSONSchema: map[string]any{
@@ -138,9 +138,9 @@ func RegisterSymbols(registry *Registry, svc *symbols.Service) error {
 		return err
 	}
 
-	// symbols.outline
+	// symbols_outline
 	if err := registry.Register(Definition{
-		Name:        "symbols.outline",
+		Name:        "symbols_outline",
 		Description: "Return a hierarchical outline of a file",
 		Safe:        true,
 		JSONSchema: map[string]any{
@@ -159,9 +159,9 @@ func RegisterSymbols(registry *Registry, svc *symbols.Service) error {
 		return err
 	}
 
-	// symbols.context_pack
+	// symbols_context_pack
 	if err := registry.Register(Definition{
-		Name:        "symbols.context_pack",
+		Name:        "symbols_context_pack",
 		Description: "Pack a symbol definition slice and limited callsite slices into a compact context within a line budget",
 		Safe:        true,
 		JSONSchema: map[string]any{

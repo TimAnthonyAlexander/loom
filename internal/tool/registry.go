@@ -181,7 +181,7 @@ func (r *Registry) InvokeToolCall(ctx context.Context, call *ToolCall) (*Executi
 			} else {
 				ui.SendChat("system", "SEARCHING codebase")
 			}
-		case "symbols.search":
+		case "symbols_search":
 			var args SymbolsSearchArgs
 			_ = json.Unmarshal(call.Args, &args)
 			if args.Q != "" {
@@ -189,7 +189,7 @@ func (r *Registry) InvokeToolCall(ctx context.Context, call *ToolCall) (*Executi
 			} else {
 				ui.SendChat("system", "SYMBOL SEARCH")
 			}
-		case "symbols.def":
+		case "symbols_def":
 			var args SymbolsDefArgs
 			_ = json.Unmarshal(call.Args, &args)
 			if args.SID != "" {
@@ -197,7 +197,7 @@ func (r *Registry) InvokeToolCall(ctx context.Context, call *ToolCall) (*Executi
 			} else {
 				ui.SendChat("system", "SYMBOL DEF")
 			}
-		case "symbols.refs":
+		case "symbols_refs":
 			var args SymbolsRefsArgs
 			_ = json.Unmarshal(call.Args, &args)
 			if args.SID != "" {
@@ -205,7 +205,7 @@ func (r *Registry) InvokeToolCall(ctx context.Context, call *ToolCall) (*Executi
 			} else {
 				ui.SendChat("system", "SYMBOL REFS")
 			}
-		case "symbols.neighborhood":
+		case "symbols_neighborhood":
 			var args SymbolsNeighborhoodArgs
 			_ = json.Unmarshal(call.Args, &args)
 			if args.SID != "" {
@@ -213,7 +213,7 @@ func (r *Registry) InvokeToolCall(ctx context.Context, call *ToolCall) (*Executi
 			} else {
 				ui.SendChat("system", "SYMBOL NEIGHBORHOOD")
 			}
-		case "symbols.outline":
+		case "symbols_outline":
 			var args SymbolsOutlineArgs
 			_ = json.Unmarshal(call.Args, &args)
 			if args.File != "" {
@@ -221,7 +221,7 @@ func (r *Registry) InvokeToolCall(ctx context.Context, call *ToolCall) (*Executi
 			} else {
 				ui.SendChat("system", "OUTLINE file")
 			}
-		case "symbols.context_pack":
+		case "symbols_context_pack":
 			var args SymbolsContextPackArgs
 			_ = json.Unmarshal(call.Args, &args)
 			if args.SID != "" {
