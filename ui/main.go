@@ -14,6 +14,7 @@ import (
 	"github.com/loom/loom/internal/engine"
 	"github.com/loom/loom/internal/indexer"
 	"github.com/loom/loom/internal/memory"
+	"github.com/loom/loom/internal/symbols"
 	"github.com/loom/loom/internal/tool"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/menu"
@@ -97,6 +98,22 @@ func main() {
 	registry := tool.NewRegistry()
 	// Register core tools for the resolved workspace
 	registerTools(registry, workspacePath)
+
+	// Initialize symbols service and start indexing
+	symsvc, err := symbols.NewService(workspacePath)
+	if err != nil {
+		log.Printf("Warning: symbols service init failed: %v", err)
+	} else {
+		go func() {
+			if err := symsvc.StartIndexing(context.Background()); err != nil {
+				log.Printf("symbols indexing error: %v", err)
+			}
+		}()
+		// Register symbol tools
+		if err := tool.RegisterSymbols(registry, symsvc); err != nil {
+			log.Printf("Failed to register symbols tools: %v", err)
+		}
+	}
 
 	// Create the engine and configure it
 	eng := engine.New(llm, nil)
@@ -192,6 +209,8 @@ func main() {
 		OnStartup: func(ctx context.Context) {
 			// Set the Wails context in the app
 			app.WithContext(ctx)
+			// Wire registry UI bridge now that context exists
+			registry.WithUI(app)
 			appCtx = ctx
 		},
 		Bind: []interface{}{

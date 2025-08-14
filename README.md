@@ -20,6 +20,7 @@ Loom pairs a Go orchestrator and tooling layer with a modern React UI. It’s de
 - Tool registry: explicit tool registration with schemas and safety flags
 - Providers: OpenAI, Anthropic Claude, and local Ollama adapters
 - Semantic search: ripgrep‑backed search with structured results
+- Heuristic symbol indexing: SQLite + FTS search over project symbols with tools for definitions, references, outlines, and neighborhood slices
 - Safe editing: proposed edits with diff preview and explicit approval before apply
 - Project memory: workspace‑scoped persistence for stable, predictable state
 - Shell execution: propose/approve/execute commands with stdout/stderr capture; cwd confined to the workspace
@@ -268,6 +269,11 @@ Adapters convert engine messages to provider‑specific payloads and parse strea
 - Indexer (`internal/indexer/ripgrep.go`)
   - Ripgrep JSON parsing with relative path normalization
   - Ignores common directories: `node_modules`, `.git`, `dist`, `build`, `vendor`
+ - Symbols (`internal/symbols`)
+   - Heuristic parsing for funcs/classes/vars/constants across languages
+   - SQLite DB per project at `~/.loom/projects/<id>/symbols.db` with FTS5
+   - Incremental reindex via file watcher and debounce
+   - Tools: `symbols.search`, `symbols.def`, `symbols.refs`, `symbols.neighborhood`, `symbols.outline`
 
 ## Security considerations
 - Tool safety: destructive tools require explicit approval (unless auto‑approval is on)

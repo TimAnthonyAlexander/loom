@@ -181,6 +181,54 @@ func (r *Registry) InvokeToolCall(ctx context.Context, call *ToolCall) (*Executi
 			} else {
 				ui.SendChat("system", "SEARCHING codebase")
 			}
+		case "symbols.search":
+			var args SymbolsSearchArgs
+			_ = json.Unmarshal(call.Args, &args)
+			if args.Q != "" {
+				ui.SendChat("system", fmt.Sprintf("SYMBOL SEARCH %q", args.Q))
+			} else {
+				ui.SendChat("system", "SYMBOL SEARCH")
+			}
+		case "symbols.def":
+			var args SymbolsDefArgs
+			_ = json.Unmarshal(call.Args, &args)
+			if args.SID != "" {
+				ui.SendChat("system", fmt.Sprintf("SYMBOL DEF %s", args.SID))
+			} else {
+				ui.SendChat("system", "SYMBOL DEF")
+			}
+		case "symbols.refs":
+			var args SymbolsRefsArgs
+			_ = json.Unmarshal(call.Args, &args)
+			if args.SID != "" {
+				ui.SendChat("system", fmt.Sprintf("SYMBOL REFS %s", args.SID))
+			} else {
+				ui.SendChat("system", "SYMBOL REFS")
+			}
+		case "symbols.neighborhood":
+			var args SymbolsNeighborhoodArgs
+			_ = json.Unmarshal(call.Args, &args)
+			if args.SID != "" {
+				ui.SendChat("system", fmt.Sprintf("SYMBOL NEIGHBORHOOD %s", args.SID))
+			} else {
+				ui.SendChat("system", "SYMBOL NEIGHBORHOOD")
+			}
+		case "symbols.outline":
+			var args SymbolsOutlineArgs
+			_ = json.Unmarshal(call.Args, &args)
+			if args.File != "" {
+				ui.SendChat("system", fmt.Sprintf("OUTLINE %s", args.File))
+			} else {
+				ui.SendChat("system", "OUTLINE file")
+			}
+		case "symbols.context_pack":
+			var args SymbolsContextPackArgs
+			_ = json.Unmarshal(call.Args, &args)
+			if args.SID != "" {
+				ui.SendChat("system", fmt.Sprintf("CONTEXT PACK %s", args.SID))
+			} else {
+				ui.SendChat("system", "CONTEXT PACK")
+			}
 		case "edit_file":
 			var args EditFileArgs
 			_ = json.Unmarshal(call.Args, &args)
