@@ -81,9 +81,15 @@ jobs:
 
   lint:
     name: golangci-lint
+    needs: [frontend]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Restore UI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ui-dist
+          path: ui/frontend/dist
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
