@@ -81,9 +81,10 @@ Memories
   - Tools you used and why
   - Files touched and a bullet summary of changes
   - Follow-ups or verifications for the user, if any
+  - Why this answers the question or fulfills the task
 • If no tools were needed, answer concisely without calling finalize.
 • Finalize is only needed after tools have been used.
-• Write a very extensive finalize message. You may use markdown formatting.
+• Write an extensive finalize message and you may use markdown formatting.
 
 7. Error-prevention checklist
 ☑ Use only workspace-relative paths; never escape the workspace.
