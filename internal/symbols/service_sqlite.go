@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/bep/debounce"
@@ -23,7 +22,6 @@ import (
 type SQLiteService struct {
 	workspacePath string
 	db            *sql.DB
-	mu            sync.RWMutex
 	watcher       *fsnotify.Watcher
 	debounceIndex func(func())
 }
@@ -203,7 +201,7 @@ func (s *SQLiteService) IndexFile(ctx context.Context, relPath string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, err := tx.ExecContext(ctx, `DELETE FROM relations WHERE file_path = ?`, relPath); err != nil {
 		return err
 	}
@@ -272,7 +270,7 @@ func (s *SQLiteService) Search(ctx context.Context, q, kind, lang, pathPrefix st
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []SymbolCard
 	for rows.Next() {
 		var c SymbolCard
@@ -333,7 +331,7 @@ func (s *SQLiteService) Refs(ctx context.Context, sid, kind string) ([]RefSite, 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []RefSite
 	for rows.Next() {
 		var r RefSite
