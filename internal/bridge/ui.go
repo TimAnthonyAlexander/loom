@@ -200,8 +200,7 @@ func (a *App) SetModel(model string) {
 		providerPrefix = string(provider)
 	}
 	a.settings.LastModel = providerPrefix + ":" + modelID
-	if err := config.Save(a.settings); err != nil {
-	}
+	_ = config.Save(a.settings)
 
 	// Update the configuration
 	newConfig := adapter.Config{
@@ -240,9 +239,7 @@ func (a *App) ensureSettingsLoaded() {
 // applyAndSaveSettings persists the provided settings and applies them to the current engine if applicable.
 func (a *App) applyAndSaveSettings(s config.Settings) {
 	// Persist to disk
-	if err := config.Save(s); err != nil {
-		return
-	}
+	_ = config.Save(s)
 
 	// Update in-memory settings
 	a.settings = s
@@ -284,10 +281,7 @@ func (a *App) applyAndSaveSettings(s config.Settings) {
 
 // SendChat emits a chat message to the UI.
 func (a *App) SendChat(role, text string) {
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
+	defer func() { _ = recover() }()
 
 	// Create a chat message
 	message := map[string]interface{}{
@@ -675,12 +669,11 @@ func (a *App) SetWorkspace(path string) {
 	// Persist as last workspace
 	a.ensureSettingsLoaded()
 	a.settings.LastWorkspace = norm
-	if err := config.Save(a.settings); err != nil {
-	}
+	_ = config.Save(a.settings)
 	// Load .gitignore matcher for this workspace
 	a.gitMatcher = a.buildGitignoreMatcher(norm)
 	// After switching, log current rules snapshot for debug
-	config.LoadRules(path)
+	_, _, _ = config.LoadRules(path)
 }
 
 // (removed) sanitizeToolName: use tool.SanitizeToolName directly where needed
@@ -858,8 +851,7 @@ func (a *App) GetRules() map[string][]string {
 func (a *App) SaveRules(payload map[string][]string) {
 	// Save user rules
 	if userRules, ok := payload["user"]; ok {
-		if err := config.SaveUserRules(userRules); err != nil {
-		}
+		_ = config.SaveUserRules(userRules)
 	}
 	// Save project rules
 	if projectRules, ok := payload["project"]; ok {
@@ -867,10 +859,8 @@ func (a *App) SaveRules(payload map[string][]string) {
 		if a.engine != nil {
 			wp = a.engine.Workspace()
 		}
-		if wp == "" {
-		} else {
-			if err := config.SaveProjectRules(wp, projectRules); err != nil {
-			}
+		if wp != "" {
+			_ = config.SaveProjectRules(wp, projectRules)
 		}
 	}
 }

@@ -147,7 +147,7 @@ func (c *Client) Chat(
 	stream bool,
 ) (<-chan engine.TokenOrToolCall, error) {
 	if c.apiKey == "" {
-		return nil, errors.New("Anthropic API key not set")
+		return nil, errors.New("anthropic API key not set")
 	}
 
 	// Removed verbose debug logging of raw message history
@@ -298,7 +298,7 @@ func (c *Client) Chat(
 			}
 			return
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		// Check response status
 		if resp.StatusCode != http.StatusOK {
@@ -739,8 +739,8 @@ func convertTools(tools []engine.ToolSchema) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(tools))
 
 	for _, tool := range tools {
-		var properties interface{} = tool.Schema["properties"]
-		var required interface{} = tool.Schema["required"]
+		properties := tool.Schema["properties"]
+		required := tool.Schema["required"]
 		claudeTool := map[string]interface{}{
 			"name":        tool.Name,
 			"description": tool.Description,

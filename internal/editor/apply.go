@@ -48,7 +48,7 @@ func GenerateGitDiff(oldContent, newContent, filePath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp dir: %w", err)
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 
 	oldFile := filepath.Join(dir, "old")
 	newFile := filepath.Join(dir, "new")
@@ -77,8 +77,8 @@ func GenerateGitDiff(oldContent, newContent, filePath string) (string, error) {
 	diffText := string(output)
 
 	// Replace the temp file paths with actual file name
-	diffText = strings.Replace(diffText, "--- a/old", fmt.Sprintf("--- a/%s", filepath.Base(filePath)), -1)
-	diffText = strings.Replace(diffText, "+++ b/new", fmt.Sprintf("+++ b/%s", filepath.Base(filePath)), -1)
+	diffText = strings.ReplaceAll(diffText, "--- a/old", fmt.Sprintf("--- a/%s", filepath.Base(filePath)))
+	diffText = strings.ReplaceAll(diffText, "+++ b/new", fmt.Sprintf("+++ b/%s", filepath.Base(filePath)))
 
 	return diffText, nil
 }

@@ -307,7 +307,9 @@ func (e *Engine) Enqueue(message string) {
 	e.bridge.SendChat("user", message)
 
 	// Start processing in a goroutine
-	go e.processLoop(context.Background(), message)
+	go func() {
+		_ = e.processLoop(context.Background(), message)
+	}()
 }
 
 // ResolveApproval resolves a pending approval request.
