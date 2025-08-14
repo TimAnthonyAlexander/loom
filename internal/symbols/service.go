@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 // Symbol represents an indexed symbol definition.
@@ -633,10 +635,20 @@ func gatherDocAbove(lines []string, idx int) string {
 }
 
 func sampleRefs(lines []string, name, relPath string) []RefSite {
+	// Guard against invalid or suspicious names that could cause regexp panics
+	if name == "" || !utf8.ValidString(name) || len(name) > 200 || !isAsciiWord(name) {
+		return nil
+	}
+
+	// Compile a safe regex and handle any error instead of panicking
+	re, err := regexp.Compile(`\b` + regexp.QuoteMeta(name) + `\b\s*(\(|=)`)
+	if err != nil {
+		return nil
+	}
+
 	var out []RefSite
-	pat := regexp.MustCompile(`\b` + regexp.QuoteMeta(name) + `\b\s*(\(|=)`) // call or assignment
 	for i, line := range lines {
-		if pat.FindStringIndex(line) != nil {
+		if re.FindStringIndex(line) != nil {
 			ln := i + 1
 			out = append(out, RefSite{File: relPath, LineStart: ln, LineEnd: ln, Kind: "references"})
 		}
@@ -645,6 +657,19 @@ func sampleRefs(lines []string, name, relPath string) []RefSite {
 		}
 	}
 	return out
+}
+
+// isAsciiWord returns true if the provided name consists only of ASCII letters, digits, or underscores
+func isAsciiWord(s string) bool {
+	for _, r := range s {
+		if r > 127 {
+			return false
+		}
+		if !(unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_') {
+			return false
+		}
+	}
+	return true
 }
 
 func extractNamedGroup(re *regexp.Regexp, s, name string) string {
