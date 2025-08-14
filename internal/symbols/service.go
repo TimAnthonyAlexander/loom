@@ -665,7 +665,7 @@ func isAsciiWord(s string) bool {
 		if r > 127 {
 			return false
 		}
-		if !(unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_') {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' {
 			return false
 		}
 	}

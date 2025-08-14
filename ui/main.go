@@ -31,8 +31,6 @@ var appCtx context.Context
 //go:embed frontend/dist
 var assets embed.FS
 
-
-
 func main() {
 	// Set up logging to show all levels
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
