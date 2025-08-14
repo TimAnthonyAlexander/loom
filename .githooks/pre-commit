@@ -1,0 +1,83 @@
+#!/usr/bin/env zsh
+# .git/hooks/pre-commit
+# Fast local checks mirroring CI (without building the frontend)
+
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+cd "$root"
+
+red() { printf "\033[31m%s\033[0m\n" "$*"; }
+green() { printf "\033[32m%s\033[0m\n" "$*"; }
+note() { printf "\033[36m%s\033[0m\n" "$*"; }
+
+need() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    red "Missing tool: $1"
+    case "$1" in
+      golangci-lint) echo "brew install golangci-lint  # or: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest";;
+      govulncheck)   echo "go install golang.org/x/vuln/cmd/govulncheck@latest";;
+    esac
+    exit 1
+  fi
+}
+
+need go
+need golangci-lint || true
+[[ -n "${RUN_VULN:-}" ]] && need govulncheck
+
+# 1) gofmt -s (fail if any file needs formatting)
+note "Running gofmt -s..."
+fmt_out="$(gofmt -l -s .)"
+if [[ -n "$fmt_out" ]]; then
+  red "Files need gofmt -s:"
+  echo "$fmt_out"
+  exit 1
+fi
+green "gofmt -s OK"
+
+# 2) go mod tidy guard (leave changes for user to commit)
+note "Checking go mod tidy..."
+go mod tidy
+if ! git diff --quiet -- go.mod go.sum; then
+  red "go.mod/go.sum changed. Run 'go mod tidy' and commit the result."
+  git --no-pager diff --minimal --word-diff -- go.mod go.sum || true
+  exit 1
+fi
+green "go mod tidy OK"
+
+# 3) go vet (limit to packages that don't require embedded UI)
+note "Running go vet on ./internal/..."
+go vet ./internal/...
+green "go vet OK"
+
+# 4) golangci-lint (skip UI dir to avoid //go:embed dist dependency)
+# If you implement build tags as discussed (embedui), you can replace the line with:
+#   golangci-lint run --build-tags '!embedui'
+if command -v golangci-lint >/dev/null 2>&1; then
+  note "Running golangci-lint (skipping ui/)..."
+  golangci-lint run --timeout=5m --skip-dirs ui
+  green "golangci-lint OK"
+fi
+
+# 5) Unit tests (fast scope)
+note "Running unit tests on ./internal/... (-count=1)..."
+go test ./internal/... -count=1
+green "go test OK"
+
+# 6) Optional: race + coverage (opt-in: export RUN_RACE=1)
+if [[ -n "${RUN_RACE:-}" ]]; then
+  note "Running race detector with coverage on ./internal/..."
+  go test -race ./internal/... -count=1 -coverprofile=coverage.out
+  green "race+coverage OK -> coverage.out"
+fi
+
+# 7) Optional: govulncheck (opt-in: export RUN_VULN=1)
+if [[ -n "${RUN_VULN:-}" ]]; then
+  note "Running govulncheck (this can be slow)..."
+  govulncheck ./...
+  green "govulncheck OK"
+fi
+
+green "Pre-commit checks passed."
+exit 0
