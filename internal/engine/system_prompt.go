@@ -86,6 +86,7 @@ Memories
 • Finalize is only needed after tools have been used.
 • Write an extensive finalize message and you may use markdown formatting.
 
+
 7. Error-prevention checklist
 ☑ Use only workspace-relative paths; never escape the workspace.
 ☑ Do not fabricate tool outputs or file contents.

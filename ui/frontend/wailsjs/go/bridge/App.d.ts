@@ -35,6 +35,8 @@ export function GetRules():Promise<Record<string, Array<string>>>;
 
 export function GetSettings():Promise<Record<string, string>>;
 
+export function GetSymbolsCount():Promise<number>;
+
 export function GetTools():Promise<Array<Record<string, any>>>;
 
 export function GetUsage():Promise<Record<string, any>>;
@@ -58,6 +60,8 @@ export function OpenProjectDataDir():Promise<void>;
 export function PromptApproval(arg1:string,arg2:string,arg3:string):Promise<boolean>;
 
 export function ReadWorkspaceFile(arg1:string):Promise<bridge.UIReadFileResult>;
+
+export function ReindexSymbols():Promise<void>;
 
 export function ReloadMCP():Promise<void>;
 

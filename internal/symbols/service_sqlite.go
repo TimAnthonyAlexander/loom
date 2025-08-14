@@ -123,6 +123,16 @@ func (s *SQLiteService) StartIndexing(ctx context.Context) error {
 	return nil
 }
 
+// Count returns the number of symbols currently stored in SQLite.
+func (s *SQLiteService) Count(ctx context.Context) (int, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT COUNT(1) FROM symbols`)
+	var n int
+	if err := row.Scan(&n); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
 func (s *SQLiteService) addWatchesRecursive(root string) error {
 	return filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {

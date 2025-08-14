@@ -163,6 +163,13 @@ func (s *Service) IndexAll(ctx context.Context) error {
 	return nil
 }
 
+// Count returns the number of symbols currently indexed in-memory.
+func (s *Service) Count(ctx context.Context) (int, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.symbols), nil
+}
+
 // IndexFile reindexes a single file.
 func (s *Service) IndexFile(ctx context.Context, relPath string) error {
 	s.mu.Lock()

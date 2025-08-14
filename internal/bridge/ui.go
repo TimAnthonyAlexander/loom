@@ -45,6 +45,11 @@ type App struct {
 	indexingTotal   int
 	indexingDone    int
 	indexingCurrent string
+	// symbols service handle for UI controls (count/reindex)
+	symbolsSvc interface {
+		IndexAll(context.Context) error
+		Count(context.Context) (int, error)
+	}
 }
 
 // NewApp creates a new App application struct.
@@ -618,10 +623,14 @@ func (a *App) SetWorkspace(path string) {
 			if sqliteSvc, err := symbols.NewSQLiteService(ws); err == nil {
 				go func() { _ = sqliteSvc.StartIndexing(context.Background()) }()
 				_ = tool.RegisterSymbols(newRegistry, sqliteSvc)
+				// store for UI operations
+				a.symbolsSvc = sqliteSvc
 			} else if svc, err := symbols.NewService(ws); err == nil {
 				svc.WithReporter(a)
 				go func() { _ = svc.StartIndexing(context.Background()) }()
 				_ = tool.RegisterSymbols(newRegistry, svc)
+				// store for UI operations
+				a.symbolsSvc = svc
 			}
 		}
 		// Register MCP tools asynchronously so workspace switch doesn't block
@@ -722,6 +731,8 @@ func (a *App) ReloadMCP() {
 			svc.WithReporter(a)
 			go func() { _ = svc.StartIndexing(context.Background()) }()
 			_ = tool.RegisterSymbols(newRegistry, svc)
+			// store for UI operations
+			a.symbolsSvc = svc
 		}
 	}
 	// Add MCP tools
@@ -793,6 +804,28 @@ func (a *App) IndexDone(total int) {
 	if a.ctx != nil {
 		runtime.EventsEmit(a.ctx, "symbols:indexing", map[string]any{"status": "done", "total": total, "done": total, "file": ""})
 	}
+}
+
+// ReindexSymbols triggers a full reindex of the current workspace's symbol service.
+func (a *App) ReindexSymbols() {
+	if a.symbolsSvc == nil {
+		return
+	}
+	go func(svc interface{ IndexAll(context.Context) error }) {
+		_ = svc.IndexAll(context.Background())
+	}(a.symbolsSvc)
+}
+
+// GetSymbolsCount returns the current number of symbols in the index.
+func (a *App) GetSymbolsCount() int {
+	if a.symbolsSvc == nil {
+		return 0
+	}
+	n, err := a.symbolsSvc.Count(context.Background())
+	if err != nil {
+		return 0
+	}
+	return n
 }
 
 // buildGitignoreMatcher scans the workspace for .gitignore files and builds a matcher

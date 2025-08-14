@@ -3,6 +3,7 @@ import { Box, Typography, IconButton, Tooltip, Paper, LinearProgress } from '@mu
 import SettingsIcon from '@mui/icons-material/Settings';
 import RuleIcon from '@mui/icons-material/Rule';
 import MemoryIcon from '@mui/icons-material/BookmarkBorder';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import FileExplorer from './Files/FileExplorer';
 import { UIFileEntry } from '../../types/ui';
 
@@ -36,6 +37,39 @@ function Sidebar(props: SidebarProps) {
         onOpenFile,
         indexing,
     } = props;
+
+    const [symbolsCount, setSymbolsCount] = React.useState<number | null>(null);
+
+    const fetchSymbolsCount = React.useCallback(async () => {
+        try {
+            const anyWin: any = window as any;
+            const n = await anyWin?.go?.bridge?.App?.GetSymbolsCount?.();
+            if (typeof n === 'number') {
+                setSymbolsCount(n);
+            }
+        } catch {
+            // ignore
+        }
+    }, []);
+
+    React.useEffect(() => {
+        fetchSymbolsCount();
+    }, [fetchSymbolsCount]);
+
+    React.useEffect(() => {
+        if (indexing && indexing.status === 'done') {
+            fetchSymbolsCount();
+        }
+    }, [indexing?.status, fetchSymbolsCount]);
+
+    const onReindex = React.useCallback(async () => {
+        try {
+            const anyWin: any = window as any;
+            await anyWin?.go?.bridge?.App?.ReindexSymbols?.();
+        } catch {
+            // ignore
+        }
+    }, []);
 
     return (
         <Box
@@ -90,6 +124,20 @@ function Sidebar(props: SidebarProps) {
                         )}
                     </Box>
                 )}
+                <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="caption" color="text.secondary">
+                        Symbols
+                    </Typography>
+                    <Typography variant="caption" fontWeight={600}>
+                        {symbolsCount ?? '—'}
+                    </Typography>
+                    <Box sx={{ flex: 1 }} />
+                    <Tooltip title="Reindex symbols">
+                        <IconButton size="small" onClick={onReindex}>
+                            <RefreshIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                </Box>
             </Box>
 
             <Box

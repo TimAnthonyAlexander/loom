@@ -58,6 +58,10 @@ export function GetSettings() {
   return window['go']['bridge']['App']['GetSettings']();
 }
 
+export function GetSymbolsCount() {
+  return window['go']['bridge']['App']['GetSymbolsCount']();
+}
+
 export function GetTools() {
   return window['go']['bridge']['App']['GetTools']();
 }
@@ -104,6 +108,10 @@ export function PromptApproval(arg1, arg2, arg3) {
 
 export function ReadWorkspaceFile(arg1) {
   return window['go']['bridge']['App']['ReadWorkspaceFile'](arg1);
+}
+
+export function ReindexSymbols() {
+  return window['go']['bridge']['App']['ReindexSymbols']();
 }
 
 export function ReloadMCP() {
