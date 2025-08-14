@@ -58,12 +58,28 @@ export function GetSettings() {
   return window['go']['bridge']['App']['GetSettings']();
 }
 
+export function GetSymbolsCount() {
+  return window['go']['bridge']['App']['GetSymbolsCount']();
+}
+
 export function GetTools() {
   return window['go']['bridge']['App']['GetTools']();
 }
 
 export function GetUsage() {
   return window['go']['bridge']['App']['GetUsage']();
+}
+
+export function IndexDone(arg1) {
+  return window['go']['bridge']['App']['IndexDone'](arg1);
+}
+
+export function IndexProgress(arg1, arg2, arg3) {
+  return window['go']['bridge']['App']['IndexProgress'](arg1, arg2, arg3);
+}
+
+export function IndexStart(arg1) {
+  return window['go']['bridge']['App']['IndexStart'](arg1);
 }
 
 export function ListWorkspaceDir(arg1) {
@@ -92,6 +108,10 @@ export function PromptApproval(arg1, arg2, arg3) {
 
 export function ReadWorkspaceFile(arg1) {
   return window['go']['bridge']['App']['ReadWorkspaceFile'](arg1);
+}
+
+export function ReindexSymbols() {
+  return window['go']['bridge']['App']['ReindexSymbols']();
 }
 
 export function ReloadMCP() {

@@ -14,6 +14,7 @@ import (
 	"github.com/loom/loom/internal/engine"
 	"github.com/loom/loom/internal/indexer"
 	"github.com/loom/loom/internal/memory"
+
 	"github.com/loom/loom/internal/tool"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/menu"
@@ -97,6 +98,8 @@ func main() {
 	registry := tool.NewRegistry()
 	// Register core tools for the resolved workspace
 	registerTools(registry, workspacePath)
+
+	// Symbols tools are registered in the bridge when workspace is set
 
 	// Create the engine and configure it
 	eng := engine.New(llm, nil)
@@ -192,6 +195,8 @@ func main() {
 		OnStartup: func(ctx context.Context) {
 			// Set the Wails context in the app
 			app.WithContext(ctx)
+			// Wire registry UI bridge now that context exists
+			registry.WithUI(app)
 			appCtx = ctx
 		},
 		Bind: []interface{}{

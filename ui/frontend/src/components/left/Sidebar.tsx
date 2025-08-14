@@ -1,8 +1,9 @@
 import React from 'react';
-import { Box, Typography, IconButton, Tooltip, Paper } from '@mui/material';
+import { Box, Typography, IconButton, Tooltip, Paper, LinearProgress } from '@mui/material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RuleIcon from '@mui/icons-material/Rule';
 import MemoryIcon from '@mui/icons-material/BookmarkBorder';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import FileExplorer from './Files/FileExplorer';
 import { UIFileEntry } from '../../types/ui';
 
@@ -18,6 +19,7 @@ type SidebarProps = {
     expandedDirs: Record<string, boolean>;
     onToggleDir: (path: string) => void;
     onOpenFile: (path: string) => void;
+    indexing?: { status: 'idle' | 'start' | 'progress' | 'done'; total: number; done: number; file: string };
 };
 
 function Sidebar(props: SidebarProps) {
@@ -33,7 +35,41 @@ function Sidebar(props: SidebarProps) {
         expandedDirs,
         onToggleDir,
         onOpenFile,
+        indexing,
     } = props;
+
+    const [symbolsCount, setSymbolsCount] = React.useState<number | null>(null);
+
+    const fetchSymbolsCount = React.useCallback(async () => {
+        try {
+            const anyWin: any = window as any;
+            const n = await anyWin?.go?.bridge?.App?.GetSymbolsCount?.();
+            if (typeof n === 'number') {
+                setSymbolsCount(n);
+            }
+        } catch {
+            // ignore
+        }
+    }, []);
+
+    React.useEffect(() => {
+        fetchSymbolsCount();
+    }, [fetchSymbolsCount]);
+
+    React.useEffect(() => {
+        if (indexing && indexing.status === 'done') {
+            fetchSymbolsCount();
+        }
+    }, [indexing?.status, fetchSymbolsCount]);
+
+    const onReindex = React.useCallback(async () => {
+        try {
+            const anyWin: any = window as any;
+            await anyWin?.go?.bridge?.App?.ReindexSymbols?.();
+        } catch {
+            // ignore
+        }
+    }, []);
 
     return (
         <Box
@@ -72,6 +108,33 @@ function Sidebar(props: SidebarProps) {
                     <Tooltip title="Settings">
                         <IconButton size="small" onClick={onOpenSettings}>
                             <SettingsIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                </Box>
+                {indexing && (indexing.status === 'start' || indexing.status === 'progress') && (
+                    <Box sx={{ mt: 1 }}>
+                        <Typography variant="caption" color="text.secondary">
+                            Indexing symbols… {Math.min(100, Math.floor((indexing.done / Math.max(1, indexing.total)) * 100))}%
+                        </Typography>
+                        <LinearProgress variant="determinate" value={Math.min(100, (indexing.done / Math.max(1, indexing.total)) * 100)} sx={{ height: 4, borderRadius: 1, mt: 0.5 }} />
+                        {indexing.file && (
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }} noWrap>
+                                {indexing.file}
+                            </Typography>
+                        )}
+                    </Box>
+                )}
+                <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="caption" color="text.secondary">
+                        Symbols
+                    </Typography>
+                    <Typography variant="caption" fontWeight={600}>
+                        {symbolsCount ?? '—'}
+                    </Typography>
+                    <Box sx={{ flex: 1 }} />
+                    <Tooltip title="Reindex symbols">
+                        <IconButton size="small" onClick={onReindex}>
+                            <RefreshIcon fontSize="small" />
                         </IconButton>
                     </Tooltip>
                 </Box>
