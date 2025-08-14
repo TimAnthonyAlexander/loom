@@ -3,19 +3,16 @@ package main
 import (
 	"context"
 	"embed"
-	"encoding/json"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/loom/loom/internal/adapter"
 	"github.com/loom/loom/internal/bridge"
 	"github.com/loom/loom/internal/config"
 	"github.com/loom/loom/internal/engine"
 	"github.com/loom/loom/internal/indexer"
-	"github.com/loom/loom/internal/mcp"
 	"github.com/loom/loom/internal/memory"
 	"github.com/loom/loom/internal/tool"
 	"github.com/wailsapp/wails/v2"
@@ -266,18 +263,8 @@ func registerTools(registry *tool.Registry, workspacePath string) {
 	}
 }
 
-// sanitizeToolName keeps [a-zA-Z0-9_] and maps others to '_'
-func sanitizeToolName(s string) string {
-	b := make([]rune, 0, len(s))
-	for _, r := range s {
-		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' {
-			b = append(b, r)
-		} else {
-			b = append(b, '_')
-		}
-	}
-	return string(b)
-}
+// sanitizeToolName is kept for backward compatibility; use tool.SanitizeToolName instead.
+func sanitizeToolName(s string) string { return tool.SanitizeToolName(s) }
 
 // normalizeWorkspacePath expands a leading ~ and returns a cleaned absolute path
 func normalizeWorkspacePath(p string) string {

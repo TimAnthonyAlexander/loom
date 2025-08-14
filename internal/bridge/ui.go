@@ -655,7 +655,7 @@ func (a *App) SetWorkspace(path string) {
 						server := alias
 						toolName := t.Name
 						safe := serverCfg.Safe
-						name := sanitizeToolName("mcp_" + server + "__" + toolName)
+						name := tool.SanitizeToolName("mcp_" + server + "__" + toolName)
 						_ = reg.Register(tool.Definition{
 							Name:        name,
 							Description: t.Description,
@@ -694,17 +694,7 @@ func (a *App) SetWorkspace(path string) {
 }
 
 // sanitizeToolName keeps [a-zA-Z0-9_] and maps others to '_'
-func sanitizeToolName(s string) string {
-	b := make([]rune, 0, len(s))
-	for _, r := range s {
-		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' {
-			b = append(b, r)
-		} else {
-			b = append(b, '_')
-		}
-	}
-	return string(b)
-}
+func sanitizeToolName(s string) string { return tool.SanitizeToolName(s) }
 
 // ReloadMCP re-reads <workspace>/.loom/mcp.json and rebuilds the registry (core + MCP)
 func (a *App) ReloadMCP() {
@@ -755,7 +745,7 @@ func (a *App) ReloadMCP() {
 						server := alias
 						toolName := t.Name
 						safe := serverCfg.Safe
-						name := sanitizeToolName("mcp_" + server + "__" + toolName)
+						name := tool.SanitizeToolName("mcp_" + server + "__" + toolName)
 						_ = newRegistry.Register(tool.Definition{
 							Name:        name,
 							Description: t.Description,

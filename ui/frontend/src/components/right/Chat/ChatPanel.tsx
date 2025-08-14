@@ -122,9 +122,9 @@ function ChatPanelComponent(props: Props) {
         };
         load();
         const onUpdate = () => load();
-        try { (window as any).wails?.EventsOn?.('system:tools_updated', onUpdate); } catch { }
+        try { (window as any).wails?.EventsOn?.('system:tools_updated', onUpdate); } catch (err) { console.warn('tools_updated subscribe failed', err); }
         return () => {
-            try { (window as any).wails?.EventsOff?.('system:tools_updated'); } catch { }
+            try { (window as any).wails?.EventsOff?.('system:tools_updated'); } catch (err) { console.warn('tools_updated unsubscribe failed', err); }
         };
     }, []);
 
