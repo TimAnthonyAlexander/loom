@@ -615,8 +615,10 @@ func (a *App) SetWorkspace(path string) {
 		_ = tool.RegisterMemories(newRegistry)
 		// Initialize and register Symbols tools with progress reporting
 		if ws := norm; ws != "" {
-			if svc, err := symbols.NewService(ws); err == nil {
-				// Hook reporter to emit UI events
+			if sqliteSvc, err := symbols.NewSQLiteService(ws); err == nil {
+				go func() { _ = sqliteSvc.StartIndexing(context.Background()) }()
+				_ = tool.RegisterSymbols(newRegistry, sqliteSvc)
+			} else if svc, err := symbols.NewService(ws); err == nil {
 				svc.WithReporter(a)
 				go func() { _ = svc.StartIndexing(context.Background()) }()
 				_ = tool.RegisterSymbols(newRegistry, svc)

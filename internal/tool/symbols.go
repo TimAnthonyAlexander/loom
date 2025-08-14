@@ -46,8 +46,18 @@ type ContextPack struct {
 	TotalLines int                 `json:"total_lines"`
 }
 
+// SymbolService defines the API needed by the symbol tools.
+type SymbolService interface {
+	Search(ctx context.Context, q, kind, lang, pathPrefix string, limit int) ([]symbols.SymbolCard, error)
+	Def(ctx context.Context, sid string) (*symbols.SymbolCard, error)
+	Refs(ctx context.Context, sid, kind string) ([]symbols.RefSite, error)
+	Neighborhood(ctx context.Context, sid string, radius int) ([]symbols.FileSlice, error)
+	Outline(ctx context.Context, relPath string) ([]symbols.OutlineNode, error)
+	Workspace() string
+}
+
 // RegisterSymbols registers all symbol tools.
-func RegisterSymbols(registry *Registry, svc *symbols.Service) error {
+func RegisterSymbols(registry *Registry, svc SymbolService) error {
 	// symbols_search
 	if err := registry.Register(Definition{
 		Name:        "symbols_search",
