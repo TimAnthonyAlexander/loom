@@ -603,27 +603,17 @@ func (a *App) SetWorkspace(path string) {
 		// In this context, we expect the Registry to already contain tools registered at startup.
 		// For correctness, try to re-register using the same helpers.
 		// Note: we rely on tool package Register* functions.
-		if err := tool.RegisterReadFile(newRegistry, norm); err != nil {
-		}
+		_ = tool.RegisterReadFile(newRegistry, norm)
 		idx := indexer.NewRipgrepIndexer(norm)
-		if err := tool.RegisterSearchCode(newRegistry, idx); err != nil {
-		}
-		if err := tool.RegisterEditFile(newRegistry, norm); err != nil {
-		}
-		if err := tool.RegisterApplyEdit(newRegistry, norm); err != nil {
-		}
-		if err := tool.RegisterListDir(newRegistry, norm); err != nil {
-		}
-		if err := tool.RegisterFinalize(newRegistry); err != nil {
-		}
-		if err := tool.RegisterRunShell(newRegistry, norm); err != nil {
-		}
-		if err := tool.RegisterApplyShell(newRegistry, norm); err != nil {
-		}
-		if err := tool.RegisterHTTPRequest(newRegistry); err != nil {
-		}
-		if err := tool.RegisterMemories(newRegistry); err != nil {
-		}
+		_ = tool.RegisterSearchCode(newRegistry, idx)
+		_ = tool.RegisterEditFile(newRegistry, norm)
+		_ = tool.RegisterApplyEdit(newRegistry, norm)
+		_ = tool.RegisterListDir(newRegistry, norm)
+		_ = tool.RegisterFinalize(newRegistry)
+		_ = tool.RegisterRunShell(newRegistry, norm)
+		_ = tool.RegisterApplyShell(newRegistry, norm)
+		_ = tool.RegisterHTTPRequest(newRegistry)
+		_ = tool.RegisterMemories(newRegistry)
 		// Register MCP tools asynchronously so workspace switch doesn't block
 		if norm != "" {
 			go func(ws string, reg *tool.Registry) {
@@ -693,8 +683,7 @@ func (a *App) SetWorkspace(path string) {
 	config.LoadRules(path)
 }
 
-// sanitizeToolName keeps [a-zA-Z0-9_] and maps others to '_'
-func sanitizeToolName(s string) string { return tool.SanitizeToolName(s) }
+// (removed) sanitizeToolName: use tool.SanitizeToolName directly where needed
 
 // ReloadMCP re-reads <workspace>/.loom/mcp.json and rebuilds the registry (core + MCP)
 func (a *App) ReloadMCP() {
@@ -707,27 +696,17 @@ func (a *App) ReloadMCP() {
 	}
 	newRegistry := tool.NewRegistry().WithUI(a)
 	// re-register core tools similar to SetWorkspace
-	if err := tool.RegisterReadFile(newRegistry, ws); err != nil {
-	}
+	_ = tool.RegisterReadFile(newRegistry, ws)
 	idx := indexer.NewRipgrepIndexer(ws)
-	if err := tool.RegisterSearchCode(newRegistry, idx); err != nil {
-	}
-	if err := tool.RegisterEditFile(newRegistry, ws); err != nil {
-	}
-	if err := tool.RegisterApplyEdit(newRegistry, ws); err != nil {
-	}
-	if err := tool.RegisterListDir(newRegistry, ws); err != nil {
-	}
-	if err := tool.RegisterFinalize(newRegistry); err != nil {
-	}
-	if err := tool.RegisterRunShell(newRegistry, ws); err != nil {
-	}
-	if err := tool.RegisterApplyShell(newRegistry, ws); err != nil {
-	}
-	if err := tool.RegisterHTTPRequest(newRegistry); err != nil {
-	}
-	if err := tool.RegisterMemories(newRegistry); err != nil {
-	}
+	_ = tool.RegisterSearchCode(newRegistry, idx)
+	_ = tool.RegisterEditFile(newRegistry, ws)
+	_ = tool.RegisterApplyEdit(newRegistry, ws)
+	_ = tool.RegisterListDir(newRegistry, ws)
+	_ = tool.RegisterFinalize(newRegistry)
+	_ = tool.RegisterRunShell(newRegistry, ws)
+	_ = tool.RegisterApplyShell(newRegistry, ws)
+	_ = tool.RegisterHTTPRequest(newRegistry)
+	_ = tool.RegisterMemories(newRegistry)
 	// Add MCP tools
 	if cfgs, err := config.LoadProjectMCP(ws); err == nil && len(cfgs) > 0 {
 		if a.mcpManager == nil {

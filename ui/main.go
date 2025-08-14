@@ -263,8 +263,7 @@ func registerTools(registry *tool.Registry, workspacePath string) {
 	}
 }
 
-// sanitizeToolName is kept for backward compatibility; use tool.SanitizeToolName instead.
-func sanitizeToolName(s string) string { return tool.SanitizeToolName(s) }
+// (removed) sanitizeToolName: use tool.SanitizeToolName directly where needed
 
 // normalizeWorkspacePath expands a leading ~ and returns a cleaned absolute path
 func normalizeWorkspacePath(p string) string {

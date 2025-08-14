@@ -39,8 +39,6 @@ type Client struct {
 	// initCh is non-nil when an initialization handshake is in-flight.
 	// Other callers of EnsureInitialized will wait on this channel.
 	initCh chan error
-	// cfgHash captures the canonical config hash at creation time
-	cfgHash string
 	// Waiting request channels keyed by id, guarded by waitMu
 	waitMu   sync.Mutex
 	waiters  map[int64]chan any
