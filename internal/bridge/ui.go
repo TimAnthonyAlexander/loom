@@ -1114,6 +1114,18 @@ func (a *App) LoadConversation(id string) {
 		if m.Role == "system" || m.Role == "tool" {
 			continue
 		}
+		// Also hide assistant messages that were used for internal steps (thinking/tool_use)
+		// Live chat does not render these JSON payloads, so skip them on replay as well.
+		if m.Role == "assistant" && (strings.TrimSpace(m.Name) != "" || strings.TrimSpace(m.ToolID) != "") {
+			// If this was a persisted thinking block, optionally surface it via reasoning panel
+			if m.Name == "thinking" {
+				var payload map[string]string
+				if json.Unmarshal([]byte(m.Content), &payload) == nil {
+					a.EmitReasoning(payload["thinking"], true)
+				}
+			}
+			continue
+		}
 		a.SendChat(m.Role, m.Content)
 	}
 }

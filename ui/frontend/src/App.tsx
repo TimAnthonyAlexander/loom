@@ -64,6 +64,57 @@ const App: React.FC = () => {
     const [gPerModel, setGPerModel] = useState<Record<string, { provider: string; inUSD: number; outUSD: number; totalUSD: number }>>({});
     const [searchMode, setSearchMode] = useState<'files' | 'text'>('files');
 
+    // Resizable layout state
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const RESIZER_WIDTH = 6;
+    const SIDEBAR_MIN_WIDTH = 280;
+    const CHAT_MIN_WIDTH = 420;
+    const CENTER_MIN_WIDTH = 320;
+    const [sidebarWidth, setSidebarWidth] = useState<number>(() => Math.max(SIDEBAR_MIN_WIDTH, Math.round(window.innerWidth * 0.14)));
+    const [chatWidth, setChatWidth] = useState<number>(() => Math.max(CHAT_MIN_WIDTH, Math.round(window.innerWidth * 0.20)));
+
+    const startLeftResize = (e: React.MouseEvent) => {
+        e.preventDefault();
+        const onMove = (ev: MouseEvent) => {
+            const rect = containerRef.current?.getBoundingClientRect();
+            if (!rect) return;
+            let next = ev.clientX - rect.left;
+            const maxSidebar = rect.width - RESIZER_WIDTH - chatWidth - RESIZER_WIDTH - CENTER_MIN_WIDTH;
+            if (!isFinite(next)) return;
+            next = Math.max(SIDEBAR_MIN_WIDTH, Math.min(next, Math.max(SIDEBAR_MIN_WIDTH, maxSidebar)));
+            setSidebarWidth(next);
+        };
+        const onUp = () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+            try { document.body.style.cursor = ''; document.body.style.userSelect = ''; } catch { }
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+        try { document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; } catch { }
+    };
+
+    const startRightResize = (e: React.MouseEvent) => {
+        e.preventDefault();
+        const onMove = (ev: MouseEvent) => {
+            const rect = containerRef.current?.getBoundingClientRect();
+            if (!rect) return;
+            let next = rect.right - ev.clientX;
+            const maxChat = rect.width - sidebarWidth - RESIZER_WIDTH - RESIZER_WIDTH - CENTER_MIN_WIDTH;
+            if (!isFinite(next)) return;
+            next = Math.max(CHAT_MIN_WIDTH, Math.min(next, Math.max(CHAT_MIN_WIDTH, maxChat)));
+            setChatWidth(next);
+        };
+        const onUp = () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+            try { document.body.style.cursor = ''; document.body.style.userSelect = ''; } catch { }
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+        try { document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; } catch { }
+    };
+
     // File explorer state
     const [dirCache, setDirCache] = useState<Record<string, UIFileEntry[]>>({}); // key: dir path ('' for root)
     const [expandedDirs, setExpandedDirs] = useState<Record<string, boolean>>({});
@@ -625,9 +676,9 @@ const App: React.FC = () => {
     }, []);
 
     return (
-        <Box display="flex" height="100vh" sx={{ bgcolor: 'background.default' }}>
+        <Box ref={containerRef} display="flex" height="100vh" sx={{ bgcolor: 'background.default' }}>
             {/* Left: Sidebar */}
-            <Box sx={{ minWidth: 280, width: '14%', borderRight: 1, borderColor: 'divider' }}>
+            <Box sx={{ minWidth: SIDEBAR_MIN_WIDTH, width: sidebarWidth, borderRight: 1, borderColor: 'divider' }}>
                 <Sidebar
                     onOpenWorkspace={() => setWorkspaceOpen(true)}
                     onOpenRules={() => setRulesOpen(true)}
@@ -642,6 +693,12 @@ const App: React.FC = () => {
                     onOpenFile={openFile}
                 />
             </Box>
+
+            {/* Left Resizer */}
+            <Box
+                onMouseDown={startLeftResize}
+                sx={{ width: RESIZER_WIDTH, cursor: 'col-resize', bgcolor: 'divider' }}
+            />
 
             {/* Center: Tabbed Editor */}
             <Box sx={{ flex: 1 }}>
@@ -667,24 +724,32 @@ const App: React.FC = () => {
                 />
             </Box>
 
-            {/* Right: Chat */}
-            <ChatPanel
-                messages={messages}
-                busy={busy}
-                lastUserIdx={lastUserIdx}
-                reasoningText={reasoningText}
-                reasoningOpen={reasoningOpen}
-                onToggleReasoning={setReasoningOpen}
-                onSend={handleSend}
-                onClear={() => { setMessages([]); ClearConversation(); }}
-                messagesEndRef={messagesEndRef}
-                onNewConversation={handleNewConversation}
-                conversations={orderedConversations}
-                currentConversationId={currentConversationId}
-                onSelectConversation={handleSelectConversation}
-                currentModel={currentModel}
-                onSelectModel={handleModelSelect}
+            {/* Right Resizer */}
+            <Box
+                onMouseDown={startRightResize}
+                sx={{ width: RESIZER_WIDTH, cursor: 'col-resize', bgcolor: 'divider' }}
             />
+
+            {/* Right: Chat */}
+            <Box sx={{ minWidth: CHAT_MIN_WIDTH, width: chatWidth, borderLeft: 1, borderColor: 'divider' }}>
+                <ChatPanel
+                    messages={messages}
+                    busy={busy}
+                    lastUserIdx={lastUserIdx}
+                    reasoningText={reasoningText}
+                    reasoningOpen={reasoningOpen}
+                    onToggleReasoning={setReasoningOpen}
+                    onSend={handleSend}
+                    onClear={() => { setMessages([]); ClearConversation(); }}
+                    messagesEndRef={messagesEndRef}
+                    onNewConversation={handleNewConversation}
+                    conversations={orderedConversations}
+                    currentConversationId={currentConversationId}
+                    onSelectConversation={handleSelectConversation}
+                    currentModel={currentModel}
+                    onSelectModel={handleModelSelect}
+                />
+            </Box>
 
             <ApprovalDialog
                 open={!!approvalRequest}

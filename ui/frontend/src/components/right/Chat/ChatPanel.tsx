@@ -189,7 +189,7 @@ function ChatPanelComponent(props: Props) {
     }, [attachments]);
 
     return (
-        <Box sx={{ minWidth: 420, width: '20%', display: 'flex', flexDirection: 'column', height: '100vh' }}>
+        <Box sx={{ minWidth: 420, width: '100%', display: 'flex', flexDirection: 'column', height: '100vh' }}>
             <Box
                 sx={{
                     width: '100%',
