@@ -266,69 +266,6 @@ func registerTools(registry *tool.Registry, workspacePath string) {
 	}
 }
 
-// registerMCPTools loads <workspace>/.loom/mcp.json, starts servers, and registers their tools
-func registerMCPTools(registry *tool.Registry, workspacePath string) error {
-	// Log where we are looking for project MCP config (supports .loom and .cursor)
-	confPath, err := config.FindProjectMCPPath(workspacePath)
-	if err != nil {
-		log.Printf("[mcp] no project MCP config found in .loom/ or .cursor/ (workspace=%s, err=%v)", workspacePath, err)
-	} else {
-		log.Printf("[mcp] found project MCP config at %s", confPath)
-	}
-
-	cfgs, err := config.LoadProjectMCP(workspacePath)
-	if err != nil {
-		log.Printf("[mcp] failed to load project MCP config: %v", err)
-		return err
-	}
-	if len(cfgs) == 0 {
-		log.Printf("[mcp] no MCP servers configured for workspace %s", workspacePath)
-		return nil
-	}
-	mgr := mcp.NewManager()
-	if err := mgr.Start(cfgs); err != nil {
-		log.Printf("[mcp] failed to start MCP servers: %v", err)
-		return err
-	}
-	toolsets, err := mgr.ListTools()
-	if err != nil {
-		log.Printf("[mcp] failed to list MCP tools: %v", err)
-		return err
-	}
-	log.Printf("[mcp] discovered %d MCP servers with tools", len(toolsets))
-	for alias, tools := range toolsets {
-		serverCfg := cfgs[alias]
-		timeout := time.Duration(serverCfg.TimeoutSec) * time.Second
-		if timeout == 0 {
-			timeout = 60 * time.Second
-		}
-		log.Printf("[mcp] server=%s tools=%d safe=%v timeout=%s", alias, len(tools), serverCfg.Safe, timeout.String())
-		for _, t := range tools {
-			name := sanitizeToolName("mcp_" + alias + "__" + t.Name)
-			// capture loop vars
-			server := alias
-			toolName := t.Name
-			safe := serverCfg.Safe
-			log.Printf("[mcp] registering tool name=%s (server=%s mcpTool=%s)", name, server, toolName)
-			_ = registry.Register(tool.Definition{
-				Name:        name,
-				Description: t.Description,
-				JSONSchema:  t.InputSchema,
-				Safe:        safe,
-				Handler: func(ctx context.Context, raw json.RawMessage) (interface{}, error) {
-					out, err := mgr.Call(server, toolName, raw, timeout)
-					if err != nil {
-						log.Printf("[mcp] tool call error server=%s tool=%s err=%v", server, toolName, err)
-						return "Error: " + err.Error(), nil
-					}
-					return out, nil
-				},
-			})
-		}
-	}
-	return nil
-}
-
 // sanitizeToolName keeps [a-zA-Z0-9_] and maps others to '_'
 func sanitizeToolName(s string) string {
 	b := make([]rune, 0, len(s))
