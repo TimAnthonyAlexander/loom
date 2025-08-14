@@ -39,6 +39,12 @@ export function GetTools():Promise<Array<Record<string, any>>>;
 
 export function GetUsage():Promise<Record<string, any>>;
 
+export function IndexDone(arg1:number):Promise<void>;
+
+export function IndexProgress(arg1:number,arg2:number,arg3:string):Promise<void>;
+
+export function IndexStart(arg1:number):Promise<void>;
+
 export function ListWorkspaceDir(arg1:string):Promise<bridge.UIListDirResult>;
 
 export function LoadConversation(arg1:string):Promise<void>;

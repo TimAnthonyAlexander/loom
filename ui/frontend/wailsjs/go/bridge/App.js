@@ -66,6 +66,18 @@ export function GetUsage() {
   return window['go']['bridge']['App']['GetUsage']();
 }
 
+export function IndexDone(arg1) {
+  return window['go']['bridge']['App']['IndexDone'](arg1);
+}
+
+export function IndexProgress(arg1, arg2, arg3) {
+  return window['go']['bridge']['App']['IndexProgress'](arg1, arg2, arg3);
+}
+
+export function IndexStart(arg1) {
+  return window['go']['bridge']['App']['IndexStart'](arg1);
+}
+
 export function ListWorkspaceDir(arg1) {
   return window['go']['bridge']['App']['ListWorkspaceDir'](arg1);
 }
