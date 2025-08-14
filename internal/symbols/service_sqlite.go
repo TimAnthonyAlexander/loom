@@ -178,8 +178,11 @@ func (s *SQLiteService) IndexAll(ctx context.Context) error {
 		}
 		rel, _ := filepath.Rel(s.workspacePath, path)
 		if d.IsDir() {
-			if ignoreDirName(d.Name()) || ignorePath(rel) {
-				return filepath.SkipDir
+			// Do not skip the workspace root (rel == ".")
+			if rel != "." {
+				if ignoreDirName(d.Name()) || ignorePath(rel) {
+					return filepath.SkipDir
+				}
 			}
 			return nil
 		}
