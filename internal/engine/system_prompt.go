@@ -83,6 +83,7 @@ Memories
   - Follow-ups or verifications for the user, if any
 • If no tools were needed, answer concisely without calling finalize.
 • Finalize is only needed after tools have been used.
+• Write a very extensive finalize message. You may use markdown formatting.
 
 7. Error-prevention checklist
 ☑ Use only workspace-relative paths; never escape the workspace.
