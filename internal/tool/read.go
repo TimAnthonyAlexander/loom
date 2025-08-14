@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/loom/loom/internal/symbols"
 )
 
 // ReadFileArgs represents the arguments for the read_file tool.
@@ -25,6 +27,32 @@ type ReadFileResult struct {
 	Language string `json:"language,omitempty"`
 	Lines    int    `json:"lines"`
 	Path     string `json:"path"`
+	// A brief summary of symbols found in this file (first 20 max), plus a hint about symbol tools
+	SymbolsSummary string           `json:"symbols_summary,omitempty"`
+	Symbols        []SymbolListItem `json:"symbols,omitempty"`
+}
+
+// SymbolListItem is a compact representation of a symbol for embedding alongside read_file content
+type SymbolListItem struct {
+	Name string `json:"name"`
+	Kind string `json:"kind"`
+	Span [2]int `json:"span"`
+}
+
+// flattenOutline flattens an outline tree to a list of SymbolListItem preserving pre-order
+func flattenOutline(nodes []symbols.OutlineNode) []SymbolListItem {
+	var out []SymbolListItem
+	var walk func([]symbols.OutlineNode)
+	walk = func(ns []symbols.OutlineNode) {
+		for _, n := range ns {
+			out = append(out, SymbolListItem{Name: n.Name, Kind: n.Kind, Span: [2]int{n.Span[0], n.Span[1]}})
+			if len(n.Children) > 0 {
+				walk(n.Children)
+			}
+		}
+	}
+	walk(nodes)
+	return out
 }
 
 // RegisterReadFile registers the read_file tool with the registry.
@@ -61,13 +89,13 @@ func RegisterReadFile(registry *Registry, workspacePath string) error {
 				return nil, fmt.Errorf("failed to parse arguments: %w", err)
 			}
 
-			return readFile(workspacePath, args)
+			return readFile(ctx, workspacePath, args)
 		},
 	})
 }
 
 // readFile implements the file reading logic.
-func readFile(workspacePath string, args ReadFileArgs) (*ReadFileResult, error) {
+func readFile(ctx context.Context, workspacePath string, args ReadFileArgs) (*ReadFileResult, error) {
 	// Normalize and validate the path
 	path := args.Path
 	if !filepath.IsAbs(path) {
@@ -147,11 +175,40 @@ func readFile(workspacePath string, args ReadFileArgs) (*ReadFileResult, error) 
 	// Detect language based on file extension
 	language := detectLanguage(path)
 
+	// Attempt to compute a symbols outline for this file and include a compact summary.
+	// This does not change Content to avoid breaking existing consumers that depend on raw file text.
+	rel := args.Path
+	if filepath.IsAbs(rel) {
+		if r, err := filepath.Rel(workspacePath, rel); err == nil {
+			rel = r
+		}
+	}
+
+	var symSummary string
+	var symItems []SymbolListItem
+	if rel != "" {
+		if svc, err := symbols.NewService(workspacePath); err == nil {
+			if outline, err := svc.Outline(ctx, rel); err == nil {
+				// Flatten and limit to 20 items
+				flat := flattenOutline(outline)
+				total := len(flat)
+				if len(flat) > 20 {
+					symItems = flat[:20]
+				} else {
+					symItems = flat
+				}
+				symSummary = fmt.Sprintf("Symbols: showing %d of %d in this file. Use tools: symbols_search, symbols_def, symbols_refs, symbols_neighborhood, symbols_outline.", len(symItems), total)
+			}
+		}
+	}
+
 	return &ReadFileResult{
-		Content:  contentStr,
-		Language: language,
-		Lines:    lines,
-		Path:     args.Path,
+		Content:        contentStr,
+		Language:       language,
+		Lines:          lines,
+		Path:           args.Path,
+		SymbolsSummary: symSummary,
+		Symbols:        symItems,
 	}, nil
 }
 
