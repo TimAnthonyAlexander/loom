@@ -14,7 +14,7 @@ import (
 	"github.com/loom/loom/internal/engine"
 	"github.com/loom/loom/internal/indexer"
 	"github.com/loom/loom/internal/memory"
-	"github.com/loom/loom/internal/symbols"
+
 	"github.com/loom/loom/internal/tool"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/menu"
@@ -99,21 +99,7 @@ func main() {
 	// Register core tools for the resolved workspace
 	registerTools(registry, workspacePath)
 
-	// Initialize symbols service and start indexing
-	symsvc, err := symbols.NewService(workspacePath)
-	if err != nil {
-		log.Printf("Warning: symbols service init failed: %v", err)
-	} else {
-		go func() {
-			if err := symsvc.StartIndexing(context.Background()); err != nil {
-				log.Printf("symbols indexing error: %v", err)
-			}
-		}()
-		// Register symbol tools
-		if err := tool.RegisterSymbols(registry, symsvc); err != nil {
-			log.Printf("Failed to register symbols tools: %v", err)
-		}
-	}
+	// Symbols tools are registered in the bridge when workspace is set
 
 	// Create the engine and configure it
 	eng := engine.New(llm, nil)

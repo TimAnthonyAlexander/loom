@@ -63,6 +63,8 @@ const App: React.FC = () => {
     const [gPerProvider, setGPerProvider] = useState<Record<string, { inUSD: number; outUSD: number; totalUSD: number; inTokens: number; outTokens: number; totalTokens: number }>>({});
     const [gPerModel, setGPerModel] = useState<Record<string, { provider: string; inUSD: number; outUSD: number; totalUSD: number }>>({});
     const [searchMode, setSearchMode] = useState<'files' | 'text'>('files');
+    // Symbols indexing progress
+    const [indexing, setIndexing] = useState<{ status: 'idle' | 'start' | 'progress' | 'done'; total: number; done: number; file: string }>({ status: 'idle', total: 0, done: 0, file: '' });
 
     // Resizable layout state
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -269,6 +271,15 @@ const App: React.FC = () => {
         // Listen for busy state changes
         EventsOn('system:busy', (isBusy: boolean) => {
             setBusy(!!isBusy);
+        });
+
+        // Listen for symbols indexing progress
+        EventsOn('symbols:indexing', (payload: any) => {
+            const status = String(payload?.status || 'progress') as any;
+            const total = Number(payload?.total || 0);
+            const done = Number(payload?.done || 0);
+            const file = String(payload?.file || '');
+            setIndexing({ status, total, done, file });
         });
 
         // Load settings
@@ -691,6 +702,7 @@ const App: React.FC = () => {
                     expandedDirs={expandedDirs}
                     onToggleDir={toggleDir}
                     onOpenFile={openFile}
+                    indexing={indexing}
                 />
             </Box>
 

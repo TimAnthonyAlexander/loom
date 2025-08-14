@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography, IconButton, Tooltip, Paper } from '@mui/material';
+import { Box, Typography, IconButton, Tooltip, Paper, LinearProgress } from '@mui/material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RuleIcon from '@mui/icons-material/Rule';
 import MemoryIcon from '@mui/icons-material/BookmarkBorder';
@@ -18,6 +18,7 @@ type SidebarProps = {
     expandedDirs: Record<string, boolean>;
     onToggleDir: (path: string) => void;
     onOpenFile: (path: string) => void;
+    indexing?: { status: 'idle' | 'start' | 'progress' | 'done'; total: number; done: number; file: string };
 };
 
 function Sidebar(props: SidebarProps) {
@@ -33,6 +34,7 @@ function Sidebar(props: SidebarProps) {
         expandedDirs,
         onToggleDir,
         onOpenFile,
+        indexing,
     } = props;
 
     return (
@@ -75,6 +77,19 @@ function Sidebar(props: SidebarProps) {
                         </IconButton>
                     </Tooltip>
                 </Box>
+                {indexing && (indexing.status === 'start' || indexing.status === 'progress') && (
+                    <Box sx={{ mt: 1 }}>
+                        <Typography variant="caption" color="text.secondary">
+                            Indexing symbols… {Math.min(100, Math.floor((indexing.done / Math.max(1, indexing.total)) * 100))}%
+                        </Typography>
+                        <LinearProgress variant="determinate" value={Math.min(100, (indexing.done / Math.max(1, indexing.total)) * 100)} sx={{ height: 4, borderRadius: 1, mt: 0.5 }} />
+                        {indexing.file && (
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }} noWrap>
+                                {indexing.file}
+                            </Typography>
+                        )}
+                    </Box>
+                )}
             </Box>
 
             <Box

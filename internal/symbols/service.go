@@ -91,6 +91,7 @@ type Service struct {
 	byFile        map[string][]string
 	refs          map[string][]RefSite // sid -> refs
 	lastIndex     time.Time
+	reporter      ProgressReporter
 }
 
 // NewService creates a new in-memory symbol service.
@@ -123,10 +124,11 @@ func (s *Service) IndexAll(ctx context.Context) error {
 	s.symbols = make(map[string]Symbol)
 	s.byFile = make(map[string][]string)
 	s.refs = make(map[string][]RefSite)
-	// Walk
-	return filepath.WalkDir(s.workspacePath, func(path string, d fs.DirEntry, err error) error {
+	// First pass: collect candidate files
+	var files []string
+	_ = filepath.WalkDir(s.workspacePath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return err
+			return nil
 		}
 		rel, _ := filepath.Rel(s.workspacePath, path)
 		if d.IsDir() {
@@ -138,8 +140,27 @@ func (s *Service) IndexAll(ctx context.Context) error {
 		if ignorePath(rel) {
 			return nil
 		}
-		return s.indexFileUnlocked(ctx, rel)
+		// skip very large files quickly
+		if fi, e := os.Stat(path); e == nil && !fi.IsDir() && fi.Size() <= 1_500_000 {
+			files = append(files, rel)
+		}
+		return nil
 	})
+	// Report start
+	if s.reporter != nil {
+		s.reporter.IndexStart(len(files))
+	}
+	// Second pass: index and report progress
+	for i, f := range files {
+		_ = s.indexFileUnlocked(ctx, f)
+		if s.reporter != nil {
+			s.reporter.IndexProgress(i+1, len(files), f)
+		}
+	}
+	if s.reporter != nil {
+		s.reporter.IndexDone(len(files))
+	}
+	return nil
 }
 
 // IndexFile reindexes a single file.
@@ -338,6 +359,16 @@ func (s *Service) Outline(ctx context.Context, relPath string) ([]OutlineNode, e
 
 // Workspace returns the absolute workspace path backing this service.
 func (s *Service) Workspace() string { return s.workspacePath }
+
+// ProgressReporter receives callbacks during IndexAll to report progress to UI
+type ProgressReporter interface {
+	IndexStart(total int)
+	IndexProgress(done int, total int, file string)
+	IndexDone(total int)
+}
+
+// WithReporter sets a progress reporter for UI updates.
+func (s *Service) WithReporter(r ProgressReporter) { s.reporter = r }
 
 // Helpers
 func ignorePath(rel string) bool {

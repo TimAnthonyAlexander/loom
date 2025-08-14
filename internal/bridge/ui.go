@@ -21,6 +21,7 @@ import (
 	"github.com/loom/loom/internal/engine"
 	"github.com/loom/loom/internal/indexer"
 	"github.com/loom/loom/internal/mcp"
+	"github.com/loom/loom/internal/symbols"
 	"github.com/loom/loom/internal/tool"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -40,6 +41,10 @@ type App struct {
 	mcpManager *mcp.Manager
 	// debounce timestamp for SetWorkspace to coalesce rapid calls
 	lastWorkspaceSet time.Time
+	// symbols reporter
+	indexingTotal   int
+	indexingDone    int
+	indexingCurrent string
 }
 
 // NewApp creates a new App application struct.
@@ -608,6 +613,15 @@ func (a *App) SetWorkspace(path string) {
 		_ = tool.RegisterApplyShell(newRegistry, norm)
 		_ = tool.RegisterHTTPRequest(newRegistry)
 		_ = tool.RegisterMemories(newRegistry)
+		// Initialize and register Symbols tools with progress reporting
+		if ws := norm; ws != "" {
+			if svc, err := symbols.NewService(ws); err == nil {
+				// Hook reporter to emit UI events
+				svc.WithReporter(a)
+				go func() { _ = svc.StartIndexing(context.Background()) }()
+				_ = tool.RegisterSymbols(newRegistry, svc)
+			}
+		}
 		// Register MCP tools asynchronously so workspace switch doesn't block
 		if norm != "" {
 			go func(ws string, reg *tool.Registry) {
@@ -700,6 +714,14 @@ func (a *App) ReloadMCP() {
 	_ = tool.RegisterApplyShell(newRegistry, ws)
 	_ = tool.RegisterHTTPRequest(newRegistry)
 	_ = tool.RegisterMemories(newRegistry)
+	// Recreate Symbols for current workspace and register
+	if ws := strings.TrimSpace(a.engine.Workspace()); ws != "" {
+		if svc, err := symbols.NewService(ws); err == nil {
+			svc.WithReporter(a)
+			go func() { _ = svc.StartIndexing(context.Background()) }()
+			_ = tool.RegisterSymbols(newRegistry, svc)
+		}
+	}
 	// Add MCP tools
 	if cfgs, err := config.LoadProjectMCP(ws); err == nil && len(cfgs) > 0 {
 		if a.mcpManager == nil {
@@ -740,6 +762,34 @@ func (a *App) ReloadMCP() {
 	a.tools = newRegistry
 	if a.engine != nil {
 		a.engine.WithRegistry(newRegistry)
+	}
+}
+
+// ProgressReporter implementation for symbols indexing
+func (a *App) IndexStart(total int) {
+	a.indexingTotal = total
+	a.indexingDone = 0
+	a.indexingCurrent = ""
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "symbols:indexing", map[string]any{"status": "start", "total": total, "done": 0, "file": ""})
+	}
+}
+
+func (a *App) IndexProgress(done int, total int, file string) {
+	a.indexingDone = done
+	a.indexingTotal = total
+	a.indexingCurrent = file
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "symbols:indexing", map[string]any{"status": "progress", "total": total, "done": done, "file": file})
+	}
+}
+
+func (a *App) IndexDone(total int) {
+	a.indexingDone = total
+	a.indexingTotal = total
+	a.indexingCurrent = ""
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "symbols:indexing", map[string]any{"status": "done", "total": total, "done": total, "file": ""})
 	}
 }
 
