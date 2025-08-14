@@ -197,6 +197,7 @@ function ChatPanelComponent(props: Props) {
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     p: 2,
+                    boxSizing: 'border-box',
                     borderBottom: 1,
                     borderColor: 'divider',
                 }}
@@ -210,7 +211,7 @@ function ChatPanelComponent(props: Props) {
                 </Button>
                 <ModelSelector onSelect={onSelectModel} currentModel={currentModel} />
             </Box>
-            <Box sx={{ flex: 1, overflowY: 'auto', px: 3, py: 2, minHeight: 0 }}>
+            <Box sx={{ flex: 1, overflowY: 'auto', px: 3, py: 2, minHeight: 0, boxSizing: 'border-box' }}>
                 <MessageList
                     messages={messages}
                     busy={busy}
@@ -247,7 +248,7 @@ function ChatPanelComponent(props: Props) {
                 </Button>
             </Box>
             <Divider />
-            <Box sx={{ px: 3, py: 2 }}>
+            <Box sx={{ px: 3, py: 2, boxSizing: 'border-box', }} >
                 <Composer
                     input={localInput}
                     setInput={setLocalInput}

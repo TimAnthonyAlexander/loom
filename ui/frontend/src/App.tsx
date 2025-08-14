@@ -66,12 +66,12 @@ const App: React.FC = () => {
 
     // Resizable layout state
     const containerRef = useRef<HTMLDivElement | null>(null);
-    const RESIZER_WIDTH = 6;
+    const RESIZER_WIDTH = 2;
     const SIDEBAR_MIN_WIDTH = 280;
-    const CHAT_MIN_WIDTH = 420;
+    const CHAT_MIN_WIDTH = 450;
     const CENTER_MIN_WIDTH = 320;
     const [sidebarWidth, setSidebarWidth] = useState<number>(() => Math.max(SIDEBAR_MIN_WIDTH, Math.round(window.innerWidth * 0.14)));
-    const [chatWidth, setChatWidth] = useState<number>(() => Math.max(CHAT_MIN_WIDTH, Math.round(window.innerWidth * 0.20)));
+    const [chatWidth, setChatWidth] = useState<number>(() => Math.max(CHAT_MIN_WIDTH, Math.round(window.innerWidth * 0.21)));
 
     const startLeftResize = (e: React.MouseEvent) => {
         e.preventDefault();
