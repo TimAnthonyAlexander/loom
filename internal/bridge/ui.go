@@ -641,8 +641,6 @@ func (a *App) SetWorkspace(path string) {
 				if err := a.mcpManager.Start(cfgs); err != nil {
 					return
 				}
-				// Give the MCP servers a brief moment to finish init
-				time.Sleep(500 * time.Millisecond)
 				toolsets, err := a.mcpManager.ListTools()
 				if err != nil {
 					return
@@ -742,9 +740,11 @@ func (a *App) ReloadMCP() {
 	}
 	// Add MCP tools
 	if cfgs, err := config.LoadProjectMCP(ws); err == nil && len(cfgs) > 0 {
-		mgr := mcp.NewManager()
-		if mgr.Start(cfgs) == nil {
-			if toolsets, err := mgr.ListTools(); err == nil {
+		if a.mcpManager == nil {
+			a.mcpManager = mcp.NewManager()
+		}
+		if a.mcpManager.Start(cfgs) == nil {
+			if toolsets, err := a.mcpManager.ListTools(); err == nil {
 				for alias, tools := range toolsets {
 					serverCfg := cfgs[alias]
 					timeout := time.Duration(serverCfg.TimeoutSec) * time.Second
@@ -762,7 +762,7 @@ func (a *App) ReloadMCP() {
 							JSONSchema:  t.InputSchema,
 							Safe:        safe,
 							Handler: func(ctx context.Context, raw json.RawMessage) (interface{}, error) {
-								out, err := mgr.Call(server, toolName, raw, timeout)
+								out, err := a.mcpManager.Call(server, toolName, raw, timeout)
 								if err != nil {
 									return "Error: " + err.Error(), nil
 								}

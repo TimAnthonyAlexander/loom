@@ -46,7 +46,11 @@ func (m *Manager) Start(cfgs map[string]config.MCPServerConfig) error {
 		// If an existing client for alias exists and its canonicalized config matches, reuse it
 		if existing, ok := m.clients[alias]; ok {
 			if configsCanonicallyEqual(existing.cfg, cfg) {
-				log.Printf("[mcp] Start(alias=%s): cfgHash=%s action=noop pid=%d", alias, hashConfigs(map[string]config.MCPServerConfig{"a": cfg})[:8], existing.cmd.Process.Pid)
+				pid := -1
+				if existing != nil && existing.cmd != nil && existing.cmd.Process != nil {
+					pid = existing.cmd.Process.Pid
+				}
+				log.Printf("[mcp] Start(alias=%s): cfgHash=%s action=noop pid=%d", alias, hashConfigs(map[string]config.MCPServerConfig{"a": cfg})[:8], pid)
 				newClients[alias] = existing
 				continue
 			}

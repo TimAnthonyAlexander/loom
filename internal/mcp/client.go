@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/loom/loom/internal/config"
@@ -33,7 +34,7 @@ type Client struct {
 	stdin  io.WriteCloser
 	stdout *bufio.Reader
 	mu     sync.Mutex
-	reqID  int64
+	reqID  atomic.Int64
 	inited bool
 	// initCh is non-nil when an initialization handshake is in-flight.
 	// Other callers of EnsureInitialized will wait on this channel.
@@ -288,8 +289,7 @@ func (c *Client) CallTool(ctx context.Context, toolName string, args json.RawMes
 // request sends a JSON-RPC request and waits for a response
 func (c *Client) request(ctx context.Context, method string, params any) (any, error) {
 	c.mu.Lock()
-	c.reqID++
-	id := c.reqID
+	id := c.reqID.Add(1)
 	req := map[string]any{
 		"jsonrpc": "2.0",
 		"id":      id,

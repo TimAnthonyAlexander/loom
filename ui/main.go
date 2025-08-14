@@ -290,8 +290,6 @@ func registerMCPTools(registry *tool.Registry, workspacePath string) error {
 		log.Printf("[mcp] failed to start MCP servers: %v", err)
 		return err
 	}
-	// ensure servers are initialized before listing tools
-	time.Sleep(500 * time.Millisecond)
 	toolsets, err := mgr.ListTools()
 	if err != nil {
 		log.Printf("[mcp] failed to list MCP tools: %v", err)
