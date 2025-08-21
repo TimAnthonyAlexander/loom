@@ -266,6 +266,11 @@ func registerTools(registry *tool.Registry, workspacePath string) {
 	if err := tool.RegisterMemories(registry); err != nil {
 		log.Printf("Failed to register memories tool: %v", err)
 	}
+
+	// Project profile tools
+	if err := tool.RegisterProjectProfileTools(registry, workspacePath); err != nil {
+		log.Printf("Failed to register project profile tools: %v", err)
+	}
 }
 
 // (removed) sanitizeToolName: use tool.SanitizeToolName directly where needed

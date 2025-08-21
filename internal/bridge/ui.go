@@ -21,6 +21,7 @@ import (
 	"github.com/loom/loom/internal/engine"
 	"github.com/loom/loom/internal/indexer"
 	"github.com/loom/loom/internal/mcp"
+	"github.com/loom/loom/internal/profiler"
 	"github.com/loom/loom/internal/symbols"
 	"github.com/loom/loom/internal/tool"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -618,6 +619,7 @@ func (a *App) SetWorkspace(path string) {
 		_ = tool.RegisterApplyShell(newRegistry, norm)
 		_ = tool.RegisterHTTPRequest(newRegistry)
 		_ = tool.RegisterMemories(newRegistry)
+		_ = tool.RegisterProjectProfileTools(newRegistry, norm)
 		// Initialize and register Symbols tools with progress reporting
 		if ws := norm; ws != "" {
 			if sqliteSvc, err := symbols.NewSQLiteService(ws); err == nil {
@@ -699,6 +701,28 @@ func (a *App) SetWorkspace(path string) {
 	a.gitMatcher = a.buildGitignoreMatcher(norm)
 	// After switching, log current rules snapshot for debug
 	_, _, _ = config.LoadRules(path)
+
+	// Check if profiler should run and run it in background
+	go func(workspace string) {
+		runner := profiler.NewRunner(workspace)
+		if runner.ShouldRun() {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			if profile, err := runner.Run(ctx); err == nil {
+				// Emit completion event to UI
+				if a.ctx != nil {
+					summary := map[string]interface{}{
+						"languages":       profile.Languages,
+						"entrypoints":     len(profile.Entrypoints),
+						"important_files": len(profile.ImportantFiles),
+						"scripts":         len(profile.Scripts),
+					}
+					runtime.EventsEmit(a.ctx, "profiler:completed", summary)
+				}
+			}
+		}
+	}(norm)
 }
 
 // (removed) sanitizeToolName: use tool.SanitizeToolName directly where needed
@@ -725,6 +749,7 @@ func (a *App) ReloadMCP() {
 	_ = tool.RegisterApplyShell(newRegistry, ws)
 	_ = tool.RegisterHTTPRequest(newRegistry)
 	_ = tool.RegisterMemories(newRegistry)
+	_ = tool.RegisterProjectProfileTools(newRegistry, ws)
 	// Recreate Symbols for current workspace and register
 	if ws := strings.TrimSpace(a.engine.Workspace()); ws != "" {
 		if svc, err := symbols.NewService(ws); err == nil {
@@ -826,6 +851,179 @@ func (a *App) GetSymbolsCount() int {
 		return 0
 	}
 	return n
+}
+
+// GetSymbolsDebug returns debug info about the symbols service
+func (a *App) GetSymbolsDebug() map[string]interface{} {
+	debug := map[string]interface{}{
+		"service_exists": a.symbolsSvc != nil,
+		"service_type":   "",
+		"count":          0,
+		"search_test":    "",
+	}
+
+	if a.symbolsSvc == nil {
+		return debug
+	}
+
+	// Get the type info
+	debug["service_type"] = fmt.Sprintf("%T", a.symbolsSvc)
+
+	// Try to get count
+	if countable, ok := a.symbolsSvc.(interface {
+		Count(context.Context) (int, error)
+	}); ok {
+		if count, err := countable.Count(context.Background()); err == nil {
+			debug["count"] = count
+		}
+	}
+
+	// Try a simple search test
+	if searchable, ok := a.symbolsSvc.(interface {
+		Search(ctx context.Context, q, kind, lang, pathPrefix string, limit int) ([]symbols.SymbolCard, error)
+	}); ok {
+		if results, err := searchable.Search(context.Background(), "func", "", "", "", 5); err == nil {
+			debug["search_test"] = fmt.Sprintf("Found %d results for 'func'", len(results))
+			if len(results) > 0 {
+				debug["sample_symbol"] = results[0]
+			}
+		} else {
+			debug["search_test"] = fmt.Sprintf("Search error: %v", err)
+		}
+	}
+
+	return debug
+}
+
+// GetSymbols returns symbols data with pagination
+func (a *App) GetSymbols(page int, limit int) map[string]interface{} {
+	result := map[string]interface{}{
+		"symbols": []map[string]interface{}{},
+		"total":   0,
+		"page":    page,
+		"limit":   limit,
+	}
+
+	if a.symbolsSvc == nil {
+		return result
+	}
+
+	// Access symbols service directly with proper type assertion
+	allSymbols := make(map[string]interface{})
+
+	// Try to access with the correct SymbolCard type
+	if svc, ok := a.symbolsSvc.(interface {
+		Search(ctx context.Context, q, kind, lang, pathPrefix string, limit int) ([]symbols.SymbolCard, error)
+	}); ok {
+		// Use diverse search terms that are likely to be in a Go project
+		searchTerms := []string{
+			"func", "App", "New", "Get", "Set", "Handle", "Process", "Service", "Manager",
+			"Create", "Update", "Delete", "Load", "Save", "Start", "Stop", "Run", "Main",
+			"Error", "String", "Context", "Request", "Response", "Config", "Client", "Server",
+		}
+
+		for _, term := range searchTerms {
+			symbolCards, err := svc.Search(context.Background(), term, "", "", "", 50)
+			if err == nil && symbolCards != nil {
+				for _, card := range symbolCards {
+					// Convert SymbolCard to map for JSON serialization
+					symMap := map[string]interface{}{
+						"sid":         card.SID,
+						"name":        card.Name,
+						"kind":        card.Kind,
+						"file":        card.File,
+						"line":        card.Span[0], // line_start
+						"lang":        card.Lang,
+						"signature":   card.Signature,
+						"doc_excerpt": card.DocExcerpt,
+						"confidence":  card.Confidence,
+						"container":   card.Container,
+					}
+					// Use SID as unique key to avoid duplicates
+					allSymbols[card.SID] = symMap
+				}
+			}
+
+			// Stop early if we have enough symbols for reasonable pagination
+			if len(allSymbols) >= 1000 {
+				break
+			}
+		}
+	}
+
+	// Convert to slice for pagination
+	symbolsSlice := make([]interface{}, 0, len(allSymbols))
+	for _, sym := range allSymbols {
+		symbolsSlice = append(symbolsSlice, sym)
+	}
+
+	totalSymbols := len(symbolsSlice)
+	start := page * limit
+	end := start + limit
+
+	if start >= totalSymbols {
+		result["total"] = totalSymbols
+		return result
+	}
+	if end > totalSymbols {
+		end = totalSymbols
+	}
+
+	pageSymbols := symbolsSlice[start:end]
+	symbolMaps := make([]map[string]interface{}, len(pageSymbols))
+
+	for i, sym := range pageSymbols {
+		if symMap, ok := sym.(map[string]interface{}); ok {
+			symbolMaps[i] = symMap
+		}
+	}
+
+	result["symbols"] = symbolMaps
+	result["total"] = totalSymbols
+
+	return result
+}
+
+// GetProfileData returns combined profile data including symbols, hotlist, and rules
+func (a *App) GetProfileData(symbolsPage int, symbolsLimit int) map[string]interface{} {
+	result := map[string]interface{}{
+		"symbols": map[string]interface{}{
+			"symbols": []map[string]interface{}{},
+			"total":   0,
+			"page":    symbolsPage,
+			"limit":   symbolsLimit,
+		},
+		"hotlist": []string{},
+		"rules":   "",
+		"profile": nil,
+	}
+
+	if a.engine == nil {
+		return result
+	}
+
+	workspace := strings.TrimSpace(a.engine.Workspace())
+	if workspace == "" {
+		return result
+	}
+
+	// Get symbols
+	symbolsData := a.GetSymbols(symbolsPage, symbolsLimit)
+	result["symbols"] = symbolsData
+
+	// Get hotlist
+	hotlist := a.GetProjectHotlist()
+	result["hotlist"] = hotlist
+
+	// Get rules
+	rules := a.GetProjectRules()
+	result["rules"] = rules
+
+	// Get profile summary
+	profile := a.GetProjectProfile()
+	result["profile"] = profile
+
+	return result
 }
 
 // buildGitignoreMatcher scans the workspace for .gitignore files and builds a matcher
@@ -1657,4 +1855,174 @@ func (a *App) WriteWorkspaceFile(payload map[string]string) map[string]string {
 	// Compute and return new serverRev
 	res["serverRev"] = computeServerRev([]byte(content))
 	return res
+}
+
+// RunProfiler runs the project profiler on the current workspace
+func (a *App) RunProfiler() map[string]interface{} {
+	result := map[string]interface{}{
+		"success": false,
+		"error":   "",
+		"profile": nil,
+	}
+
+	if a.engine == nil {
+		result["error"] = "engine not initialized"
+		return result
+	}
+
+	workspace := strings.TrimSpace(a.engine.Workspace())
+	if workspace == "" {
+		result["error"] = "workspace not set"
+		return result
+	}
+
+	runner := profiler.NewRunner(workspace)
+
+	// Run in background context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	profile, err := runner.Run(ctx)
+	if err != nil {
+		result["error"] = err.Error()
+		return result
+	}
+
+	result["success"] = true
+	result["profile"] = profile
+
+	// Emit event to notify UI of completion
+	if a.ctx != nil {
+		summary := map[string]interface{}{
+			"languages":       profile.Languages,
+			"entrypoints":     len(profile.Entrypoints),
+			"important_files": len(profile.ImportantFiles),
+			"scripts":         len(profile.Scripts),
+		}
+		runtime.EventsEmit(a.ctx, "profiler:completed", summary)
+	}
+
+	return result
+}
+
+// GetProjectProfile returns the existing project profile if available
+func (a *App) GetProjectProfile() map[string]interface{} {
+	result := map[string]interface{}{
+		"exists":  false,
+		"profile": nil,
+		"error":   "",
+	}
+
+	if a.engine == nil {
+		result["error"] = "engine not initialized"
+		return result
+	}
+
+	workspace := strings.TrimSpace(a.engine.Workspace())
+	if workspace == "" {
+		result["error"] = "workspace not set"
+		return result
+	}
+
+	runner := profiler.NewRunner(workspace)
+	profile, err := runner.GetExistingProfile()
+	if err != nil {
+		result["error"] = err.Error()
+		return result
+	}
+
+	result["exists"] = true
+	result["profile"] = profile
+	return result
+}
+
+// GetProjectHotlist returns the hotlist of important files
+func (a *App) GetProjectHotlist() []string {
+	if a.engine == nil {
+		return []string{}
+	}
+
+	workspace := strings.TrimSpace(a.engine.Workspace())
+	if workspace == "" {
+		return []string{}
+	}
+
+	runner := profiler.NewRunner(workspace)
+	hotlist, err := runner.GetHotlist()
+	if err != nil {
+		return []string{}
+	}
+
+	return hotlist
+}
+
+// GetProjectRules returns the generated project rules
+func (a *App) GetProjectRules() string {
+	if a.engine == nil {
+		return ""
+	}
+
+	workspace := strings.TrimSpace(a.engine.Workspace())
+	if workspace == "" {
+		return ""
+	}
+
+	runner := profiler.NewRunner(workspace)
+	rules, err := runner.GetRules()
+	if err != nil {
+		return ""
+	}
+
+	return rules
+}
+
+// ShouldRunProfiler checks if the profiler should be run
+func (a *App) ShouldRunProfiler() bool {
+	if a.engine == nil {
+		return false
+	}
+
+	workspace := strings.TrimSpace(a.engine.Workspace())
+	if workspace == "" {
+		return false
+	}
+
+	runner := profiler.NewRunner(workspace)
+	return runner.ShouldRun()
+}
+
+// RunQuickProfiler performs a quick profiling for basic project information
+func (a *App) RunQuickProfiler() map[string]interface{} {
+	result := map[string]interface{}{
+		"success": false,
+		"error":   "",
+		"profile": nil,
+	}
+
+	if a.engine == nil {
+		result["error"] = "engine not initialized"
+		return result
+	}
+
+	workspace := strings.TrimSpace(a.engine.Workspace())
+	if workspace == "" {
+		result["error"] = "workspace not set"
+		return result
+	}
+
+	runner := profiler.NewRunner(workspace)
+
+	// Quick run with short timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	profile, err := runner.RunQuick(ctx)
+	if err != nil {
+		result["error"] = err.Error()
+		return result
+	}
+
+	result["success"] = true
+	result["profile"] = profile
+	return result
 }

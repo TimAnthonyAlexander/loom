@@ -90,6 +90,17 @@ func (r *Registry) Get(name string) (Definition, bool) {
 	return def, ok
 }
 
+// GetHandler retrieves a tool handler function by name.
+func (r *Registry) GetHandler(name string) func(ctx context.Context, raw json.RawMessage) (interface{}, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if def, ok := r.tools[name]; ok {
+		return def.Handler
+	}
+	return nil
+}
+
 // Tools returns all registered tool definitions.
 func (r *Registry) Tools() []Definition {
 	r.mu.RLock()

@@ -1,0 +1,1704 @@
+{
+  "workspace_root": "/Users/tim.alexander/loom",
+  "created_at_unix": 1755783582,
+  "languages": [
+    "typescript",
+    "go"
+  ],
+  "entrypoints": [
+    {
+      "path": "ui/frontend/src/main.ts",
+      "kind": "frontend",
+      "hints": [
+        "vite"
+      ]
+    },
+    {
+      "path": "ui/frontend/src/main.ts",
+      "kind": "frontend",
+      "hints": [
+        "vite"
+      ]
+    },
+    {
+      "path": "ui/frontend/wailsjs/runtime/runtime.js",
+      "kind": "backend",
+      "hints": null
+    },
+    {
+      "path": "ui/wails.json",
+      "kind": "backend",
+      "hints": [
+        "wails"
+      ]
+    },
+    {
+      "path": "web/src/main.ts",
+      "kind": "frontend",
+      "hints": [
+        "vite"
+      ]
+    }
+  ],
+  "scripts": [
+    {
+      "name": "dev",
+      "source": "package.json",
+      "cmd": "vite --port 5173 --strictPort",
+      "paths": null
+    },
+    {
+      "name": "dev:debug",
+      "source": "package.json",
+      "cmd": "vite --debug --host",
+      "paths": null
+    },
+    {
+      "name": "build",
+      "source": "package.json",
+      "cmd": "tsc \u0026\u0026 vite build",
+      "paths": null
+    },
+    {
+      "name": "preview",
+      "source": "package.json",
+      "cmd": "vite preview",
+      "paths": null
+    },
+    {
+      "name": "dev",
+      "source": "package.json",
+      "cmd": "screen -dmS loom-frontend-web vite --port 8444",
+      "paths": null
+    },
+    {
+      "name": "build",
+      "source": "package.json",
+      "cmd": "tsc -b \u0026\u0026 vite build",
+      "paths": null
+    },
+    {
+      "name": "lint",
+      "source": "package.json",
+      "cmd": "eslint .",
+      "paths": null
+    },
+    {
+      "name": "preview",
+      "source": "package.json",
+      "cmd": "vite preview",
+      "paths": null
+    },
+    {
+      "name": "WAILS_BIN",
+      "source": "make",
+      "cmd": "make WAILS_BIN",
+      "paths": null
+    },
+    {
+      "name": "APP_DIR",
+      "source": "make",
+      "cmd": "make APP_DIR",
+      "paths": null
+    },
+    {
+      "name": "FRONTEND_DIR",
+      "source": "make",
+      "cmd": "make FRONTEND_DIR",
+      "paths": null
+    },
+    {
+      "name": "LINUX_BUILDER_FILE",
+      "source": "make",
+      "cmd": "make LINUX_BUILDER_FILE",
+      "paths": null
+    },
+    {
+      "name": "BUILD_DIR",
+      "source": "make",
+      "cmd": "make BUILD_DIR",
+      "paths": null
+    },
+    {
+      "name": "DIST_DIR",
+      "source": "make",
+      "cmd": "make DIST_DIR",
+      "paths": null
+    },
+    {
+      "name": "APP_NAME",
+      "source": "make",
+      "cmd": "make APP_NAME",
+      "paths": null
+    },
+    {
+      "name": "ENV_PATH",
+      "source": "make",
+      "cmd": "make ENV_PATH",
+      "paths": null
+    },
+    {
+      "name": "CACHE_ENV",
+      "source": "make",
+      "cmd": "make CACHE_ENV",
+      "paths": null
+    },
+    {
+      "name": "APP_PRODUCT",
+      "source": "make",
+      "cmd": "make APP_PRODUCT",
+      "paths": null
+    },
+    {
+      "name": "VOLUME_NAME",
+      "source": "make",
+      "cmd": "make VOLUME_NAME",
+      "paths": null
+    },
+    {
+      "name": "DMG_FORMAT",
+      "source": "make",
+      "cmd": "make DMG_FORMAT",
+      "paths": null
+    },
+    {
+      "name": "DMG_TMP",
+      "source": "make",
+      "cmd": "make DMG_TMP",
+      "paths": null
+    },
+    {
+      "name": "NM_VOL_AMD64",
+      "source": "make",
+      "cmd": "make NM_VOL_AMD64",
+      "paths": null
+    },
+    {
+      "name": "NM_VOL_ARM64",
+      "source": "make",
+      "cmd": "make NM_VOL_ARM64",
+      "paths": null
+    },
+    {
+      "name": "WAILS",
+      "source": "make",
+      "cmd": "make WAILS",
+      "paths": null
+    },
+    {
+      "name": "WAILS",
+      "source": "make",
+      "cmd": "make WAILS",
+      "paths": null
+    },
+    {
+      "name": "DOCKER_IMAGE",
+      "source": "make",
+      "cmd": "make DOCKER_IMAGE",
+      "paths": null
+    },
+    {
+      "name": "DOCKER_RUN",
+      "source": "make",
+      "cmd": "make DOCKER_RUN",
+      "paths": null
+    },
+    {
+      "name": ".PHONY",
+      "source": "make",
+      "cmd": "make .PHONY",
+      "paths": null
+    },
+    {
+      "name": "all",
+      "source": "make",
+      "cmd": "make all",
+      "paths": null
+    },
+    {
+      "name": ".PHONY",
+      "source": "make",
+      "cmd": "make .PHONY",
+      "paths": null
+    },
+    {
+      "name": "deps",
+      "source": "make",
+      "cmd": "make deps",
+      "paths": null
+    },
+    {
+      "name": ".PHONY",
+      "source": "make",
+      "cmd": "make .PHONY",
+      "paths": null
+    },
+    {
+      "name": ".PHONY",
+      "source": "make",
+      "cmd": "make .PHONY",
+      "paths": null
+    },
+    {
+      "name": ".PHONY",
+      "source": "make",
+      "cmd": "make .PHONY",
+      "paths": null
+    },
+    {
+      "name": ".PHONY",
+      "source": "make",
+      "cmd": "make .PHONY",
+      "paths": null
+    },
+    {
+      "name": ".PHONY",
+      "source": "make",
+      "cmd": "make .PHONY",
+      "paths": null
+    },
+    {
+      "name": ".PHONY",
+      "source": "make",
+      "cmd": "make .PHONY",
+      "paths": null
+    },
+    {
+      "name": ".PHONY",
+      "source": "make",
+      "cmd": "make .PHONY",
+      "paths": null
+    },
+    {
+      "name": ".PHONY",
+      "source": "make",
+      "cmd": "make .PHONY",
+      "paths": null
+    },
+    {
+      "name": ".PHONY",
+      "source": "make",
+      "cmd": "make .PHONY",
+      "paths": null
+    },
+    {
+      "name": ".PHONY",
+      "source": "make",
+      "cmd": "make .PHONY",
+      "paths": null
+    },
+    {
+      "name": ".PHONY",
+      "source": "make",
+      "cmd": "make .PHONY",
+      "paths": null
+    },
+    {
+      "name": ".PHONY",
+      "source": "make",
+      "cmd": "make .PHONY",
+      "paths": null
+    },
+    {
+      "name": "UID",
+      "source": "make",
+      "cmd": "make UID",
+      "paths": null
+    },
+    {
+      "name": "GID",
+      "source": "make",
+      "cmd": "make GID",
+      "paths": null
+    },
+    {
+      "name": "WEBKIT_TAG",
+      "source": "make",
+      "cmd": "make WEBKIT_TAG",
+      "paths": null
+    },
+    {
+      "name": ".PHONY",
+      "source": "make",
+      "cmd": "make .PHONY",
+      "paths": null
+    },
+    {
+      "name": "-t loom-linux-builder",
+      "source": "make",
+      "cmd": "make -t loom-linux-builder",
+      "paths": null
+    },
+    {
+      "name": ".PHONY",
+      "source": "make",
+      "cmd": "make .PHONY",
+      "paths": null
+    },
+    {
+      "name": "-t loom-linux-builder",
+      "source": "make",
+      "cmd": "make -t loom-linux-builder",
+      "paths": null
+    },
+    {
+      "name": ".PHONY",
+      "source": "make",
+      "cmd": "make .PHONY",
+      "paths": null
+    },
+    {
+      "name": "prepare-linux-amd64",
+      "source": "make",
+      "cmd": "make prepare-linux-amd64",
+      "paths": null
+    },
+    {
+      "name": "-v $(PWD)",
+      "source": "make",
+      "cmd": "make -v $(PWD)",
+      "paths": null
+    },
+    {
+      "name": "-v $(NM_VOL_AMD64)",
+      "source": "make",
+      "cmd": "make -v $(NM_VOL_AMD64)",
+      "paths": [
+        "app/"
+      ]
+    },
+    {
+      "name": "--user 0",
+      "source": "make",
+      "cmd": "make --user 0",
+      "paths": null
+    },
+    {
+      "name": "loom-linux-builder",
+      "source": "make",
+      "cmd": "make loom-linux-builder",
+      "paths": null
+    },
+    {
+      "name": ".PHONY",
+      "source": "make",
+      "cmd": "make .PHONY",
+      "paths": null
+    },
+    {
+      "name": "prepare-linux-arm64",
+      "source": "make",
+      "cmd": "make prepare-linux-arm64",
+      "paths": null
+    },
+    {
+      "name": "-v $(PWD)",
+      "source": "make",
+      "cmd": "make -v $(PWD)",
+      "paths": null
+    },
+    {
+      "name": "-v $(NM_VOL_ARM64)",
+      "source": "make",
+      "cmd": "make -v $(NM_VOL_ARM64)",
+      "paths": [
+        "app/"
+      ]
+    },
+    {
+      "name": "--user 0",
+      "source": "make",
+      "cmd": "make --user 0",
+      "paths": null
+    },
+    {
+      "name": "loom-linux-builder",
+      "source": "make",
+      "cmd": "make loom-linux-builder",
+      "paths": null
+    },
+    {
+      "name": ".PHONY",
+      "source": "make",
+      "cmd": "make .PHONY",
+      "paths": null
+    },
+    {
+      "name": "build-linux-amd64",
+      "source": "make",
+      "cmd": "make build-linux-amd64",
+      "paths": null
+    },
+    {
+      "name": "-v $(PWD)",
+      "source": "make",
+      "cmd": "make -v $(PWD)",
+      "paths": null
+    },
+    {
+      "name": "-v $(NM_VOL_AMD64)",
+      "source": "make",
+      "cmd": "make -v $(NM_VOL_AMD64)",
+      "paths": [
+        "app/"
+      ]
+    },
+    {
+      "name": "-u $(UID)",
+      "source": "make",
+      "cmd": "make -u $(UID)",
+      "paths": null
+    },
+    {
+      "name": "loom-linux-builder",
+      "source": "make",
+      "cmd": "make loom-linux-builder",
+      "paths": null
+    },
+    {
+      "name": ".PHONY",
+      "source": "make",
+      "cmd": "make .PHONY",
+      "paths": null
+    },
+    {
+      "name": "build-linux-arm64",
+      "source": "make",
+      "cmd": "make build-linux-arm64",
+      "paths": null
+    },
+    {
+      "name": "-v $(PWD)",
+      "source": "make",
+      "cmd": "make -v $(PWD)",
+      "paths": null
+    },
+    {
+      "name": "-v $(NM_VOL_ARM64)",
+      "source": "make",
+      "cmd": "make -v $(NM_VOL_ARM64)",
+      "paths": [
+        "app/"
+      ]
+    },
+    {
+      "name": "-u $(UID)",
+      "source": "make",
+      "cmd": "make -u $(UID)",
+      "paths": null
+    },
+    {
+      "name": "loom-linux-builder",
+      "source": "make",
+      "cmd": "make loom-linux-builder",
+      "paths": null
+    },
+    {
+      "name": ".PHONY",
+      "source": "make",
+      "cmd": "make .PHONY",
+      "paths": null
+    },
+    {
+      "name": "cd $(APP_DIR) \u0026\u0026 $(WAILS) dev -s -frontenddevserverurl http",
+      "source": "make",
+      "cmd": "make cd $(APP_DIR) \u0026\u0026 $(WAILS) dev -s -frontenddevserverurl http",
+      "paths": null
+    },
+    {
+      "name": ".PHONY",
+      "source": "make",
+      "cmd": "make .PHONY",
+      "paths": null
+    },
+    {
+      "name": "build-linux-all",
+      "source": "make",
+      "cmd": "make build-linux-all",
+      "paths": null
+    },
+    {
+      "name": ".PHONY",
+      "source": "make",
+      "cmd": "make .PHONY",
+      "paths": null
+    },
+    {
+      "name": "build-all",
+      "source": "make",
+      "cmd": "make build-all",
+      "paths": null
+    },
+    {
+      "name": ".PHONY",
+      "source": "make",
+      "cmd": "make .PHONY",
+      "paths": null
+    },
+    {
+      "name": "build-macos-all",
+      "source": "make",
+      "cmd": "make build-macos-all",
+      "paths": null
+    },
+    {
+      "name": ".PHONY",
+      "source": "make",
+      "cmd": "make .PHONY",
+      "paths": null
+    },
+    {
+      "name": "@echo \"targets",
+      "source": "make",
+      "cmd": "make @echo \"targets",
+      "paths": null
+    }
+  ],
+  "ci": [],
+  "configs": [
+    {
+      "tool": "unknown",
+      "path": ".gitignore"
+    },
+    {
+      "tool": "make",
+      "path": "Makefile"
+    },
+    {
+      "tool": "go",
+      "path": "go.mod"
+    },
+    {
+      "tool": "unknown",
+      "path": "go.sum"
+    },
+    {
+      "tool": "config",
+      "path": "internal/profiler/signals/configs.go"
+    },
+    {
+      "tool": "unknown",
+      "path": "ui/frontend/.gitignore"
+    },
+    {
+      "tool": "npm",
+      "path": "ui/frontend/package.json"
+    },
+    {
+      "tool": "typescript",
+      "path": "ui/frontend/tsconfig.json"
+    },
+    {
+      "tool": "config",
+      "path": "ui/frontend/tsconfig.node.json"
+    },
+    {
+      "tool": "vite",
+      "path": "ui/frontend/vite.config.ts"
+    },
+    {
+      "tool": "npm",
+      "path": "ui/frontend/wailsjs/runtime/package.json"
+    },
+    {
+      "tool": "wails",
+      "path": "ui/wails.json"
+    },
+    {
+      "tool": "unknown",
+      "path": "web/.gitignore"
+    },
+    {
+      "tool": "eslint",
+      "path": "web/eslint.config.js"
+    },
+    {
+      "tool": "npm",
+      "path": "web/package.json"
+    },
+    {
+      "tool": "config",
+      "path": "web/tsconfig.app.json"
+    },
+    {
+      "tool": "typescript",
+      "path": "web/tsconfig.json"
+    },
+    {
+      "tool": "config",
+      "path": "web/tsconfig.node.json"
+    },
+    {
+      "tool": "vite",
+      "path": "web/vite.config.ts"
+    }
+  ],
+  "codegen": [],
+  "routes_services": [
+    {
+      "kind": "service",
+      "path": "internal/profiler/signals/routes.go",
+      "name": "UserService"
+    }
+  ],
+  "important_files": [
+    {
+      "path": "go.mod",
+      "score": 0.455,
+      "reasons": [
+        "graph_central",
+        "config"
+      ],
+      "components": {
+        "centrality": 0.45,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/package.json",
+      "score": 0.455,
+      "reasons": [
+        "graph_central",
+        "config"
+      ],
+      "components": {
+        "centrality": 0.45,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/wailsjs/runtime/package.json",
+      "score": 0.455,
+      "reasons": [
+        "graph_central",
+        "config"
+      ],
+      "components": {
+        "centrality": 0.45,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "web/package.json",
+      "score": 0.455,
+      "reasons": [
+        "graph_central",
+        "config"
+      ],
+      "components": {
+        "centrality": 0.45,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/types/ui.ts",
+      "score": 0.3562468892578125,
+      "reasons": [
+        "graph_central"
+      ],
+      "components": {
+        "centrality": 0.3562468892578125,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/wailsjs/go/bridge/App.js",
+      "score": 0.34198584062500004,
+      "reasons": [
+        "graph_central",
+        "entrypoint"
+      ],
+      "components": {
+        "centrality": 0.33198584062500003,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/wailsjs/runtime/runtime.js",
+      "score": 0.15057900000000002,
+      "reasons": [
+        "graph_central"
+      ],
+      "components": {
+        "centrality": 0.15057900000000002,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "web/src/App.css",
+      "score": 0.14925937500000003,
+      "reasons": [
+        "graph_central"
+      ],
+      "components": {
+        "centrality": 0.14925937500000003,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/components/diff/DiffViewer.tsx",
+      "score": 0.12867896250000002,
+      "reasons": null,
+      "components": {
+        "centrality": 0.12867896250000002,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/wailsjs/go/models.ts",
+      "score": 0.12487500000000001,
+      "reasons": null,
+      "components": {
+        "centrality": 0.12487500000000001,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/components/markdown/MarkdownErrorBoundary.tsx",
+      "score": 0.12125878239550782,
+      "reasons": null,
+      "components": {
+        "centrality": 0.12125878239550782,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/components/markdown/MarkdownRenderer.tsx",
+      "score": 0.12125878239550782,
+      "reasons": null,
+      "components": {
+        "centrality": 0.12125878239550782,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/main.go",
+      "score": 0.11,
+      "reasons": [
+        "doc_mention",
+        "entrypoint"
+      ],
+      "components": {
+        "centrality": 0,
+        "doc_mentions": 0.1,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "web/src/App.tsx",
+      "score": 0.1061875,
+      "reasons": [
+        "entrypoint"
+      ],
+      "components": {
+        "centrality": 0.09618750000000001,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "internal/adapter/factory.go",
+      "score": 0.1,
+      "reasons": [
+        "doc_mention"
+      ],
+      "components": {
+        "centrality": 0,
+        "doc_mentions": 0.1,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "internal/adapter/models.go",
+      "score": 0.1,
+      "reasons": [
+        "doc_mention"
+      ],
+      "components": {
+        "centrality": 0,
+        "doc_mentions": 0.1,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "internal/indexer/ripgrep.go",
+      "score": 0.1,
+      "reasons": [
+        "doc_mention"
+      ],
+      "components": {
+        "centrality": 0,
+        "doc_mentions": 0.1,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/ModelSelector.tsx",
+      "score": 0.1,
+      "reasons": [
+        "doc_mention"
+      ],
+      "components": {
+        "centrality": 0,
+        "doc_mentions": 0.1,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "web/src/index.css",
+      "score": 0.09618750000000001,
+      "reasons": null,
+      "components": {
+        "centrality": 0.09618750000000001,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/utils/language.ts",
+      "score": 0.0923682375,
+      "reasons": null,
+      "components": {
+        "centrality": 0.0923682375,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/App.tsx",
+      "score": 0.088975,
+      "reasons": [
+        "entrypoint"
+      ],
+      "components": {
+        "centrality": 0.078975,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/components/dialogs/ProfileDialog.tsx",
+      "score": 0.0878929875,
+      "reasons": null,
+      "components": {
+        "centrality": 0.0878929875,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/components/left/Files/FileExplorer.tsx",
+      "score": 0.0878929875,
+      "reasons": null,
+      "components": {
+        "centrality": 0.0878929875,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/themes/mocha_converted.json",
+      "score": 0.0878929875,
+      "reasons": null,
+      "components": {
+        "centrality": 0.0878929875,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/components/right/Chat/ReasoningPanel.tsx",
+      "score": 0.08509388238281251,
+      "reasons": null,
+      "components": {
+        "centrality": 0.08509388238281251,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/components/right/Chat/Composer.tsx",
+      "score": 0.08279474062500002,
+      "reasons": null,
+      "components": {
+        "centrality": 0.08279474062500002,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/components/right/Chat/MessageList.tsx",
+      "score": 0.08279474062500002,
+      "reasons": null,
+      "components": {
+        "centrality": 0.08279474062500002,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/App.css",
+      "score": 0.078975,
+      "reasons": null,
+      "components": {
+        "centrality": 0.078975,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/ErrorBoundary.tsx",
+      "score": 0.078975,
+      "reasons": null,
+      "components": {
+        "centrality": 0.078975,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/monaco-workers.ts",
+      "score": 0.078975,
+      "reasons": null,
+      "components": {
+        "centrality": 0.078975,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/components/center/EditorPanel.tsx",
+      "score": 0.07197525,
+      "reasons": null,
+      "components": {
+        "centrality": 0.07197525,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/components/dialogs/ApprovalDialog.tsx",
+      "score": 0.07197525,
+      "reasons": null,
+      "components": {
+        "centrality": 0.07197525,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/components/dialogs/CostsDialog.tsx",
+      "score": 0.07197525,
+      "reasons": null,
+      "components": {
+        "centrality": 0.07197525,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/components/dialogs/MemoriesDialog.tsx",
+      "score": 0.07197525,
+      "reasons": null,
+      "components": {
+        "centrality": 0.07197525,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/components/dialogs/RulesDialog.tsx",
+      "score": 0.07197525,
+      "reasons": null,
+      "components": {
+        "centrality": 0.07197525,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/components/dialogs/SearchDialog.tsx",
+      "score": 0.07197525,
+      "reasons": null,
+      "components": {
+        "centrality": 0.07197525,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/components/dialogs/SettingsDialog.tsx",
+      "score": 0.07197525,
+      "reasons": null,
+      "components": {
+        "centrality": 0.07197525,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/components/dialogs/WorkspaceDialog.tsx",
+      "score": 0.07197525,
+      "reasons": null,
+      "components": {
+        "centrality": 0.07197525,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/components/left/Sidebar.tsx",
+      "score": 0.07197525,
+      "reasons": null,
+      "components": {
+        "centrality": 0.07197525,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/components/right/Chat/ChatPanel.tsx",
+      "score": 0.07197525,
+      "reasons": null,
+      "components": {
+        "centrality": 0.07197525,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/services/files.ts",
+      "score": 0.07197525,
+      "reasons": null,
+      "components": {
+        "centrality": 0.07197525,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/components/left/Conversations/ConversationList.tsx",
+      "score": 0.06750000000000002,
+      "reasons": null,
+      "components": {
+        "centrality": 0.06750000000000002,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/main.tsx",
+      "score": 0.06750000000000002,
+      "reasons": [
+        "entrypoint"
+      ],
+      "components": {
+        "centrality": 0.06750000000000002,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "web/src/main.tsx",
+      "score": 0.06750000000000002,
+      "reasons": [
+        "entrypoint"
+      ],
+      "components": {
+        "centrality": 0.06750000000000002,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/wailsjs/go/bridge/App.d.ts",
+      "score": 0.013500000000000005,
+      "reasons": null,
+      "components": {
+        "centrality": 0.06750000000000002,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0.05400000000000002
+      },
+      "confidence": 0.8,
+      "is_generated": true
+    },
+    {
+      "path": "Makefile",
+      "score": 0.005,
+      "reasons": [
+        "config"
+      ],
+      "components": {
+        "centrality": 0,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/tsconfig.json",
+      "score": 0.005,
+      "reasons": [
+        "config"
+      ],
+      "components": {
+        "centrality": 0,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/wails.json",
+      "score": 0.005,
+      "reasons": [
+        "config"
+      ],
+      "components": {
+        "centrality": 0,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "web/tsconfig.json",
+      "score": 0.005,
+      "reasons": [
+        "config"
+      ],
+      "components": {
+        "centrality": 0,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    }
+  ],
+  "heuristics": {
+    "graph_centrality": 0.45,
+    "git_recency": 0.2,
+    "git_frequency": 0.15,
+    "script_ci_refs": 0.1,
+    "doc_mentions": 0.1,
+    "cap_max": 0.98
+  },
+  "gitstats": {
+    "mode": "none",
+    "window_days": 730
+  },
+  "git_window_days": 730,
+  "input_signature": {
+    "manifest_hashes": {
+      ".gitignore": "76afc567d2c40cd0115906c0c1bc8ebe067299ea3ad6d4026b6891c35a1cef58",
+      "Makefile": "42b252d4884ad28360e4d3fb6fdadc61e41e490d5271fbecd2625a37292df2fc",
+      "go.mod": "dbadfb90325649d0927eefdd0ed699e853168e461830f6b39790e4ae51a5b946"
+    },
+    "tsconfig_hash": "",
+    "readme_hash": "7ccb81b024d3f65738f9af1cc433d96fa1b9d6c98b34ed21a998f6d89ae83cd1",
+    "mtime_max": 1755774744
+  },
+  "metrics": {
+    "files": 157,
+    "edges": 61,
+    "pagerank_iters": 7,
+    "duration_ms": 63
+  },
+  "version": "2"
+}

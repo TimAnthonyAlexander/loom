@@ -387,10 +387,10 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 		}
 	}
 	if !hasSystem {
-		// Load dynamic rules and inject into system prompt
+		// Load dynamic rules and inject into system prompt with project context
 		userRules, projectRules, _ := config.LoadRules(e.workspaceDir)
 		mems := loadUserMemoriesForPrompt()
-		base := GenerateSystemPromptWithRules(toolSchemas, userRules, projectRules, mems)
+		base := GenerateSystemPromptWithProjectContext(toolSchemas, userRules, projectRules, mems, e.workspaceDir)
 		if ui := strings.TrimSpace(e.formatEditorContext()); ui != "" {
 			base = strings.TrimSpace(base) + "\n\nUI Context:\n- " + ui
 		}
