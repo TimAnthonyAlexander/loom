@@ -20,10 +20,11 @@ internal/adapter/factory.go
 internal/adapter/models.go
 internal/indexer/ripgrep.go
 ui/frontend/src/ModelSelector.tsx
-ui/frontend/src/components/left/Files/FileExplorer.tsx
 web/src/index.css
 ui/frontend/src/utils/language.ts
 ui/frontend/src/App.tsx
+ui/frontend/src/components/dialogs/ProfileDialog.tsx
+ui/frontend/src/components/left/Files/FileExplorer.tsx
 ui/frontend/src/themes/mocha_converted.json
 ui/frontend/src/components/right/Chat/ReasoningPanel.tsx
 ui/frontend/src/components/right/Chat/Composer.tsx
