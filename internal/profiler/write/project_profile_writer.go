@@ -30,7 +30,11 @@ func (w *ProjectProfileWriter) Write(profile *shared.Profile) error {
 
 	// Set creation timestamp
 	profile.CreatedAtUnix = time.Now().Unix()
-	profile.Version = "1"
+
+	// Set version if not already set
+	if profile.Version == "" {
+		profile.Version = "2"
+	}
 
 	// Write to temporary file first for atomicity
 	tempPath := filepath.Join(loomDir, "project_profile.json.tmp")

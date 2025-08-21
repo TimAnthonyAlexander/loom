@@ -22,15 +22,21 @@ func NewManifestExtractor(root string) *ManifestExtractor {
 // Extract processes manifest files and returns signals
 func (m *ManifestExtractor) Extract(files []*shared.FileInfo) *shared.SignalData {
 	signals := &shared.SignalData{
-		TSFiles:     make([]string, 0),
-		GoFiles:     make([]string, 0),
-		PHPFiles:    make([]string, 0),
-		TSConfig:    make(map[string]interface{}),
-		ComposerPSR: make(map[string]string),
-		Manifests:   make([]string, 0),
-		Entrypoints: make([]shared.EntryPoint, 0),
-		Scripts:     make([]shared.Script, 0),
-		Configs:     make([]shared.ConfigFile, 0),
+		TSFiles:        make([]string, 0),
+		GoFiles:        make([]string, 0),
+		PHPFiles:       make([]string, 0),
+		TSConfig:       make(map[string]interface{}),
+		ComposerPSR:    make(map[string]string),
+		ScriptRefs:     make(map[string][]string),
+		CIRefs:         make(map[string][]string),
+		DocRefs:        make([]string, 0),
+		Manifests:      make([]string, 0),
+		Entrypoints:    make([]shared.EntryPoint, 0),
+		Scripts:        make([]shared.Script, 0),
+		CI:             make([]shared.CIConfig, 0),
+		Configs:        make([]shared.ConfigFile, 0),
+		Codegen:        make([]shared.CodegenSpec, 0),
+		RoutesServices: make([]shared.RouteOrService, 0),
 	}
 
 	for _, file := range files {

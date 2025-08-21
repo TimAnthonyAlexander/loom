@@ -131,10 +131,11 @@ func (fs *FSScan) shouldIgnore(path string, info os.FileInfo) bool {
 		}
 	}
 
-	// Large files (>512KB) unless they're important
+	// Large files (>512KB) unless they're important or config files
 	if info.Size() > 512*1024 {
 		important := isImportantLargeFile(name)
-		if !important {
+		isConfig := isConfigFile(name, filepath.Ext(path))
+		if !important && !isConfig {
 			return true
 		}
 	}

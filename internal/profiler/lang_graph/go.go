@@ -39,6 +39,12 @@ func (g *GoGraphBuilder) Build(files []string) error {
 	// Parse go.mod to understand module structure
 	g.parseGoMod()
 
+	// First, add all files as vertices to ensure they appear in the graph
+	for _, file := range files {
+		normalizedFile := shared.NormalizePath(file)
+		g.graph.Vertices[normalizedFile] = true
+	}
+
 	for _, file := range files {
 		if err := g.processFile(file); err != nil {
 			// Log error but continue processing other files

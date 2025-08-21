@@ -39,6 +39,12 @@ func (ts *TSGraphBuilder) Build(files []string, tsConfig map[string]interface{})
 	ts.tsConfig = tsConfig
 	ts.parseTypeScriptConfig()
 
+	// First, add all files as vertices to ensure they appear in the graph
+	for _, file := range files {
+		normalizedFile := shared.NormalizePath(file)
+		ts.graph.Vertices[normalizedFile] = true
+	}
+
 	for _, file := range files {
 		if err := ts.processFile(file); err != nil {
 			// Log error but continue processing other files

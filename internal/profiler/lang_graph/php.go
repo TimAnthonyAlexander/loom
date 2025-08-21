@@ -48,6 +48,12 @@ func (p *PHPGraphBuilder) Build(files []string, composerPSR map[string]string) e
 	p.psr4Map = composerPSR
 	p.parseComposerPSR4(composerPSR)
 
+	// First, add all files as vertices to ensure they appear in the graph
+	for _, file := range files {
+		normalizedFile := shared.NormalizePath(file)
+		p.graph.Vertices[normalizedFile] = true
+	}
+
 	for _, file := range files {
 		if err := p.processFile(file); err != nil {
 			// Log error but continue processing other files

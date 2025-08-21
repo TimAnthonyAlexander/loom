@@ -22,16 +22,16 @@ func NewDocsExtractor(root string) *DocsExtractor {
 
 // Extract processes documentation files and returns signals
 func (d *DocsExtractor) Extract(files []*shared.FileInfo, existing *shared.SignalData) {
-	var docRefs []string
+	if existing.DocRefs == nil {
+		existing.DocRefs = make([]string, 0)
+	}
 
 	for _, file := range files {
 		if file.IsDoc {
 			refs := d.extractDocRefs(file.Path)
-			docRefs = append(docRefs, refs...)
+			existing.DocRefs = append(existing.DocRefs, refs...)
 		}
 	}
-
-	existing.DocRefs = docRefs
 }
 
 // extractDocRefs extracts file references from a documentation file
