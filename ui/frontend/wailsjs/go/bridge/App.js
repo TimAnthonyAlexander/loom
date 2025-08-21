@@ -50,6 +50,18 @@ export function GetMemories() {
   return window['go']['bridge']['App']['GetMemories']();
 }
 
+export function GetProjectHotlist() {
+  return window['go']['bridge']['App']['GetProjectHotlist']();
+}
+
+export function GetProjectProfile() {
+  return window['go']['bridge']['App']['GetProjectProfile']();
+}
+
+export function GetProjectRules() {
+  return window['go']['bridge']['App']['GetProjectRules']();
+}
+
 export function GetRules() {
   return window['go']['bridge']['App']['GetRules']();
 }
@@ -126,6 +138,14 @@ export function ResetUsage() {
   return window['go']['bridge']['App']['ResetUsage']();
 }
 
+export function RunProfiler() {
+  return window['go']['bridge']['App']['RunProfiler']();
+}
+
+export function RunQuickProfiler() {
+  return window['go']['bridge']['App']['RunQuickProfiler']();
+}
+
 export function SaveRules(arg1) {
   return window['go']['bridge']['App']['SaveRules'](arg1);
 }
@@ -160,6 +180,10 @@ export function SetModel(arg1) {
 
 export function SetWorkspace(arg1) {
   return window['go']['bridge']['App']['SetWorkspace'](arg1);
+}
+
+export function ShouldRunProfiler() {
+  return window['go']['bridge']['App']['ShouldRunProfiler']();
 }
 
 export function UpdateEditorContext(arg1, arg2, arg3) {

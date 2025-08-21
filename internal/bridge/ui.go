@@ -21,6 +21,7 @@ import (
 	"github.com/loom/loom/internal/engine"
 	"github.com/loom/loom/internal/indexer"
 	"github.com/loom/loom/internal/mcp"
+	"github.com/loom/loom/internal/profiler"
 	"github.com/loom/loom/internal/symbols"
 	"github.com/loom/loom/internal/tool"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -699,6 +700,28 @@ func (a *App) SetWorkspace(path string) {
 	a.gitMatcher = a.buildGitignoreMatcher(norm)
 	// After switching, log current rules snapshot for debug
 	_, _, _ = config.LoadRules(path)
+
+	// Check if profiler should run and run it in background
+	go func(workspace string) {
+		runner := profiler.NewRunner(workspace)
+		if runner.ShouldRun() {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			if profile, err := runner.Run(ctx); err == nil {
+				// Emit completion event to UI
+				if a.ctx != nil {
+					summary := map[string]interface{}{
+						"languages":       profile.Languages,
+						"entrypoints":     len(profile.Entrypoints),
+						"important_files": len(profile.ImportantFiles),
+						"scripts":         len(profile.Scripts),
+					}
+					runtime.EventsEmit(a.ctx, "profiler:completed", summary)
+				}
+			}
+		}
+	}(norm)
 }
 
 // (removed) sanitizeToolName: use tool.SanitizeToolName directly where needed
@@ -1657,4 +1680,174 @@ func (a *App) WriteWorkspaceFile(payload map[string]string) map[string]string {
 	// Compute and return new serverRev
 	res["serverRev"] = computeServerRev([]byte(content))
 	return res
+}
+
+// RunProfiler runs the project profiler on the current workspace
+func (a *App) RunProfiler() map[string]interface{} {
+	result := map[string]interface{}{
+		"success": false,
+		"error":   "",
+		"profile": nil,
+	}
+
+	if a.engine == nil {
+		result["error"] = "engine not initialized"
+		return result
+	}
+
+	workspace := strings.TrimSpace(a.engine.Workspace())
+	if workspace == "" {
+		result["error"] = "workspace not set"
+		return result
+	}
+
+	runner := profiler.NewRunner(workspace)
+
+	// Run in background context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	profile, err := runner.Run(ctx)
+	if err != nil {
+		result["error"] = err.Error()
+		return result
+	}
+
+	result["success"] = true
+	result["profile"] = profile
+
+	// Emit event to notify UI of completion
+	if a.ctx != nil {
+		summary := map[string]interface{}{
+			"languages":       profile.Languages,
+			"entrypoints":     len(profile.Entrypoints),
+			"important_files": len(profile.ImportantFiles),
+			"scripts":         len(profile.Scripts),
+		}
+		runtime.EventsEmit(a.ctx, "profiler:completed", summary)
+	}
+
+	return result
+}
+
+// GetProjectProfile returns the existing project profile if available
+func (a *App) GetProjectProfile() map[string]interface{} {
+	result := map[string]interface{}{
+		"exists":  false,
+		"profile": nil,
+		"error":   "",
+	}
+
+	if a.engine == nil {
+		result["error"] = "engine not initialized"
+		return result
+	}
+
+	workspace := strings.TrimSpace(a.engine.Workspace())
+	if workspace == "" {
+		result["error"] = "workspace not set"
+		return result
+	}
+
+	runner := profiler.NewRunner(workspace)
+	profile, err := runner.GetExistingProfile()
+	if err != nil {
+		result["error"] = err.Error()
+		return result
+	}
+
+	result["exists"] = true
+	result["profile"] = profile
+	return result
+}
+
+// GetProjectHotlist returns the hotlist of important files
+func (a *App) GetProjectHotlist() []string {
+	if a.engine == nil {
+		return []string{}
+	}
+
+	workspace := strings.TrimSpace(a.engine.Workspace())
+	if workspace == "" {
+		return []string{}
+	}
+
+	runner := profiler.NewRunner(workspace)
+	hotlist, err := runner.GetHotlist()
+	if err != nil {
+		return []string{}
+	}
+
+	return hotlist
+}
+
+// GetProjectRules returns the generated project rules
+func (a *App) GetProjectRules() string {
+	if a.engine == nil {
+		return ""
+	}
+
+	workspace := strings.TrimSpace(a.engine.Workspace())
+	if workspace == "" {
+		return ""
+	}
+
+	runner := profiler.NewRunner(workspace)
+	rules, err := runner.GetRules()
+	if err != nil {
+		return ""
+	}
+
+	return rules
+}
+
+// ShouldRunProfiler checks if the profiler should be run
+func (a *App) ShouldRunProfiler() bool {
+	if a.engine == nil {
+		return false
+	}
+
+	workspace := strings.TrimSpace(a.engine.Workspace())
+	if workspace == "" {
+		return false
+	}
+
+	runner := profiler.NewRunner(workspace)
+	return runner.ShouldRun()
+}
+
+// RunQuickProfiler performs a quick profiling for basic project information
+func (a *App) RunQuickProfiler() map[string]interface{} {
+	result := map[string]interface{}{
+		"success": false,
+		"error":   "",
+		"profile": nil,
+	}
+
+	if a.engine == nil {
+		result["error"] = "engine not initialized"
+		return result
+	}
+
+	workspace := strings.TrimSpace(a.engine.Workspace())
+	if workspace == "" {
+		result["error"] = "workspace not set"
+		return result
+	}
+
+	runner := profiler.NewRunner(workspace)
+
+	// Quick run with short timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	profile, err := runner.RunQuick(ctx)
+	if err != nil {
+		result["error"] = err.Error()
+		return result
+	}
+
+	result["success"] = true
+	result["profile"] = profile
+	return result
 }

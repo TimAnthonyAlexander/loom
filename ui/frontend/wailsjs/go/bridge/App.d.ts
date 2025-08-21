@@ -31,6 +31,12 @@ export function GetGlobalUsage():Promise<Record<string, any>>;
 
 export function GetMemories():Promise<Array<Record<string, string>>>;
 
+export function GetProjectHotlist():Promise<Array<string>>;
+
+export function GetProjectProfile():Promise<Record<string, any>>;
+
+export function GetProjectRules():Promise<string>;
+
 export function GetRules():Promise<Record<string, Array<string>>>;
 
 export function GetSettings():Promise<Record<string, string>>;
@@ -69,6 +75,10 @@ export function ResetGlobalUsage():Promise<void>;
 
 export function ResetUsage():Promise<void>;
 
+export function RunProfiler():Promise<Record<string, any>>;
+
+export function RunQuickProfiler():Promise<Record<string, any>>;
+
 export function SaveRules(arg1:Record<string, Array<string>>):Promise<void>;
 
 export function SaveSettings(arg1:Record<string, string>):Promise<void>;
@@ -86,6 +96,8 @@ export function SetBusy(arg1:boolean):Promise<void>;
 export function SetModel(arg1:string):Promise<void>;
 
 export function SetWorkspace(arg1:string):Promise<void>;
+
+export function ShouldRunProfiler():Promise<boolean>;
 
 export function UpdateEditorContext(arg1:string,arg2:number,arg3:number):Promise<void>;
 
