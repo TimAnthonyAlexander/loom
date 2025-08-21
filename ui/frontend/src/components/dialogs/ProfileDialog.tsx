@@ -7,7 +7,6 @@ import {
     Button,
     Box,
     Typography,
-    Divider,
     Table,
     TableBody,
     TableCell,
@@ -95,11 +94,11 @@ const ProfileDialog: React.FC<ProfileDialogProps> = ({ open, onClose }) => {
         }
     }, [open, symbolsPage, fetchProfileData]);
 
-    const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
         setTabValue(newValue);
     };
 
-    const handleSymbolsPageChange = (event: React.ChangeEvent<unknown>, page: number) => {
+    const handleSymbolsPageChange = (_event: React.ChangeEvent<unknown>, page: number) => {
         setSymbolsPage(page - 1); // MUI Pagination is 1-based
     };
 
@@ -108,7 +107,7 @@ const ProfileDialog: React.FC<ProfileDialogProps> = ({ open, onClose }) => {
             return profileData?.symbols?.symbols || [];
         }
         const search = symbolsSearch.toLowerCase();
-        return profileData.symbols.symbols.filter(symbol => 
+        return profileData.symbols.symbols.filter(symbol =>
             (symbol.name?.toLowerCase().includes(search)) ||
             (symbol.file?.toLowerCase().includes(search)) ||
             (symbol.kind?.toLowerCase().includes(search))
@@ -136,12 +135,12 @@ const ProfileDialog: React.FC<ProfileDialogProps> = ({ open, onClose }) => {
                 {/* Rules Tab */}
                 <TabPanel value={tabValue} index={0}>
                     <Typography variant="h6" gutterBottom>Project Rules</Typography>
-                    <Paper 
-                        variant="outlined" 
-                        sx={{ 
-                            p: 2, 
-                            maxHeight: 400, 
-                            overflow: 'auto', 
+                    <Paper
+                        variant="outlined"
+                        sx={{
+                            p: 2,
+                            maxHeight: 400,
+                            overflow: 'auto',
                             bgcolor: 'grey.900',
                             color: 'grey.100',
                             '& code': {
@@ -164,11 +163,11 @@ const ProfileDialog: React.FC<ProfileDialogProps> = ({ open, onClose }) => {
                             }
                         }}
                     >
-                        <Typography 
-                            component="div" 
-                            sx={{ 
-                                whiteSpace: 'pre-wrap', 
-                                fontFamily: 'monospace', 
+                        <Typography
+                            component="div"
+                            sx={{
+                                whiteSpace: 'pre-wrap',
+                                fontFamily: 'monospace',
                                 fontSize: '0.875rem',
                                 lineHeight: 1.5,
                                 color: 'inherit'
@@ -189,7 +188,7 @@ const ProfileDialog: React.FC<ProfileDialogProps> = ({ open, onClose }) => {
                         <List dense>
                             {(profileData?.hotlist || []).map((file, index) => (
                                 <ListItem key={index} divider>
-                                    <ListItemText 
+                                    <ListItemText
                                         primary={
                                             <Typography variant="body2" fontFamily="monospace">
                                                 {file}
@@ -220,7 +219,7 @@ const ProfileDialog: React.FC<ProfileDialogProps> = ({ open, onClose }) => {
                             sx={{ width: 250 }}
                         />
                     </Box>
-                    
+
                     <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400 }}>
                         <Table stickyHeader size="small">
                             <TableHead>
@@ -241,12 +240,12 @@ const ProfileDialog: React.FC<ProfileDialogProps> = ({ open, onClose }) => {
                                             </Typography>
                                         </TableCell>
                                         <TableCell>
-                                            <Chip 
-                                                label={symbol.kind || 'unknown'} 
-                                                size="small" 
+                                            <Chip
+                                                label={symbol.kind || 'unknown'}
+                                                size="small"
                                                 variant="outlined"
-                                                color={symbol.kind === 'func' ? 'primary' : 
-                                                       symbol.kind === 'class' ? 'secondary' : 'default'}
+                                                color={symbol.kind === 'func' ? 'primary' :
+                                                    symbol.kind === 'class' ? 'secondary' : 'default'}
                                             />
                                         </TableCell>
                                         <TableCell>
@@ -278,7 +277,7 @@ const ProfileDialog: React.FC<ProfileDialogProps> = ({ open, onClose }) => {
                             </TableBody>
                         </Table>
                     </TableContainer>
-                    
+
                     {!symbolsSearch && profileData?.symbols && profileData.symbols.total > symbolsLimit && (
                         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
                             <Pagination
@@ -310,7 +309,7 @@ const ProfileDialog: React.FC<ProfileDialogProps> = ({ open, onClose }) => {
                                     <List dense>
                                         {profileData.profile.profile?.entrypoints?.map((ep: any, index: number) => (
                                             <ListItem key={index}>
-                                                <ListItemText 
+                                                <ListItemText
                                                     primary={ep.path || ep}
                                                     secondary={ep.kind}
                                                 />
@@ -319,7 +318,7 @@ const ProfileDialog: React.FC<ProfileDialogProps> = ({ open, onClose }) => {
                                     </List>
                                 </AccordionDetails>
                             </Accordion>
-                            
+
                             <Accordion>
                                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                                     <Typography variant="subtitle1">Statistics</Typography>
@@ -341,7 +340,7 @@ const ProfileDialog: React.FC<ProfileDialogProps> = ({ open, onClose }) => {
                                         <Box>
                                             <Typography variant="body2" color="text.secondary">Confidence</Typography>
                                             <Typography variant="h6">
-                                                {profileData.profile.profile?.confidence ? 
+                                                {profileData.profile.profile?.confidence ?
                                                     `${(profileData.profile.profile.confidence * 100).toFixed(0)}%` : 'N/A'}
                                             </Typography>
                                         </Box>
