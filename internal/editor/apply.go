@@ -141,9 +141,9 @@ func containsSuspiciousPatterns(content string) bool {
 func isSuspiciousExtension(ext string) bool {
 	suspiciousExtensions := []string{
 		".exe", ".dll", ".so", ".dylib",
-		".sh", ".bash", ".bat", ".cmd",
-		".jar", ".war", ".php", ".cgi",
-		".py", ".rb", ".pl",
+		".bash", ".bat", ".cmd",
+		".jar", ".war", ".cgi",
+		".rb", ".pl",
 	}
 
 	for _, susExt := range suspiciousExtensions {
