@@ -1,6 +1,6 @@
 {
   "workspace_root": "/Users/tim.alexander/loom",
-  "created_at_unix": 1755783582,
+  "created_at_unix": 1755784245,
   "languages": [
     "typescript",
     "go"
@@ -66,12 +66,6 @@
       "paths": null
     },
     {
-      "name": "dev",
-      "source": "package.json",
-      "cmd": "screen -dmS loom-frontend-web vite --port 8444",
-      "paths": null
-    },
-    {
       "name": "build",
       "source": "package.json",
       "cmd": "tsc -b \u0026\u0026 vite build",
@@ -87,6 +81,12 @@
       "name": "preview",
       "source": "package.json",
       "cmd": "vite preview",
+      "paths": null
+    },
+    {
+      "name": "dev",
+      "source": "package.json",
+      "cmd": "screen -dmS loom-frontend-web vite --port 8444",
       "paths": null
     },
     {
@@ -736,12 +736,12 @@
     },
     {
       "path": "ui/frontend/src/types/ui.ts",
-      "score": 0.3562468892578125,
+      "score": 0.35624688925781256,
       "reasons": [
         "graph_central"
       ],
       "components": {
-        "centrality": 0.3562468892578125,
+        "centrality": 0.35624688925781256,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -1691,14 +1691,14 @@
       "go.mod": "dbadfb90325649d0927eefdd0ed699e853168e461830f6b39790e4ae51a5b946"
     },
     "tsconfig_hash": "",
-    "readme_hash": "7ccb81b024d3f65738f9af1cc433d96fa1b9d6c98b34ed21a998f6d89ae83cd1",
-    "mtime_max": 1755774744
+    "readme_hash": "f873383c3bc736f524143f93a2a6d2591d13c68bb84db17cff9ae5f3319544e3",
+    "mtime_max": 1755784243
   },
   "metrics": {
     "files": 157,
     "edges": 61,
     "pagerank_iters": 7,
-    "duration_ms": 63
+    "duration_ms": 67
   },
   "version": "2"
 }
