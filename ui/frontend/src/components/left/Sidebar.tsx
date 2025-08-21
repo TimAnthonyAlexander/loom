@@ -5,6 +5,7 @@ import RuleIcon from '@mui/icons-material/Rule';
 import MemoryIcon from '@mui/icons-material/BookmarkBorder';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import FileExplorer from './Files/FileExplorer';
+import ProfileDialog from '../dialogs/ProfileDialog';
 import { UIFileEntry } from '../../types/ui';
 
 type SidebarProps = {
@@ -39,6 +40,7 @@ function Sidebar(props: SidebarProps) {
     } = props;
 
     const [symbolsCount, setSymbolsCount] = React.useState<number | null>(null);
+    const [profileDialogOpen, setProfileDialogOpen] = React.useState(false);
 
     const fetchSymbolsCount = React.useCallback(async () => {
         try {
@@ -124,7 +126,22 @@ function Sidebar(props: SidebarProps) {
                         )}
                     </Box>
                 )}
-                <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Tooltip title="Click to view project profile">
+                    <Box 
+                        sx={{ 
+                            mt: 1, 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: 1,
+                            cursor: 'pointer',
+                            p: 0.5,
+                            borderRadius: 1,
+                            '&:hover': {
+                                bgcolor: 'action.hover'
+                            }
+                        }}
+                        onClick={() => setProfileDialogOpen(true)}
+                    >
                     <Typography variant="caption" color="text.secondary">
                         Symbols
                     </Typography>
@@ -133,11 +150,18 @@ function Sidebar(props: SidebarProps) {
                     </Typography>
                     <Box sx={{ flex: 1 }} />
                     <Tooltip title="Reindex symbols">
-                        <IconButton size="small" onClick={onReindex}>
+                        <IconButton 
+                            size="small" 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onReindex();
+                            }}
+                        >
                             <RefreshIcon fontSize="small" />
                         </IconButton>
                     </Tooltip>
-                </Box>
+                    </Box>
+                </Tooltip>
             </Box>
 
             <Box
@@ -187,6 +211,11 @@ function Sidebar(props: SidebarProps) {
                     </Box>
                 </Paper>
             </Box>
+
+            <ProfileDialog 
+                open={profileDialogOpen}
+                onClose={() => setProfileDialogOpen(false)}
+            />
         </Box>
     );
 }

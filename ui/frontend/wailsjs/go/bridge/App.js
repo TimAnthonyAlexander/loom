@@ -50,6 +50,10 @@ export function GetMemories() {
   return window['go']['bridge']['App']['GetMemories']();
 }
 
+export function GetProfileData(arg1, arg2) {
+  return window['go']['bridge']['App']['GetProfileData'](arg1, arg2);
+}
+
 export function GetProjectHotlist() {
   return window['go']['bridge']['App']['GetProjectHotlist']();
 }
@@ -70,8 +74,16 @@ export function GetSettings() {
   return window['go']['bridge']['App']['GetSettings']();
 }
 
+export function GetSymbols(arg1, arg2) {
+  return window['go']['bridge']['App']['GetSymbols'](arg1, arg2);
+}
+
 export function GetSymbolsCount() {
   return window['go']['bridge']['App']['GetSymbolsCount']();
+}
+
+export function GetSymbolsDebug() {
+  return window['go']['bridge']['App']['GetSymbolsDebug']();
 }
 
 export function GetTools() {

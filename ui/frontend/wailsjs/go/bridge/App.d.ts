@@ -31,6 +31,8 @@ export function GetGlobalUsage():Promise<Record<string, any>>;
 
 export function GetMemories():Promise<Array<Record<string, string>>>;
 
+export function GetProfileData(arg1:number,arg2:number):Promise<Record<string, any>>;
+
 export function GetProjectHotlist():Promise<Array<string>>;
 
 export function GetProjectProfile():Promise<Record<string, any>>;
@@ -41,7 +43,11 @@ export function GetRules():Promise<Record<string, Array<string>>>;
 
 export function GetSettings():Promise<Record<string, string>>;
 
+export function GetSymbols(arg1:number,arg2:number):Promise<Record<string, any>>;
+
 export function GetSymbolsCount():Promise<number>;
+
+export function GetSymbolsDebug():Promise<Record<string, any>>;
 
 export function GetTools():Promise<Array<Record<string, any>>>;
 

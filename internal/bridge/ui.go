@@ -619,6 +619,7 @@ func (a *App) SetWorkspace(path string) {
 		_ = tool.RegisterApplyShell(newRegistry, norm)
 		_ = tool.RegisterHTTPRequest(newRegistry)
 		_ = tool.RegisterMemories(newRegistry)
+		_ = tool.RegisterProjectProfileTools(newRegistry, norm)
 		// Initialize and register Symbols tools with progress reporting
 		if ws := norm; ws != "" {
 			if sqliteSvc, err := symbols.NewSQLiteService(ws); err == nil {
@@ -748,6 +749,7 @@ func (a *App) ReloadMCP() {
 	_ = tool.RegisterApplyShell(newRegistry, ws)
 	_ = tool.RegisterHTTPRequest(newRegistry)
 	_ = tool.RegisterMemories(newRegistry)
+	_ = tool.RegisterProjectProfileTools(newRegistry, ws)
 	// Recreate Symbols for current workspace and register
 	if ws := strings.TrimSpace(a.engine.Workspace()); ws != "" {
 		if svc, err := symbols.NewService(ws); err == nil {
@@ -849,6 +851,179 @@ func (a *App) GetSymbolsCount() int {
 		return 0
 	}
 	return n
+}
+
+// GetSymbolsDebug returns debug info about the symbols service
+func (a *App) GetSymbolsDebug() map[string]interface{} {
+	debug := map[string]interface{}{
+		"service_exists": a.symbolsSvc != nil,
+		"service_type":   "",
+		"count":          0,
+		"search_test":    "",
+	}
+
+	if a.symbolsSvc == nil {
+		return debug
+	}
+
+	// Get the type info
+	debug["service_type"] = fmt.Sprintf("%T", a.symbolsSvc)
+
+	// Try to get count
+	if countable, ok := a.symbolsSvc.(interface {
+		Count(context.Context) (int, error)
+	}); ok {
+		if count, err := countable.Count(context.Background()); err == nil {
+			debug["count"] = count
+		}
+	}
+
+	// Try a simple search test
+	if searchable, ok := a.symbolsSvc.(interface {
+		Search(ctx context.Context, q, kind, lang, pathPrefix string, limit int) ([]symbols.SymbolCard, error)
+	}); ok {
+		if results, err := searchable.Search(context.Background(), "func", "", "", "", 5); err == nil {
+			debug["search_test"] = fmt.Sprintf("Found %d results for 'func'", len(results))
+			if len(results) > 0 {
+				debug["sample_symbol"] = results[0]
+			}
+		} else {
+			debug["search_test"] = fmt.Sprintf("Search error: %v", err)
+		}
+	}
+
+	return debug
+}
+
+// GetSymbols returns symbols data with pagination
+func (a *App) GetSymbols(page int, limit int) map[string]interface{} {
+	result := map[string]interface{}{
+		"symbols": []map[string]interface{}{},
+		"total":   0,
+		"page":    page,
+		"limit":   limit,
+	}
+
+	if a.symbolsSvc == nil {
+		return result
+	}
+
+	// Access symbols service directly with proper type assertion
+	allSymbols := make(map[string]interface{})
+
+	// Try to access with the correct SymbolCard type
+	if svc, ok := a.symbolsSvc.(interface {
+		Search(ctx context.Context, q, kind, lang, pathPrefix string, limit int) ([]symbols.SymbolCard, error)
+	}); ok {
+		// Use diverse search terms that are likely to be in a Go project
+		searchTerms := []string{
+			"func", "App", "New", "Get", "Set", "Handle", "Process", "Service", "Manager",
+			"Create", "Update", "Delete", "Load", "Save", "Start", "Stop", "Run", "Main",
+			"Error", "String", "Context", "Request", "Response", "Config", "Client", "Server",
+		}
+
+		for _, term := range searchTerms {
+			symbolCards, err := svc.Search(context.Background(), term, "", "", "", 50)
+			if err == nil && symbolCards != nil {
+				for _, card := range symbolCards {
+					// Convert SymbolCard to map for JSON serialization
+					symMap := map[string]interface{}{
+						"sid":         card.SID,
+						"name":        card.Name,
+						"kind":        card.Kind,
+						"file":        card.File,
+						"line":        card.Span[0], // line_start
+						"lang":        card.Lang,
+						"signature":   card.Signature,
+						"doc_excerpt": card.DocExcerpt,
+						"confidence":  card.Confidence,
+						"container":   card.Container,
+					}
+					// Use SID as unique key to avoid duplicates
+					allSymbols[card.SID] = symMap
+				}
+			}
+
+			// Stop early if we have enough symbols for reasonable pagination
+			if len(allSymbols) >= 1000 {
+				break
+			}
+		}
+	}
+
+	// Convert to slice for pagination
+	symbolsSlice := make([]interface{}, 0, len(allSymbols))
+	for _, sym := range allSymbols {
+		symbolsSlice = append(symbolsSlice, sym)
+	}
+
+	totalSymbols := len(symbolsSlice)
+	start := page * limit
+	end := start + limit
+
+	if start >= totalSymbols {
+		result["total"] = totalSymbols
+		return result
+	}
+	if end > totalSymbols {
+		end = totalSymbols
+	}
+
+	pageSymbols := symbolsSlice[start:end]
+	symbolMaps := make([]map[string]interface{}, len(pageSymbols))
+
+	for i, sym := range pageSymbols {
+		if symMap, ok := sym.(map[string]interface{}); ok {
+			symbolMaps[i] = symMap
+		}
+	}
+
+	result["symbols"] = symbolMaps
+	result["total"] = totalSymbols
+
+	return result
+}
+
+// GetProfileData returns combined profile data including symbols, hotlist, and rules
+func (a *App) GetProfileData(symbolsPage int, symbolsLimit int) map[string]interface{} {
+	result := map[string]interface{}{
+		"symbols": map[string]interface{}{
+			"symbols": []map[string]interface{}{},
+			"total":   0,
+			"page":    symbolsPage,
+			"limit":   symbolsLimit,
+		},
+		"hotlist": []string{},
+		"rules":   "",
+		"profile": nil,
+	}
+
+	if a.engine == nil {
+		return result
+	}
+
+	workspace := strings.TrimSpace(a.engine.Workspace())
+	if workspace == "" {
+		return result
+	}
+
+	// Get symbols
+	symbolsData := a.GetSymbols(symbolsPage, symbolsLimit)
+	result["symbols"] = symbolsData
+
+	// Get hotlist
+	hotlist := a.GetProjectHotlist()
+	result["hotlist"] = hotlist
+
+	// Get rules
+	rules := a.GetProjectRules()
+	result["rules"] = rules
+
+	// Get profile summary
+	profile := a.GetProjectProfile()
+	result["profile"] = profile
+
+	return result
 }
 
 // buildGitignoreMatcher scans the workspace for .gitignore files and builds a matcher
