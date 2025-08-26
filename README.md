@@ -306,3 +306,6 @@ Adapters convert engine messages to provider‑specific payloads and parse strea
 
 ## License
 See `LICENSE`.
+
+
+By Tim Anthony Alexander
