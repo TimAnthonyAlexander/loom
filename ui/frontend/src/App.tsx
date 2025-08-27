@@ -81,9 +81,10 @@ const App: React.FC = () => {
             const rect = containerRef.current?.getBoundingClientRect();
             if (!rect) return;
             let next = ev.clientX - rect.left;
-            const maxSidebar = rect.width - RESIZER_WIDTH - chatWidth - RESIZER_WIDTH - CENTER_MIN_WIDTH;
+            // Ensure EditorPanel (center) has at least CENTER_MIN_WIDTH
+            const maxSidebar = rect.width - chatWidth - 2 * RESIZER_WIDTH - CENTER_MIN_WIDTH;
             if (!isFinite(next)) return;
-            next = Math.max(SIDEBAR_MIN_WIDTH, Math.min(next, Math.max(SIDEBAR_MIN_WIDTH, maxSidebar)));
+            next = Math.max(SIDEBAR_MIN_WIDTH, Math.min(next, maxSidebar));
             setSidebarWidth(next);
         };
         const onUp = () => {
@@ -102,9 +103,10 @@ const App: React.FC = () => {
             const rect = containerRef.current?.getBoundingClientRect();
             if (!rect) return;
             let next = rect.right - ev.clientX;
-            const maxChat = rect.width - sidebarWidth - RESIZER_WIDTH - RESIZER_WIDTH - CENTER_MIN_WIDTH;
+            // Ensure EditorPanel (center) has at least CENTER_MIN_WIDTH
+            const maxChat = rect.width - sidebarWidth - 2 * RESIZER_WIDTH - CENTER_MIN_WIDTH;
             if (!isFinite(next)) return;
-            next = Math.max(CHAT_MIN_WIDTH, Math.min(next, Math.max(CHAT_MIN_WIDTH, maxChat)));
+            next = Math.max(CHAT_MIN_WIDTH, Math.min(next, maxChat));
             setChatWidth(next);
         };
         const onUp = () => {
