@@ -15,6 +15,7 @@ import (
 	"github.com/loom/loom/internal/config"
 	"github.com/loom/loom/internal/memory"
 	"github.com/loom/loom/internal/tool"
+	"github.com/loom/loom/internal/workflow"
 )
 
 // Message represents a single message in the chat.
@@ -85,6 +86,9 @@ type Engine struct {
 	}
 	// list of workspace-relative file paths attached by the user for extra context
 	attachedFiles []string
+
+	// workflow state store (feature-flagged)
+	wf *workflow.Store
 }
 
 // LLM is an interface to abstract different language model providers.
@@ -148,6 +152,9 @@ func (e *Engine) ResetUsage() error {
 // WithWorkspace sets the workspace directory path for the engine.
 func (e *Engine) WithWorkspace(path string) *Engine {
 	e.workspaceDir = path
+	if strings.TrimSpace(path) != "" {
+		e.wf = workflow.NewStore(path)
+	}
 	return e
 }
 
@@ -453,6 +460,16 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 		if ui := strings.TrimSpace(e.formatEditorContext()); ui != "" {
 			engineMessages = append(engineMessages, Message{Role: "system", Content: "UI Context: " + ui})
 		}
+		// Inject compact workflow state and recent events if enabled
+		if e.wf != nil {
+			if st, err := e.wf.Load(); err == nil {
+				recent := workflow.RecentEventsForPrompt(e.workspaceDir, st.Budget.MaxEventsInPrompt)
+				block := workflow.BuildPromptFromStore(ctx, e.workspaceDir, st, recent)
+				if strings.TrimSpace(block) != "" {
+					engineMessages = append(engineMessages, Message{Role: "system", Content: block})
+				}
+			}
+		}
 		// No longer inject attachments as system context; they are appended to the user message on send
 
 		// Call the LLM with the conversation history (+ transient UI hint)
@@ -507,6 +524,16 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 							ID:   item.ToolCall.ID,
 							Name: item.ToolCall.Name,
 							Args: item.ToolCall.Args,
+						}
+						// Record tool_use event to workflow state
+						if e.wf != nil {
+							_ = e.wf.ApplyEvent(ctx, map[string]any{
+								"ts":   time.Now().Unix(),
+								"type": "tool_use",
+								"tool": item.ToolCall.Name,
+								"args": string(item.ToolCall.Args),
+								"id":   item.ToolCall.ID,
+							})
 						}
 						// Record the assistant tool_use in conversation for Anthropic
 						if convo != nil {
@@ -629,6 +656,18 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 				e.bridge.SendChat("system", fmt.Sprintf("[debug] Tool executed: name=%s safe=%v diffLen=%d contentLen=%d", toolCallReceived.Name, execResult.Safe, len(execResult.Diff), len(execResult.Content)))
 			}
 
+			// Record tool_result summary
+			if e.wf != nil {
+				_ = e.wf.ApplyEvent(ctx, map[string]any{
+					"ts":      time.Now().Unix(),
+					"type":    "tool_result",
+					"tool":    toolCallReceived.Name,
+					"ok":      err == nil,
+					"summary": strings.TrimSpace(execResult.Content),
+					"id":      toolCallReceived.ID,
+				})
+			}
+
 			// If the tool was file-related, hint UI to open the file
 			if e.bridge != nil {
 				// Try to extract a path field from args JSON for known tools
@@ -654,6 +693,15 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 			// Approval path returns structured result to the model
 			if !execResult.Safe {
 				approved := e.UserApproved(toolCallReceived, execResult.Diff)
+				if e.wf != nil {
+					_ = e.wf.ApplyEvent(ctx, map[string]any{
+						"ts":     time.Now().Unix(),
+						"type":   "approval",
+						"tool":   toolCallReceived.Name,
+						"status": map[bool]string{true: "granted", false: "denied"}[approved],
+						"id":     toolCallReceived.ID,
+					})
+				}
 				payload := map[string]any{
 					"tool":     toolCallReceived.Name,
 					"approved": approved,
