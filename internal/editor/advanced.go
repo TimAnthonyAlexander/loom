@@ -345,8 +345,34 @@ func ProposeAdvancedEdit(workspacePath string, req AdvancedEditRequest) (*EditPl
 			if startOrig < 0 || endOrig < 0 || startOrig > endOrig || endOrig > len(oldContent) {
 				return nil, ValidationError{Message: "failed to map indices to original content", Code: "INDEX_MAP_ERROR"}
 			}
+			// Smart content handling: detect and trim anchor overlap to prevent duplication
+			finalContent := req.Content
+
+			// If content starts with anchor_before text, this indicates the LLM included
+			// the anchor boundary in the replacement content. Trim it to prevent duplication.
+			if strings.TrimSpace(req.AnchorBefore) != "" {
+				anchorBefore := req.AnchorBefore
+				if req.NormalizeWhitespace {
+					// Normalize both for comparison if whitespace normalization is enabled
+					normAnchor, _ := normalizeWithMap(anchorBefore, true)
+					normContent, _ := normalizeWithMap(finalContent, true)
+					if strings.HasPrefix(normContent, normAnchor) {
+						// Find where the normalized anchor ends in the original content
+						afterAnchor := strings.TrimPrefix(finalContent, anchorBefore)
+						if afterAnchor != finalContent {
+							finalContent = afterAnchor
+						}
+					}
+				} else {
+					// Direct string comparison
+					if strings.HasPrefix(finalContent, anchorBefore) {
+						finalContent = strings.TrimPrefix(finalContent, anchorBefore)
+					}
+				}
+			}
+
 			// Two-phase replace: delete region then insert new content
-			newContent = oldContent[:startOrig] + req.Content + oldContent[endOrig:]
+			newContent = oldContent[:startOrig] + finalContent + oldContent[endOrig:]
 			// Determine affected line range
 			startLine := 1 + strings.Count(oldContent[:startOrig], "\n")
 			endLine := 1 + strings.Count(oldContent[:endOrig], "\n")
