@@ -22,7 +22,7 @@ Some screenshots of the interface and Loom in action:
 - Desktop app via Wails: native windowing, compact packaging, and system integration
 - Material UI: minimalist, content‑forward interface with a calm visual rhythm
 - Tool registry: explicit tool registration with schemas and safety flags
-- Providers: OpenAI, Anthropic Claude, and local Ollama adapters
+- Providers: OpenAI, Anthropic Claude, OpenRouter (thousands of models), and local Ollama adapters
 - Semantic search: ripgrep‑backed search with structured results
 - Heuristic symbol indexing: SQLite + FTS search over project symbols with tools for definitions, references, outlines, and neighborhood slices
 - Safe editing: proposed edits with diff preview and explicit approval before apply
@@ -105,6 +105,7 @@ API keys and endpoints are managed in‑app via Settings and persisted to `~/.lo
 
 - OpenAI: set your key in Settings (stored as `openai_api_key`)
 - Anthropic: set your key in Settings (stored as `anthropic_api_key`)
+- OpenRouter: set your key in Settings (stored as `openrouter_api_key`) for access to thousands of models
 - Ollama: set endpoint in Settings (stored as `ollama_endpoint`), e.g. `http://localhost:11434/v1/chat/completions`
 
 ### Settings
@@ -124,32 +125,24 @@ Two rule sets influence model behavior:
 Access Rules from the sidebar. The app normalizes and persists rule arrays.
 
 ### Model selection
-The UI exposes a curated, static selector. Entries are of the form `provider:model_id` and grouped by provider. Current set mirrors `ui/frontend/src/ModelSelector.tsx`:
+The UI exposes a comprehensive model selector with both curated static models and dynamically fetched models. Entries are of the form `provider:model_id` and grouped by provider and capabilities.
 
-```ts
-{ id: 'openai:gpt-5', name: 'GPT 5', provider: 'openai' },
-{ id: 'claude:claude-opus-4-20250514', name: 'Claude Opus 4', provider: 'claude' },
-{ id: 'claude:claude-sonnet-4-20250514', name: 'Claude Sonnet 4', provider: 'claude' },
-{ id: 'claude:claude-haiku-4-20250514', name: 'Claude Haiku 4', provider: 'claude' },
-{ id: 'claude:claude-3-7-sonnet-20250219', name: 'Claude 3.7 Sonnet', provider: 'claude' },
-{ id: 'claude:claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', provider: 'claude' },
-{ id: 'claude:claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku', provider: 'claude' },
-{ id: 'claude:claude-3-opus-20240229', name: 'Claude 3 Opus', provider: 'claude' },
-{ id: 'claude:claude-3-sonnet-20240229', name: 'Claude 3 Sonnet', provider: 'claude' },
-{ id: 'claude:claude-3-haiku-20240307', name: 'Claude 3 Haiku', provider: 'claude' },
-{ id: 'openai:gpt-4.1', name: 'GPT-4.1', provider: 'openai' },
-{ id: 'openai:o4-mini', name: 'o4-mini', provider: 'openai' },
-{ id: 'openai:o3', name: 'o3', provider: 'openai' },
-{ id: 'ollama:llama3.1:8b', name: 'Llama 3.1 (8B)', provider: 'ollama' },
-{ id: 'ollama:llama3:8b', name: 'Llama 3 (8B)', provider: 'ollama' },
-{ id: 'ollama:gpt-oss:20b', name: 'GPT-OSS (20B)', provider: 'ollama' },
-{ id: 'ollama:qwen3:8b', name: 'Qwen3 (8B)', provider: 'ollama' },
-{ id: 'ollama:gemma3:12b', name: 'Gemma3 (12B)', provider: 'ollama' },
-{ id: 'ollama:mistral:7b', name: 'Mistral (7B)', provider: 'ollama' },
-{ id: 'ollama:deepseek-r1:70b', name: 'DeepSeek R1 (70B)', provider: 'ollama' },
-```
+**Static Models**: The interface includes curated selections of flagship models from OpenAI (GPT-5, o3, o4-mini), Anthropic Claude (Opus 4, Sonnet 4, Haiku 4, 3.5 Sonnet, etc.), and local Ollama models (Llama, Mistral, DeepSeek R1, etc.).
 
-The backend parses `provider:model_id` (see `internal/adapter/models.go`) and switches adapters accordingly.
+**Dynamic OpenRouter Models**: When you configure an OpenRouter API key, the interface automatically fetches the complete catalog of available models with real-time pricing information. This provides access to thousands of models from various providers including:
+- Latest frontier models from all major providers
+- Specialized models for different tasks
+- Cost-effective alternatives with transparent pricing
+- Models sorted by cost efficiency
+
+**Model Categories**: Models are organized into logical groups:
+- **Flagship**: Top-tier models for complex tasks
+- **Reasoning**: Models optimized for step-by-step thinking
+- **Fast**: Quick response models for simple tasks  
+- **Cheap**: Cost-effective models for high-volume usage
+- **OpenRouter**: Dynamic catalog with pricing
+
+The backend parses `provider:model_id` (see `internal/adapter/models.go`) and switches adapters accordingly. OpenRouter models use the format `openrouter:provider/model-name`.
 
 ## Using Loom
 - Workspace: choose a workspace on first launch or via the sidebar. The file explorer and Monaco editor reflect the active workspace.
@@ -261,6 +254,10 @@ Delete its entry from .loom/mcp.json (or the file). Loom detects the change and 
   - Emits reasoning summaries on supported models (o3/o4/gpt‑5)
 - Anthropic (`internal/adapter/anthropic`)
   - Messages API with tool use
+- OpenRouter (`internal/adapter/openrouter`)
+  - OpenAI-compatible API providing access to thousands of models
+  - Unified interface with transparent pricing and model routing
+  - Supports reasoning models with normalized controls across providers
 - Ollama (`internal/adapter/ollama`)
   - Local model execution via HTTP endpoint
 
@@ -286,8 +283,9 @@ Adapters convert engine messages to provider‑specific payloads and parse strea
 - Shell execution: subject to timeouts; not sandboxed beyond CWD validation
 
 ## Troubleshooting
-- “No model configured” message: open Settings to set your API key and select a model
-- OpenAI/Anthropic errors: verify keys in Settings and network access
+- "No model configured" message: open Settings to set your API key and select a model
+- OpenAI/Anthropic/OpenRouter errors: verify keys in Settings and network access
+- OpenRouter model loading: if dynamic models don't appear, check API key and network connectivity
 - ripgrep missing: run `make deps` or install `rg` manually
 - Streaming stalls: temporarily disable streaming by retrying internally; check logs if persisted
 
