@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import JohnBerry from './JohnBerry';
 
 interface BerryFacts {
     [key: string]: string;
@@ -39,6 +40,7 @@ const DingleBerryPage: React.FC = () => {
                     </div>
                 ))}
             </main>
+            <JohnBerry />
             {selectedFact && (
                 <section style={styles.factSection}>
                     <h4>Secret Revealed:</h4>
