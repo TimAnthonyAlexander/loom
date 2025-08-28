@@ -27,7 +27,9 @@ type EditFileArgs struct {
 	AnchorAfter         string  `json:"anchor_after,omitempty"`
 	NormalizeWhitespace bool    `json:"normalize_whitespace,omitempty"`
 	FuzzyThreshold      float64 `json:"fuzzy_threshold,omitempty"`
-	Occurrence          int     `json:"occurrence,omitempty"`
+	Occurrence          int     `json:"occurrence,omitempty"`        // backward compatibility
+	OccurrenceBefore    int     `json:"occurrence_before,omitempty"` // independent control for anchor_before
+	OccurrenceAfter     int     `json:"occurrence_after,omitempty"`  // independent control for anchor_after
 }
 
 // EditFileResult represents the result of the edit_file tool.
@@ -103,7 +105,15 @@ func RegisterEditFile(registry *Registry, workspacePath string) error {
 				},
 				"occurrence": map[string]interface{}{
 					"type":        "integer",
-					"description": "1-based occurrence of the anchors to use (default 1)",
+					"description": "1-based occurrence of the anchors to use (default 1, for backward compatibility)",
+				},
+				"occurrence_before": map[string]interface{}{
+					"type":        "integer",
+					"description": "1-based occurrence of anchor_before to use (default 1). Overrides 'occurrence' for anchor_before.",
+				},
+				"occurrence_after": map[string]interface{}{
+					"type":        "integer",
+					"description": "1-based occurrence of anchor_after to use (default 1). Overrides 'occurrence' for anchor_after. Searched relative to anchor_before position.",
 				},
 			},
 			// We cannot express conditional requirements here; runtime will validate
@@ -138,6 +148,8 @@ func editFile(ctx context.Context, workspacePath string, args EditFileArgs) (*Ex
 		NormalizeWhitespace: args.NormalizeWhitespace,
 		FuzzyThreshold:      args.FuzzyThreshold,
 		Occurrence:          args.Occurrence,
+		OccurrenceBefore:    args.OccurrenceBefore,
+		OccurrenceAfter:     args.OccurrenceAfter,
 	}
 
 	// Create an edit plan first

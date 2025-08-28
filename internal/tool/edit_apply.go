@@ -24,7 +24,9 @@ type ApplyEditArgs struct {
 	AnchorAfter         string  `json:"anchor_after,omitempty"`
 	NormalizeWhitespace bool    `json:"normalize_whitespace,omitempty"`
 	FuzzyThreshold      float64 `json:"fuzzy_threshold,omitempty"`
-	Occurrence          int     `json:"occurrence,omitempty"`
+	Occurrence          int     `json:"occurrence,omitempty"`        // backward compatibility
+	OccurrenceBefore    int     `json:"occurrence_before,omitempty"` // independent control for anchor_before
+	OccurrenceAfter     int     `json:"occurrence_after,omitempty"`  // independent control for anchor_after
 }
 
 // RegisterApplyEdit registers the apply_edit tool with the registry.
@@ -93,7 +95,15 @@ func RegisterApplyEdit(registry *Registry, workspacePath string) error {
 				},
 				"occurrence": map[string]interface{}{
 					"type":        "integer",
-					"description": "1-based occurrence of the anchors to use (default 1)",
+					"description": "1-based occurrence of the anchors to use (default 1, for backward compatibility)",
+				},
+				"occurrence_before": map[string]interface{}{
+					"type":        "integer",
+					"description": "1-based occurrence of anchor_before to use (default 1). Overrides 'occurrence' for anchor_before.",
+				},
+				"occurrence_after": map[string]interface{}{
+					"type":        "integer",
+					"description": "1-based occurrence of anchor_after to use (default 1). Overrides 'occurrence' for anchor_after. Searched relative to anchor_before position.",
 				},
 			},
 			"required": []string{"path", "action"},
@@ -127,6 +137,8 @@ func applyEdit(ctx context.Context, workspacePath string, args ApplyEditArgs) (*
 		NormalizeWhitespace: args.NormalizeWhitespace,
 		FuzzyThreshold:      args.FuzzyThreshold,
 		Occurrence:          args.Occurrence,
+		OccurrenceBefore:    args.OccurrenceBefore,
+		OccurrenceAfter:     args.OccurrenceAfter,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to recreate edit plan: %w", err)
