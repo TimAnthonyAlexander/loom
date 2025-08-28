@@ -19,7 +19,6 @@ web/src/App.tsx
 internal/adapter/factory.go
 internal/adapter/models.go
 internal/indexer/ripgrep.go
-ui/frontend/src/ModelSelector.tsx
 web/src/index.css
 ui/frontend/src/utils/language.ts
 ui/frontend/src/App.tsx
@@ -46,6 +45,8 @@ ui/frontend/src/services/files.ts
 ui/frontend/src/components/left/Conversations/ConversationList.tsx
 ui/frontend/src/main.tsx
 web/src/main.tsx
+README.md
+README_DE.md
 ui/frontend/wailsjs/go/bridge/App.d.ts
 Makefile
 ui/frontend/tsconfig.json

@@ -210,3 +210,78 @@ func TestEditTool_SearchReplace(t *testing.T) {
 		t.Fatalf("file content mismatch: got %q want %q", got, want)
 	}
 }
+
+func TestEditTool_AnchoredReplace_BetweenAnchors(t *testing.T) {
+    workspace := t.TempDir()
+    reg := setupRegistryForTests(t, workspace)
+
+    // Initial file content with a region between anchors
+    mustWriteFile(t, workspace, "anch.txt", "a\nold1\nold2\nb")
+
+    args := EditFileArgs{
+        Path:              "anch.txt",
+        Action:            "ANCHOR_REPLACE",
+        AnchorBefore:      "a",
+        AnchorAfter:       "b",
+        Content:           "new1\nnew2\n",
+        NormalizeWhitespace: true,
+    }
+
+    // Propose anchored replace
+    res := invokeTool(t, reg, "edit_file", args)
+    if res.Diff == "" {
+        t.Fatalf("expected non-empty diff for anchored replace proposal")
+    }
+
+    // Apply
+    _ = invokeTool(t, reg, "apply_edit", ApplyEditArgs{
+        Path:                args.Path,
+        Action:              args.Action,
+        AnchorBefore:        args.AnchorBefore,
+        AnchorAfter:         args.AnchorAfter,
+        Content:             args.Content,
+        NormalizeWhitespace: args.NormalizeWhitespace,
+    })
+
+    got := readFileContent(t, workspace, args.Path)
+    want := "a\nnew1\nnew2\n" + "b"
+    if got != want {
+        t.Fatalf("file content mismatch: got %q want %q", got, want)
+    }
+}
+
+func TestEditTool_AnchoredReplace_TargetMatch(t *testing.T) {
+    workspace := t.TempDir()
+    reg := setupRegistryForTests(t, workspace)
+
+    mustWriteFile(t, workspace, "anch2.txt", "head\nX = 1\nY=2\nfoot")
+
+    args := EditFileArgs{
+        Path:                "anch2.txt",
+        Action:              "ANCHOR_REPLACE",
+        AnchorBefore:        "head",
+        AnchorAfter:         "foot",
+        Target:              "X = 1\nY=2",
+        Content:             "X = 10\nY = 20",
+        NormalizeWhitespace: true,
+        FuzzyThreshold:      0.9,
+    }
+
+    _ = invokeTool(t, reg, "edit_file", args)
+    _ = invokeTool(t, reg, "apply_edit", ApplyEditArgs{
+        Path:                args.Path,
+        Action:              args.Action,
+        AnchorBefore:        args.AnchorBefore,
+        AnchorAfter:         args.AnchorAfter,
+        Target:              args.Target,
+        Content:             args.Content,
+        NormalizeWhitespace: args.NormalizeWhitespace,
+        FuzzyThreshold:      args.FuzzyThreshold,
+    })
+
+    got := readFileContent(t, workspace, args.Path)
+    want := "head\nX = 10\nY = 20\nfoot"
+    if got != want {
+        t.Fatalf("file content mismatch: got %q want %q", got, want)
+    }
+}

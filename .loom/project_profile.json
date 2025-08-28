@@ -1,6 +1,6 @@
 {
   "workspace_root": "/Users/tim.alexander/loom",
-  "created_at_unix": 1756307671,
+  "created_at_unix": 1756391095,
   "languages": [
     "typescript",
     "go"
@@ -736,12 +736,12 @@
     },
     {
       "path": "ui/frontend/src/types/ui.ts",
-      "score": 0.3562468892578125,
+      "score": 0.35624688925781256,
       "reasons": [
         "graph_central"
       ],
       "components": {
-        "centrality": 0.3562468892578125,
+        "centrality": 0.35624688925781256,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -994,28 +994,6 @@
     },
     {
       "path": "internal/indexer/ripgrep.go",
-      "score": 0.1,
-      "reasons": [
-        "doc_mention"
-      ],
-      "components": {
-        "centrality": 0,
-        "doc_mentions": 0.1,
-        "git_frequency": 0,
-        "git_recency": 0,
-        "script_ci_refs": 0
-      },
-      "penalties": {
-        "generated": 0,
-        "large": 0,
-        "test": 0,
-        "vendored": 0
-      },
-      "confidence": 0.8,
-      "is_generated": false
-    },
-    {
-      "path": "ui/frontend/src/ModelSelector.tsx",
       "score": 0.1,
       "reasons": [
         "doc_mention"
@@ -1563,6 +1541,50 @@
       "is_generated": false
     },
     {
+      "path": "README.md",
+      "score": 0.05,
+      "reasons": [
+        "doc_mention"
+      ],
+      "components": {
+        "centrality": 0,
+        "doc_mentions": 0.05,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "README_DE.md",
+      "score": 0.05,
+      "reasons": [
+        "doc_mention"
+      ],
+      "components": {
+        "centrality": 0,
+        "doc_mentions": 0.05,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
       "path": "ui/frontend/wailsjs/go/bridge/App.d.ts",
       "score": 0.013500000000000005,
       "reasons": null,
@@ -1691,14 +1713,15 @@
       "go.mod": "dbadfb90325649d0927eefdd0ed699e853168e461830f6b39790e4ae51a5b946"
     },
     "tsconfig_hash": "",
-    "readme_hash": "06181807d68b725cd99776f1a5f26f96785c8a70667d51c55141c9463b975769",
+    "readme_hash": "fdbe533116f77b77429a1022c89b7da0e850bfb8182371ddf58d14dabf421f11",
     "mtime_max": 1755784243
   },
   "metrics": {
-    "files": 162,
+    "files": 166,
     "edges": 61,
     "pagerank_iters": 7,
-    "duration_ms": 129
+    "duration_ms": 101,
+    "rank_churn": 0.09523809523809523
   },
   "version": "2"
 }
