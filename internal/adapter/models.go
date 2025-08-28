@@ -46,6 +46,8 @@ func GetProviderFromModel(modelString string) (Provider, string, error) {
 		provider = ProviderAnthropic
 	case "ollama":
 		provider = ProviderOllama
+	case "openrouter":
+		provider = ProviderOpenRouter
 	default:
 		return "", "", fmt.Errorf("unknown provider: %s", model.ProviderPrefix)
 	}

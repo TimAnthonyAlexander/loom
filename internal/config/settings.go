@@ -10,10 +10,11 @@ import (
 
 // Settings represents persisted application settings such as API keys and endpoints.
 type Settings struct {
-	OpenAIAPIKey    string `json:"openai_api_key"`
-	AnthropicAPIKey string `json:"anthropic_api_key"`
-	OllamaEndpoint  string `json:"ollama_endpoint,omitempty"`
-	LastWorkspace   string `json:"last_workspace,omitempty"`
+	OpenAIAPIKey     string `json:"openai_api_key"`
+	AnthropicAPIKey  string `json:"anthropic_api_key"`
+	OpenRouterAPIKey string `json:"openrouter_api_key"`
+	OllamaEndpoint   string `json:"ollama_endpoint,omitempty"`
+	LastWorkspace    string `json:"last_workspace,omitempty"`
 	// Last selected model in the format "provider:model_id"
 	LastModel string `json:"last_model,omitempty"`
 	// Feature flags

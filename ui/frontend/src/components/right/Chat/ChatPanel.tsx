@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Button, Divider, Typography, Popover, TextField, List, ListItemButton, ListItemText } from '@mui/material';
+import { Box, Divider, Typography, Popover, TextField, List, ListItemButton, ListItemText, IconButton } from '@mui/material';
 import * as AppBridge from '../../../../wailsjs/go/bridge/App';
 import * as Bridge from '../../../../wailsjs/go/bridge/App';
 import MessageList from './MessageList';
@@ -7,6 +7,7 @@ import Composer from './Composer';
 import { ChatMessage, ConversationListItem } from '../../../types/ui';
 import ConversationList from '@/components/left/Conversations/ConversationList';
 import ModelSelector from '@/ModelSelector';
+import { AddRounded, SettingsSuggestRounded } from '@mui/icons-material';
 
 type Props = {
     messages: ChatMessage[];
@@ -189,7 +190,7 @@ function ChatPanelComponent(props: Props) {
     }, [attachments]);
 
     return (
-        <Box sx={{ minWidth: 420, width: '100%', display: 'flex', flexDirection: 'column', height: '100vh' }}>
+        <Box sx={{ minWidth: 450, width: '100%', display: 'flex', flexDirection: 'column', height: '100vh' }}>
             <Box
                 sx={{
                     width: '100%',
@@ -202,16 +203,30 @@ function ChatPanelComponent(props: Props) {
                     borderColor: 'divider',
                 }}
             >
-                <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={onNewConversation}
-                >
-                    New Conversation
-                </Button>
                 <ModelSelector onSelect={onSelectModel} currentModel={currentModel} />
+                <Box
+                    sx={{
+                        p: 1,
+                        boxSizing: 'border-box',
+                        display: 'flex',
+                        gap: 1,
+                    }}
+                >
+                    <IconButton
+                        size="small"
+                        onClick={onNewConversation}
+                    >
+                        <AddRounded />
+                    </IconButton>
+                    <IconButton
+                        size="small"
+                        onClick={(e) => { setToolsAnchor(e.currentTarget); setToolsOpen(true); }}
+                    >
+                        <SettingsSuggestRounded />
+                    </IconButton>
+                </Box>
             </Box>
-            <Box sx={{ flex: 1, overflowY: 'auto', px: 3, py: 2, minHeight: 0, boxSizing: 'border-box' }}>
+            <Box sx={{ flex: 1, overflowY: 'auto', p: 2, minHeight: 0, boxSizing: 'border-box' }}>
                 <MessageList
                     messages={messages}
                     busy={busy}
@@ -239,13 +254,6 @@ function ChatPanelComponent(props: Props) {
                         />
                     </Box>
                 }
-                <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={(e) => { setToolsAnchor(e.currentTarget); setToolsOpen(true); }}
-                >
-                    MCP Tools
-                </Button>
             </Box>
             <Divider />
             <Box sx={{ px: 3, py: 2, boxSizing: 'border-box', }} >
@@ -296,7 +304,7 @@ function ChatPanelComponent(props: Props) {
                 onClose={() => setAttachOpen(false)}
                 anchorOrigin={{ vertical: 'top', horizontal: 'left' }}
                 transformOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-                PaperProps={{ sx: { p: 1, width: 420 } }}
+                PaperProps={{ sx: { p: 1, width: 450 } }}
             >
                 <TextField
                     autoFocus

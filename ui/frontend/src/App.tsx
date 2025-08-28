@@ -32,6 +32,7 @@ const App: React.FC = () => {
     const [workspacePath, setWorkspacePath] = useState<string>('');
     const [openaiKey, setOpenaiKey] = useState<string>('');
     const [anthropicKey, setAnthropicKey] = useState<string>('');
+    const [openrouterKey, setOpenrouterKey] = useState<string>('');
     const [ollamaEndpoint, setOllamaEndpoint] = useState<string>('');
     const [autoApproveShell, setAutoApproveShell] = useState<boolean>(false);
     const [autoApproveEdits, setAutoApproveEdits] = useState<boolean>(false);
@@ -70,7 +71,7 @@ const App: React.FC = () => {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const RESIZER_WIDTH = 2;
     const SIDEBAR_MIN_WIDTH = 280;
-    const CHAT_MIN_WIDTH = 450;
+    const CHAT_MIN_WIDTH = 460;
     const CENTER_MIN_WIDTH = 320;
     const [sidebarWidth, setSidebarWidth] = useState<number>(() => Math.max(SIDEBAR_MIN_WIDTH, Math.round(window.innerWidth * 0.14)));
     const [chatWidth, setChatWidth] = useState<number>(() => Math.max(CHAT_MIN_WIDTH, Math.round(window.innerWidth * 0.21)));
@@ -289,6 +290,7 @@ const App: React.FC = () => {
             .then((s: any) => {
                 setOpenaiKey(s?.openai_api_key || '');
                 setAnthropicKey(s?.anthropic_api_key || '');
+                setOpenrouterKey(s?.openrouter_api_key || '');
                 setOllamaEndpoint(s?.ollama_endpoint || '');
                 setAutoApproveShell(String(s?.auto_approve_shell).toLowerCase() === 'true');
                 setAutoApproveEdits(String(s?.auto_approve_edits).toLowerCase() === 'true');
@@ -793,13 +795,15 @@ const App: React.FC = () => {
                 setOpenaiKey={setOpenaiKey}
                 anthropicKey={anthropicKey}
                 setAnthropicKey={setAnthropicKey}
+                openrouterKey={openrouterKey}
+                setOpenrouterKey={setOpenrouterKey}
                 ollamaEndpoint={ollamaEndpoint}
                 setOllamaEndpoint={setOllamaEndpoint}
                 autoApproveShell={autoApproveShell}
                 setAutoApproveShell={setAutoApproveShell}
                 autoApproveEdits={autoApproveEdits}
                 setAutoApproveEdits={setAutoApproveEdits}
-                onSave={() => { SaveSettings({ openai_api_key: openaiKey, anthropic_api_key: anthropicKey, ollama_endpoint: ollamaEndpoint, auto_approve_shell: String(autoApproveShell), auto_approve_edits: String(autoApproveEdits) }).finally(() => setSettingsOpen(false)); }}
+                onSave={() => { SaveSettings({ openai_api_key: openaiKey, anthropic_api_key: anthropicKey, openrouter_api_key: openrouterKey, ollama_endpoint: ollamaEndpoint, auto_approve_shell: String(autoApproveShell), auto_approve_edits: String(autoApproveEdits) }).finally(() => setSettingsOpen(false)); }}
                 onClose={() => setSettingsOpen(false)}
             />
             <WorkspaceDialog

@@ -7,6 +7,8 @@ type Props = {
     setOpenaiKey: (v: string) => void;
     anthropicKey: string;
     setAnthropicKey: (v: string) => void;
+    openrouterKey: string;
+    setOpenrouterKey: (v: string) => void;
     ollamaEndpoint: string;
     setOllamaEndpoint: (v: string) => void;
     autoApproveShell: boolean;
@@ -24,6 +26,8 @@ export default function SettingsDialog(props: Props) {
         setOpenaiKey,
         anthropicKey,
         setAnthropicKey,
+        openrouterKey,
+        setOpenrouterKey,
         ollamaEndpoint,
         setOllamaEndpoint,
         autoApproveShell,
@@ -41,6 +45,7 @@ export default function SettingsDialog(props: Props) {
                 <Stack spacing={2} sx={{ mt: 1 }}>
                     <TextField label="OpenAI API Key" type="password" autoComplete="off" value={openaiKey} onChange={(e) => setOpenaiKey(e.target.value)} placeholder="sk-..." fullWidth />
                     <TextField label="Anthropic API Key" type="password" autoComplete="off" value={anthropicKey} onChange={(e) => setAnthropicKey(e.target.value)} placeholder="sk-ant-..." fullWidth />
+                    <TextField label="OpenRouter API Key" type="password" autoComplete="off" value={openrouterKey} onChange={(e) => setOpenrouterKey(e.target.value)} placeholder="sk-or-..." fullWidth />
                     <TextField label="Ollama Endpoint" value={ollamaEndpoint} onChange={(e) => setOllamaEndpoint(e.target.value)} placeholder="http://localhost:11434" fullWidth />
                     <Stack direction="row" spacing={2} alignItems="center">
                         <Link component="button" underline="hover" onClick={() => OpenProjectDataDir()}>

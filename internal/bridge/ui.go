@@ -193,6 +193,8 @@ func (a *App) SetModel(model string) {
 		apiKey = a.settings.OpenAIAPIKey
 	case adapter.ProviderAnthropic:
 		apiKey = a.settings.AnthropicAPIKey
+	case adapter.ProviderOpenRouter:
+		apiKey = a.settings.OpenRouterAPIKey
 	default:
 		apiKey = a.config.APIKey // Keep existing key for other providers like Ollama
 	}
@@ -207,6 +209,8 @@ func (a *App) SetModel(model string) {
 		providerPrefix = "claude"
 	case adapter.ProviderOllama:
 		providerPrefix = "ollama"
+	case adapter.ProviderOpenRouter:
+		providerPrefix = "openrouter"
 	default:
 		providerPrefix = string(provider)
 	}
@@ -265,6 +269,10 @@ func (a *App) applyAndSaveSettings(s config.Settings) {
 	case adapter.ProviderAnthropic:
 		if s.AnthropicAPIKey != "" {
 			updatedConfig.APIKey = s.AnthropicAPIKey
+		}
+	case adapter.ProviderOpenRouter:
+		if s.OpenRouterAPIKey != "" {
+			updatedConfig.APIKey = s.OpenRouterAPIKey
 		}
 	case adapter.ProviderOllama:
 		if s.OllamaEndpoint != "" {
@@ -359,9 +367,11 @@ func (a *App) GetSettings() map[string]string {
 	// Do not fallback API keys to environment; only return persisted values
 	openaiKey := s.OpenAIAPIKey
 	anthropicKey := s.AnthropicAPIKey
+	openrouterKey := s.OpenRouterAPIKey
 	return map[string]string{
 		"openai_api_key":     openaiKey,
 		"anthropic_api_key":  anthropicKey,
+		"openrouter_api_key": openrouterKey,
 		"ollama_endpoint":    s.OllamaEndpoint,
 		"last_workspace":     lastWorkspace,
 		"last_model":         s.LastModel,
@@ -561,6 +571,9 @@ func (a *App) SaveSettings(settings map[string]string) {
 	}
 	if v, ok := settings["anthropic_api_key"]; ok {
 		s.AnthropicAPIKey = v
+	}
+	if v, ok := settings["openrouter_api_key"]; ok {
+		s.OpenRouterAPIKey = v
 	}
 	if v, ok := settings["ollama_endpoint"]; ok {
 		s.OllamaEndpoint = v

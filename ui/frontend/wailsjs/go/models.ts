@@ -123,6 +123,7 @@ export namespace config {
 	export class Settings {
 	    openai_api_key: string;
 	    anthropic_api_key: string;
+	    openrouter_api_key: string;
 	    ollama_endpoint?: string;
 	    last_workspace?: string;
 	    last_model?: string;
@@ -137,6 +138,7 @@ export namespace config {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.openai_api_key = source["openai_api_key"];
 	        this.anthropic_api_key = source["anthropic_api_key"];
+	        this.openrouter_api_key = source["openrouter_api_key"];
 	        this.ollama_endpoint = source["ollama_endpoint"];
 	        this.last_workspace = source["last_workspace"];
 	        this.last_model = source["last_model"];

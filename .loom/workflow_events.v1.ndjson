@@ -1,0 +1,2 @@
+{"args":"{\"action\":\"add\",\"id\":\"\",\"text\":\"The user greeted the system.\"}","id":"j80r7x4y3","tool":"memories","ts":1756384945,"type":"tool_use"}
+{"id":"j80r7x4y3","ok":true,"summary":"{\n  \"memory\": {\n    \"id\": \"20250828-144225\",\n    \"text\": \"The user greeted the system.\"\n  },\n  \"status\": \"ok\"\n}","tool":"memories","ts":1756384945,"type":"tool_result"}

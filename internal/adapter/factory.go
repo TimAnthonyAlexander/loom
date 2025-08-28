@@ -8,6 +8,7 @@ import (
 	"github.com/loom/loom/internal/adapter/ollama"
 	"github.com/loom/loom/internal/adapter/openai"
 	responses "github.com/loom/loom/internal/adapter/openai/responses"
+	"github.com/loom/loom/internal/adapter/openrouter"
 	"github.com/loom/loom/internal/engine"
 )
 
@@ -23,6 +24,9 @@ const (
 
 	// Ollama provider for local models
 	ProviderOllama Provider = "ollama"
+
+	// OpenRouter provider for multi-model access
+	ProviderOpenRouter Provider = "openrouter"
 )
 
 // Config holds configuration for an LLM adapter.
@@ -75,6 +79,12 @@ func New(config Config) (engine.LLM, error) {
 			baseURL = "http://localhost:11434/v1/chat/completions"
 		}
 		return ollama.New(baseURL, config.Model), nil
+
+	case ProviderOpenRouter:
+		if config.APIKey == "" {
+			return nil, errors.New("openrouter API key not set; set it in Settings")
+		}
+		return openrouter.New(config.APIKey, config.Model), nil
 
 	default:
 		return nil, errors.New("unknown LLM provider")

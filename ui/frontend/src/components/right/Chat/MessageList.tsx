@@ -1,6 +1,5 @@
 import React from 'react';
 import { Box, Stack, CircularProgress } from '@mui/material';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import MarkdownRenderer from '../../markdown/MarkdownRenderer';
 import MarkdownErrorBoundary from '../../markdown/MarkdownErrorBoundary';
 import ReasoningPanel from './ReasoningPanel';
@@ -55,21 +54,15 @@ const MessageItem = React.memo(function MessageItem({
         return (
             <Box
                 sx={{
-                    p: 1.25,
                     borderRadius: 1.5,
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    bgcolor: 'background.paper',
                     color: 'text.secondary',
                 }}
             >
                 <Stack direction="row" spacing={1.25} alignItems="flex-start">
                     <Box sx={{ pt: '3px' }}>
-                        {showSpinner ? (
+                        {showSpinner &&
                             <CircularProgress size={14} thickness={5} />
-                        ) : (
-                            <InfoOutlinedIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
-                        )}
+                        }
                     </Box>
                     <Box sx={{ flex: 1, fontSize: '0.9rem' }}>
                         <MarkdownErrorBoundary>
@@ -83,17 +76,19 @@ const MessageItem = React.memo(function MessageItem({
 
     const containerProps = isUser
         ? { component: Box, sx: { p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2, fontSize: '0.9rem', bgcolor: 'action.hover' } }
-        : { component: Box, sx: { py: 1, borderTop: '1px solid', borderBottom: '1px solid', borderColor: 'divider', fontSize: '0.9rem' } };
+        : { component: Box, sx: { py: 1, borderColor: 'divider', fontSize: '0.9rem' } };
 
     return (
-        <Box {...(containerProps as any)}>
+        <>
             {showReasoning && (
                 <ReasoningPanel text={reasoningText} open={reasoningOpen} onToggle={onToggleReasoning} />
             )}
-            <MarkdownErrorBoundary>
-                <MarkdownRenderer>{filterAttachments(msg.content)}</MarkdownRenderer>
-            </MarkdownErrorBoundary>
-        </Box>
+            <Box {...(containerProps as any)}>
+                <MarkdownErrorBoundary>
+                    <MarkdownRenderer>{filterAttachments(msg.content)}</MarkdownRenderer>
+                </MarkdownErrorBoundary>
+            </Box>
+        </>
     );
 }, (prev, next) => {
     // Re-render only if content or relevant flags change for this item
