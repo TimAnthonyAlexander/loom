@@ -4,6 +4,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import RuleIcon from '@mui/icons-material/Rule';
 import MemoryIcon from '@mui/icons-material/BookmarkBorder';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import { EventsOn, EventsOff } from '../../../wailsjs/runtime/runtime';
 import FileExplorer from './Files/FileExplorer';
 import ProfileDialog from '../dialogs/ProfileDialog';
 import { UIFileEntry } from '../../types/ui';
@@ -63,6 +64,24 @@ function Sidebar(props: SidebarProps) {
             fetchSymbolsCount();
         }
     }, [indexing?.status, fetchSymbolsCount]);
+
+    // Listen for workspace changes and refetch symbol count
+    React.useEffect(() => {
+        const handleWorkspaceChanged = () => {
+            // Reset symbol count immediately and fetch new count
+            setSymbolsCount(null);
+            // Add a small delay to ensure the backend has time to initialize the new symbols service
+            setTimeout(() => {
+                fetchSymbolsCount();
+            }, 500);
+        };
+        
+        EventsOn('workspace:changed', handleWorkspaceChanged);
+        
+        return () => {
+            EventsOff('workspace:changed', handleWorkspaceChanged);
+        };
+    }, [fetchSymbolsCount]);
 
     const onReindex = React.useCallback(async () => {
         try {

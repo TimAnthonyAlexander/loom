@@ -611,6 +611,9 @@ func (a *App) SetWorkspace(path string) {
 	// Update engine workspace
 	if a.engine != nil {
 		a.engine.WithWorkspace(norm)
+		// Reset editor context since we're switching to a new workspace
+		// The old file path and cursor position are no longer relevant
+		a.engine.SetEditorContext("", 1, 1)
 	}
 	// Re-register tools with new workspace paths
 	if a.tools != nil {
@@ -709,6 +712,12 @@ func (a *App) SetWorkspace(path string) {
 	a.ensureSettingsLoaded()
 	a.settings.LastWorkspace = norm
 	_ = config.Save(a.settings)
+
+	// Emit event to notify frontend that workspace has changed
+	// This allows UI components to update (e.g., symbol count, file explorer)
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "workspace:changed", map[string]string{"path": norm})
+	}
 	// Load .gitignore matcher for this workspace
 	a.gitMatcher = a.buildGitignoreMatcher(norm)
 	// After switching, log current rules snapshot for debug
@@ -857,10 +866,18 @@ func (a *App) GetSymbolsCount() int {
 	if a.symbolsSvc == nil {
 		return 0
 	}
+
 	n, err := a.symbolsSvc.Count(context.Background())
 	if err != nil {
+		// Fallback: use the same method as GetProfileData which seems to work
+		// This is more robust when symbols service is still initializing
+		symbolsData := a.GetSymbols(0, 10) // Just get first page to get total count
+		if total, ok := symbolsData["total"].(int); ok {
+			return total
+		}
 		return 0
 	}
+
 	return n
 }
 

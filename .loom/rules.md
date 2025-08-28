@@ -4,14 +4,14 @@
 
 ## Entrypoints
 
+**Backend:**
+- `ui/frontend/wailsjs/runtime/runtime.js`
+- `ui/wails.json` (wails)
+
 **Frontend:**
 - `ui/frontend/src/main.ts` (vite)
 - `ui/frontend/src/main.ts` (vite)
 - `web/src/main.ts` (vite)
-
-**Backend:**
-- `ui/frontend/wailsjs/runtime/runtime.js`
-- `ui/wails.json` (wails)
 
 ## Commands
 

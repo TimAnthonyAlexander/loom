@@ -1,6 +1,6 @@
 {
   "workspace_root": "/Users/tim.alexander/loom",
-  "created_at_unix": 1756391095,
+  "created_at_unix": 1756408755,
   "languages": [
     "typescript",
     "go"
@@ -42,6 +42,12 @@
   ],
   "scripts": [
     {
+      "name": "preview",
+      "source": "package.json",
+      "cmd": "vite preview",
+      "paths": null
+    },
+    {
       "name": "dev",
       "source": "package.json",
       "cmd": "vite --port 5173 --strictPort",
@@ -60,9 +66,9 @@
       "paths": null
     },
     {
-      "name": "preview",
+      "name": "dev",
       "source": "package.json",
-      "cmd": "vite preview",
+      "cmd": "screen -dmS loom-frontend-web vite --port 8444",
       "paths": null
     },
     {
@@ -81,12 +87,6 @@
       "name": "preview",
       "source": "package.json",
       "cmd": "vite preview",
-      "paths": null
-    },
-    {
-      "name": "dev",
-      "source": "package.json",
-      "cmd": "screen -dmS loom-frontend-web vite --port 8444",
       "paths": null
     },
     {
@@ -736,12 +736,12 @@
     },
     {
       "path": "ui/frontend/src/types/ui.ts",
-      "score": 0.35624688925781256,
+      "score": 0.3562468892578125,
       "reasons": [
         "graph_central"
       ],
       "components": {
-        "centrality": 0.35624688925781256,
+        "centrality": 0.3562468892578125,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -781,12 +781,12 @@
     },
     {
       "path": "ui/frontend/wailsjs/runtime/runtime.js",
-      "score": 0.15057900000000002,
+      "score": 0.15057900000000005,
       "reasons": [
         "graph_central"
       ],
       "components": {
-        "centrality": 0.15057900000000002,
+        "centrality": 0.15057900000000005,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -1036,10 +1036,10 @@
     },
     {
       "path": "ui/frontend/src/utils/language.ts",
-      "score": 0.0923682375,
+      "score": 0.09236823749999999,
       "reasons": null,
       "components": {
-        "centrality": 0.0923682375,
+        "centrality": 0.09236823749999999,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -1713,15 +1713,14 @@
       "go.mod": "dbadfb90325649d0927eefdd0ed699e853168e461830f6b39790e4ae51a5b946"
     },
     "tsconfig_hash": "",
-    "readme_hash": "fdbe533116f77b77429a1022c89b7da0e850bfb8182371ddf58d14dabf421f11",
-    "mtime_max": 1755784243
+    "readme_hash": "5c8efd89e30ba7aed5dc76de3a8743032a1b5cce535c91570ce2a1d873f70286",
+    "mtime_max": 1756407618
   },
   "metrics": {
-    "files": 166,
+    "files": 315,
     "edges": 61,
     "pagerank_iters": 7,
-    "duration_ms": 101,
-    "rank_churn": 0.09523809523809523
+    "duration_ms": 98
   },
   "version": "2"
 }
