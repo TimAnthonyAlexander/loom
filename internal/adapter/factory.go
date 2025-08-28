@@ -1,5 +1,7 @@
 package adapter
 
+// DEMO EDIT: This is a random demo edit to showcase editing capabilities
+
 import (
 	"errors"
 	"strings"
