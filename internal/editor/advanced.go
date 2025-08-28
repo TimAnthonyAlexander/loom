@@ -364,10 +364,7 @@ func ProposeAdvancedEdit(workspacePath string, req AdvancedEditRequest) (*EditPl
 						}
 					}
 				} else {
-					// Direct string comparison
-					if strings.HasPrefix(finalContent, anchorBefore) {
-						finalContent = strings.TrimPrefix(finalContent, anchorBefore)
-					}
+					finalContent = strings.TrimPrefix(finalContent, anchorBefore)
 				}
 			}
 
