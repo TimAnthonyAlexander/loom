@@ -1,5 +1,7 @@
 [![CI](https://github.com/TimAnthonyAlexander/loom/actions/workflows/tests.yml/badge.svg)](https://github.com/TimAnthonyAlexander/loom/actions/workflows/tests.yml)
 
+[Deutsche Version](README_DE.md)
+
 Modern, code-aware, desktop AI assistant with an extensible tool system, built with Go (Wails) and React (Vite) using Material UI. Loom is a ground‑up rewrite of Loom v1 focused on simplicity, extensibility, reliability, and a calm, content‑centric UX.
 
 ## Overview
