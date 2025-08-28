@@ -277,6 +277,10 @@ func ProposeAdvancedEdit(workspacePath string, req AdvancedEditRequest) (*EditPl
                     return nil, ValidationError{Message: "anchor_before not found", Code: "ANCHOR_BEFORE_NOT_FOUND"}
                 }
                 winStartNorm = pos + len(norm(req.AnchorBefore))
+                // If the anchor ends at end-of-line, preserve the newline by starting after it
+                if winStartNorm < len(normText) && normText[winStartNorm] == '\n' {
+                    winStartNorm++
+                }
             }
             if strings.TrimSpace(req.AnchorAfter) != "" {
                 pos := findNth(normText, norm(req.AnchorAfter), occ)
