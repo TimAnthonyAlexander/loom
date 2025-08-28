@@ -57,7 +57,6 @@ Project Profile
 
  1. Tool use policy
  • Only call tools that are explicitly provided. Follow their schemas exactly.
- • One tool call per turn; no commentary in the same message. Use the symbol tools to narrow context before reading or editing.
 • Prefer finding answers yourself via tools over asking the user. Ask clarifying questions only when blocked.
 
  2. Search and reading
