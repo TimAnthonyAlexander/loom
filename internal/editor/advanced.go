@@ -44,7 +44,9 @@ type AdvancedEditRequest struct {
 	AnchorAfter         string  // text after the region to replace (not included in replacement)
 	NormalizeWhitespace bool    // if true, collapse runs of spaces/tabs and match ignoring minor spacing
 	FuzzyThreshold      float64 // 0..1, higher means stricter desired match; used to configure fuzzy matcher
-	Occurrence          int     // 1-based occurrence selection for anchors (default 1)
+	Occurrence          int     // 1-based occurrence selection for anchors (default 1, for backward compatibility)
+	OccurrenceBefore    int     // 1-based occurrence selection for anchor_before (default 1)
+	OccurrenceAfter     int     // 1-based occurrence selection for anchor_after (default 1)
 }
 
 // ProposeAdvancedEdit validates and constructs an EditPlan based on an AdvancedEditRequest.
@@ -256,11 +258,22 @@ func ProposeAdvancedEdit(workspacePath string, req AdvancedEditRequest) (*EditPl
 			if strings.TrimSpace(req.AnchorBefore) == "" && strings.TrimSpace(req.AnchorAfter) == "" && strings.TrimSpace(req.Target) == "" {
 				return nil, ValidationError{Message: "ANCHOR_REPLACE requires at least target or one anchor", Code: "MISSING_ANCHORS"}
 			}
-			// Defaults
-			occ := req.Occurrence
-			if occ <= 0 {
-				occ = 1
+			// Determine occurrence counts with backward compatibility
+			occBefore := req.OccurrenceBefore
+			if occBefore <= 0 {
+				occBefore = req.Occurrence
+				if occBefore <= 0 {
+					occBefore = 1
+				}
 			}
+			occAfter := req.OccurrenceAfter
+			if occAfter <= 0 {
+				occAfter = req.Occurrence
+				if occAfter <= 0 {
+					occAfter = 1
+				}
+			}
+
 			// Prepare normalized text and index mapping
 			normText, idxMap := normalizeWithMap(oldContent, req.NormalizeWhitespace)
 			// Helper to normalize a pattern consistently
@@ -272,7 +285,7 @@ func ProposeAdvancedEdit(workspacePath string, req AdvancedEditRequest) (*EditPl
 			winStartNorm := 0
 			winEndNorm := len(normText)
 			if strings.TrimSpace(req.AnchorBefore) != "" {
-				pos := findNth(normText, norm(req.AnchorBefore), occ)
+				pos := findNth(normText, norm(req.AnchorBefore), occBefore)
 				if pos < 0 {
 					return nil, ValidationError{Message: "anchor_before not found", Code: "ANCHOR_BEFORE_NOT_FOUND"}
 				}
@@ -283,7 +296,8 @@ func ProposeAdvancedEdit(workspacePath string, req AdvancedEditRequest) (*EditPl
 				}
 			}
 			if strings.TrimSpace(req.AnchorAfter) != "" {
-				pos := findNth(normText, norm(req.AnchorAfter), occ)
+				// Search for anchor_after starting from after anchor_before (relative search)
+				pos := findNthFrom(normText, norm(req.AnchorAfter), occAfter, winStartNorm)
 				if pos < 0 {
 					return nil, ValidationError{Message: "anchor_after not found", Code: "ANCHOR_AFTER_NOT_FOUND"}
 				}

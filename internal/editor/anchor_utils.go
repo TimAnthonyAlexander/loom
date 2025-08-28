@@ -81,6 +81,31 @@ func findNth(text, pattern string, occurrence int) int {
 	return found
 }
 
+// findNthFrom returns the 0-based index of the nth (1-based) occurrence of pattern in text,
+// starting the search from the given startPos. Returns -1 if not found.
+func findNthFrom(text, pattern string, occurrence int, startPos int) int {
+	if occurrence <= 0 {
+		occurrence = 1
+	}
+	if pattern == "" {
+		return -1
+	}
+	if startPos < 0 {
+		startPos = 0
+	}
+	if startPos >= len(text) {
+		return -1
+	}
+
+	// Search in the substring starting from startPos
+	relativeIdx := findNth(text[startPos:], pattern, occurrence)
+	if relativeIdx < 0 {
+		return -1
+	}
+
+	return startPos + relativeIdx
+}
+
 // fuzzyMatch uses diff-match-patch to find the best match location for pattern within text.
 // threshold is dmp.MatchThreshold (lower is stricter). Returns -1 if no match.
 func fuzzyMatch(text, pattern string, threshold float64) int {
