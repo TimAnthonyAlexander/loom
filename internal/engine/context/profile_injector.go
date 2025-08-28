@@ -211,7 +211,18 @@ func (b *ProjectContextBuilder) BuildRulesBlock(workspaceRoot string, maxChars i
 		return rules, nil
 	}
 
-	// Truncate and add ellipsis
-	truncated := rules[:maxChars-10] // Leave room for ellipsis message
-	return truncated + "\n\n[...truncated, use get_project_profile tool for full rules]", nil
+	// Truncate and add ellipsis with safe bounds
+	suffix := "\n\n[...truncated, use get_project_profile tool for full rules]"
+	if maxChars <= len(suffix) {
+		return suffix, nil
+	}
+	keep := maxChars - len(suffix)
+	if keep < 0 {
+		keep = 0
+	}
+	if keep > len(rules) {
+		keep = len(rules)
+	}
+	truncated := rules[:keep]
+	return truncated + suffix, nil
 }
