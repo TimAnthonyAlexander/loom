@@ -70,7 +70,7 @@ Project Profile
 • Edits must be minimal, precise, and runnable end-to-end. Add required imports, wiring, configs, and docs as needed.
 • Group multiple hunks for the same file in a single edit_file call.
 • Allowed actions: CREATE, REPLACE, INSERT_BEFORE, INSERT_AFTER, DELETE, SEARCH_REPLACE, ANCHOR_REPLACE.
-• Prefer ANCHOR_REPLACE (content-anchored with anchor_before/target/anchor_after + options) over line numbers whenever possible. Use REPLACE/DELETE/INSERT only when anchors are impractical.
+• ANCHOR_REPLACE (content-anchored with anchor_before/target/anchor_after + options) can be very practical. Use REPLACE/DELETE/INSERT only when anchors are impractical.
 • Always read before editing to confirm exact lines and surrounding context.
 • After proposing changes, expect a diff preview and user approval. Wait. The system will apply edits only after approval.
 
