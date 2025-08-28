@@ -75,11 +75,11 @@ function Sidebar(props: SidebarProps) {
                 fetchSymbolsCount();
             }, 500);
         };
-        
-        EventsOn('workspace:changed', handleWorkspaceChanged);
-        
+
+        const off = EventsOn('workspace:changed', handleWorkspaceChanged);
+
         return () => {
-            EventsOff('workspace:changed', handleWorkspaceChanged);
+            off();
         };
     }, [fetchSymbolsCount]);
 
@@ -146,11 +146,11 @@ function Sidebar(props: SidebarProps) {
                     </Box>
                 )}
                 <Tooltip title="Click to view project profile">
-                    <Box 
-                        sx={{ 
-                            mt: 1, 
-                            display: 'flex', 
-                            alignItems: 'center', 
+                    <Box
+                        sx={{
+                            mt: 1,
+                            display: 'flex',
+                            alignItems: 'center',
                             gap: 1,
                             cursor: 'pointer',
                             p: 0.5,
@@ -161,24 +161,24 @@ function Sidebar(props: SidebarProps) {
                         }}
                         onClick={() => setProfileDialogOpen(true)}
                     >
-                    <Typography variant="caption" color="text.secondary">
-                        Symbols
-                    </Typography>
-                    <Typography variant="caption" fontWeight={600}>
-                        {symbolsCount ?? '—'}
-                    </Typography>
-                    <Box sx={{ flex: 1 }} />
-                    <Tooltip title="Reindex symbols">
-                        <IconButton 
-                            size="small" 
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onReindex();
-                            }}
-                        >
-                            <RefreshIcon fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
+                        <Typography variant="caption" color="text.secondary">
+                            Symbols
+                        </Typography>
+                        <Typography variant="caption" fontWeight={600}>
+                            {symbolsCount ?? '—'}
+                        </Typography>
+                        <Box sx={{ flex: 1 }} />
+                        <Tooltip title="Reindex symbols">
+                            <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onReindex();
+                                }}
+                            >
+                                <RefreshIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
                     </Box>
                 </Tooltip>
             </Box>
@@ -231,7 +231,7 @@ function Sidebar(props: SidebarProps) {
                 </Paper>
             </Box>
 
-            <ProfileDialog 
+            <ProfileDialog
                 open={profileDialogOpen}
                 onClose={() => setProfileDialogOpen(false)}
             />
