@@ -88,13 +88,6 @@ func validateToolArgs(toolName string, args map[string]interface{}) bool {
 			}
 		}
 		return false
-	case "finalize":
-		if v, ok := args["summary"]; ok {
-			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
-				return true
-			}
-		}
-		return false
 	default:
 		// For other tools, accept any JSON (including empty) by default
 		return true

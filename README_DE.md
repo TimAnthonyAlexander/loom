@@ -172,7 +172,6 @@ Tools sind in `ui/main.go` registriert und unter `internal/tool/` implementiert:
 - `run_shell`: Shell-Befehl vorschlagen – erfordert Freigabe
 - `apply_shell`: freigegebenen Shell-Befehl ausführen
 - `http_request`: HTTP-Calls an Dev-Server/APIs
-- `finalize`: kurze Endsummaries erzeugen und Loop beenden
 
 Destruktive Aktionen erfordern im UI eine explizite Freigabe, außer Auto-Freigabe ist in den Einstellungen aktiviert.
 

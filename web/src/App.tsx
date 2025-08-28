@@ -206,7 +206,6 @@ Wails + Vite with live reload
   edit_file(),
   run_shell(),
   http_request(), 
-  finalize(),
 ]`}</code>
                         </pre>
                     </div>
