@@ -4,7 +4,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import RuleIcon from '@mui/icons-material/Rule';
 import MemoryIcon from '@mui/icons-material/BookmarkBorder';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import { EventsOn, EventsOff } from '../../../wailsjs/runtime/runtime';
+import { EventsOn } from '../../../wailsjs/runtime/runtime';
 import FileExplorer from './Files/FileExplorer';
 import ProfileDialog from '../dialogs/ProfileDialog';
 import { UIFileEntry } from '../../types/ui';
