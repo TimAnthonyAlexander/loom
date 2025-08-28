@@ -742,15 +742,6 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 				convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, execResult.Content)
 			}
 
-			// If this was a finalize call, end now
-			if toolCallReceived.Name == "finalize" {
-				if execResult.Content != "" {
-					convo.AddAssistant(execResult.Content)
-					e.bridge.EmitAssistant(execResult.Content)
-				}
-				return nil
-			}
-
 			// Continue the loop to get the next assistant message
 			continue
 		}
@@ -859,13 +850,6 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 					}
 				} else {
 					convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, execResult.Content)
-				}
-				if toolCallReceived.Name == "finalize" {
-					if execResult.Content != "" {
-						convo.AddAssistant(execResult.Content)
-						e.bridge.EmitAssistant(execResult.Content)
-					}
-					return nil
 				}
 				continue
 			}

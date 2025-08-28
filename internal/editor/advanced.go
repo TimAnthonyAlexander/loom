@@ -17,6 +17,10 @@ const (
 	ActionInsertBefore  ActionType = "INSERT_BEFORE"
 	ActionDeleteLines   ActionType = "DELETE"
 	ActionSearchReplace ActionType = "SEARCH_REPLACE"
+	// ActionAnchorReplace performs a content-anchored replacement that avoids line numbers.
+	// It locates the target region by optional anchors (before/after) and/or a target block,
+	// with optional whitespace normalization and fuzzy matching.
+	ActionAnchorReplace ActionType = "ANCHOR_REPLACE"
 )
 
 // AdvancedEditRequest captures parameters for advanced edits.
@@ -32,6 +36,17 @@ type AdvancedEditRequest struct {
 	// Search/replace payload
 	OldString string
 	NewString string
+
+	// Anchor-based replace payload (for ANCHOR_REPLACE)
+	// All anchors/target are optional, but at least one of target or an anchor must be provided.
+	AnchorBefore        string  // text before the region to replace (not included in replacement)
+	Target              string  // the text block intended to be replaced
+	AnchorAfter         string  // text after the region to replace (not included in replacement)
+	NormalizeWhitespace bool    // if true, collapse runs of spaces/tabs and match ignoring minor spacing
+	FuzzyThreshold      float64 // 0..1, higher means stricter desired match; used to configure fuzzy matcher
+	Occurrence          int     // 1-based occurrence selection for anchors (default 1, for backward compatibility)
+	OccurrenceBefore    int     // 1-based occurrence selection for anchor_before (default 1)
+	OccurrenceAfter     int     // 1-based occurrence selection for anchor_after (default 1)
 }
 
 // ProposeAdvancedEdit validates and constructs an EditPlan based on an AdvancedEditRequest.
@@ -85,7 +100,7 @@ func ProposeAdvancedEdit(workspacePath string, req AdvancedEditRequest) (*EditPl
 			},
 		}, nil
 
-	case ActionReplaceLines, ActionInsertAfter, ActionInsertBefore, ActionDeleteLines, ActionSearchReplace:
+	case ActionReplaceLines, ActionInsertAfter, ActionInsertBefore, ActionDeleteLines, ActionSearchReplace, ActionAnchorReplace:
 		if !fileExists {
 			return nil, ValidationError{
 				Message: "File does not exist",
@@ -237,6 +252,136 @@ func ProposeAdvancedEdit(workspacePath string, req AdvancedEditRequest) (*EditPl
 				maxLine = strings.Count(oldContent, "\n") + 1
 			}
 			changed = LineRange{StartLine: minLine, EndLine: maxLine}
+
+		case ActionAnchorReplace:
+			// Robust anchored replace: find region using anchors/target with optional normalization and fuzzy match
+			if strings.TrimSpace(req.AnchorBefore) == "" && strings.TrimSpace(req.AnchorAfter) == "" && strings.TrimSpace(req.Target) == "" {
+				return nil, ValidationError{Message: "ANCHOR_REPLACE requires at least target or one anchor", Code: "MISSING_ANCHORS"}
+			}
+			// Determine occurrence counts with backward compatibility
+			occBefore := req.OccurrenceBefore
+			if occBefore <= 0 {
+				occBefore = req.Occurrence
+				if occBefore <= 0 {
+					occBefore = 1
+				}
+			}
+			occAfter := req.OccurrenceAfter
+			if occAfter <= 0 {
+				occAfter = req.Occurrence
+				if occAfter <= 0 {
+					occAfter = 1
+				}
+			}
+
+			// Prepare normalized text and index mapping
+			normText, idxMap := normalizeWithMap(oldContent, req.NormalizeWhitespace)
+			// Helper to normalize a pattern consistently
+			norm := func(s string) string {
+				ns, _ := normalizeWithMap(s, req.NormalizeWhitespace)
+				return ns
+			}
+			// Locate anchors in normalized space
+			winStartNorm := 0
+			winEndNorm := len(normText)
+			if strings.TrimSpace(req.AnchorBefore) != "" {
+				pos := findNth(normText, norm(req.AnchorBefore), occBefore)
+				if pos < 0 {
+					return nil, ValidationError{Message: "anchor_before not found", Code: "ANCHOR_BEFORE_NOT_FOUND"}
+				}
+				winStartNorm = pos + len(norm(req.AnchorBefore))
+				// If the anchor ends at end-of-line, preserve the newline by starting after it
+				if winStartNorm < len(normText) && normText[winStartNorm] == '\n' {
+					winStartNorm++
+				}
+			}
+			if strings.TrimSpace(req.AnchorAfter) != "" {
+				// Search for anchor_after starting from after anchor_before (relative search)
+				pos := findNthFrom(normText, norm(req.AnchorAfter), occAfter, winStartNorm)
+				if pos < 0 {
+					return nil, ValidationError{Message: "anchor_after not found", Code: "ANCHOR_AFTER_NOT_FOUND"}
+				}
+				winEndNorm = pos
+			}
+			if winStartNorm > winEndNorm {
+				return nil, ValidationError{Message: "anchor window invalid: before occurs after after", Code: "ANCHOR_WINDOW_INVALID"}
+			}
+			// Determine target region in normalized window
+			regionStartNorm := winStartNorm
+			regionEndNorm := winEndNorm
+			if strings.TrimSpace(req.Target) != "" {
+				tgtNorm := norm(req.Target)
+				if tgtNorm == "" {
+					return nil, ValidationError{Message: "empty target after normalization", Code: "EMPTY_TARGET"}
+				}
+				window := normText[winStartNorm:winEndNorm]
+				// Exact search first
+				rel := strings.Index(window, tgtNorm)
+				if rel < 0 {
+					// Fuzzy search using diff-match-patch
+					// Convert fuzzy threshold (high=strict) to dmp threshold (low=strict)
+					dmpThreshold := 0.5
+					if req.FuzzyThreshold > 0 {
+						ft := req.FuzzyThreshold
+						if ft < 0 {
+							ft = 0
+						} else if ft > 1 {
+							ft = 1
+						}
+						dmpThreshold = 1.0 - ft
+					}
+					// Perform MatchMain
+					rel = fuzzyMatch(window, tgtNorm, dmpThreshold)
+					if rel < 0 {
+						return nil, ValidationError{Message: "target not found within anchors", Code: "TARGET_NOT_FOUND"}
+					}
+				}
+				regionStartNorm = winStartNorm + rel
+				regionEndNorm = regionStartNorm + len(tgtNorm)
+			}
+			// Map normalized indices back to original indices (exclusive end)
+			startOrig := mapNormToOrig(idxMap, regionStartNorm, len(normText), len(oldContent))
+			endOrig := mapNormToOrig(idxMap, regionEndNorm, len(normText), len(oldContent))
+			if startOrig < 0 || endOrig < 0 || startOrig > endOrig || endOrig > len(oldContent) {
+				return nil, ValidationError{Message: "failed to map indices to original content", Code: "INDEX_MAP_ERROR"}
+			}
+			// Smart content handling: detect and trim anchor overlap to prevent duplication
+			finalContent := req.Content
+
+			// If content starts with anchor_before text, this indicates the LLM included
+			// the anchor boundary in the replacement content. Trim it to prevent duplication.
+			if strings.TrimSpace(req.AnchorBefore) != "" {
+				anchorBefore := req.AnchorBefore
+				if req.NormalizeWhitespace {
+					// Normalize both for comparison if whitespace normalization is enabled
+					normAnchor, _ := normalizeWithMap(anchorBefore, true)
+					normContent, _ := normalizeWithMap(finalContent, true)
+					if strings.HasPrefix(normContent, normAnchor) {
+						// Find where the normalized anchor ends in the original content
+						afterAnchor := strings.TrimPrefix(finalContent, anchorBefore)
+						if afterAnchor != finalContent {
+							finalContent = afterAnchor
+						}
+					}
+				} else {
+					finalContent = strings.TrimPrefix(finalContent, anchorBefore)
+				}
+			}
+
+			// Two-phase replace: delete region then insert new content
+			newContent = oldContent[:startOrig] + finalContent + oldContent[endOrig:]
+			// Determine affected line range
+			startLine := 1 + strings.Count(oldContent[:startOrig], "\n")
+			endLine := 1 + strings.Count(oldContent[:endOrig], "\n")
+			// After replacement, compute new end based on inserted content
+			insLines := 0
+			if req.Content != "" {
+				insLines = strings.Count(req.Content, "\n") + 1
+			} else {
+				insLines = 0
+			}
+			_ = endLine // unused but kept for potential future use
+			changed = LineRange{StartLine: startLine, EndLine: startLine + insLines - 1}
 		}
 
 		return &EditPlan{

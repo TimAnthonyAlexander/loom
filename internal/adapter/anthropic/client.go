@@ -190,13 +190,13 @@ func (c *Client) Chat(
 	if len(claudeMessages) == 0 {
 		claudeMessages = append(claudeMessages, map[string]interface{}{
 			"role":    "user",
-			"content": []map[string]interface{}{{"type": "text", "text": "Either continue with your task at hand or use finalize tool."}},
+			"content": []map[string]interface{}{{"type": "text", "text": "Either continue with your task at hand or write finalizing message."}},
 		})
 	} else {
 		if role, _ := claudeMessages[len(claudeMessages)-1]["role"].(string); role != "user" {
 			claudeMessages = append(claudeMessages, map[string]interface{}{
 				"role":    "user",
-				"content": []map[string]interface{}{{"type": "text", "text": "Either continue with your task at hand or use finalize tool."}},
+				"content": []map[string]interface{}{{"type": "text", "text": "Either continue with your task at hand or write finalizing message."}},
 			})
 		}
 	}

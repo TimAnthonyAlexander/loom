@@ -171,7 +171,6 @@ Tools are registered in `ui/main.go` and implemented under `internal/tool/`:
 - `run_shell`: Propose a shell command — requires approval
 - `apply_shell`: Execute an approved shell command
 - `http_request`: Perform HTTP calls to dev servers/APIs
-- `finalize`: Emit a concise final summary and end the loop
 
 Destructive actions require explicit user approval in the UI before execution, unless auto‑approval is enabled in Settings.
 

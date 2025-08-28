@@ -4,6 +4,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import RuleIcon from '@mui/icons-material/Rule';
 import MemoryIcon from '@mui/icons-material/BookmarkBorder';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import { EventsOn } from '../../../wailsjs/runtime/runtime';
 import FileExplorer from './Files/FileExplorer';
 import ProfileDialog from '../dialogs/ProfileDialog';
 import { UIFileEntry } from '../../types/ui';
@@ -63,6 +64,24 @@ function Sidebar(props: SidebarProps) {
             fetchSymbolsCount();
         }
     }, [indexing?.status, fetchSymbolsCount]);
+
+    // Listen for workspace changes and refetch symbol count
+    React.useEffect(() => {
+        const handleWorkspaceChanged = () => {
+            // Reset symbol count immediately and fetch new count
+            setSymbolsCount(null);
+            // Add a small delay to ensure the backend has time to initialize the new symbols service
+            setTimeout(() => {
+                fetchSymbolsCount();
+            }, 500);
+        };
+
+        const off = EventsOn('workspace:changed', handleWorkspaceChanged);
+
+        return () => {
+            off();
+        };
+    }, [fetchSymbolsCount]);
 
     const onReindex = React.useCallback(async () => {
         try {
@@ -127,11 +146,11 @@ function Sidebar(props: SidebarProps) {
                     </Box>
                 )}
                 <Tooltip title="Click to view project profile">
-                    <Box 
-                        sx={{ 
-                            mt: 1, 
-                            display: 'flex', 
-                            alignItems: 'center', 
+                    <Box
+                        sx={{
+                            mt: 1,
+                            display: 'flex',
+                            alignItems: 'center',
                             gap: 1,
                             cursor: 'pointer',
                             p: 0.5,
@@ -142,24 +161,24 @@ function Sidebar(props: SidebarProps) {
                         }}
                         onClick={() => setProfileDialogOpen(true)}
                     >
-                    <Typography variant="caption" color="text.secondary">
-                        Symbols
-                    </Typography>
-                    <Typography variant="caption" fontWeight={600}>
-                        {symbolsCount ?? '—'}
-                    </Typography>
-                    <Box sx={{ flex: 1 }} />
-                    <Tooltip title="Reindex symbols">
-                        <IconButton 
-                            size="small" 
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onReindex();
-                            }}
-                        >
-                            <RefreshIcon fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
+                        <Typography variant="caption" color="text.secondary">
+                            Symbols
+                        </Typography>
+                        <Typography variant="caption" fontWeight={600}>
+                            {symbolsCount ?? '—'}
+                        </Typography>
+                        <Box sx={{ flex: 1 }} />
+                        <Tooltip title="Reindex symbols">
+                            <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onReindex();
+                                }}
+                            >
+                                <RefreshIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
                     </Box>
                 </Tooltip>
             </Box>
@@ -212,7 +231,7 @@ function Sidebar(props: SidebarProps) {
                 </Paper>
             </Box>
 
-            <ProfileDialog 
+            <ProfileDialog
                 open={profileDialogOpen}
                 onClose={() => setProfileDialogOpen(false)}
             />

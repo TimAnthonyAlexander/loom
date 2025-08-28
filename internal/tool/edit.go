@@ -21,6 +21,15 @@ type EditFileArgs struct {
 	// Search/replace parameters
 	OldString string `json:"old_string,omitempty"`
 	NewString string `json:"new_string,omitempty"`
+	// Anchored replace parameters (for ANCHOR_REPLACE)
+	AnchorBefore        string  `json:"anchor_before,omitempty"`
+	Target              string  `json:"target,omitempty"`
+	AnchorAfter         string  `json:"anchor_after,omitempty"`
+	NormalizeWhitespace bool    `json:"normalize_whitespace,omitempty"`
+	FuzzyThreshold      float64 `json:"fuzzy_threshold,omitempty"`
+	Occurrence          int     `json:"occurrence,omitempty"`        // backward compatibility
+	OccurrenceBefore    int     `json:"occurrence_before,omitempty"` // independent control for anchor_before
+	OccurrenceAfter     int     `json:"occurrence_after,omitempty"`  // independent control for anchor_after
 }
 
 // EditFileResult represents the result of the edit_file tool.
@@ -35,7 +44,7 @@ type EditFileResult struct {
 func RegisterEditFile(registry *Registry, workspacePath string) error {
 	return registry.Register(Definition{
 		Name:        "edit_file",
-		Description: "Edit a file with advanced actions: CREATE, REPLACE (line range), INSERT_BEFORE/INSERT_AFTER (line), DELETE (line range), or SEARCH_REPLACE",
+		Description: "Edit a file with actions: CREATE, REPLACE (line range), INSERT_BEFORE/INSERT_AFTER (line), DELETE (line range), SEARCH_REPLACE, or ANCHOR_REPLACE (content-anchored). Prefer ANCHOR_REPLACE over line numbers when possible.",
 		Safe:        false, // Editing files requires approval
 		JSONSchema: map[string]interface{}{
 			"type": "object",
@@ -47,7 +56,7 @@ func RegisterEditFile(registry *Registry, workspacePath string) error {
 				"action": map[string]interface{}{
 					"type":        "string",
 					"description": "Action to perform",
-					"enum":        []string{"CREATE", "REPLACE", "INSERT_AFTER", "INSERT_BEFORE", "DELETE", "SEARCH_REPLACE"},
+					"enum":        []string{"CREATE", "REPLACE", "INSERT_AFTER", "INSERT_BEFORE", "DELETE", "SEARCH_REPLACE", "ANCHOR_REPLACE"},
 				},
 				"content": map[string]interface{}{
 					"type":        "string",
@@ -73,6 +82,39 @@ func RegisterEditFile(registry *Registry, workspacePath string) error {
 					"type":        "string",
 					"description": "Replacement string for SEARCH_REPLACE",
 				},
+				// Anchored replace fields
+				"anchor_before": map[string]interface{}{
+					"type":        "string",
+					"description": "Text immediately before the region to replace (not included)",
+				},
+				"target": map[string]interface{}{
+					"type":        "string",
+					"description": "Existing block to be replaced. Optional when replacing the span between anchors.",
+				},
+				"anchor_after": map[string]interface{}{
+					"type":        "string",
+					"description": "Text immediately after the region to replace (not included)",
+				},
+				"normalize_whitespace": map[string]interface{}{
+					"type":        "boolean",
+					"description": "Normalize whitespace during matching (collapse spaces, ignore tabs vs spaces)",
+				},
+				"fuzzy_threshold": map[string]interface{}{
+					"type":        "number",
+					"description": "0..1: higher prefers stricter match when using fuzzy search fallback",
+				},
+				"occurrence": map[string]interface{}{
+					"type":        "integer",
+					"description": "1-based occurrence of the anchors to use (default 1, for backward compatibility)",
+				},
+				"occurrence_before": map[string]interface{}{
+					"type":        "integer",
+					"description": "1-based occurrence of anchor_before to use (default 1). Overrides 'occurrence' for anchor_before.",
+				},
+				"occurrence_after": map[string]interface{}{
+					"type":        "integer",
+					"description": "1-based occurrence of anchor_after to use (default 1). Overrides 'occurrence' for anchor_after. Searched relative to anchor_before position.",
+				},
 			},
 			// We cannot express conditional requirements here; runtime will validate
 			"required": []string{"path", "action"},
@@ -92,14 +134,22 @@ func RegisterEditFile(registry *Registry, workspacePath string) error {
 func editFile(ctx context.Context, workspacePath string, args EditFileArgs) (*ExecutionResult, error) {
 	// Map args to advanced request
 	adv := editor.AdvancedEditRequest{
-		FilePath:  args.Path,
-		Action:    editor.ActionType(args.Action),
-		Content:   args.Content,
-		StartLine: args.StartLine,
-		EndLine:   args.EndLine,
-		Line:      args.Line,
-		OldString: args.OldString,
-		NewString: args.NewString,
+		FilePath:            args.Path,
+		Action:              editor.ActionType(args.Action),
+		Content:             args.Content,
+		StartLine:           args.StartLine,
+		EndLine:             args.EndLine,
+		Line:                args.Line,
+		OldString:           args.OldString,
+		NewString:           args.NewString,
+		AnchorBefore:        args.AnchorBefore,
+		Target:              args.Target,
+		AnchorAfter:         args.AnchorAfter,
+		NormalizeWhitespace: args.NormalizeWhitespace,
+		FuzzyThreshold:      args.FuzzyThreshold,
+		Occurrence:          args.Occurrence,
+		OccurrenceBefore:    args.OccurrenceBefore,
+		OccurrenceAfter:     args.OccurrenceAfter,
 	}
 
 	// Create an edit plan first
@@ -138,6 +188,8 @@ func editFile(ctx context.Context, workspacePath string, args EditFileArgs) (*Ex
 		message = fmt.Sprintf("File will be edited (INSERT_AFTER line %d): %s", args.Line, args.Path)
 	case editor.ActionSearchReplace:
 		message = fmt.Sprintf("File will be edited (SEARCH_REPLACE): %s", args.Path)
+	case editor.ActionAnchorReplace:
+		message = fmt.Sprintf("File will be edited (ANCHOR_REPLACE): %s", args.Path)
 	default:
 		message = fmt.Sprintf("File will be edited: %s", args.Path)
 	}
