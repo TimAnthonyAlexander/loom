@@ -1,19 +1,16 @@
-[![Go Tests (Linux)](https://github.com/TimAnthonyAlexander/loom/actions/workflows/go-tests.yml/badge.svg)](https://github.com/TimAnthonyAlexander/loom/actions/workflows/go-tests.yml)
+[![CI](https://github.com/TimAnthonyAlexander/loom/actions/workflows/tests.yml/badge.svg)](https://github.com/TimAnthonyAlexander/loom/actions/workflows/tests.yml)
 
-Modern, code-bewusster Desktop-KI-Assistent mit einem erweiterbaren Toolsystem, gebaut mit Go (Wails) und React (Vite) unter Verwendung von Material UI. Loom ist eine komplette Neuentwicklung von Loom v1 mit Fokus auf Einfachheit, Erweiterbarkeit, Zuverlässigkeit und einer ruhigen, inhaltszentrierten Benutzererfahrung.
+Moderner, code-bewusster Desktop-AI-Assistent mit erweiterbarem Tool-System. Entwickelt mit Go (Wails) und React (Vite) unter Verwendung von Material UI. Loom ist ein kompletter Neubau von Loom v1 mit Fokus auf Einfachheit, Erweiterbarkeit, Zuverlässigkeit und eine ruhige, inhaltszentrierte UX.
 
 ## Übersicht
-
-Loom kombiniert einen Go-Orchestrator und eine Tooling-Schicht mit einer modernen React-Benutzeroberfläche. Es ist für iterative Programmierunterstützung bei lokalen Projekten mit erstklassiger Unterstützung für:
-
+Loom kombiniert einen Go-Orchestrator und eine Tooling-Schicht mit einer modernen React-Oberfläche. Ausgelegt für iterative Coding-Assistenz in lokalen Projekten mit erstklassiger Unterstützung für:
 - Semantische Code-Erkundung
-- Präzise, minimale Dateiänderungen mit menschlicher Genehmigung
-- Streaming-Antworten, Begründungsschnipsel und Tool-Aufrufe
-- Klare Trennung zwischen Engine, Adaptern, Tools und UI
+- Präzise, minimale Dateiänderungen mit menschlicher Freigabe
+- Streaming-Antworten, Reasoning-Snippets und Tool-Aufrufe
+- Saubere Trennung von Engine, Adaptern, Tools und UI
 
 ## Screenshots
-
-Einige Screenshots der Benutzeroberfläche und Loom in Aktion:
+Einige Screenshots der Oberfläche und Loom in Aktion:
 
 ![Loom Screenshot](screenshot1.png)
 ![Loom Screenshot](screenshot2.png)
@@ -21,208 +18,181 @@ Einige Screenshots der Benutzeroberfläche und Loom in Aktion:
 ![Loom Screenshot](screenshot4.png)
 
 ## Hauptfunktionen
-
-- Desktop-App über Wails: native Fensterverwaltung, kompakte Verpackung und Systemintegration
-- Material UI: minimalistisches, inhaltsorientiertes Interface mit ruhigem visuellen Rhythmus
-- Tool-Registry: explizite Tool-Registrierung mit Schemata und Sicherheitskennzeichen
-- Provider: OpenAI, Anthropic Claude und lokale Ollama-Adapter
-- Semantische Suche: ripgrep-gestützte Suche mit strukturierten Ergebnissen
-- Heuristische Symbolindizierung: SQLite + FTS-Suche über Projektsymbole mit Tools für Definitionen, Referenzen, Gliederungen und Nachbarschaftsausschnitte
-- Sichere Bearbeitung: vorgeschlagene Änderungen mit Diff-Vorschau und expliziter Genehmigung vor Anwendung
-- Projektgedächtnis: arbeitsbereichsbezogene Persistenz für stabilen, vorhersehbaren Zustand
-- Shell-Ausführung: Vorschlagen/Genehmigen/Ausführen von Befehlen mit stdout/stderr-Erfassung; Arbeitsverzeichnis auf den Arbeitsbereich beschränkt
-- Automatische Genehmigung: optionale automatische Genehmigung für Änderungen und Shell-Befehle
-- Regelsystem: benutzer- und projektspezifische Regeln für konsistentes KI-Verhalten
-- Tabbed Editor: Monaco mit Thema, Cmd/Ctrl+S zum Speichern und Dateiexplorer
-- Begründungsansicht: vorübergehender, einklappbarer Stream von Modellbegründungszusammenfassungen
-- Kostenverfolgung: Anzeige aller verbrauchten Tokens nach Projekt, Modell, Ein-/Ausgabe
+- Desktop-App via Wails: native Fenster, kompaktes Packaging und Systemintegration
+- Material UI: minimalistische, inhaltsorientierte Oberfläche mit ruhigem visuellen Rhythmus
+- Tool-Registry: explizite Tool-Registrierung mit Schemas und Sicherheits-Flags
+- Provider: OpenAI, Anthropic Claude, OpenRouter (tausende Modelle) und lokale Ollama-Adapter
+- Semantische Suche: ripgrep-basierte Suche mit strukturierten Ergebnissen
+- Heuristische Symbol-Indizierung: SQLite + FTS über Projektsymbole mit Tools für Definitionen, Referenzen, Umgebungs-Ausschnitte und Outline
+- Sicheres Editieren: Änderungsvorschläge mit Diff-Vorschau und expliziter Freigabe vor Anwendung
+- Projekt-Memory: workspace-gebundene Persistenz für stabilen, vorhersagbaren Zustand
+- Shell-Ausführung: Befehle vorschlagen/freigeben/ausführen mit stdout/stderr-Erfassung; Arbeitsverzeichnis auf den Workspace beschränkt
+- Auto-Freigabe: optional automatische Freigabe für Edits und Shell-Befehle
+- Regel-System: benutzer- und projektspezifische Regeln für konsistentes AI-Verhalten
+- Tab-Editor: Monaco mit Theme, Cmd/Ctrl+S zum Speichern, plus Dateibrowser
+- Reasoning-Ansicht: temporärer, einklappbarer Strom von Modell-Reasoning-Zusammenfassungen
+- Kosten-Tracking: Einsicht aller verbrauchten Tokens nach Projekt, Modell, Input/Output
 
 ## Architektur
-
 - Frontend (`ui/frontend/`)
   - Vite + React 18 + TypeScript
-  - Material UI-Komponenten und Catppuccin-Thema für Monaco
-  - Markdown-Darstellung mit Code-Hervorhebung
-  - Streaming-Nachrichtenupdates über Wails-Ereignisse
-  - Genehmigungsdialog mit Diff-Formatierung
+  - Material UI Komponenten und Catppuccin Theme für Monaco
+  - Markdown-Rendering mit Code-Highlighting
+  - Streaming-Message-Updates via Wails Events
+  - Bestätigungsdialog mit Diff-Formatierung
 
 - Backend (`ui/main.go` und `internal/*`)
-  - Wails-App bootstrapped Engine, Tools, Adapter und Speicher
+  - Wails-App bootstrapped Engine, Tools, Adapter und Memory
   - Engine orchestriert Modellaufrufe und Tool-Invokationen
   - Tool-Registry deklariert verfügbare Fähigkeiten und Sicherheit
-  - Adapter implementieren anbieter-spezifische Chat-Semantik
-  - Speicher speichert Projektdaten unter dem Arbeitsbereichspfad
-  - Indexer führt schnelle Code-Suche über ripgrep durch
+  - Adapter implementieren provider-spezifische Chat-Semantik
+  - Memory speichert Projektdaten unter dem Workspace-Pfad
+  - Indexer führt schnelle Code-Suche über ripgrep aus
 
 - Website (`web/`) https://loom-assistant.de
   - Vite + React 18 + TypeScript
-  - Material UI-Komponenten
-  - Marketing und Landing Page
+  - Material UI Komponenten
+  - Marketing- und Landingpage
 
 ## Verzeichnisstruktur
-
-- `ui/` — Wails-App (Go) und Frontend
-- `internal/` — Engine, Adapter, Tools, Speicher, Indexer, Konfiguration
-- `web/` — Website (Marketing, Landing Page)
-- `Makefile` — gemeinsame Entwicklungs-/Build-Aufgaben
+- `ui/`: Wails-App (Go) und Frontend
+- `internal/`: Engine, Adapter, Tools, Memory, Indexer, Config
+- `web/`: Website (Marketing, Landingpage)
+- `Makefile`: gängige Dev-/Build-Tasks
 
 ## Erste Schritte
-
 Voraussetzungen:
 - Go 1.21+
 - Node.js 18+ und npm
 - ripgrep (`rg`) im PATH
-- Plattform-Toolchain (z.B. Xcode Command Line Tools auf macOS)
+- Plattform-Toolchain (z. B. Xcode Command Line Tools auf macOS)
 
-Abhängigkeiten installieren:
-
+Alle Abhängigkeiten installieren:
 ```bash
 make deps
 ```
 
-Dies wird:
-- Go-Module aufräumen und die Wails-CLI installieren
-- Frontend-Abhängigkeiten (einschließlich Material UI) installieren
-- Sicherstellen, dass ripgrep verfügbar ist (installiert über Homebrew auf macOS, falls nicht vorhanden)
+Dies bewirkt:
+- Go-Module aufräumen und Wails CLI installieren
+- Frontend-Abhängigkeiten installieren (inklusive Material UI)
+- ripgrep sicherstellen (wird auf macOS via Homebrew installiert, falls fehlend)
 
 ## Ausführen und Bauen
-
-- Entwicklung (vollständige App mit Wails Live Reload):
-
+- Entwicklung (volle App mit Wails Live-Reload):
 ```bash
 make dev-hmr
 ```
 
-- Nur Frontend (Vite Dev Server):
-
+- Nur Frontend (Vite Dev-Server):
 ```bash
 cd ui/frontend && npm run dev
 ```
 
 - Build (aktuelle Plattform):
-
 ```bash
 make build
 ```
 
 - Plattform-Builds:
   - macOS universal: `make build-macos-universal`
-  - macOS pro Architektur: `make build-macos-amd64` (Intel), `make build-macos-arm64` (Apple Silicon)
+  - macOS arch-spezifisch: `make build-macos-amd64` (Intel), `make build-macos-arm64` (Apple Silicon)
   - Windows: `make build-windows`
   - Linux: `make build-linux-all` (oder `build-linux-amd64` / `build-linux-arm64`)
 
 ## Konfiguration
+Loom konfiguriert einen LLM-Adapter über die Adapter-Factory (`internal/adapter/factory.go`) mit konservativen Defaults.
 
-Loom konfiguriert einen LLM-Adapter über die Adapterfabrik (`internal/adapter/factory.go`) mit konservativen Standardeinstellungen
+API-Keys und Endpoints werden in der App unter Einstellungen verwaltet und in `~/.loom/settings.json` persistent gespeichert. Persistente Einstellungen haben Vorrang vor Umgebungsvariablen.
 
-API-Schlüssel und Endpunkte werden in der App über Einstellungen verwaltet und in `~/.loom/settings.json` gespeichert. Die App bevorzugt gespeicherte Einstellungen gegenüber Umgebungsvariablen.
-
-- OpenAI: Schlüssel in den Einstellungen setzen (gespeichert als `openai_api_key`)
-- Anthropic: Schlüssel in den Einstellungen setzen (gespeichert als `anthropic_api_key`)
-- Ollama: Endpunkt in den Einstellungen setzen (gespeichert als `ollama_endpoint`), z.B. `http://localhost:11434/v1/chat/completions`
+- OpenAI: Key in den Einstellungen setzen (`openai_api_key`)
+- Anthropic: Key in den Einstellungen setzen (`anthropic_api_key`)
+- OpenRouter: Key in den Einstellungen setzen (`openrouter_api_key`) für Zugriff auf tausende Modelle
+- Ollama: Endpoint in den Einstellungen setzen (`ollama_endpoint`), z. B. `http://localhost:11434/v1/chat/completions`
 
 ### Einstellungen
-
-Einstellungen umfassen:
-- Letzter Arbeitsbereichspfad und zuletzt ausgewähltes Modell (`provider:model_id`)
-- Feature Flags:
+Beinhaltet:
+- Letzter Workspace-Pfad und zuletzt gewähltes Modell (`provider:model_id`)
+- Feature-Flags:
   - Auto-Approve Shell
   - Auto-Approve Edits
 
-Einstellungen werden in `~/.loom/settings.json` mit restriktiven Berechtigungen gespeichert.
+Gespeichert in `~/.loom/settings.json` mit restriktiven Berechtigungen.
 
 ### Regeln
-
 Zwei Regelsets beeinflussen das Modellverhalten:
-- Benutzerregeln: global (gespeichert in `~/.loom/rules.json`)
-- Projektregeln: arbeitsbereichsspezifisch (gespeichert in `<workspace>/.loom/rules.json`)
+- User Rules: global (`~/.loom/rules.json`)
+- Projekt Rules: workspace-spezifisch (`<workspace>/.loom/rules.json`)
 
-Regeln sind über die Seitenleiste zugänglich. Die App normalisiert und speichert Regelarrays.
+Zugriff über die Sidebar. Die App normalisiert und persistiert Regel-Arrays.
 
 ### Modellauswahl
+Die UI bietet einen umfassenden Model-Selector mit kuratierten statischen Modellen und dynamisch geladenen Modellen. Einträge haben das Format `provider:model_id` und sind nach Provider und Fähigkeiten gruppiert.
 
-Die UI bietet einen kuratierten, statischen Selektor. Einträge haben die Form `provider:model_id` und sind nach Anbietern gruppiert. Der aktuelle Satz spiegelt `ui/frontend/src/ModelSelector.tsx` wider:
+**Statische Modelle**: Kuratierte Auswahl von Flaggschiff-Modellen von OpenAI (GPT-5, o3, o4-mini), Anthropic Claude (Opus 4, Sonnet 4, Haiku 4, 3.5 Sonnet usw.) sowie lokale Ollama-Modelle (Llama, Mistral, DeepSeek R1 usw.).
 
-```ts
-{ id: 'openai:gpt-5', name: 'GPT 5', provider: 'openai' },
-{ id: 'claude:claude-opus-4-20250514', name: 'Claude Opus 4', provider: 'claude' },
-{ id: 'claude:claude-sonnet-4-20250514', name: 'Claude Sonnet 4', provider: 'claude' },
-{ id: 'claude:claude-haiku-4-20250514', name: 'Claude Haiku 4', provider: 'claude' },
-{ id: 'claude:claude-3-7-sonnet-20250219', name: 'Claude 3.7 Sonnet', provider: 'claude' },
-{ id: 'claude:claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', provider: 'claude' },
-{ id: 'claude:claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku', provider: 'claude' },
-{ id: 'claude:claude-3-opus-20240229', name: 'Claude 3 Opus', provider: 'claude' },
-{ id: 'claude:claude-3-sonnet-20240229', name: 'Claude 3 Sonnet', provider: 'claude' },
-{ id: 'claude:claude-3-haiku-20240307', name: 'Claude 3 Haiku', provider: 'claude' },
-{ id: 'openai:gpt-4.1', name: 'GPT-4.1', provider: 'openai' },
-{ id: 'openai:o4-mini', name: 'o4-mini', provider: 'openai' },
-{ id: 'openai:o3', name: 'o3', provider: 'openai' },
-{ id: 'ollama:llama3.1:8b', name: 'Llama 3.1 (8B)', provider: 'ollama' },
-{ id: 'ollama:llama3:8b', name: 'Llama 3 (8B)', provider: 'ollama' },
-{ id: 'ollama:gpt-oss:20b', name: 'GPT-OSS (20B)', provider: 'ollama' },
-{ id: 'ollama:qwen3:8b', name: 'Qwen3 (8B)', provider: 'ollama' },
-{ id: 'ollama:gemma3:12b', name: 'Gemma3 (12B)', provider: 'ollama' },
-{ id: 'ollama:mistral:7b', name: 'Mistral (7B)', provider: 'ollama' },
-{ id: 'ollama:deepseek-r1:70b', name: 'DeepSeek R1 (70B)', provider: 'ollama' },
-```
+**Dynamische OpenRouter-Modelle**: Mit OpenRouter-API-Key lädt die Oberfläche automatisch den kompletten Katalog verfügbarer Modelle mit Echtzeit-Preisinformationen. Zugriff auf tausende Modelle verschiedener Anbieter:
+- Neueste Frontier-Modelle aller großen Provider
+- Spezialisierte Modelle für unterschiedliche Aufgaben
+- Kosteneffiziente Alternativen mit transparenter Preisgestaltung
+- Modelle nach Kosteneffizienz sortiert
 
-Das Backend analysiert `provider:model_id` (siehe `internal/adapter/models.go`) und wechselt entsprechend die Adapter.
+**Modelkategorien**:
+- **Flagship**: Top-Modelle für komplexe Aufgaben
+- **Reasoning**: Für schrittweises Denken optimiert
+- **Fast**: Schnelle Modelle für einfache Aufgaben
+- **Cheap**: Preiswerte Modelle für hohes Volumen
+- **OpenRouter**: Dynamischer Katalog mit Preisen
 
-## Verwendung von Loom
+Das Backend parst `provider:model_id` (siehe `internal/adapter/models.go`) und wechselt Adapter entsprechend. OpenRouter-Modelle verwenden das Format `openrouter:provider/model-name`.
 
-- Arbeitsbereich: Wählen Sie einen Arbeitsbereich beim ersten Start oder über die Seitenleiste. Der Dateiexplorer und der Monaco-Editor spiegeln den aktiven Arbeitsbereich wider.
-- Modellauswahl: Wählen Sie im Chat-Panel-Kopf ein Modell aus. Die Auswahl wird gespeichert und an das Backend (`SetModel`) gesendet.
+## Nutzung von Loom
+- Workspace: beim ersten Start oder über die Sidebar auswählen. Dateibrowser und Monaco-Editor spiegeln den aktiven Workspace.
+- Modellauswahl: im Chat-Panel-Header ein Modell wählen. Die Auswahl wird persistiert und an das Backend übergeben (`SetModel`).
 - Konversationen:
-  - Starten Sie eine neue Konversation im Chat-Panel
-  - Fügen Sie Dateien mit der Anhangsschaltfläche oder STRG+ALT+P (CMD+OPTION+P auf macOS) zur Nachricht hinzu
-  - Kürzliche Konversationen erscheinen, wenn der Thread leer ist; wählen Sie eine aus, um sie zu laden
-  - Das Löschen des Chats erstellt eine neue Konversation
+  - Neue Konversation im Chat-Panel starten
+  - Dateien an Nachrichten anhängen (Attach-Button oder CTRL+ALT+P, auf macOS CMD+OPTION+P)
+  - Zuletzt verwendete Konversationen erscheinen, wenn der Thread leer ist; Auswahl lädt die Sitzung
+  - Chat leeren erzeugt eine frische Konversation
 - Nachrichten und Streaming:
-  - Ereignisse: `chat:new`, `assistant-msg` (Assistenten-Stream), `assistant-reasoning` (Begründungs-Stream), `task:prompt` (Genehmigung), `system:busy`
-  - Der Begründungs-Stream zeigt vorübergehende Zusammenfassungen; er klappt nach Abschluss automatisch zusammen
+  - Events: `chat:new`, `assistant-msg` (Assistant-Stream), `assistant-reasoning` (Reasoning-Stream), `task:prompt` (Freigabe), `system:busy`
+  - Reasoning-Stream zeigt temporäre Zusammenfassungen und klappt nach Abschluss ein
 - Editor:
-  - Tabs für geöffnete Dateien; schließen mit der Tab-Schaltfläche
+  - Tabs für geöffnete Dateien; Schließen über Tab-Schließen
   - Cmd/Ctrl+S speichert die aktive Datei
 
-## Tools und Genehmigungen
-
+## Tools und Freigaben
 Tools sind in `ui/main.go` registriert und unter `internal/tool/` implementiert:
-- `read_file`: Sicherer, schreibgeschützter Datei-Zugriff
-- `search_code`: Ripgrep-gestützte Suche
+- `read_file`: sicheres, read-only Lesen
+- `search_code`: ripgrep-gestützte Suche
 - `list_dir`: Verzeichnisse auflisten
-- `edit_file`: Präzise Änderung vorschlagen (CREATE/REPLACE/INSERT/DELETE/SEARCH_REPLACE) — erfordert Genehmigung
-- `apply_edit`: Genehmigte Änderung anwenden
-- `run_shell`: Shell-Befehl vorschlagen — erfordert Genehmigung
-- `apply_shell`: Genehmigten Shell-Befehl ausführen
-- `http_request`: HTTP-Aufrufe an Dev-Server/APIs durchführen
-- `finalize`: Eine prägnante abschließende Zusammenfassung ausgeben und die Schleife beenden
+- `edit_file`: präziser Änderungsvorschlag (CREATE/REPLACE/INSERT/DELETE/SEARCH_REPLACE) – erfordert Freigabe
+- `apply_edit`: freigegebene Änderung anwenden
+- `run_shell`: Shell-Befehl vorschlagen – erfordert Freigabe
+- `apply_shell`: freigegebenen Shell-Befehl ausführen
+- `http_request`: HTTP-Calls an Dev-Server/APIs
+- `finalize`: kurze Endsummaries erzeugen und Loop beenden
 
-Destruktive Aktionen erfordern vor der Ausführung eine explizite Benutzergenehmigung in der UI, sofern die automatische Genehmigung in den Einstellungen nicht aktiviert ist.
+Destruktive Aktionen erfordern im UI eine explizite Freigabe, außer Auto-Freigabe ist in den Einstellungen aktiviert.
 
 ### Shell-Befehle
-
 Unterstützt:
-- Direkte Binär-Ausführung oder Shell-Interpretation (`sh -c`)
-- Arbeitsverzeichnis auf den Arbeitsbereich beschränkt (CWD-Validierung)
-- Timeout-Limits (Standard 60s, max. 600s)
-- Vollständige Ausgabeerfassung: stdout, stderr, Exit-Code, Dauer
+- Direkter Binary-Start oder Shell-Interpretation (`sh -c`)
+- Arbeitsverzeichnis auf den Workspace beschränkt (CWD-Validierung)
+- Timeout-Grenzen (Standard 60 s, Maximum 600 s)
+- Vollständige Ausgabeerfassung: stdout, stderr, Exitcode, Dauer
 
 Hinweis: Befehle sind nicht sandboxed; nur das Arbeitsverzeichnis ist beschränkt.
 
 ## MCP (Model Context Protocol)
-
-Loom kann sich über stdio mit externen MCP-Servern verbinden, um zusätzliche Tools bereitzustellen (z.B. Jira, Confluence, Git, Cloud-APIs). MCP-Tools erscheinen neben eingebauten Tools und unterliegen dem Genehmigungsmodell von Loom.
+Loom kann sich über stdio mit externen MCP-Servern verbinden, um zusätzliche Tools bereitzustellen (z. B. Jira, Confluence, Git, Cloud-APIs). MCP-Tools erscheinen neben den eingebauten Tools und folgen Looms Freigabemodell.
 
 ### Funktionsweise
-
-- Transport: stdio mit newline-delimited JSON (ein JSON-Objekt pro Zeile). Server müssen Logs nur auf stderr schreiben; stdout ist für JSON reserviert.
-- Handshake: Loom sendet eine Initialisierung, wartet auf das Ergebnis des Servers, sendet dann Benachrichtigungen/initialized und listet schließlich Tools über tools/list auf.
-- Discovery: Tools von jedem Server sind nach Server-Alias namespaced.
+- Transport: stdio mit newline-getrenntem JSON (ein JSON-Objekt pro Zeile). Server müssen Logs ausschließlich auf stderr schreiben; stdout ist für JSON reserviert.
+- Handshake: Loom sendet ein `initialize`, wartet auf das Ergebnis des Servers, sendet anschließend `notifications/initialized` und ruft dann `tools/list` auf.
+- Discovery: Tools jedes Servers werden per Server-Alias namespaced.
 
 ### Server aktivieren
-
-Erstellen Sie eine Projektkonfiguration unter `<workspace>/.loom/mcp.json`:
-
+Projektkonfiguration unter `<workspace>/.loom/mcp.json` anlegen:
 ```json
 {
   "mcpServers": {
@@ -242,100 +212,95 @@ Erstellen Sie eine Projektkonfiguration unter `<workspace>/.loom/mcp.json`:
   }
 }
 ```
+Secrets werden aus der Umgebung gelesen; nicht committen. Loom kanonisiert diese Konfiguration und startet pro Alias genau einen Prozess. Ein Neustart erfolgt nicht, solange sich die Konfiguration nicht ändert.
 
-Geheimnisse werden aus der Umgebung gelesen; nicht committen. Loom kanonisiert diese Konfiguration und startet einen Prozess pro Alias. Es wird nicht neu gestartet, wenn die Konfiguration unverändert bleibt.
-
-### Minimale Einrichtung
-
-#### macOS: uv einmal installieren (Python-Paket-Runner)
-
+### Minimal-Setup
+macOS: uv einmal installieren (Python-Package-Runner)
+```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
+```
 
-#### MCP-Paketcache aufwärmen (vermeidet Erstlauf-Latenz)
-
+MCP-Package-Cache vorwärmen (vermeidet Latenz beim ersten Start)
+```bash
 uvx mcp-atlassian --help
+```
 
 ### Laufzeitverhalten
+- Loom startet jeden Server genau einmal, führt den MCP-Handshake durch und ruft `tools/list` auf.
+- Wenn ein Server langsam ist oder noch authentifiziert, wartet Loom (Long-Init) und zeigt Fehler in Logs an.
+- Tool-Aufrufe nutzen `tools/call` mit dem vom Server deklarierten JSON-Schema.
 
-- Loom startet jeden Server einmal, führt den MCP-Handshake durch und ruft dann tools/list auf.
-- Wenn ein Server langsam ist oder sich noch authentifiziert, wartet Loom (lang lebender Initialisierer) und zeigt Fehler in Logs an.
-- Tool-Aufrufe verwenden tools/call mit dem vom Server deklarierten JSON-Schema.
+### Beispiel: Atlassian (read-only)
+Der Atlassian-MCP stellt Tools wie `jira_get_issue`, `jira_search`, `confluence_search` bereit (genauer Umfang abhängig vom Server). `--read-only` beibehalten, außer schreibende Aktionen sind ausdrücklich gewünscht.
 
-### Beispiel: Atlassian (nur lesen)
+### Troubleshooting
+- "0 servers with tools": Handshake nicht abgeschlossen. Sicherstellen, dass der Server JSON auf stdout schreibt (newline-terminiert) und Logs nur auf stderr.
+- Timeouts beim ersten Start: `uvx <server> --help` vorwärmen oder Init-Timeout in Loom-Einstellungen erhöhen.
+- Doppelte Starts: Loom entprellt und hasht die Konfiguration; sicherstellen, dass `.loom/mcp.json` nicht bei jedem Speichern neu geschrieben wird.
+- Atlassian-Auth: `JIRA_USER` und `JIRA_TOKEN` (oder Confluence PAT) prüfen, gültig und nicht abgelaufen.
 
-Der Atlassian MCP stellt Tools wie jira_get_issue, jira_search, confluence_search bereit (exakte Menge hängt vom Server ab). Behalten Sie --read-only bei, es sei denn, Sie möchten explizit Schreibaktionen.
+### Sicherheitshinweise
+- MCP-Server wie eigenen Code mit eigenen Rechten behandeln. Read-only-Flags und Least-Privilege-Tokens bevorzugen.
+- Alle destruktiven Tools erfordern weiterhin Loom-Freigaben, außer Auto-Freigabe ist aktiviert (für externe Server nicht empfohlen).
 
-#### Fehlerbehebung
+### Server entfernen
+Eintrag aus `.loom/mcp.json` löschen (oder Datei entfernen). Loom erkennt die Änderung und stoppt den Prozess.
 
-- "0 servers with tools": Der Handshake wurde nicht abgeschlossen. Überprüfen Sie, ob der Server JSON auf stdout schreibt (newline-terminiert) und Logs auf stderr.
-- Timeouts beim ersten Lauf: Wärmen Sie mit uvx <server> --help vor oder erhöhen Sie das Server-Init-Timeout in den Loom-Einstellungen.
-- Doppelte Starts: Loom entprellt und hasht die Konfiguration; stellen Sie sicher, dass Sie `.loom/mcp.json` nicht bei jedem Speichern neu schreiben.
-- Atlassian-Authentifizierung: Bestätigen Sie, dass JIRA_USER und JIRA_TOKEN (oder Confluence PAT) gültig und nicht abgelaufen sind.
-
-#### Sicherheitshinweise
-
-- Behandeln Sie MCP-Server als Code mit Ihren Berechtigungen. Bevorzugen Sie Read-Only-Flags und Least-Privilege-Tokens.
-- Alle destruktiven Tools erfordern weiterhin Loom-Genehmigung, sofern Sie die automatische Genehmigung nicht aktivieren (nicht empfohlen für externe Server).
-
-### Entfernen eines Servers
-
-Löschen Sie den Eintrag aus `.loom/mcp.json` (oder der Datei). Loom erkennt die Änderung und stoppt den Prozess.
-
-## Modelladapter
-
+## Modell-Adapter
 - OpenAI (`internal/adapter/openai`)
-  - Chat/Antworten-API mit Tool-Aufrufen und Streaming
-  - Gibt Begründungszusammenfassungen bei unterstützten Modellen aus (o3/o4/gpt-5)
+  - Chat/Responses API mit Tool Calls und Streaming
+  - Gibt Reasoning-Zusammenfassungen auf unterstützten Modellen aus (o3/o4/gpt-5)
 - Anthropic (`internal/adapter/anthropic`)
-  - Nachrichten-API mit Tool-Nutzung
+  - Messages API mit Tool Use
+- OpenRouter (`internal/adapter/openrouter`)
+  - OpenAI-kompatible API mit Zugang zu tausenden Modellen
+  - Vereinheitlichte Schnittstelle mit transparenter Preisgestaltung und Model Routing
+  - Unterstützt Reasoning-Modelle mit normalisierten Controls über Provider hinweg
 - Ollama (`internal/adapter/ollama`)
-  - Lokale Modellausführung über HTTP-Endpunkt
+  - Lokale Modellausführung über HTTP-Endpoint
 
-Adapter wandeln Engine-Nachrichten in anbieter-spezifische Payloads um und parsen Streaming-/Tool-Aufruf-Antworten zurück in Engine-Ereignisse.
+Adapter konvertieren Engine-Nachrichten in provider-spezifische Payloads und parsen Streaming- und Tool-Call-Antworten zurück in Engine-Events.
 
-## Speicher und Indizierung
-
-- Projektgedächtnis (`internal/memory`)
-  - Arbeitsbereichsbezogener Schlüssel/Wert-Speicher unter `~/.loom/projects`
-  - Gesprächspersistenz, Titel, Zusammenfassungen und Bereinigung leerer Threads
+## Memory und Indexierung
+- Projekt-Memory (`internal/memory`)
+  - Workspace-gebundener Key/Value Store unter `~/.loom/projects`
+  - Konversationspersistenz, Titel, Zusammenfassungen, Cleanup leerer Threads
 - Indexer (`internal/indexer/ripgrep.go`)
-  - Ripgrep JSON-Parsing mit relativer Pfadnormalisierung
-  - Ignoriert gängige Verzeichnisse: `node_modules`, `.git`, `dist`, `build`, `vendor`
- - Symbole (`internal/symbols`)
-  - Heuristische Analyse für Funktionen/Klassen/Variablen/Konstanten in verschiedenen Sprachen
-  - SQLite DB pro Projekt unter `~/.loom/projects/<id>/symbols.db` mit FTS5
-  - Inkrementelle Reindizierung via Dateiüberwachung und Entprellung
+  - ripgrep-JSON-Parsing mit relativer Pfadnormalisierung
+  - Ignoriert übliche Verzeichnisse: `node_modules`, `.git`, `dist`, `build`, `vendor`
+- Symbole (`internal/symbols`)
+  - Heuristische Extraktion von funcs/classes/vars/constants über Sprachen hinweg
+  - SQLite-DB pro Projekt unter `~/.loom/projects/<id>/symbols.db` mit FTS5
+  - Inkrementelles Reindexing via File-Watcher und Debounce
   - Tools: `symbols.search`, `symbols.def`, `symbols.refs`, `symbols.neighborhood`, `symbols.outline`
 
-## Sicherheitsüberlegungen
+## Sicherheit
+- Tool-Sicherheit: destruktive Tools erfordern explizite Freigabe (außer Auto-Freigabe aktiv)
+- Pfad/CWD-Handling: Tools arbeiten innerhalb des Workspaces; CWD-Escapes sind nicht erlaubt
+- Secrets: Credentials nicht im Klartext ausgeben; als redacted behandeln
+- Shell-Ausführung: Timeouts unterworfen; keine Sandbox über CWD-Validierung hinaus
 
-- Tool-Sicherheit: destruktive Tools erfordern explizite Genehmigung (sofern automatische Genehmigung nicht aktiviert ist)
-- Pfad-/CWD-Handhabung: Tools arbeiten innerhalb des Arbeitsbereichs; CWD-Ausbrüche sind nicht erlaubt
-- Geheimnisse: Vermeiden Sie das Echo von Zugangsdaten; behandeln Sie sie als geschwärzt
-- Shell-Ausführung: Zeitlimits; nicht sandboxed außer CWD-Validierung
-
-## Fehlerbehebung
-
-- "Kein Modell konfiguriert"-Meldung: Öffnen Sie die Einstellungen, um Ihren API-Schlüssel zu setzen und ein Modell auszuwählen
-- OpenAI/Anthropic-Fehler: Überprüfen Sie Schlüssel in den Einstellungen und den Netzwerkzugang
-- ripgrep fehlt: Führen Sie `make deps` aus oder installieren Sie `rg` manuell
-- Streaming stoppt: Deaktivieren Sie vorübergehend das Streaming durch internes erneutes Versuchen; prüfen Sie die Logs, wenn das Problem bestehen bleibt
+## Troubleshooting
+- "No model configured": Einstellungen öffnen, API-Key setzen und Modell wählen
+- OpenAI/Anthropic/OpenRouter-Fehler: Keys und Netzwerk prüfen
+- OpenRouter-Modelle laden nicht: API-Key und Netzwerkverbindung prüfen
+- ripgrep fehlt: `make deps` ausführen oder `rg` manuell installieren
+- Streaming stoppt: Streaming intern temporär deaktivieren und erneut versuchen; Logs prüfen, wenn persistiert
 
 ## Roadmap
-
-- Erweiterter Werkzeugkasten (Mehrfachdateiänderungen, Refactorings)
-- Reichhaltigeres Gedächtnis (Zusammenfassungen, vektorbasierte Erinnerung)
-- Granulare Genehmigungen und Prüfpfad
-- Verbesserte Provider-Streaming und Robustheit
-- Themenumschaltung und Barrierefreiheitsverbesserungen
+- Erweiterter Tool-Satz (Multi-File-Edits, Refactoring)
+- Reichere Memory-Funktionen (Summaries, vektorunterstützte Reanalyse)
+- Granularere Freigaben und Audit-Trail
+- Robustere Provider-Streams und -Fehlerbehandlung
+- Theme-Umschalter und Accessibility-Verbesserungen
 
 ## Mitwirken
-
-- Forken Sie das Repo und erstellen Sie einen Feature-Branch
-- Folgen Sie den Code-Stil- und Namenskonventionen
-- Führen Sie `make deps` und `make dev` aus, um Änderungen lokal zu validieren
-- Öffnen Sie einen PR mit einer prägnanten Beschreibung und ggf. Screenshots
+- Repo forken und Feature-Branch erstellen
+- Code-Style- und Benennungsrichtlinien einhalten
+- `make deps` und `make dev` lokal ausführen
+- PR mit kurzer Beschreibung und ggf. Screenshots öffnen
 
 ## Lizenz
-
 Siehe `LICENSE`.
+
+Von Tim Anthony Alexander
