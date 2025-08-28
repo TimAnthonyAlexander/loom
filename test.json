@@ -1,6 +1,9 @@
 {
-    "test": "in fact",
-    "true?": false,
+    "example": "in fact",
+    "isTrue": true,
     "number": 123,
-    "story": "Once upon a time, in a quiet village, a curious cat discovered a hidden garden full of magical flowers."
+    "story": "Once upon a time, in a quiet village, a curious cat discovered a hidden garden full of magical flowers and made a new friend.",
+    "tags": ["demo", "edit"],
+    "cucumber": "some other value"
 }
+

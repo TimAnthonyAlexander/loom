@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/loom/loom/internal/editor"
 )
@@ -144,34 +147,140 @@ func applyEdit(ctx context.Context, workspacePath string, args ApplyEditArgs) (*
 		return nil, fmt.Errorf("failed to recreate edit plan: %w", err)
 	}
 
+	// Store the original content before applying for verification
+	originalContent := plan.OldContent
+
 	// Apply the edit
 	if err := editor.ApplyEdit(plan); err != nil {
 		return nil, fmt.Errorf("failed to apply edit: %w", err)
+	}
+
+	// Read the actual file content after applying to verify what was written
+	actualContent, err := readFileForVerification(plan.FilePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file for verification: %w", err)
+	}
+
+	// Generate verification diff to show what actually changed
+	verificationDiff, err := generateVerificationDiff(originalContent, actualContent, args.Path, plan.ChangedLines)
+	if err != nil {
+		// If diff generation fails, still return success but note the issue
+		verificationDiff = fmt.Sprintf("Edit applied successfully, but couldn't generate verification diff: %v", err)
 	}
 
 	// Create a message describing what happened
 	var message string
 	switch editor.ActionType(args.Action) {
 	case editor.ActionCreate:
-		message = fmt.Sprintf("Created file: %s", args.Path)
+		message = fmt.Sprintf("✅ Created file: %s", args.Path)
 	case editor.ActionDeleteLines:
-		message = fmt.Sprintf("Edited file (DELETE lines %d-%d): %s", args.StartLine, args.EndLine, args.Path)
+		message = fmt.Sprintf("✅ Edited file (DELETE lines %d-%d): %s", args.StartLine, args.EndLine, args.Path)
 	case editor.ActionReplaceLines:
-		message = fmt.Sprintf("Edited file (REPLACE lines %d-%d): %s", args.StartLine, args.EndLine, args.Path)
+		message = fmt.Sprintf("✅ Edited file (REPLACE lines %d-%d): %s", args.StartLine, args.EndLine, args.Path)
 	case editor.ActionInsertBefore:
-		message = fmt.Sprintf("Edited file (INSERT_BEFORE line %d): %s", args.Line, args.Path)
+		message = fmt.Sprintf("✅ Edited file (INSERT_BEFORE line %d): %s", args.Line, args.Path)
 	case editor.ActionInsertAfter:
-		message = fmt.Sprintf("Edited file (INSERT_AFTER line %d): %s", args.Line, args.Path)
+		message = fmt.Sprintf("✅ Edited file (INSERT_AFTER line %d): %s", args.Line, args.Path)
 	case editor.ActionSearchReplace:
-		message = fmt.Sprintf("Edited file (SEARCH_REPLACE): %s", args.Path)
+		message = fmt.Sprintf("✅ Edited file (SEARCH_REPLACE): %s", args.Path)
 	case editor.ActionAnchorReplace:
-		message = fmt.Sprintf("Edited file (ANCHOR_REPLACE): %s", args.Path)
+		message = fmt.Sprintf("✅ Edited file (ANCHOR_REPLACE): %s", args.Path)
 	default:
-		message = fmt.Sprintf("Edited file: %s", args.Path)
+		message = fmt.Sprintf("✅ Edited file: %s", args.Path)
 	}
+
+	// Include verification in the message
+	message += "\n\n" + verificationDiff
 
 	return &ExecutionResult{
 		Content: message,
+		Diff:    verificationDiff,
 		Safe:    true,
 	}, nil
+}
+
+// readFileForVerification reads the file content after an edit for verification purposes.
+func readFileForVerification(filePath string) (string, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", err
+	}
+	return string(content), nil
+}
+
+// generateVerificationDiff creates a focused diff showing the changes with context.
+func generateVerificationDiff(originalContent, actualContent, filePath string, changedLines editor.LineRange) (string, error) {
+	// For file creation, show a preview of the created content
+	if originalContent == "" {
+		lines := strings.Split(actualContent, "\n")
+		preview := "📄 **File Created Successfully**\n\nContent preview:\n"
+
+		// Show first 10 lines or all lines if fewer
+		maxLines := 10
+		if len(lines) <= maxLines {
+			for i, line := range lines {
+				preview += fmt.Sprintf("%4d: %s\n", i+1, line)
+			}
+		} else {
+			for i := 0; i < maxLines-1; i++ {
+				preview += fmt.Sprintf("%4d: %s\n", i+1, lines[i])
+			}
+			preview += fmt.Sprintf("... (%d more lines)\n", len(lines)-maxLines+1)
+		}
+		return preview, nil
+	}
+
+	// Generate a contextual diff focusing on the changed region
+	originalLines := strings.Split(originalContent, "\n")
+	actualLines := strings.Split(actualContent, "\n")
+
+	// Calculate context window around changes
+	contextBefore := 3
+	contextAfter := 3
+
+	startLine := changedLines.StartLine - contextBefore
+	if startLine < 1 {
+		startLine = 1
+	}
+
+	endLine := changedLines.EndLine + contextAfter
+	if endLine > len(actualLines) {
+		endLine = len(actualLines)
+	}
+
+	// Build verification result showing before/after with context
+	result := "🔍 **Edit Verification - Changes Applied Successfully**\n\n"
+	result += fmt.Sprintf("File: %s\n", filepath.Base(filePath))
+	result += fmt.Sprintf("Changed lines: %d-%d\n", changedLines.StartLine, changedLines.EndLine)
+	result += "Context:\n\n"
+
+	// Show the edited region with context
+	for i := startLine - 1; i < endLine && i < len(actualLines); i++ {
+		lineNum := i + 1
+		line := actualLines[i]
+
+		// Mark changed lines
+		if lineNum >= changedLines.StartLine && lineNum <= changedLines.EndLine {
+			result += fmt.Sprintf("→ %4d: %s\n", lineNum, line)
+		} else {
+			result += fmt.Sprintf("  %4d: %s\n", lineNum, line)
+		}
+	}
+
+	// Add summary
+	totalOriginalLines := len(originalLines)
+	totalActualLines := len(actualLines)
+	linesDiff := totalActualLines - totalOriginalLines
+
+	result += "\n📊 **Summary:**\n"
+	if linesDiff > 0 {
+		result += fmt.Sprintf("- Added %d line(s)\n", linesDiff)
+	} else if linesDiff < 0 {
+		result += fmt.Sprintf("- Removed %d line(s)\n", -linesDiff)
+	} else {
+		result += "- Modified content (same line count)\n"
+	}
+	result += fmt.Sprintf("- Total lines: %d → %d\n", totalOriginalLines, totalActualLines)
+
+	return result, nil
 }
