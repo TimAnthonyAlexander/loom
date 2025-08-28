@@ -4,7 +4,6 @@ import { EditorTabItem } from '../../types/ui';
 import Editor, { OnMount } from '@monaco-editor/react';
 import React from 'react';
 import { guessLanguage } from '../../utils/language';
-import DingleBerryPage from '../DingleBerry';
 
 type Props = {
     openTabs: EditorTabItem[];
