@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Divider, Typography, Popover, TextField, List, ListItemButton, ListItemText, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Button } from '@mui/material';
+import { Box, Divider, Typography, Popover, TextField, List, ListItemButton, ListItemText, IconButton, Button, Card, CardContent } from '@mui/material';
 import { EventsOn, EventsOff } from '../../../../wailsjs/runtime/runtime';
 import * as AppBridge from '../../../../wailsjs/go/bridge/App';
 import * as Bridge from '../../../../wailsjs/go/bridge/App';
@@ -8,7 +8,7 @@ import Composer from './Composer';
 import { ChatMessage, ConversationListItem } from '../../../types/ui';
 import ConversationList from '@/components/left/Conversations/ConversationList';
 import ModelSelector from '@/ModelSelector';
-import { AddRounded, SettingsSuggestRounded } from '@mui/icons-material';
+import { AddRounded, SettingsSuggestRounded, CheckCircleRounded } from '@mui/icons-material';
 
 type Props = {
     messages: ChatMessage[];
@@ -103,6 +103,7 @@ function ChatPanelComponent(props: Props) {
         id: string;
         question: string;
         options: string[];
+        selectedIndex?: number;
     } | null>(null);
 
     // Load MCP tools from backend and keep them updated when the backend refreshes
@@ -215,14 +216,15 @@ function ChatPanelComponent(props: Props) {
 
     // Handle user choice selection
     const handleChoiceSelection = React.useCallback(async (selectedIndex: number) => {
-        if (!choiceRequest) return;
+        if (!choiceRequest || choiceRequest.selectedIndex !== undefined) return;
+        
+        // Mark the choice as selected but keep it visible
+        setChoiceRequest(prev => prev ? { ...prev, selectedIndex } : null);
         
         try {
             await (Bridge as any).ResolveChoice(choiceRequest.id, selectedIndex);
         } catch (error) {
             console.error('Failed to resolve choice:', error);
-        } finally {
-            setChoiceRequest(null);
         }
     }, [choiceRequest]);
 
@@ -273,6 +275,86 @@ function ChatPanelComponent(props: Props) {
                     onToggleReasoning={onToggleReasoning}
                     messagesEndRef={messagesEndRef}
                 />
+                {choiceRequest && messages.length > 0 && (
+                    <Card 
+                        sx={{ 
+                            mt: 2, 
+                            borderRadius: 2,
+                            backgroundColor: 'grey.900',
+                            border: '1px solid',
+                            borderColor: 'grey.700',
+                            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
+                        }}
+                    >
+                        <CardContent sx={{ pb: 2 }}>
+                            <Typography 
+                                variant="h6" 
+                                sx={{ 
+                                    mb: 2, 
+                                    fontWeight: 600,
+                                    color: 'grey.100',
+                                }}
+                            >
+                                {choiceRequest.question}
+                            </Typography>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                {choiceRequest.options.map((option, index) => {
+                                    const isSelected = choiceRequest.selectedIndex === index;
+                                    const isDisabled = choiceRequest.selectedIndex !== undefined;
+                                    
+                                    return (
+                                        <Button
+                                            key={index}
+                                            variant={isSelected ? "contained" : "outlined"}
+                                            onClick={() => handleChoiceSelection(index)}
+                                            disabled={isDisabled && !isSelected}
+                                            startIcon={isSelected ? <CheckCircleRounded /> : null}
+                                            sx={{
+                                                justifyContent: 'flex-start',
+                                                textAlign: 'left',
+                                                py: 1.5,
+                                                px: 2,
+                                                borderRadius: 2,
+                                                textTransform: 'none',
+                                                opacity: isDisabled && !isSelected ? 0.4 : 1,
+                                                backgroundColor: isSelected ? 'primary.main' : 'grey.800',
+                                                color: isSelected ? 'primary.contrastText' : 'grey.100',
+                                                borderColor: isSelected ? 'primary.main' : 'grey.600',
+                                                '&:hover': !isDisabled ? {
+                                                    backgroundColor: isSelected ? 'primary.dark' : 'grey.700',
+                                                    borderColor: isSelected ? 'primary.dark' : 'grey.500',
+                                                } : {},
+                                                '&:disabled': {
+                                                    backgroundColor: 'grey.800',
+                                                    color: 'grey.500',
+                                                    borderColor: 'grey.700',
+                                                },
+                                            }}
+                                        >
+                                            <Typography variant="body1" sx={{ color: 'inherit' }}>
+                                                {index + 1}. {option}
+                                            </Typography>
+                                        </Button>
+                                    );
+                                })}
+                            </Box>
+                            {choiceRequest.selectedIndex !== undefined && (
+                                <Typography 
+                                    variant="caption" 
+                                    sx={{ 
+                                        mt: 2, 
+                                        display: 'block',
+                                        fontStyle: 'italic',
+                                        color: 'success.main',
+                                        fontWeight: 500,
+                                    }}
+                                >
+                                    ✓ You selected: {choiceRequest.options[choiceRequest.selectedIndex]}
+                                </Typography>
+                            )}
+                        </CardContent>
+                    </Card>
+                )}
                 {messages.length === 0 &&
                     <Box>
                         <Typography
@@ -454,44 +536,7 @@ function ChatPanelComponent(props: Props) {
                     })}
                 </Box>
             </Popover>
-            <Dialog
-                open={choiceRequest !== null}
-                onClose={() => {}} // Prevent closing without selection
-                maxWidth="sm"
-                fullWidth
-            >
-                <DialogTitle>
-                    <Typography variant="h6">{choiceRequest?.question}</Typography>
-                </DialogTitle>
-                <DialogContent>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1 }}>
-                        {choiceRequest?.options.map((option, index) => (
-                            <Button
-                                key={index}
-                                variant="outlined"
-                                onClick={() => handleChoiceSelection(index)}
-                                sx={{
-                                    justifyContent: 'flex-start',
-                                    textAlign: 'left',
-                                    py: 1.5,
-                                    px: 2,
-                                    borderRadius: 2,
-                                    textTransform: 'none',
-                                    '&:hover': {
-                                        backgroundColor: 'primary.main',
-                                        color: 'primary.contrastText',
-                                        borderColor: 'primary.main',
-                                    },
-                                }}
-                            >
-                                <Typography variant="body1">
-                                    {index + 1}. {option}
-                                </Typography>
-                            </Button>
-                        ))}
-                    </Box>
-                </DialogContent>
-            </Dialog>
+
         </Box>
     );
 }
