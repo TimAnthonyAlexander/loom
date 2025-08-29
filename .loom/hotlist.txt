@@ -11,6 +11,7 @@ ui/frontend/wailsjs/go/bridge/App.js
 ui/frontend/wailsjs/runtime/runtime.js
 web/src/App.css
 ui/frontend/src/components/diff/DiffViewer.tsx
+ui/frontend/src/components/JohnBerry.tsx
 ui/frontend/wailsjs/go/models.ts
 ui/frontend/src/components/markdown/MarkdownErrorBoundary.tsx
 ui/frontend/src/components/markdown/MarkdownRenderer.tsx
@@ -22,10 +23,10 @@ internal/indexer/ripgrep.go
 web/src/index.css
 ui/frontend/src/utils/language.ts
 ui/frontend/src/App.tsx
-ui/frontend/src/components/dialogs/ProfileDialog.tsx
-ui/frontend/src/components/left/Files/FileExplorer.tsx
 ui/frontend/src/themes/mocha_converted.json
 ui/frontend/src/components/right/Chat/ReasoningPanel.tsx
+ui/frontend/src/components/dialogs/ProfileDialog.tsx
+ui/frontend/src/components/left/Files/FileExplorer.tsx
 ui/frontend/src/components/right/Chat/Composer.tsx
 ui/frontend/src/components/right/Chat/MessageList.tsx
 ui/frontend/src/App.css
@@ -42,6 +43,7 @@ ui/frontend/src/components/dialogs/WorkspaceDialog.tsx
 ui/frontend/src/components/left/Sidebar.tsx
 ui/frontend/src/components/right/Chat/ChatPanel.tsx
 ui/frontend/src/services/files.ts
+ui/frontend/src/components/DingleBerry.tsx
 ui/frontend/src/components/left/Conversations/ConversationList.tsx
 ui/frontend/src/main.tsx
 web/src/main.tsx
@@ -50,5 +52,3 @@ README_DE.md
 ui/frontend/wailsjs/go/bridge/App.d.ts
 Makefile
 ui/frontend/tsconfig.json
-ui/wails.json
-web/tsconfig.json

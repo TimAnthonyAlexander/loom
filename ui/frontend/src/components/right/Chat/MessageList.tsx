@@ -104,18 +104,15 @@ const MessageItem = React.memo(function MessageItem({
 
 function MessageListComponent({ messages, busy, lastUserIdx, reasoningText, reasoningOpen, onToggleReasoning, messagesEndRef }: Props) {
     const count = messages.length;
-    const start = Math.max(0, count - 5);
-    const visibleMessages = messages.slice(start);
     return (
         <Stack spacing={2}>
-            {visibleMessages.map((msg: ChatMessage, localIndex: number) => {
-                const globalIndex = start + localIndex;
-                const showReasoning = globalIndex === lastUserIdx || (globalIndex === start && lastUserIdx < start && !!reasoningText);
+            {messages.map((msg: ChatMessage, index: number) => {
+                const showReasoning = index === lastUserIdx || (index === 0 && lastUserIdx < 0 && !!reasoningText);
                 return (
                     <MessageItem
-                        key={msg.id || globalIndex}
+                        key={msg.id || index}
                         msg={msg}
-                        index={globalIndex}
+                        index={index}
                         messagesCount={count}
                         busy={busy}
                         showReasoning={showReasoning}

@@ -4,14 +4,14 @@
 
 ## Entrypoints
 
-**Backend:**
-- `ui/frontend/wailsjs/runtime/runtime.js`
-- `ui/wails.json` (wails)
-
 **Frontend:**
 - `ui/frontend/src/main.ts` (vite)
 - `ui/frontend/src/main.ts` (vite)
 - `web/src/main.ts` (vite)
+
+**Backend:**
+- `ui/frontend/wailsjs/runtime/runtime.js`
+- `ui/wails.json` (wails)
 
 ## Commands
 
@@ -49,7 +49,7 @@
 - `ui/frontend/wailsjs/runtime/runtime.js` (graph_central)
 - `web/src/App.css` (graph_central)
 - `ui/frontend/src/components/diff/DiffViewer.tsx` ()
-- `ui/frontend/wailsjs/go/models.ts` ()
+- `ui/frontend/src/components/JohnBerry.tsx` ()
 
 
 ---

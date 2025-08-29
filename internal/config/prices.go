@@ -30,6 +30,16 @@ var PricePerToken = map[string]Price{
 	"o3-mini":      {InPerToken: 1.10 / 1e6, OutPerToken: 4.40 / 1e6},
 	"gpt-4.1-mini": {InPerToken: 0.40 / 1e6, OutPerToken: 1.60 / 1e6},
 	"gpt-4.1-nano": {InPerToken: 0.10 / 1e6, OutPerToken: 0.40 / 1e6},
+
+	// OpenRouter models (pricing from frontend ModelSelector)
+	"anthropic/claude-3.5-sonnet":       {InPerToken: 3.0 / 1e6, OutPerToken: 15.0 / 1e6},
+	"openai/gpt-4o":                     {InPerToken: 5.0 / 1e6, OutPerToken: 15.0 / 1e6},
+	"openai/gpt-4o-mini":                {InPerToken: 0.15 / 1e6, OutPerToken: 0.6 / 1e6},
+	"anthropic/claude-3-haiku":          {InPerToken: 0.25 / 1e6, OutPerToken: 1.25 / 1e6},
+	"meta-llama/llama-3.1-70b-instruct": {InPerToken: 0.9 / 1e6, OutPerToken: 0.9 / 1e6},
+	"deepseek/deepseek-chat":            {InPerToken: 0.14 / 1e6, OutPerToken: 0.28 / 1e6},
+	"google/gemini-pro":                 {InPerToken: 1.25 / 1e6, OutPerToken: 5.0 / 1e6},
+	"mistralai/mistral-large":           {InPerToken: 3.0 / 1e6, OutPerToken: 9.0 / 1e6},
 }
 
 // CostUSDParts computes separate input and output USD costs and their sum for a given model and usage.

@@ -254,6 +254,11 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 				} `json:"delta"`
 				FinishReason string `json:"finish_reason"`
 			} `json:"choices"`
+			Usage *struct {
+				PromptTokens     int64 `json:"prompt_tokens"`
+				CompletionTokens int64 `json:"completion_tokens"`
+				TotalTokens      int64 `json:"total_tokens"`
+			} `json:"usage"`
 		}
 
 		if err := json.Unmarshal([]byte(data), &streamResp); err != nil {
@@ -354,6 +359,17 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 				}
 			}
 		}
+
+		// Emit usage information when finishing
+		if (finish == "stop" || finish == "tool_calls") && streamResp.Usage != nil {
+			usage := fmt.Sprintf("[USAGE] provider=openrouter model=%s in=%d out=%d",
+				c.model, streamResp.Usage.PromptTokens, streamResp.Usage.CompletionTokens)
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- engine.TokenOrToolCall{Token: usage}:
+			}
+		}
 	}
 
 	// If the scanner ends without explicit finish_reason but we have a parsable tool call, try to emit it
@@ -424,6 +440,11 @@ func (c *Client) handleNonStreamingResponse(ctx context.Context, body io.Reader,
 				} `json:"tool_calls"`
 			} `json:"message"`
 		} `json:"choices"`
+		Usage *struct {
+			PromptTokens     int64 `json:"prompt_tokens"`
+			CompletionTokens int64 `json:"completion_tokens"`
+			TotalTokens      int64 `json:"total_tokens"`
+		} `json:"usage"`
 	}
 
 	if err := json.Unmarshal(respBody, &resp); err != nil {
@@ -504,6 +525,17 @@ func (c *Client) handleNonStreamingResponse(ctx context.Context, body io.Reader,
 					return
 				case ch <- engine.TokenOrToolCall{Token: string(char)}:
 				}
+			}
+		}
+
+		// Emit usage information if available
+		if resp.Usage != nil {
+			usage := fmt.Sprintf("[USAGE] provider=openrouter model=%s in=%d out=%d",
+				c.model, resp.Usage.PromptTokens, resp.Usage.CompletionTokens)
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- engine.TokenOrToolCall{Token: usage}:
 			}
 		}
 	}
