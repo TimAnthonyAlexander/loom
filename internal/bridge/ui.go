@@ -1412,6 +1412,16 @@ func (a *App) NewConversation() string {
 	return id
 }
 
+// StopLLM cancels any running LLM operation and sets busy state to false.
+func (a *App) StopLLM() {
+	if a.engine != nil {
+		// Cancel the current LLM operation if any
+		a.engine.Stop()
+	}
+	// Ensure busy state is cleared
+	a.SetBusy(false)
+}
+
 // OpenFileInUI emits an event for the frontend to open the given file in the viewer
 func (a *App) OpenFileInUI(path string) {
 	if a.ctx != nil && strings.TrimSpace(path) != "" {

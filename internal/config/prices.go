@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"sync"
@@ -66,14 +67,15 @@ var PricePerToken = map[string]Price{
 
 // fetchOpenRouterPrices fetches model pricing from OpenRouter API and caches it
 func fetchOpenRouterPrices() error {
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get("https://openrouter.ai/api/v1/models")
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("OpenRouter API returned status %d", resp.StatusCode)
@@ -87,18 +89,14 @@ func fetchOpenRouterPrices() error {
 	openRouterCacheMutex.Lock()
 	defer openRouterCacheMutex.Unlock()
 
-	// Clear existing cache
 	openRouterPrices = make(map[string]Price)
 
-	// Parse and cache pricing for each model
 	for _, model := range apiResp.Data {
 		if model.ID == "" || model.Pricing == nil {
 			continue
 		}
-
 		promptPrice, err1 := strconv.ParseFloat(model.Pricing.Prompt, 64)
 		completionPrice, err2 := strconv.ParseFloat(model.Pricing.Completion, 64)
-
 		if err1 == nil && err2 == nil {
 			openRouterPrices[model.ID] = Price{
 				InPerToken:  promptPrice,

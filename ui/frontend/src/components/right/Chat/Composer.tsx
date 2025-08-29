@@ -1,12 +1,13 @@
 import React from 'react';
 import { Stack, TextField, IconButton, Chip, Box } from '@mui/material';
-import { PendingRounded, SendRounded, AttachFileRounded, CloseRounded } from '@mui/icons-material';
+import { PendingRounded, SendRounded, StopRounded, AttachFileRounded, CloseRounded } from '@mui/icons-material';
 
 type Props = {
     input: string;
     setInput: (val: string) => void;
     busy: boolean;
     onSend: () => void;
+    onStop?: () => void;
     onClear: () => void;
     // When this number changes, focus the input
     focusToken?: number;
@@ -16,7 +17,7 @@ type Props = {
     onAttachButtonRef?: (el: HTMLElement | null) => void;
 };
 
-function ComposerComponent({ input, setInput, busy, onSend, focusToken, attachments = [], onRemoveAttachment, onOpenAttach, onAttachButtonRef }: Props) {
+function ComposerComponent({ input, setInput, busy, onSend, onStop, focusToken, attachments = [], onRemoveAttachment, onOpenAttach, onAttachButtonRef }: Props) {
     const inputRef = React.useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
     const attachBtnRef = React.useRef<HTMLButtonElement | null>(null);
 
@@ -86,16 +87,17 @@ function ComposerComponent({ input, setInput, busy, onSend, focusToken, attachme
                     <AttachFileRounded />
                 </IconButton>
                 <IconButton
-                    onClick={onSend}
-                    disabled={busy || !input.trim()}
+                    onClick={busy ? onStop : onSend}
+                    disabled={busy ? false : !input.trim()}
                     sx={{
                         position: 'absolute',
                         height: '100%',
                         bottom: 0,
                         right: 5,
+                        color: busy ? 'error.main' : undefined,
                     }}
                 >
-                    {busy ? <PendingRounded /> : <SendRounded />}
+                    {busy ? <StopRounded /> : <SendRounded />}
                 </IconButton>
             </Stack>
         </Box>
@@ -107,6 +109,7 @@ export default React.memo(ComposerComponent, (prev, next) => {
         prev.input === next.input &&
         prev.busy === next.busy &&
         prev.onSend === next.onSend &&
+        prev.onStop === next.onStop &&
         prev.focusToken === next.focusToken &&
         prev.attachments === next.attachments
     );

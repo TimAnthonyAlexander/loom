@@ -287,6 +287,13 @@ function ChatPanelComponent(props: Props) {
                         onSend(augmented);
                         setLocalInput('');
                     }}
+                    onStop={async () => {
+                        try {
+                            await (Bridge as any).StopLLM();
+                        } catch (error) {
+                            console.error('Failed to stop LLM:', error);
+                        }
+                    }}
                     onClear={() => {
                         setLocalInput('');
                         onClear();

@@ -79,7 +79,11 @@ const MessageItem = React.memo(function MessageItem({
         : { component: Box, sx: { py: 1, borderColor: 'divider', fontSize: '0.9rem' } };
 
     return (
-        <>
+        <Box
+            sx={{
+                py: 1,
+            }}
+        >
             <Box {...(containerProps as any)}>
                 <MarkdownErrorBoundary>
                     <MarkdownRenderer>{filterAttachments(msg.content)}</MarkdownRenderer>
@@ -88,7 +92,7 @@ const MessageItem = React.memo(function MessageItem({
             {showReasoning && (
                 <ReasoningPanel text={reasoningText} open={reasoningOpen} onToggle={onToggleReasoning} />
             )}
-        </>
+        </Box>
     );
 }, (prev, next) => {
     // Re-render only if content or relevant flags change for this item

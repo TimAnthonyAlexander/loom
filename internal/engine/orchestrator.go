@@ -89,6 +89,11 @@ type Engine struct {
 
 	// workflow state store (feature-flagged)
 	wf *workflow.Store
+
+	// cancellation support for stopping LLM operations
+	currentCtx    context.Context
+	cancelCurrent context.CancelFunc
+	ctxMu         sync.Mutex
 }
 
 // LLM is an interface to abstract different language model providers.
@@ -313,10 +318,32 @@ func (e *Engine) Enqueue(message string) {
 	// Send to UI
 	e.bridge.SendChat("user", message)
 
+	// Create cancellable context for this operation
+	e.ctxMu.Lock()
+	// Cancel any existing operation before starting a new one
+	if e.cancelCurrent != nil {
+		e.cancelCurrent()
+	}
+	e.currentCtx, e.cancelCurrent = context.WithCancel(context.Background())
+	ctx := e.currentCtx
+	e.ctxMu.Unlock()
+
 	// Start processing in a goroutine
 	go func() {
-		_ = e.processLoop(context.Background(), message)
+		_ = e.processLoop(ctx, message)
 	}()
+}
+
+// Stop cancels any running LLM operation.
+func (e *Engine) Stop() {
+	e.ctxMu.Lock()
+	defer e.ctxMu.Unlock()
+
+	if e.cancelCurrent != nil {
+		e.cancelCurrent()
+		e.cancelCurrent = nil
+		e.currentCtx = nil
+	}
 }
 
 // ResolveApproval resolves a pending approval request.
@@ -493,6 +520,10 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 		for {
 			select {
 			case <-ctx.Done():
+				// Send cancellation message to UI
+				if e.bridge != nil {
+					e.bridge.SendChat("system", "Operation stopped by user.")
+				}
 				return ctx.Err()
 			case <-slowTicker.C:
 				if !slowNotified {

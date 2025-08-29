@@ -198,6 +198,10 @@ export function ShouldRunProfiler() {
   return window['go']['bridge']['App']['ShouldRunProfiler']();
 }
 
+export function StopLLM() {
+  return window['go']['bridge']['App']['StopLLM']();
+}
+
 export function UpdateEditorContext(arg1, arg2, arg3) {
   return window['go']['bridge']['App']['UpdateEditorContext'](arg1, arg2, arg3);
 }

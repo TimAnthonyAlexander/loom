@@ -105,6 +105,8 @@ export function SetWorkspace(arg1:string):Promise<void>;
 
 export function ShouldRunProfiler():Promise<boolean>;
 
+export function StopLLM():Promise<void>;
+
 export function UpdateEditorContext(arg1:string,arg2:number,arg3:number):Promise<void>;
 
 export function WithConfig(arg1:adapter.Config):Promise<bridge.App>;
