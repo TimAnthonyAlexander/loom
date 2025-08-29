@@ -80,14 +80,14 @@ const MessageItem = React.memo(function MessageItem({
 
     return (
         <>
-            {showReasoning && (
-                <ReasoningPanel text={reasoningText} open={reasoningOpen} onToggle={onToggleReasoning} />
-            )}
             <Box {...(containerProps as any)}>
                 <MarkdownErrorBoundary>
                     <MarkdownRenderer>{filterAttachments(msg.content)}</MarkdownRenderer>
                 </MarkdownErrorBoundary>
             </Box>
+            {showReasoning && (
+                <ReasoningPanel text={reasoningText} open={reasoningOpen} onToggle={onToggleReasoning} />
+            )}
         </>
     );
 }, (prev, next) => {
