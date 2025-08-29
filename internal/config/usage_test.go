@@ -12,6 +12,34 @@ func floatEquals(a, b, eps float64) bool {
 }
 
 // Test global usage aggregation lifecycle: add → get → reset
+func TestCostUSDParts_StaticPricing(t *testing.T) {
+	// Test static pricing for known models
+	inUSD, outUSD, totalUSD := CostUSDParts("claude-3-5-sonnet-20241022", 1000, 2000)
+
+	expectedIn := float64(1000) * (3.0 / 1e6)   // $3 per 1M tokens
+	expectedOut := float64(2000) * (15.0 / 1e6) // $15 per 1M tokens
+	expectedTotal := expectedIn + expectedOut
+
+	if !floatEquals(inUSD, expectedIn, 1e-9) {
+		t.Errorf("input cost mismatch: got %f, want %f", inUSD, expectedIn)
+	}
+	if !floatEquals(outUSD, expectedOut, 1e-9) {
+		t.Errorf("output cost mismatch: got %f, want %f", outUSD, expectedOut)
+	}
+	if !floatEquals(totalUSD, expectedTotal, 1e-9) {
+		t.Errorf("total cost mismatch: got %f, want %f", totalUSD, expectedTotal)
+	}
+}
+
+func TestCostUSDParts_UnknownModel(t *testing.T) {
+	// Test unknown model returns zero costs
+	inUSD, outUSD, totalUSD := CostUSDParts("unknown-model", 1000, 2000)
+
+	if inUSD != 0 || outUSD != 0 || totalUSD != 0 {
+		t.Errorf("unknown model should return zero costs: in=%f, out=%f, total=%f", inUSD, outUSD, totalUSD)
+	}
+}
+
 func TestGlobalUsage_AddGetReset(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 
