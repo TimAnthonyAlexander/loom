@@ -1,6 +1,6 @@
 import React from 'react';
 import { Stack, TextField, IconButton, Chip, Box } from '@mui/material';
-import { PendingRounded, SendRounded, StopRounded, AttachFileRounded, CloseRounded } from '@mui/icons-material';
+import { SendRounded, StopRounded, AttachFileRounded, CloseRounded } from '@mui/icons-material';
 
 type Props = {
     input: string;
