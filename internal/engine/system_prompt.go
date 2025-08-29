@@ -114,7 +114,7 @@ Project Profile
   - Evidence: bullet list of what you actually read with symbol names and LNN ranges, for example: ui/frontend/src/components/diff/DiffViewer.tsx: renderLines LNN 28-74; ui/main.go: normalizeWorkspacePath LNN 274-293.
   - Provenance: include only if making missing or misreference claims; quote the exact lines and cite file + LNN.
   - Coverage and Confidence: Files read N (Generated skipped M). Stop reason. Confidence High/Medium/Low with a one-line rationale.
-• For quick Q&A where no files are required, provide Summary and Recommendations only, then add Evidence with a single bullet that says "No files required. Reason: ...".
+• For quick Q&A where no files are required, provide Summary and Recommendations only, then add Evidence with a single bullet that says "No files required. Reason: ...". In the user prompt's language.
 • Write in natural prose. No "Objective:" prefix.
 • Obviously write in the language the user used. You can use this for the text as well as the headlines.
 
