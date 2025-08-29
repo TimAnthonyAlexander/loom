@@ -71,6 +71,8 @@ export function OpenProjectDataDir():Promise<void>;
 
 export function PromptApproval(arg1:string,arg2:string,arg3:string):Promise<boolean>;
 
+export function PromptChoice(arg1:string,arg2:string,arg3:Array<string>):Promise<number>;
+
 export function ReadWorkspaceFile(arg1:string):Promise<bridge.UIReadFileResult>;
 
 export function ReindexSymbols():Promise<void>;
@@ -80,6 +82,8 @@ export function ReloadMCP():Promise<void>;
 export function ResetGlobalUsage():Promise<void>;
 
 export function ResetUsage():Promise<void>;
+
+export function ResolveChoice(arg1:string,arg2:number):Promise<void>;
 
 export function RunProfiler():Promise<Record<string, any>>;
 

@@ -130,6 +130,10 @@ export function PromptApproval(arg1, arg2, arg3) {
   return window['go']['bridge']['App']['PromptApproval'](arg1, arg2, arg3);
 }
 
+export function PromptChoice(arg1, arg2, arg3) {
+  return window['go']['bridge']['App']['PromptChoice'](arg1, arg2, arg3);
+}
+
 export function ReadWorkspaceFile(arg1) {
   return window['go']['bridge']['App']['ReadWorkspaceFile'](arg1);
 }
@@ -148,6 +152,10 @@ export function ResetGlobalUsage() {
 
 export function ResetUsage() {
   return window['go']['bridge']['App']['ResetUsage']();
+}
+
+export function ResolveChoice(arg1, arg2) {
+  return window['go']['bridge']['App']['ResolveChoice'](arg1, arg2);
 }
 
 export function RunProfiler() {

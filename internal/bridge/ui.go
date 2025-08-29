@@ -155,6 +155,15 @@ func (a *App) Approve(id string, approved bool) {
 	}
 }
 
+// ResolveChoice resolves a choice request with the selected option index.
+func (a *App) ResolveChoice(id string, selectedIndex int) {
+	if a.engine != nil {
+		a.engine.ResolveChoice(id, selectedIndex)
+	} else {
+		log.Println("Engine not initialized")
+	}
+}
+
 // GetTools returns a list of available tools.
 func (a *App) GetTools() []map[string]interface{} {
 	if a.tools == nil {
@@ -634,6 +643,7 @@ func (a *App) SetWorkspace(path string) {
 		_ = tool.RegisterApplyShell(newRegistry, norm)
 		_ = tool.RegisterHTTPRequest(newRegistry)
 		_ = tool.RegisterMemories(newRegistry)
+		_ = tool.RegisterUserChoice(newRegistry)
 		_ = tool.RegisterProjectProfileTools(newRegistry, norm)
 		// Initialize and register Symbols tools with progress reporting
 		if ws := norm; ws != "" {
@@ -769,6 +779,7 @@ func (a *App) ReloadMCP() {
 	_ = tool.RegisterApplyShell(newRegistry, ws)
 	_ = tool.RegisterHTTPRequest(newRegistry)
 	_ = tool.RegisterMemories(newRegistry)
+	_ = tool.RegisterUserChoice(newRegistry)
 	_ = tool.RegisterProjectProfileTools(newRegistry, ws)
 	// Recreate Symbols for current workspace and register
 	if ws := strings.TrimSpace(a.engine.Workspace()); ws != "" {
@@ -1318,6 +1329,27 @@ func (a *App) PromptApproval(actionID, summary, diff string) bool {
 
 	// The actual approval will come back via the Approve method
 	return false // Placeholder return, actual approval handled asynchronously
+}
+
+// PromptChoice asks the user to choose from multiple options.
+func (a *App) PromptChoice(actionID, question string, options []string) int {
+	// Create a choice request
+	request := map[string]interface{}{
+		"id":       actionID,
+		"question": question,
+		"options":  options,
+		"type":     "choice",
+	}
+
+	// Send the request to the UI
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "user:choice", request)
+	} else {
+		log.Println("Warning: Wails context not initialized in PromptChoice")
+	}
+
+	// Return -1 to indicate asynchronous handling
+	return -1
 }
 
 func boolToStr(b bool) string {

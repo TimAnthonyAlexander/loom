@@ -263,6 +263,11 @@ func registerTools(registry *tool.Registry, workspacePath string) {
 		log.Printf("Failed to register memories tool: %v", err)
 	}
 
+	// User choice tool
+	if err := tool.RegisterUserChoice(registry); err != nil {
+		log.Printf("Failed to register user_choice tool: %v", err)
+	}
+
 	// Project profile tools
 	if err := tool.RegisterProjectProfileTools(registry, workspacePath); err != nil {
 		log.Printf("Failed to register project profile tools: %v", err)

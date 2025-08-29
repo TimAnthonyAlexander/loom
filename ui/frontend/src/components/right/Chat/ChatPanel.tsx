@@ -1,5 +1,6 @@
 import React from 'react';
-import { Box, Divider, Typography, Popover, TextField, List, ListItemButton, ListItemText, IconButton } from '@mui/material';
+import { Box, Divider, Typography, Popover, TextField, List, ListItemButton, ListItemText, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Button } from '@mui/material';
+import { EventsOn, EventsOff } from '../../../../wailsjs/runtime/runtime';
 import * as AppBridge from '../../../../wailsjs/go/bridge/App';
 import * as Bridge from '../../../../wailsjs/go/bridge/App';
 import MessageList from './MessageList';
@@ -97,6 +98,13 @@ function ChatPanelComponent(props: Props) {
     const [toolSearch, setToolSearch] = React.useState<string>('');
     const [mcpTools, setMcpTools] = React.useState<Record<string, { name: string; description: string }[]>>({});
 
+    // User choice state
+    const [choiceRequest, setChoiceRequest] = React.useState<{
+        id: string;
+        question: string;
+        options: string[];
+    } | null>(null);
+
     // Load MCP tools from backend and keep them updated when the backend refreshes
     React.useEffect(() => {
         const load = async () => {
@@ -123,17 +131,16 @@ function ChatPanelComponent(props: Props) {
         };
         load();
         const onUpdate = () => load();
-        try { (window as any).wails?.EventsOn?.('system:tools_updated', onUpdate); } catch (err) { console.warn('tools_updated subscribe failed', err); }
+        EventsOn('system:tools_updated', onUpdate);
         return () => {
-            try { (window as any).wails?.EventsOff?.('system:tools_updated'); } catch (err) { console.warn('tools_updated unsubscribe failed', err); }
+            // EventsOff doesn't take a callback parameter in Wails v2
         };
     }, []);
 
     // Clear attachments when backend emits chat:clear
     React.useEffect(() => {
         const handler = () => setAttachments([]);
-        const fn = () => handler();
-        (window as any).wails?.EventsOn?.('chat:clear', fn);
+        EventsOn('chat:clear', handler);
         // Also listen to our local event bus for safety
         window.addEventListener('loom:clear-attachments', handler as EventListener);
         return () => {
@@ -146,6 +153,25 @@ function ChatPanelComponent(props: Props) {
         const handler = () => setAttachOpen(true);
         window.addEventListener('loom:open-attach', handler as EventListener);
         return () => window.removeEventListener('loom:open-attach', handler as EventListener);
+    }, []);
+
+    // Listen for user choice requests from backend
+    React.useEffect(() => {
+        const handler = (data: any) => {
+            if (data && data.type === 'choice' && data.id && data.question && Array.isArray(data.options)) {
+                setChoiceRequest({
+                    id: data.id,
+                    question: data.question,
+                    options: data.options,
+                });
+            }
+        };
+        
+        EventsOn('user:choice', handler);
+        
+        return () => {
+            // EventsOff doesn't take specific handlers in Wails v2
+        };
     }, []);
 
     // Debounce helper for attachQuery
@@ -183,11 +209,22 @@ function ChatPanelComponent(props: Props) {
         try {
             if ((AppBridge as any).SetAttachments) {
                 (AppBridge as any).SetAttachments(attachments);
-            } else if ((window as any).wails?.EventsEmit) {
-                (window as any).wails.EventsEmit('chat:set_attachments', attachments);
             }
         } catch { }
     }, [attachments]);
+
+    // Handle user choice selection
+    const handleChoiceSelection = React.useCallback(async (selectedIndex: number) => {
+        if (!choiceRequest) return;
+        
+        try {
+            await (Bridge as any).ResolveChoice(choiceRequest.id, selectedIndex);
+        } catch (error) {
+            console.error('Failed to resolve choice:', error);
+        } finally {
+            setChoiceRequest(null);
+        }
+    }, [choiceRequest]);
 
     return (
         <Box sx={{ minWidth: 450, width: '100%', display: 'flex', flexDirection: 'column', height: '100vh' }}>
@@ -417,6 +454,44 @@ function ChatPanelComponent(props: Props) {
                     })}
                 </Box>
             </Popover>
+            <Dialog
+                open={choiceRequest !== null}
+                onClose={() => {}} // Prevent closing without selection
+                maxWidth="sm"
+                fullWidth
+            >
+                <DialogTitle>
+                    <Typography variant="h6">{choiceRequest?.question}</Typography>
+                </DialogTitle>
+                <DialogContent>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1 }}>
+                        {choiceRequest?.options.map((option, index) => (
+                            <Button
+                                key={index}
+                                variant="outlined"
+                                onClick={() => handleChoiceSelection(index)}
+                                sx={{
+                                    justifyContent: 'flex-start',
+                                    textAlign: 'left',
+                                    py: 1.5,
+                                    px: 2,
+                                    borderRadius: 2,
+                                    textTransform: 'none',
+                                    '&:hover': {
+                                        backgroundColor: 'primary.main',
+                                        color: 'primary.contrastText',
+                                        borderColor: 'primary.main',
+                                    },
+                                }}
+                            >
+                                <Typography variant="body1">
+                                    {index + 1}. {option}
+                                </Typography>
+                            </Button>
+                        ))}
+                    </Box>
+                </DialogContent>
+            </Dialog>
         </Box>
     );
 }

@@ -240,6 +240,17 @@ func (r *Registry) InvokeToolCall(ctx context.Context, call *ToolCall) (*Executi
 			} else {
 				ui.SendChat("system", "CONTEXT PACK")
 			}
+		case "user_choice":
+			var args struct {
+				Question string   `json:"question"`
+				Options  []string `json:"options"`
+			}
+			_ = json.Unmarshal(call.Args, &args)
+			if args.Question != "" {
+				ui.SendChat("system", fmt.Sprintf("ASKING USER CHOICE: %s", args.Question))
+			} else {
+				ui.SendChat("system", "ASKING USER CHOICE")
+			}
 		case "edit_file":
 			var args EditFileArgs
 			_ = json.Unmarshal(call.Args, &args)

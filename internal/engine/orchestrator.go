@@ -48,6 +48,7 @@ type UIBridge interface {
 	// EmitBilling notifies the UI of per-request usage and costs in USD
 	EmitBilling(provider string, model string, inTokens int64, outTokens int64, inUSD float64, outUSD float64, totalUSD float64)
 	PromptApproval(actionID string, summary string, diff string) (approved bool)
+	PromptChoice(actionID string, question string, options []string) (selectedIndex int)
 	SetBusy(isBusy bool)
 	// Request the UI to open a file path (relative to workspace) in the file viewer
 	OpenFileInUI(path string)
@@ -61,6 +62,14 @@ type ApprovalRequest struct {
 	Response chan bool
 }
 
+// ChoiceRequest tracks an outstanding choice request.
+type ChoiceRequest struct {
+	ID       string
+	Question string
+	Options  []string
+	Response chan int
+}
+
 // Engine is the core orchestrator for the Loom system.
 type Engine struct {
 	bridge       UIBridge
@@ -68,6 +77,7 @@ type Engine struct {
 	llm          LLM
 	mu           sync.RWMutex
 	approvals    map[string]chan bool
+	choices      map[string]chan int
 	approvalMu   sync.Mutex
 	tools        *tool.Registry
 	memory       *memory.Project
@@ -119,6 +129,7 @@ func New(llm LLM, bridge UIBridge) *Engine {
 		bridge:    bridge,
 		messages:  []Message{},
 		approvals: make(map[string]chan bool),
+		choices:   make(map[string]chan int),
 	}
 }
 
@@ -357,6 +368,17 @@ func (e *Engine) ResolveApproval(id string, approved bool) {
 	}
 }
 
+// ResolveChoice resolves a pending choice request.
+func (e *Engine) ResolveChoice(id string, selectedIndex int) {
+	e.approvalMu.Lock()
+	defer e.approvalMu.Unlock()
+
+	if ch, ok := e.choices[id]; ok {
+		ch <- selectedIndex
+		delete(e.choices, id)
+	}
+}
+
 // UserApproved prompts for approval and waits for the response.
 func (e *Engine) UserApproved(toolCall *tool.ToolCall, diff string) bool {
 	// Auto-approval rules
@@ -385,6 +407,24 @@ func (e *Engine) UserApproved(toolCall *tool.ToolCall, diff string) bool {
 	// Wait for response
 	approved := <-responseCh
 	return approved
+}
+
+// UserChoice prompts for a choice and waits for the response.
+func (e *Engine) UserChoice(toolCall *tool.ToolCall, question string, options []string) int {
+	// Create a channel for the response
+	responseCh := make(chan int)
+
+	// Register the choice request
+	e.approvalMu.Lock()
+	e.choices[toolCall.ID] = responseCh
+	e.approvalMu.Unlock()
+
+	// Ask the bridge for a choice (this will always return -1 for async handling)
+	e.bridge.PromptChoice(toolCall.ID, question, options)
+
+	// Wait for response
+	selected := <-responseCh
+	return selected
 }
 
 // processLoop is the main processing loop for the engine.
@@ -721,8 +761,32 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 				}
 			}
 
-			// Approval path returns structured result to the model
-			if !execResult.Safe {
+			// Special handling for user_choice tool
+			if !execResult.Safe && toolCallReceived.Name == "user_choice" {
+				// Parse the tool args to extract question and options
+				type userChoiceArgs struct {
+					Question string   `json:"question"`
+					Options  []string `json:"options"`
+				}
+				var args userChoiceArgs
+				if err := json.Unmarshal(toolCallReceived.Args, &args); err == nil {
+					selectedIndex := e.UserChoice(toolCallReceived, args.Question, args.Options)
+					if selectedIndex >= 0 && selectedIndex < len(args.Options) {
+						selectedOption := args.Options[selectedIndex]
+						response := map[string]any{
+							"selected_option": selectedOption,
+							"selected_index":  selectedIndex,
+						}
+						responseJson, _ := json.Marshal(response)
+						convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, string(responseJson))
+					} else {
+						convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, "Invalid choice selection")
+					}
+				} else {
+					convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, "Error parsing choice arguments")
+				}
+			} else if !execResult.Safe {
+				// Regular approval path for other tools
 				approved := e.UserApproved(toolCallReceived, execResult.Diff)
 				if e.wf != nil {
 					_ = e.wf.ApplyEvent(ctx, map[string]any{
@@ -844,7 +908,30 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 					}
 				}
 
-				if !execResult.Safe {
+				if !execResult.Safe && toolCallReceived.Name == "user_choice" {
+					// Parse the tool args to extract question and options
+					type userChoiceArgs struct {
+						Question string   `json:"question"`
+						Options  []string `json:"options"`
+					}
+					var args userChoiceArgs
+					if err := json.Unmarshal(toolCallReceived.Args, &args); err == nil {
+						selectedIndex := e.UserChoice(toolCallReceived, args.Question, args.Options)
+						if selectedIndex >= 0 && selectedIndex < len(args.Options) {
+							selectedOption := args.Options[selectedIndex]
+							response := map[string]any{
+								"selected_option": selectedOption,
+								"selected_index":  selectedIndex,
+							}
+							responseJson, _ := json.Marshal(response)
+							convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, string(responseJson))
+						} else {
+							convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, "Invalid choice selection")
+						}
+					} else {
+						convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, "Error parsing choice arguments")
+					}
+				} else if !execResult.Safe {
 					approved := e.UserApproved(toolCallReceived, execResult.Diff)
 					payload := map[string]any{
 						"tool":     toolCallReceived.Name,
