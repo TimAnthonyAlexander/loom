@@ -15,6 +15,8 @@ export function ChooseWorkspace():Promise<string>;
 
 export function ClearConversation():Promise<void>;
 
+export function CreateNewProject(arg1:Record<string, any>):Promise<Record<string, any>>;
+
 export function DeleteMemory(arg1:string):Promise<boolean>;
 
 export function EmitAssistant(arg1:string):Promise<void>;
@@ -38,6 +40,8 @@ export function GetProjectHotlist():Promise<Array<string>>;
 export function GetProjectProfile():Promise<Record<string, any>>;
 
 export function GetProjectRules():Promise<string>;
+
+export function GetRecentWorkspaces():Promise<Array<string>>;
 
 export function GetRules():Promise<Record<string, Array<string>>>;
 

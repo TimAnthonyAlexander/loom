@@ -20,6 +20,8 @@ type Settings struct {
 	// Feature flags
 	AutoApproveShell bool `json:"auto_approve_shell,omitempty"`
 	AutoApproveEdits bool `json:"auto_approve_edits,omitempty"`
+	// Recent workspaces (max 10, ordered from most recent)
+	RecentWorkspaces []string `json:"recent_workspaces,omitempty"`
 }
 
 // settingsFilePath returns the absolute path to the settings JSON file
@@ -110,4 +112,53 @@ func Save(s Settings) error {
 		return fmt.Errorf("failed to write settings: %w", err)
 	}
 	return nil
+}
+
+// AddRecentWorkspace adds a workspace path to the recent workspaces list.
+// If the path already exists, it moves it to the front. If the list exceeds maxRecent,
+// it trims the oldest entries.
+func (s *Settings) AddRecentWorkspace(path string, maxRecent int) {
+	if path == "" {
+		return
+	}
+
+	// Normalize the path
+	if abs, err := filepath.Abs(path); err == nil {
+		path = abs
+	}
+
+	// Remove existing entry if present
+	for i, existing := range s.RecentWorkspaces {
+		if existing == path {
+			s.RecentWorkspaces = append(s.RecentWorkspaces[:i], s.RecentWorkspaces[i+1:]...)
+			break
+		}
+	}
+
+	// Add to front
+	s.RecentWorkspaces = append([]string{path}, s.RecentWorkspaces...)
+
+	// Trim to max length
+	if len(s.RecentWorkspaces) > maxRecent {
+		s.RecentWorkspaces = s.RecentWorkspaces[:maxRecent]
+	}
+}
+
+// RemoveRecentWorkspace removes a workspace path from the recent workspaces list.
+func (s *Settings) RemoveRecentWorkspace(path string) {
+	if path == "" {
+		return
+	}
+
+	// Normalize the path for comparison
+	if abs, err := filepath.Abs(path); err == nil {
+		path = abs
+	}
+
+	for i, existing := range s.RecentWorkspaces {
+		if existing == path {
+			s.RecentWorkspaces = append(s.RecentWorkspaces[:i], s.RecentWorkspaces[i+1:]...)
+			break
+		}
+	}
 }

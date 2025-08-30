@@ -12,6 +12,7 @@ import SettingsDialog from './components/dialogs/SettingsDialog';
 import RulesDialog from './components/dialogs/RulesDialog';
 import CostsDialog from './components/dialogs/CostsDialog';
 import WorkspaceDialog from './components/dialogs/WorkspaceDialog';
+import NewProjectDialog, { NewProjectConfig } from './components/dialogs/NewProjectDialog';
 import SearchDialog from './components/dialogs/SearchDialog';
 import MemoriesDialog from './components/dialogs/MemoriesDialog';
 import { ChatMessage, ApprovalRequest, UIFileEntry, UIListDirResult, ConversationListItem, EditorTabItem } from './types/ui';
@@ -30,6 +31,8 @@ const App: React.FC = () => {
     const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
     const [workspaceOpen, setWorkspaceOpen] = useState<boolean>(false);
     const [workspacePath, setWorkspacePath] = useState<string>('');
+    const [newProjectOpen, setNewProjectOpen] = useState<boolean>(false);
+    const [recentWorkspaces, setRecentWorkspaces] = useState<string[]>([]);
     const [openaiKey, setOpenaiKey] = useState<string>('');
     const [anthropicKey, setAnthropicKey] = useState<string>('');
     const [openrouterKey, setOpenrouterKey] = useState<string>('');
@@ -475,6 +478,126 @@ const App: React.FC = () => {
             .catch(() => { });
     }, []);
 
+    // Handle new project creation
+    const handleCreateProject = useCallback(async (config: NewProjectConfig) => {
+        try {
+            const result = await (AppBridge as any).CreateNewProject(config) as any;
+            if (result?.success && result?.path) {
+                // Project created successfully, open it as workspace
+                const projectPath = String(result.path);
+                setWorkspacePath(projectPath);
+                
+                // Open the new project as workspace
+                await SetWorkspace(projectPath);
+                
+                // Reset and reload file explorer for the new workspace
+                setDirCache({});
+                setExpandedDirs({});
+                setOpenTabs([]);
+                setActiveTab('');
+                
+                const dirResult = await Bridge.ListWorkspaceDir('');
+                const r = dirResult as UIListDirResult;
+                if (r && Array.isArray(r.entries)) {
+                    setDirCache((prev) => ({ ...prev, [r.path || '']: r.entries }));
+                    setExpandedDirs((prev) => ({ ...prev, [r.path || '']: true }));
+                }
+                
+                // Refresh rules and conversation
+                const rules = await AppBridge.GetRules() as any;
+                setUserRules(Array.isArray(rules?.user) ? rules.user : []);
+                setProjectRules(Array.isArray(rules?.project) ? rules.project : []);
+                
+                const newConversationId = await NewConversation();
+                setCurrentConversationId(newConversationId);
+                
+                const conversations = await GetConversations() as any;
+                const list = Array.isArray(conversations?.conversations) ? conversations.conversations : [];
+                setConversations(list.map((c: any) => ({ 
+                    id: String(c.id), 
+                    title: String(c.title || c.id), 
+                    updated_at: String(c.updated_at || '') 
+                })));
+                
+                // Close the new project dialog
+                setNewProjectOpen(false);
+            } else {
+                // Show error message
+                console.error('Failed to create project:', result?.error || 'Unknown error');
+                // Could show a toast/snackbar here
+            }
+        } catch (error) {
+            console.error('Error creating project:', error);
+            // Could show a toast/snackbar here
+        }
+    }, []);
+
+    // Load recent workspaces
+    const loadRecentWorkspaces = useCallback(async () => {
+        try {
+            const recent = await (AppBridge as any).GetRecentWorkspaces() as string[];
+            setRecentWorkspaces(Array.isArray(recent) ? recent : []);
+        } catch (error) {
+            console.error('Failed to load recent workspaces:', error);
+            setRecentWorkspaces([]);
+        }
+    }, []);
+
+    // Load recent workspaces on mount and when workspace changes
+    useEffect(() => {
+        loadRecentWorkspaces();
+        
+        const unsubscribe = EventsOn('workspace:changed', () => {
+            loadRecentWorkspaces();
+        });
+
+        return () => {
+            if (unsubscribe) unsubscribe();
+        };
+    }, [loadRecentWorkspaces]);
+
+    // Handle opening a recent workspace
+    const handleOpenRecentWorkspace = useCallback(async (path: string) => {
+        if (!path) return;
+        
+        try {
+            setWorkspacePath(path);
+            
+            await SetWorkspace(path);
+            
+            // Reset and reload file explorer for the new workspace
+            setDirCache({});
+            setExpandedDirs({});
+            setOpenTabs([]);
+            setActiveTab('');
+            
+            const dirResult = await Bridge.ListWorkspaceDir('');
+            const r = dirResult as UIListDirResult;
+            if (r && Array.isArray(r.entries)) {
+                setDirCache((prev) => ({ ...prev, [r.path || '']: r.entries }));
+                setExpandedDirs((prev) => ({ ...prev, [r.path || '']: true }));
+            }
+            
+            // Refresh rules and conversation
+            const rules = await AppBridge.GetRules() as any;
+            setUserRules(Array.isArray(rules?.user) ? rules.user : []);
+            setProjectRules(Array.isArray(rules?.project) ? rules.project : []);
+            
+            const newConversationId = await NewConversation();
+            setCurrentConversationId(newConversationId);
+            
+            const conversations = await GetConversations() as any;
+            const list = Array.isArray(conversations?.conversations) ? conversations.conversations : [];
+            setConversations(list.map((c: any) => ({ 
+                id: String(c.id), 
+                title: String(c.title || c.id), 
+                updated_at: String(c.updated_at || '') 
+            })));
+        } catch (error) {
+            console.error('Failed to open recent workspace:', error);
+        }
+    }, []);
+
     // File explorer helpers
     const loadDir = (path: string) => {
         const key = path || '';
@@ -641,6 +764,19 @@ const App: React.FC = () => {
         });
         EventsOn('menu:file:new_conversation', () => {
             if (handleNewConversationRef.current) handleNewConversationRef.current();
+        });
+        EventsOn('menu:file:new_project', () => {
+            setNewProjectOpen(true);
+        });
+        EventsOn('menu:file:clear_recent', async () => {
+            try {
+                // Clear recent workspaces by saving empty settings
+                const settings = await GetSettings() as any;
+                await SaveSettings({ ...settings, recent_workspaces: '' });
+                setRecentWorkspaces([]);
+            } catch (error) {
+                console.error('Failed to clear recent workspaces:', error);
+            }
         });
     }, []);
 
@@ -849,6 +985,12 @@ const App: React.FC = () => {
                     }
                 }}
                 onClose={() => setWorkspaceOpen(false)}
+            />
+            <NewProjectDialog
+                open={newProjectOpen}
+                onClose={() => setNewProjectOpen(false)}
+                onCreate={handleCreateProject}
+                onBrowsePath={() => Bridge.ChooseWorkspace()}
             />
             <SearchDialog
                 open={searchOpen}

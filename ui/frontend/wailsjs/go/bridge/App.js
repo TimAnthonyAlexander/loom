@@ -18,6 +18,10 @@ export function ClearConversation() {
   return window['go']['bridge']['App']['ClearConversation']();
 }
 
+export function CreateNewProject(arg1) {
+  return window['go']['bridge']['App']['CreateNewProject'](arg1);
+}
+
 export function DeleteMemory(arg1) {
   return window['go']['bridge']['App']['DeleteMemory'](arg1);
 }
@@ -64,6 +68,10 @@ export function GetProjectProfile() {
 
 export function GetProjectRules() {
   return window['go']['bridge']['App']['GetProjectRules']();
+}
+
+export function GetRecentWorkspaces() {
+  return window['go']['bridge']['App']['GetRecentWorkspaces']();
 }
 
 export function GetRules() {

@@ -252,7 +252,8 @@ func (a *App) SetModel(model string) {
 
 // ensureSettingsLoaded loads settings from disk into memory if not already loaded.
 func (a *App) ensureSettingsLoaded() {
-	if a.settings != (config.Settings{}) {
+	// Check if settings are loaded by checking if any key field is set
+	if a.settings.OpenAIAPIKey != "" || a.settings.AnthropicAPIKey != "" || a.settings.LastWorkspace != "" || len(a.settings.RecentWorkspaces) > 0 {
 		return
 	}
 	if s, err := config.Load(); err == nil {
@@ -387,6 +388,12 @@ func (a *App) GetSettings() map[string]string {
 		"auto_approve_shell": boolToStr(s.AutoApproveShell),
 		"auto_approve_edits": boolToStr(s.AutoApproveEdits),
 	}
+}
+
+// GetRecentWorkspaces returns the list of recently opened workspaces.
+func (a *App) GetRecentWorkspaces() []string {
+	a.ensureSettingsLoaded()
+	return a.settings.RecentWorkspaces
 }
 
 // GetUsage returns persisted usage aggregates for the current workspace.
@@ -718,9 +725,10 @@ func (a *App) SetWorkspace(path string) {
 			a.engine.WithRegistry(newRegistry)
 		}
 	}
-	// Persist as last workspace
+	// Persist as last workspace and add to recent workspaces
 	a.ensureSettingsLoaded()
 	a.settings.LastWorkspace = norm
+	a.settings.AddRecentWorkspace(norm, 10) // Keep max 10 recent workspaces
 	_ = config.Save(a.settings)
 
 	// Emit event to notify frontend that workspace has changed
@@ -2095,4 +2103,303 @@ func (a *App) RunQuickProfiler() map[string]interface{} {
 	result["success"] = true
 	result["profile"] = profile
 	return result
+}
+
+// CreateNewProject creates a new project with the specified configuration.
+// The payload should contain: name, path, language, frameworks (comma-separated), initGit (bool)
+func (a *App) CreateNewProject(payload map[string]interface{}) map[string]interface{} {
+	result := map[string]interface{}{
+		"success": false,
+		"error":   "",
+		"path":    "",
+	}
+
+	// Extract parameters
+	name, ok := payload["name"].(string)
+	if !ok || strings.TrimSpace(name) == "" {
+		result["error"] = "Project name is required"
+		return result
+	}
+
+	basePath, ok := payload["path"].(string)
+	if !ok || strings.TrimSpace(basePath) == "" {
+		result["error"] = "Project path is required"
+		return result
+	}
+
+	language, _ := payload["language"].(string)
+	frameworks, _ := payload["frameworks"].(string)
+	initGit, _ := payload["initGit"].(bool)
+
+	// Normalize and create full project path
+	basePath = normalizeWorkspacePath(strings.TrimSpace(basePath))
+	projectPath := filepath.Join(basePath, strings.TrimSpace(name))
+
+	// Check if directory already exists
+	if _, err := os.Stat(projectPath); err == nil {
+		result["error"] = "Directory already exists"
+		return result
+	}
+
+	// Create project directory
+	if err := os.MkdirAll(projectPath, 0o755); err != nil {
+		result["error"] = fmt.Sprintf("Failed to create project directory: %v", err)
+		return result
+	}
+
+	// Initialize git repository if requested
+	if initGit {
+		if err := a.initGitRepo(projectPath); err != nil {
+			// Log warning but don't fail the whole operation
+			log.Printf("Warning: Failed to initialize git repository: %v", err)
+		}
+	}
+
+	// Create basic project structure based on language
+	if err := a.createProjectStructure(projectPath, language, frameworks); err != nil {
+		result["error"] = fmt.Sprintf("Failed to create project structure: %v", err)
+		return result
+	}
+
+	// Create .loom directory for project-specific settings
+	loomDir := filepath.Join(projectPath, ".loom")
+	if err := os.MkdirAll(loomDir, 0o755); err != nil {
+		log.Printf("Warning: Failed to create .loom directory: %v", err)
+	}
+
+	result["success"] = true
+	result["path"] = projectPath
+	return result
+}
+
+// initGitRepo initializes a git repository in the specified directory
+func (a *App) initGitRepo(projectPath string) error {
+	cmd := exec.Command("git", "init")
+	cmd.Dir = projectPath
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("git init failed: %w", err)
+	}
+
+	// Create a basic .gitignore
+	gitignoreContent := `# Dependencies
+node_modules/
+vendor/
+
+# Build outputs
+dist/
+build/
+target/
+
+# IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Loom
+.loom/
+`
+	gitignorePath := filepath.Join(projectPath, ".gitignore")
+	if err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0o644); err != nil {
+		log.Printf("Warning: Failed to create .gitignore: %v", err)
+	}
+
+	return nil
+}
+
+// createProjectStructure creates basic project structure based on language and frameworks
+func (a *App) createProjectStructure(projectPath, language, frameworks string) error {
+	frameworkList := strings.Split(frameworks, ",")
+	for i, f := range frameworkList {
+		frameworkList[i] = strings.TrimSpace(f)
+	}
+
+	// Create basic README
+	readmeContent := fmt.Sprintf("# %s\n\nProject created with Loom\n\n", filepath.Base(projectPath))
+	if language != "" {
+		readmeContent += fmt.Sprintf("**Language:** %s\n", language)
+	}
+	if len(frameworkList) > 0 && frameworkList[0] != "" {
+		readmeContent += fmt.Sprintf("**Frameworks:** %s\n", strings.Join(frameworkList, ", "))
+	}
+
+	readmePath := filepath.Join(projectPath, "README.md")
+	if err := os.WriteFile(readmePath, []byte(readmeContent), 0o644); err != nil {
+		log.Printf("Warning: Failed to create README.md: %v", err)
+	}
+
+	// Create language-specific structure
+	switch strings.ToLower(language) {
+	case "javascript", "typescript":
+		return a.createJSProjectStructure(projectPath, language, frameworkList)
+	case "python":
+		return a.createPythonProjectStructure(projectPath, frameworkList)
+	case "go":
+		return a.createGoProjectStructure(projectPath, frameworkList)
+	case "rust":
+		return a.createRustProjectStructure(projectPath, frameworkList)
+	}
+
+	return nil
+}
+
+// createJSProjectStructure creates JavaScript/TypeScript project structure
+func (a *App) createJSProjectStructure(projectPath, language string, frameworks []string) error {
+	// Create src directory
+	srcDir := filepath.Join(projectPath, "src")
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		return err
+	}
+
+	// Create package.json
+	packageJSON := map[string]interface{}{
+		"name":        filepath.Base(projectPath),
+		"version":     "1.0.0",
+		"description": "",
+		"main":        "src/index.js",
+		"scripts": map[string]string{
+			"start": "node src/index.js",
+		},
+		"keywords": []string{},
+		"author":   "",
+		"license":  "MIT",
+	}
+
+	if language == "typescript" {
+		packageJSON["main"] = "src/index.ts"
+		scripts := packageJSON["scripts"].(map[string]string)
+		scripts["build"] = "tsc"
+		scripts["start"] = "node dist/index.js"
+
+		// Create basic TypeScript config
+		tsConfig := map[string]interface{}{
+			"compilerOptions": map[string]interface{}{
+				"target":          "ES2020",
+				"module":          "commonjs",
+				"outDir":          "./dist",
+				"rootDir":         "./src",
+				"strict":          true,
+				"esModuleInterop": true,
+			},
+		}
+
+		tsConfigBytes, _ := json.MarshalIndent(tsConfig, "", "  ")
+		tsConfigPath := filepath.Join(projectPath, "tsconfig.json")
+		if err := os.WriteFile(tsConfigPath, tsConfigBytes, 0o644); err != nil {
+			log.Printf("Warning: Failed to create tsconfig.json: %v", err)
+		}
+	}
+
+	packageBytes, _ := json.MarshalIndent(packageJSON, "", "  ")
+	packagePath := filepath.Join(projectPath, "package.json")
+	if err := os.WriteFile(packagePath, packageBytes, 0o644); err != nil {
+		return err
+	}
+
+	// Create main file
+	var mainContent string
+	var fileName string
+	if language == "typescript" {
+		fileName = "index.ts"
+		mainContent = `console.log("Hello, TypeScript!");
+
+export {};
+`
+	} else {
+		fileName = "index.js"
+		mainContent = `console.log("Hello, JavaScript!");
+`
+	}
+
+	mainPath := filepath.Join(srcDir, fileName)
+	return os.WriteFile(mainPath, []byte(mainContent), 0o644)
+}
+
+// createPythonProjectStructure creates Python project structure
+func (a *App) createPythonProjectStructure(projectPath string, frameworks []string) error {
+	// Create src directory
+	srcDir := filepath.Join(projectPath, "src")
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		return err
+	}
+
+	// Create main.py
+	mainContent := `#!/usr/bin/env python3
+
+def main():
+    print("Hello, Python!")
+
+if __name__ == "__main__":
+    main()
+`
+	mainPath := filepath.Join(srcDir, "main.py")
+	if err := os.WriteFile(mainPath, []byte(mainContent), 0o644); err != nil {
+		return err
+	}
+
+	// Create requirements.txt
+	reqPath := filepath.Join(projectPath, "requirements.txt")
+	return os.WriteFile(reqPath, []byte("# Add your dependencies here\n"), 0o644)
+}
+
+// createGoProjectStructure creates Go project structure
+func (a *App) createGoProjectStructure(projectPath string, frameworks []string) error {
+	projectName := filepath.Base(projectPath)
+
+	// Create go.mod
+	goModContent := fmt.Sprintf("module %s\n\ngo 1.21\n", projectName)
+	goModPath := filepath.Join(projectPath, "go.mod")
+	if err := os.WriteFile(goModPath, []byte(goModContent), 0o644); err != nil {
+		return err
+	}
+
+	// Create main.go
+	mainContent := `package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("Hello, Go!")
+}
+`
+	mainPath := filepath.Join(projectPath, "main.go")
+	return os.WriteFile(mainPath, []byte(mainContent), 0o644)
+}
+
+// createRustProjectStructure creates Rust project structure
+func (a *App) createRustProjectStructure(projectPath string, frameworks []string) error {
+	projectName := filepath.Base(projectPath)
+
+	// Create Cargo.toml
+	cargoContent := fmt.Sprintf(`[package]
+name = "%s"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+`, projectName)
+	cargoPath := filepath.Join(projectPath, "Cargo.toml")
+	if err := os.WriteFile(cargoPath, []byte(cargoContent), 0o644); err != nil {
+		return err
+	}
+
+	// Create src directory and main.rs
+	srcDir := filepath.Join(projectPath, "src")
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		return err
+	}
+
+	mainContent := `fn main() {
+    println!("Hello, Rust!");
+}
+`
+	mainPath := filepath.Join(srcDir, "main.rs")
+	return os.WriteFile(mainPath, []byte(mainContent), 0o644)
 }

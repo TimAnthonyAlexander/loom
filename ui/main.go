@@ -145,6 +145,14 @@ func main() {
 		runtime.EventsEmit(appCtx, "menu:file:new_conversation")
 	})
 	fileMenu.AddSeparator()
+	newProjectAccel, _ := keys.Parse("CmdOrCtrl+Shift+N")
+	fileMenu.AddText("New Project…", newProjectAccel, func(_ *menu.CallbackData) {
+		if appCtx == nil {
+			return
+		}
+		runtime.EventsEmit(appCtx, "menu:file:new_project")
+	})
+	fileMenu.AddSeparator()
 	fileMenu.AddText("Open Workspace…", keys.CmdOrCtrl("O"), func(_ *menu.CallbackData) {
 		if appCtx == nil {
 			return
@@ -152,6 +160,15 @@ func main() {
 		// Let the frontend open its workspace dialog to handle full UI refresh logic
 		runtime.EventsEmit(appCtx, "menu:file:open_workspace")
 	})
+	// Add Open Recent submenu
+	openRecentMenu := fileMenu.AddSubmenu("Open Recent")
+	openRecentMenu.AddText("Clear Recent", nil, func(_ *menu.CallbackData) {
+		if appCtx == nil {
+			return
+		}
+		runtime.EventsEmit(appCtx, "menu:file:clear_recent")
+	})
+	// Recent workspace items will be populated dynamically by the frontend
 	openFileAccel, _ := keys.Parse("CmdOrCtrl+Shift+O")
 	fileMenu.AddText("Open File…", openFileAccel, func(_ *menu.CallbackData) {
 		if appCtx == nil {
