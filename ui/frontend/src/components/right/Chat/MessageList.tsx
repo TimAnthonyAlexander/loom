@@ -14,31 +14,6 @@ function filterAttachments(text: string): string {
     }
 }
 
-// Extract formatted message from tool response JSON
-function extractToolMessage(content: string): string {
-    if (!content) return '';
-    try {
-        const parsed = JSON.parse(content);
-        if (parsed && typeof parsed === 'object') {
-            // Check if this looks like an HTTP response (has status, headers, body, duration_ms)
-            if (typeof parsed.status === 'number' && 
-                typeof parsed.headers === 'object' && 
-                typeof parsed.body === 'string' && 
-                typeof parsed.duration_ms === 'number') {
-                // This is an HTTP response - return empty string to hide it
-                return '';
-            }
-            
-            if (parsed.message) {
-                return String(parsed.message);
-            }
-        }
-    } catch {
-        // If parsing fails, return raw content
-    }
-    return content;
-}
-
 type Props = {
     messages: ChatMessage[];
     busy: boolean;
@@ -101,26 +76,8 @@ const MessageItem = React.memo(function MessageItem({
     }
 
     if (isTool) {
-        const toolMessage = extractToolMessage(msg.content);
-        // Don't render anything for empty tool messages (e.g., http_request responses)
-        if (!toolMessage.trim()) {
-            return null;
-        }
-        
-        return (
-            <Box
-                sx={{
-                    py: 1,
-                    borderRadius: 2,
-                }}
-            >
-                <Box sx={{ py: 1, fontSize: '0.9rem' }}>
-                    <MarkdownErrorBoundary>
-                        <MarkdownRenderer>{toolMessage}</MarkdownRenderer>
-                    </MarkdownErrorBoundary>
-                </Box>
-            </Box>
-        );
+        // UNIVERSAL RULE: Never show ANY tool results - always hide them
+        return <Box sx={{ display: 'none' }} />;
     }
 
     const containerProps = isUser
