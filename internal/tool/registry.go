@@ -251,6 +251,32 @@ func (r *Registry) InvokeToolCall(ctx context.Context, call *ToolCall) (*Executi
 			} else {
 				ui.SendChat("system", "ASKING USER CHOICE")
 			}
+		case "todo_list":
+			var args struct {
+				Action string `json:"action"`
+				Task   string `json:"task,omitempty"`
+			}
+			_ = json.Unmarshal(call.Args, &args)
+			switch args.Action {
+			case "create":
+				ui.SendChat("system", "CREATING TODO LIST")
+			case "add":
+				if args.Task != "" {
+					ui.SendChat("system", fmt.Sprintf("ADDING TASK: %s", args.Task))
+				} else {
+					ui.SendChat("system", "ADDING TASK")
+				}
+			case "complete":
+				ui.SendChat("system", "COMPLETING TASK")
+			case "list":
+				ui.SendChat("system", "LISTING TODOS")
+			case "clear":
+				ui.SendChat("system", "CLEARING TODO LIST")
+			case "remove":
+				ui.SendChat("system", "REMOVING TASK")
+			default:
+				ui.SendChat("system", "MANAGING TODO LIST")
+			}
 		case "edit_file":
 			var args EditFileArgs
 			_ = json.Unmarshal(call.Args, &args)

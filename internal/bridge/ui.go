@@ -650,6 +650,7 @@ func (a *App) SetWorkspace(path string) {
 		_ = tool.RegisterApplyShell(newRegistry, norm)
 		_ = tool.RegisterHTTPRequest(newRegistry)
 		_ = tool.RegisterMemories(newRegistry)
+		_ = tool.RegisterTodoList(newRegistry)
 		_ = tool.RegisterUserChoice(newRegistry)
 		_ = tool.RegisterProjectProfileTools(newRegistry, norm)
 		// Initialize and register Symbols tools with progress reporting
@@ -787,6 +788,7 @@ func (a *App) ReloadMCP() {
 	_ = tool.RegisterApplyShell(newRegistry, ws)
 	_ = tool.RegisterHTTPRequest(newRegistry)
 	_ = tool.RegisterMemories(newRegistry)
+	_ = tool.RegisterTodoList(newRegistry)
 	_ = tool.RegisterUserChoice(newRegistry)
 	_ = tool.RegisterProjectProfileTools(newRegistry, ws)
 	// Recreate Symbols for current workspace and register
