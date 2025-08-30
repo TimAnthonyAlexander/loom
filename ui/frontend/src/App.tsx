@@ -985,6 +985,9 @@ const App: React.FC = () => {
                     }
                 }}
                 onClose={() => setWorkspaceOpen(false)}
+                onNewProject={() => setNewProjectOpen(true)}
+                recentWorkspaces={recentWorkspaces}
+                onOpenRecent={handleOpenRecentWorkspace}
             />
             <NewProjectDialog
                 open={newProjectOpen}
