@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Divider, Typography, Popover, TextField, List, ListItemButton, ListItemText, IconButton, Button, Card, CardContent } from '@mui/material';
-import { EventsOn, EventsOff } from '../../../../wailsjs/runtime/runtime';
+import { EventsOn } from '../../../../wailsjs/runtime/runtime';
 import * as AppBridge from '../../../../wailsjs/go/bridge/App';
 import * as Bridge from '../../../../wailsjs/go/bridge/App';
 import MessageList from './MessageList';
