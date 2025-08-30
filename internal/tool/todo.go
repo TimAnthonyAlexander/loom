@@ -129,8 +129,11 @@ func createTodoList() (*TodoResponse, error) {
 
 func addTodoTask(taskDesc string) (*TodoResponse, error) {
 	if currentTodoList == nil {
-		// Auto-create list if it doesn't exist
-		createTodoList()
+		_, err := createTodoList()
+
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	taskDesc = strings.TrimSpace(taskDesc)

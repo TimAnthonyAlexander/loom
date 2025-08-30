@@ -1422,8 +1422,9 @@ func (a *App) LoadConversation(id string) {
 		return
 	}
 	for _, m := range msgs {
-		// Hide system and tool messages from the chat view when loading history
-		if m.Role == "system" || m.Role == "tool" {
+		// Hide system messages from the chat view when loading history
+		// Keep tool messages visible so todo lists and other formatted tool outputs are preserved
+		if m.Role == "system" {
 			continue
 		}
 		// Also hide assistant messages that were used for internal steps (thinking/tool_use)

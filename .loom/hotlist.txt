@@ -36,6 +36,7 @@ ui/frontend/src/components/center/EditorPanel.tsx
 ui/frontend/src/components/dialogs/ApprovalDialog.tsx
 ui/frontend/src/components/dialogs/CostsDialog.tsx
 ui/frontend/src/components/dialogs/MemoriesDialog.tsx
+ui/frontend/src/components/dialogs/NewProjectDialog.tsx
 ui/frontend/src/components/dialogs/RulesDialog.tsx
 ui/frontend/src/components/dialogs/SearchDialog.tsx
 ui/frontend/src/components/dialogs/SettingsDialog.tsx
@@ -51,4 +52,3 @@ README.md
 README_DE.md
 ui/frontend/wailsjs/go/bridge/App.d.ts
 Makefile
-ui/frontend/tsconfig.json

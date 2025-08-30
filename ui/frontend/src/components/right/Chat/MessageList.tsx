@@ -14,6 +14,20 @@ function filterAttachments(text: string): string {
     }
 }
 
+// Extract formatted message from tool response JSON
+function extractToolMessage(content: string): string {
+    if (!content) return '';
+    try {
+        const parsed = JSON.parse(content);
+        if (parsed && typeof parsed === 'object' && parsed.message) {
+            return String(parsed.message);
+        }
+    } catch {
+        // If parsing fails, return raw content
+    }
+    return content;
+}
+
 type Props = {
     messages: ChatMessage[];
     busy: boolean;
@@ -47,6 +61,7 @@ const MessageItem = React.memo(function MessageItem({
 }: ItemProps) {
     const isUser = msg.role === 'user';
     const isSystem = msg.role === 'system';
+    const isTool = msg.role === 'tool';
     const isLastMessage = index === messagesCount - 1;
     const showSpinner = isSystem && isLastMessage && busy;
 
@@ -70,6 +85,23 @@ const MessageItem = React.memo(function MessageItem({
                         </MarkdownErrorBoundary>
                     </Box>
                 </Stack>
+            </Box>
+        );
+    }
+
+    if (isTool) {
+        return (
+            <Box
+                sx={{
+                    py: 1,
+                    borderRadius: 2,
+                }}
+            >
+                <Box sx={{ py: 1, fontSize: '0.9rem' }}>
+                    <MarkdownErrorBoundary>
+                        <MarkdownRenderer>{extractToolMessage(msg.content)}</MarkdownRenderer>
+                    </MarkdownErrorBoundary>
+                </Box>
             </Box>
         );
     }
