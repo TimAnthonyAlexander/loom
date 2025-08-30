@@ -167,9 +167,9 @@ function ChatPanelComponent(props: Props) {
                 });
             }
         };
-        
+
         EventsOn('user:choice', handler);
-        
+
         return () => {
             // EventsOff doesn't take specific handlers in Wails v2
         };
@@ -217,10 +217,10 @@ function ChatPanelComponent(props: Props) {
     // Handle user choice selection
     const handleChoiceSelection = React.useCallback(async (selectedIndex: number) => {
         if (!choiceRequest || choiceRequest.selectedIndex !== undefined) return;
-        
+
         // Mark the choice as selected but keep it visible
         setChoiceRequest(prev => prev ? { ...prev, selectedIndex } : null);
-        
+
         try {
             await (Bridge as any).ResolveChoice(choiceRequest.id, selectedIndex);
         } catch (error) {
@@ -275,10 +275,10 @@ function ChatPanelComponent(props: Props) {
                     onToggleReasoning={onToggleReasoning}
                     messagesEndRef={messagesEndRef}
                 />
-                {choiceRequest && messages.length > 0 && (
-                    <Card 
-                        sx={{ 
-                            mt: 2, 
+                {choiceRequest && messages.length > 0 && choiceRequest.selectedIndex === undefined && (
+                    <Card
+                        sx={{
+                            mt: 2,
                             borderRadius: 2,
                             backgroundColor: 'grey.900',
                             border: '1px solid',
@@ -287,10 +287,10 @@ function ChatPanelComponent(props: Props) {
                         }}
                     >
                         <CardContent sx={{ pb: 2 }}>
-                            <Typography 
-                                variant="h6" 
-                                sx={{ 
-                                    mb: 2, 
+                            <Typography
+                                variant="h6"
+                                sx={{
+                                    mb: 2,
                                     fontWeight: 600,
                                     color: 'grey.100',
                                 }}
@@ -301,7 +301,7 @@ function ChatPanelComponent(props: Props) {
                                 {choiceRequest.options.map((option, index) => {
                                     const isSelected = choiceRequest.selectedIndex === index;
                                     const isDisabled = choiceRequest.selectedIndex !== undefined;
-                                    
+
                                     return (
                                         <Button
                                             key={index}
@@ -339,10 +339,10 @@ function ChatPanelComponent(props: Props) {
                                 })}
                             </Box>
                             {choiceRequest.selectedIndex !== undefined && (
-                                <Typography 
-                                    variant="caption" 
-                                    sx={{ 
-                                        mt: 2, 
+                                <Typography
+                                    variant="caption"
+                                    sx={{
+                                        mt: 2,
                                         display: 'block',
                                         fontStyle: 'italic',
                                         color: 'success.main',
