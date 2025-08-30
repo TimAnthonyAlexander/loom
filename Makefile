@@ -181,7 +181,7 @@ build-linux-arm64: prepare-linux-arm64
 .PHONY: dev-hmr
 dev-hmr:
 	cd $(FRONTEND_DIR) && npm run dev & \
-	cd $(APP_DIR) && $(WAILS) dev -s -frontenddevserverurl http://localhost:5173
+	cd $(APP_DIR) && $(WAILS) dev -s -frontenddevserverurl http://localhost:5173 -reloaddirs ../internal
 
 .PHONY: build-linux-all
 build-linux-all: build-linux-amd64 build-linux-arm64

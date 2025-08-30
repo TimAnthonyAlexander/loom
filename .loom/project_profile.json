@@ -1,6 +1,6 @@
 {
   "workspace_root": "/Users/tim.alexander/loom",
-  "created_at_unix": 1756567891,
+  "created_at_unix": 1756568858,
   "languages": [
     "typescript",
     "go"
@@ -66,18 +66,6 @@
       "paths": null
     },
     {
-      "name": "dev",
-      "source": "package.json",
-      "cmd": "screen -dmS loom-frontend-web vite --port 8444",
-      "paths": null
-    },
-    {
-      "name": "build",
-      "source": "package.json",
-      "cmd": "tsc -b \u0026\u0026 vite build",
-      "paths": null
-    },
-    {
       "name": "lint",
       "source": "package.json",
       "cmd": "eslint .",
@@ -87,6 +75,18 @@
       "name": "preview",
       "source": "package.json",
       "cmd": "vite preview",
+      "paths": null
+    },
+    {
+      "name": "dev",
+      "source": "package.json",
+      "cmd": "screen -dmS loom-frontend-web vite --port 8444",
+      "paths": null
+    },
+    {
+      "name": "build",
+      "source": "package.json",
+      "cmd": "tsc -b \u0026\u0026 vite build",
       "paths": null
     },
     {
@@ -758,13 +758,13 @@
     },
     {
       "path": "ui/frontend/wailsjs/go/bridge/App.js",
-      "score": 0.33764864921875004,
+      "score": 0.3376486492187501,
       "reasons": [
         "graph_central",
         "entrypoint"
       ],
       "components": {
-        "centrality": 0.32764864921875003,
+        "centrality": 0.3276486492187501,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -1769,18 +1769,18 @@
   "input_signature": {
     "manifest_hashes": {
       ".gitignore": "76afc567d2c40cd0115906c0c1bc8ebe067299ea3ad6d4026b6891c35a1cef58",
-      "Makefile": "afb5deff03e277291593b9eb7fbdd22171bf0edf64efdaa11fd52a2a9cb55957",
+      "Makefile": "42b252d4884ad28360e4d3fb6fdadc61e41e490d5271fbecd2625a37292df2fc",
       "go.mod": "dbadfb90325649d0927eefdd0ed699e853168e461830f6b39790e4ae51a5b946"
     },
     "tsconfig_hash": "",
     "readme_hash": "5c8efd89e30ba7aed5dc76de3a8743032a1b5cce535c91570ce2a1d873f70286",
-    "mtime_max": 1756567876
+    "mtime_max": 1756568840
   },
   "metrics": {
-    "files": 325,
+    "files": 326,
     "edges": 65,
     "pagerank_iters": 7,
-    "duration_ms": 114
+    "duration_ms": 99
   },
   "version": "2"
 }

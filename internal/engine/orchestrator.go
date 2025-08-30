@@ -833,8 +833,13 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 					}
 				}
 			} else {
-				// Safe tool: just return content
+				// Safe tool: add to conversation and show in UI
 				convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, execResult.Content)
+				// Send tool result to UI for immediate display, except for http_request
+				// which should let the LLM decide what to say about the response
+				if strings.TrimSpace(execResult.Content) != "" && toolCallReceived.Name != "http_request" {
+					e.bridge.SendChat("tool", execResult.Content)
+				}
 			}
 
 			// Continue the loop to get the next assistant message
@@ -967,7 +972,13 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 						}
 					}
 				} else {
+					// Safe tool: add to conversation and show in UI
 					convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, execResult.Content)
+					// Send tool result to UI for immediate display, except for http_request
+					// which should let the LLM decide what to say about the response
+					if strings.TrimSpace(execResult.Content) != "" && toolCallReceived.Name != "http_request" {
+						e.bridge.SendChat("tool", execResult.Content)
+					}
 				}
 				continue
 			}
