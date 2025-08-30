@@ -835,9 +835,8 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 			} else {
 				// Safe tool: add to conversation and show in UI
 				convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, execResult.Content)
-				// Send tool result to UI for immediate display, except for http_request
-				// which should let the LLM decide what to say about the response
-				if strings.TrimSpace(execResult.Content) != "" && toolCallReceived.Name != "http_request" {
+				// Send tool result to UI for immediate display
+				if strings.TrimSpace(execResult.Content) != "" {
 					e.bridge.SendChat("tool", execResult.Content)
 				}
 			}
@@ -974,9 +973,8 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 				} else {
 					// Safe tool: add to conversation and show in UI
 					convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, execResult.Content)
-					// Send tool result to UI for immediate display, except for http_request
-					// which should let the LLM decide what to say about the response
-					if strings.TrimSpace(execResult.Content) != "" && toolCallReceived.Name != "http_request" {
+					// Send tool result to UI for immediate display
+					if strings.TrimSpace(execResult.Content) != "" {
 						e.bridge.SendChat("tool", execResult.Content)
 					}
 				}
