@@ -165,137 +165,55 @@ func (r *Registry) InvokeToolCall(ctx context.Context, call *ToolCall) (*Executi
 	ui := r.ui
 	r.mu.RUnlock()
 	if ui != nil {
-		// Try to derive a concise action verb from the tool name
-		action := call.Name
+		// DEAD SIMPLE: Always show action message
+		var args map[string]interface{}
+		err := json.Unmarshal(call.Args, &args)
+
+		if err != nil {
+			args = map[string]interface{}{}
+		}
+
 		switch call.Name {
 		case "read_file":
-			var args ReadFileArgs
-			_ = json.Unmarshal(call.Args, &args)
-			if args.Path != "" {
-				ui.SendChat("system", fmt.Sprintf("READING %s", args.Path))
+			if path, ok := args["path"].(string); ok && path != "" {
+				ui.SendChat("system", fmt.Sprintf("READING %s", path))
 			} else {
 				ui.SendChat("system", "READING file")
 			}
 		case "list_dir":
-			var args ListDirArgs
-			_ = json.Unmarshal(call.Args, &args)
-			path := args.Path
-			if path == "" {
-				path = "."
+			if path, ok := args["path"].(string); ok && path != "" {
+				ui.SendChat("system", fmt.Sprintf("LISTING %s", path))
+			} else {
+				ui.SendChat("system", "LISTING .")
 			}
-			ui.SendChat("system", fmt.Sprintf("LISTING %s", path))
 		case "search_code":
-			var args SearchCodeArgs
-			_ = json.Unmarshal(call.Args, &args)
-			if args.Query != "" {
-				ui.SendChat("system", fmt.Sprintf("SEARCHING %q", args.Query))
+			if query, ok := args["query"].(string); ok && query != "" {
+				ui.SendChat("system", fmt.Sprintf("SEARCHING %q", query))
 			} else {
 				ui.SendChat("system", "SEARCHING codebase")
 			}
-		case "symbols_search":
-			var args SymbolsSearchArgs
-			_ = json.Unmarshal(call.Args, &args)
-			if args.Q != "" {
-				ui.SendChat("system", fmt.Sprintf("SYMBOL SEARCH %q", args.Q))
+		case "http_request":
+			method, _ := args["method"].(string)
+			url, _ := args["url"].(string)
+			if method != "" && url != "" {
+				ui.SendChat("system", fmt.Sprintf("HTTP %s %s", method, url))
 			} else {
-				ui.SendChat("system", "SYMBOL SEARCH")
-			}
-		case "symbols_def":
-			var args SymbolsDefArgs
-			_ = json.Unmarshal(call.Args, &args)
-			if args.SID != "" {
-				ui.SendChat("system", fmt.Sprintf("SYMBOL DEF %s", args.SID))
-			} else {
-				ui.SendChat("system", "SYMBOL DEF")
-			}
-		case "symbols_refs":
-			var args SymbolsRefsArgs
-			_ = json.Unmarshal(call.Args, &args)
-			if args.SID != "" {
-				ui.SendChat("system", fmt.Sprintf("SYMBOL REFS %s", args.SID))
-			} else {
-				ui.SendChat("system", "SYMBOL REFS")
-			}
-		case "symbols_neighborhood":
-			var args SymbolsNeighborhoodArgs
-			_ = json.Unmarshal(call.Args, &args)
-			if args.SID != "" {
-				ui.SendChat("system", fmt.Sprintf("SYMBOL NEIGHBORHOOD %s", args.SID))
-			} else {
-				ui.SendChat("system", "SYMBOL NEIGHBORHOOD")
-			}
-		case "symbols_outline":
-			var args SymbolsOutlineArgs
-			_ = json.Unmarshal(call.Args, &args)
-			if args.File != "" {
-				ui.SendChat("system", fmt.Sprintf("OUTLINE %s", args.File))
-			} else {
-				ui.SendChat("system", "OUTLINE file")
-			}
-		case "symbols_context_pack":
-			var args SymbolsContextPackArgs
-			_ = json.Unmarshal(call.Args, &args)
-			if args.SID != "" {
-				ui.SendChat("system", fmt.Sprintf("CONTEXT PACK %s", args.SID))
-			} else {
-				ui.SendChat("system", "CONTEXT PACK")
-			}
-		case "user_choice":
-			var args struct {
-				Question string   `json:"question"`
-				Options  []string `json:"options"`
-			}
-			_ = json.Unmarshal(call.Args, &args)
-			if args.Question != "" {
-				ui.SendChat("system", fmt.Sprintf("ASKING USER CHOICE: %s", args.Question))
-			} else {
-				ui.SendChat("system", "ASKING USER CHOICE")
-			}
-		case "todo_list":
-			var args struct {
-				Action string `json:"action"`
-				Task   string `json:"task,omitempty"`
-			}
-			_ = json.Unmarshal(call.Args, &args)
-			switch args.Action {
-			case "create":
-				ui.SendChat("system", "CREATING TODO LIST")
-			case "add":
-				if args.Task != "" {
-					ui.SendChat("system", fmt.Sprintf("ADDING TASK: %s", args.Task))
-				} else {
-					ui.SendChat("system", "ADDING TASK")
-				}
-			case "complete":
-				ui.SendChat("system", "COMPLETING TASK")
-			case "list":
-				ui.SendChat("system", "LISTING TODOS")
-			case "clear":
-				ui.SendChat("system", "CLEARING TODO LIST")
-			case "remove":
-				ui.SendChat("system", "REMOVING TASK")
-			default:
-				ui.SendChat("system", "MANAGING TODO LIST")
+				ui.SendChat("system", "HTTP REQUEST")
 			}
 		case "edit_file":
-			var args EditFileArgs
-			_ = json.Unmarshal(call.Args, &args)
-			if args.Path != "" {
-				ui.SendChat("system", fmt.Sprintf("PROPOSING EDIT %s", args.Path))
+			if path, ok := args["path"].(string); ok && path != "" {
+				ui.SendChat("system", fmt.Sprintf("PROPOSING EDIT %s", path))
 			} else {
 				ui.SendChat("system", "PROPOSING EDIT")
 			}
 		case "apply_edit":
-			var args ApplyEditArgs
-			_ = json.Unmarshal(call.Args, &args)
-			if args.Path != "" {
-				ui.SendChat("system", fmt.Sprintf("APPLYING EDIT %s", args.Path))
+			if path, ok := args["path"].(string); ok && path != "" {
+				ui.SendChat("system", fmt.Sprintf("APPLYING EDIT %s", path))
 			} else {
 				ui.SendChat("system", "APPLYING EDIT")
 			}
 		default:
-			// Do not emit approval-asking popups here; engine handles approval.
-			ui.SendChat("system", fmt.Sprintf("USING TOOL %s", action))
+			ui.SendChat("system", fmt.Sprintf("USING TOOL %s", call.Name))
 		}
 	}
 
