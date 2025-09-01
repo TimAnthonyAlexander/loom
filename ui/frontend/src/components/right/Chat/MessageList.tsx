@@ -1,5 +1,6 @@
 import React from 'react';
-import { Box, Stack, CircularProgress } from '@mui/material';
+import { Box, Stack, CircularProgress, IconButton, Tooltip } from '@mui/material';
+import { ContentCopyRounded } from '@mui/icons-material';
 import MarkdownRenderer from '../../markdown/MarkdownRenderer';
 import MarkdownErrorBoundary from '../../markdown/MarkdownErrorBoundary';
 import ReasoningPanel from './ReasoningPanel';
@@ -11,6 +12,23 @@ function filterAttachments(text: string): string {
         return text.replace(/<attachments>[\s\S]*?<\/attachments>/g, '').trim();
     } catch {
         return text;
+    }
+}
+
+// Copy message content to clipboard
+async function copyToClipboard(text: string): Promise<void> {
+    try {
+        const filteredText = filterAttachments(text);
+        await navigator.clipboard.writeText(filteredText);
+    } catch (error) {
+        console.error('Failed to copy to clipboard:', error);
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = filterAttachments(text);
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
     }
 }
 
@@ -94,6 +112,32 @@ const MessageItem = React.memo(function MessageItem({
                 <MarkdownErrorBoundary>
                     <MarkdownRenderer>{filterAttachments(msg.content)}</MarkdownRenderer>
                 </MarkdownErrorBoundary>
+                <Box
+                    sx={{
+                        display: 'flex',
+                        justifyContent: 'flex-end',
+                        mt: 1,
+                        opacity: 0.7,
+                        '&:hover': {
+                            opacity: 1,
+                        },
+                    }}
+                >
+                    <Tooltip title="Copy message">
+                        <IconButton
+                            size="small"
+                            onClick={() => copyToClipboard(msg.content)}
+                            sx={{
+                                color: 'text.secondary',
+                                '&:hover': {
+                                    color: 'text.primary',
+                                },
+                            }}
+                        >
+                            <ContentCopyRounded fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                </Box>
             </Box>
             {showReasoning && (
                 <ReasoningPanel text={reasoningText} open={reasoningOpen} onToggle={onToggleReasoning} />
