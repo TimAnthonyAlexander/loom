@@ -1,6 +1,6 @@
 {
   "workspace_root": "/Users/tim.alexander/loom",
-  "created_at_unix": 1756718222,
+  "created_at_unix": 1756738232,
   "languages": [
     "typescript",
     "go"
@@ -42,6 +42,18 @@
   ],
   "scripts": [
     {
+      "name": "build",
+      "source": "package.json",
+      "cmd": "tsc \u0026\u0026 vite build",
+      "paths": null
+    },
+    {
+      "name": "preview",
+      "source": "package.json",
+      "cmd": "vite preview",
+      "paths": null
+    },
+    {
       "name": "dev",
       "source": "package.json",
       "cmd": "vite --port 5173 --strictPort",
@@ -54,15 +66,9 @@
       "paths": null
     },
     {
-      "name": "build",
+      "name": "dev",
       "source": "package.json",
-      "cmd": "tsc \u0026\u0026 vite build",
-      "paths": null
-    },
-    {
-      "name": "preview",
-      "source": "package.json",
-      "cmd": "vite preview",
+      "cmd": "screen -dmS loom-frontend-web vite --port 8444",
       "paths": null
     },
     {
@@ -81,12 +87,6 @@
       "name": "preview",
       "source": "package.json",
       "cmd": "vite preview",
-      "paths": null
-    },
-    {
-      "name": "dev",
-      "source": "package.json",
-      "cmd": "screen -dmS loom-frontend-web vite --port 8444",
       "paths": null
     },
     {
@@ -885,10 +885,10 @@
     },
     {
       "path": "ui/frontend/src/components/markdown/MarkdownErrorBoundary.tsx",
-      "score": 0.1203180960739746,
+      "score": 0.12031809607397465,
       "reasons": null,
       "components": {
-        "centrality": 0.1203180960739746,
+        "centrality": 0.12031809607397465,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -905,10 +905,10 @@
     },
     {
       "path": "ui/frontend/src/components/markdown/MarkdownRenderer.tsx",
-      "score": 0.1203180960739746,
+      "score": 0.12031809607397465,
       "reasons": null,
       "components": {
-        "centrality": 0.1203180960739746,
+        "centrality": 0.12031809607397465,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -1770,17 +1770,17 @@
     "manifest_hashes": {
       ".gitignore": "76afc567d2c40cd0115906c0c1bc8ebe067299ea3ad6d4026b6891c35a1cef58",
       "Makefile": "42b252d4884ad28360e4d3fb6fdadc61e41e490d5271fbecd2625a37292df2fc",
-      "go.mod": "dbadfb90325649d0927eefdd0ed699e853168e461830f6b39790e4ae51a5b946"
+      "go.mod": "ea64afb789876bc5d4f3e95b0a6b192d4050cc48011803b8a1d25c31e6440da3"
     },
     "tsconfig_hash": "",
     "readme_hash": "96444a328572021ecae3711ae72e9b8c395505f0cfe97e4836bcfe0a6d4dd9e2",
-    "mtime_max": 1755784243
+    "mtime_max": 1756719122
   },
   "metrics": {
-    "files": 174,
+    "files": 176,
     "edges": 65,
     "pagerank_iters": 7,
-    "duration_ms": 89
+    "duration_ms": 206
   },
   "version": "2"
 }

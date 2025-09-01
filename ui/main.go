@@ -12,9 +12,7 @@ import (
 	"github.com/loom/loom/internal/bridge"
 	"github.com/loom/loom/internal/config"
 	"github.com/loom/loom/internal/engine"
-	"github.com/loom/loom/internal/indexer"
 	"github.com/loom/loom/internal/memory"
-
 	"github.com/loom/loom/internal/tool"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/menu"
@@ -237,58 +235,7 @@ func main() {
 
 // registerTools registers all available tools with the registry.
 func registerTools(registry *tool.Registry, workspacePath string) {
-
-	// Create indexer
-	idx := indexer.NewRipgrepIndexer(workspacePath)
-
-	// Register tools
-	if err := tool.RegisterReadFile(registry, workspacePath); err != nil {
-		log.Printf("Failed to register read_file tool: %v", err)
-	}
-
-	if err := tool.RegisterSearchCode(registry, idx); err != nil {
-		log.Printf("Failed to register search_code tool: %v", err)
-	}
-
-	if err := tool.RegisterEditFile(registry, workspacePath); err != nil {
-		log.Printf("Failed to register edit_file tool: %v", err)
-	}
-
-	if err := tool.RegisterApplyEdit(registry, workspacePath); err != nil {
-		log.Printf("Failed to register apply_edit tool: %v", err)
-	}
-
-	if err := tool.RegisterListDir(registry, workspacePath); err != nil {
-		log.Printf("Failed to register list_dir tool: %v", err)
-	}
-
-	// Shell tools
-	if err := tool.RegisterRunShell(registry, workspacePath); err != nil {
-		log.Printf("Failed to register run_shell tool: %v", err)
-	}
-	if err := tool.RegisterApplyShell(registry, workspacePath); err != nil {
-		log.Printf("Failed to register apply_shell tool: %v", err)
-	}
-
-	// HTTP request tool
-	if err := tool.RegisterHTTPRequest(registry); err != nil {
-		log.Printf("Failed to register http_request tool: %v", err)
-	}
-
-	// Memories tool (user-scoped)
-	if err := tool.RegisterMemories(registry); err != nil {
-		log.Printf("Failed to register memories tool: %v", err)
-	}
-
-	// User choice tool
-	if err := tool.RegisterUserChoice(registry); err != nil {
-		log.Printf("Failed to register user_choice tool: %v", err)
-	}
-
-	// Project profile tools
-	if err := tool.RegisterProjectProfileTools(registry, workspacePath); err != nil {
-		log.Printf("Failed to register project profile tools: %v", err)
-	}
+	tool.RegisterCoreTools(registry, workspacePath)
 }
 
 // (removed) sanitizeToolName: use tool.SanitizeToolName directly where needed
