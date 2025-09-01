@@ -1,144 +1,175 @@
 #!/usr/bin/env zsh
+# .git/hooks/pre-commit
+# Fast local checks with colorful, compact output
 
 set -euo pipefail
+zmodload zsh/datetime 2>/dev/null || true
 
 root="$(git rev-parse --show-toplevel)"
 cd "$root"
 
-zmodload zsh/datetime 2>/dev/null || true
-
+# ── Colors ─────────────────────────────────────────────────────────────────────
 RESET=$'\033[0m'
 BOLD=$'\033[1m'
 DIM=$'\033[2m'
-RED=$'\033[31m'
-GREEN=$'\033[32m'
-YELLOW=$'\033[33m'
-CYAN=$'\033[36m'
-GRAY=$'\033[90m'
+FG_RED=$'\033[31m'
+FG_GRN=$'\033[32m'
+FG_YEL=$'\033[33m'
+FG_BLU=$'\033[34m'
+FG_MAG=$'\033[35m'
+FG_CYN=$'\033[36m'
+FG_GRY=$'\033[90m'
 
-typeset -a SUMMARY
+# Force colors for tools that honor these envs
+export CLICOLOR=1 CLICOLOR_FORCE=1 FORCE_COLOR=1
+
+# ── UI helpers ─────────────────────────────────────────────────────────────────
+cols=${COLUMNS:-$(command -v tput >/dev/null && tput cols || echo 80)}
+hr() { printf "%s\n" "${FG_GRY}$(printf '─%.0s' {1..500} | cut -c1-$cols)${RESET}"; }
+
+title() {
+    local proj="${PWD:t}"
+    local branch; branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
+    printf "${BOLD}${FG_MAG}┏%0.s━${RESET}" {1..10} >/dev/null
+    printf "%s\n" "${BOLD}${FG_MAG}┏$(printf '━%.0s' {1..200} | cut -c1-$((cols-2)))┓${RESET}"
+    printf "%s\n" "${BOLD}${FG_MAG}┃${RESET} ${BOLD}${FG_BLU}Pre-commit${RESET} ${DIM}•${RESET} ${BOLD}${proj}${RESET} ${DIM}(${branch})${RESET}"
+    printf "%s\n" "${BOLD}${FG_MAG}┗$(printf '━%.0s' {1..200} | cut -c1-$((cols-2)))┛${RESET}"
+}
+
+typeset -ga SUMMARY
 STATUS_OVERALL="passed"
 
-print_hr() { print -r -- "${GRAY}────────────────────────────────────────────────────────────${RESET}"; }
-print_title() {
-  local proj branch
-  proj="${PWD:t}"
-  branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
-  print -r -- "${BOLD}┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓${RESET}"
-  print -r -- "${BOLD}┃${RESET} ${BOLD}Pre-commit • ${proj} ${DIM}(${branch})${RESET}"
-  print -r -- "${BOLD}┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛${RESET}"
+# Timing (float if EPOCHREALTIME exists, else seconds)
+typeset -gF 6 STEP_T0=0
+_now() {
+    if [[ -n ${EPOCHREALTIME-} ]]; then
+        printf "%f" "$EPOCHREALTIME"
+    else
+        printf "%f" "$SECONDS"
+    fi
+}
+step_start() {
+    STEP_NAME="$1"
+    STEP_T0="$(_now)"
+    printf "%s %s\n" "${FG_CYN}›${RESET}" "${BOLD}${STEP_NAME}${RESET}"
+}
+_elapsed() {
+    local now dt
+    now="$(_now)"
+    dt=$(printf "%.2f" "$(echo "$now - $STEP_T0" | bc -l 2>/dev/null || awk -v n="$now" -v t="$STEP_T0" 'BEGIN{printf "%.2f", n-t}')")
+    printf "%s" "${FG_GRY}(${dt}s)${RESET}"
+}
+ok() {
+    printf "  %s %s %s\n" "${FG_GRN}✓${RESET}" "${DIM}${STEP_NAME}${RESET}" "$(_elapsed)"
+    SUMMARY+=("${FG_GRN}✓${RESET} ${STEP_NAME} ${FG_GRY}$(_elapsed)${RESET}")
+}
+skip() {
+    local reason="$1"
+    printf "  %s %s %s %s\n" "${FG_YEL}•${RESET}" "${DIM}${STEP_NAME}${RESET}" "${FG_GRY}[skipped: ${reason}]${RESET}" "$(_elapsed)"
+    SUMMARY+=("${FG_YEL}•${RESET} ${STEP_NAME} ${FG_GRY}[skipped: ${reason}] $(_elapsed)${RESET}")
+}
+fail() {
+    STATUS_OVERALL="failed"
+    printf "  %s %s %s\n" "${FG_RED}✗${RESET}" "${BOLD}${STEP_NAME}${RESET}" "$(_elapsed)"
+    summary
+    exit 1
+}
+summary() {
+    hr
+    printf "%s\n" "${BOLD}Summary${RESET}"
+    local line; for line in "${SUMMARY[@]}"; do printf "  %s\n" "$line"; done
+    hr
+    if [[ "$STATUS_OVERALL" = "passed" ]]; then
+        printf "%s\n" "${FG_GRN}All pre-commit checks passed.${RESET}"
+    else
+        printf "%s\n" "${FG_RED}Pre-commit checks failed.${RESET}"
+    fi
 }
 
 need() {
-  if ! command -v "$1" >/dev/null 2>&1; then
-    print -r -- "${RED}✗ Missing tool:${RESET} $1"
-    case "$1" in
-      golangci-lint) print -r -- "brew install golangci-lint"; print -r -- "go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest";;
-      govulncheck)   print -r -- "go install golang.org/x/vuln/cmd/govulncheck@latest";;
-      go)            print -r -- "brew install go";;
-    esac
-    exit 1
-  fi
+    if ! command -v "$1" >/dev/null 2>&1; then
+        printf "%s %s\n" "${FG_RED}✗ Missing tool:${RESET}" "$1"
+        case "$1" in
+            golangci-lint) printf "  %s\n" "brew install golangci-lint   # or: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest" ;;
+            govulncheck)   printf "  %s\n" "go install golang.org/x/vuln/cmd/govulncheck@latest" ;;
+            richgo)        printf "  %s\n" "brew install richgo          # or: go install github.com/kyoh86/richgo@latest" ;;
+            go)            printf "  %s\n" "brew install go" ;;
+        esac
+        exit 1
+    fi
 }
 
-typeset -gF 6 STEP_T0=0
-_now() {
-  if [[ -n ${EPOCHREALTIME-} ]]; then
-    print -r -- "$EPOCHREALTIME"
-  else
-    print -r -- "$SECONDS"
-  fi
-}
-step_start() {
-  STEP_NAME="$1"
-  typeset -gF 6 STEP_T0="$(_now)"
-  print -r -- "${CYAN}›${RESET} ${BOLD}${STEP_NAME}${RESET}"
-}
-_elapsed_str() {
-  local -F 6 now dt
-  now="$(_now)"
-  dt=$(( now - STEP_T0 ))
-  printf '(%0.2fs)' "$dt"
-}
-step_ok() {
-  print -r -- "  ${GREEN}✓${RESET} ${DIM}${STEP_NAME}${RESET} ${GRAY}$(_elapsed_str)${RESET}"
-  SUMMARY+=("${GREEN}✓${RESET} ${STEP_NAME} ${GRAY}$(_elapsed_str)${RESET}")
-}
-step_skip() {
-  local reason="$1"
-  print -r -- "  ${YELLOW}•${RESET} ${DIM}${STEP_NAME}${RESET} ${GRAY}[skipped: ${reason}] $(_elapsed_str)${RESET}"
-  SUMMARY+=("${YELLOW}•${RESET} ${STEP_NAME} ${GRAY}[skipped: ${reason}] $(_elapsed_str)${RESET}")
-}
-step_fail() {
-  STATUS_OVERALL="failed"
-  print -r -- "  ${RED}✗${RESET} ${BOLD}${STEP_NAME}${RESET} ${GRAY}$(_elapsed_str)${RESET}"
-  print_summary
-  exit 1
-}
+title
 
-print_summary() {
-  print_hr
-  print -r -- "${BOLD}Summary${RESET}"
-  for line in "${SUMMARY[@]}"; do print -r -- "  $line"; done
-  print_hr
-  if [[ "$STATUS_OVERALL" = "passed" ]]; then
-    print -r -- "${GREEN}All pre-commit checks passed.${RESET}"
-  else
-    print -r -- "${RED}Pre-commit checks failed.${RESET}"
-  fi
-}
-
-print_title
-
+# Required/optional tools
 need go
+need golangci-lint || true
 [[ -n "${RUN_VULN:-}" ]] && need govulncheck || true
 
+# Prefer richgo for colored test output if available
+GO_TEST_BIN="go"
+if command -v richgo >/dev/null 2>&1; then
+    GO_TEST_BIN="richgo"
+else
+    # hint only; no hard fail
+    SUMMARY+=("${FG_YEL}•${RESET} Tests ${FG_GRY}(tip: install 'richgo' for colored output)${RESET}")
+fi
+
+# 1) gofmt -s
 step_start "gofmt -s"
 fmt_out="$(gofmt -l -s .)"
 if [[ -n "$fmt_out" ]]; then
-  print -r -- "${RED}Files need gofmt -s:${RESET}"
-  print -r -- "$fmt_out"
-  step_fail
+    printf "%s\n" "${FG_RED}Files need gofmt -s:${RESET}"
+    printf "%s\n" "${fmt_out}"
+    fail
 fi
-step_ok
+ok
 
+# 2) go mod tidy guard
 step_start "go mod tidy"
 go mod tidy
 if ! git diff --quiet -- go.mod go.sum; then
-  print -r -- "${RED}go.mod/go.sum changed. Run 'go mod tidy' and commit the result.${RESET}"
-  git --no-pager diff --minimal --word-diff -- go.mod go.sum || true
-  step_fail
+    printf "%s\n" "${FG_RED}go.mod/go.sum changed. Run 'go mod tidy' and commit the result.${RESET}"
+    # force color in diff
+    git --no-pager diff --minimal --word-diff --color=always -- go.mod go.sum || true
+    fail
 fi
-step_ok
+ok
 
+# 3) go vet
 step_start "go vet ./internal/..."
-go vet ./internal/...
-step_ok
+GOFLAGS="${GOFLAGS:-}"
+env GOFLAGS="$GOFLAGS" go vet ./internal/...
+ok
 
+# 4) golangci-lint (skip ui/)
 step_start "golangci-lint (skip ui/)"
 if command -v golangci-lint >/dev/null 2>&1; then
-  golangci-lint run --timeout=5m --skip-dirs ui
-  step_ok
+    golangci-lint run --timeout=5m --skip-dirs ui --color always
+    ok
 else
-  step_skip "golangci-lint not installed"
+    skip "golangci-lint not installed"
 fi
 
+# 5) Unit tests
 step_start "go test ./internal/... -count=1"
-go test ./internal/... -count=1
-step_ok
+env GOTERM=ansi "$GO_TEST_BIN" test ./internal/... -count=1
+ok
 
+# 6) Optional race + coverage
 if [[ -n "${RUN_RACE:-}" ]]; then
-  step_start "race detector + coverage"
-  go test -race ./internal/... -count=1 -coverprofile=coverage.out
-  print -r -- "  ${DIM}coverage → coverage.out${RESET}"
-  step_ok
+    step_start "race detector + coverage"
+    env GOTERM=ansi "$GO_TEST_BIN" test -race ./internal/... -count=1 -coverprofile=coverage.out
+    printf "  %s\n" "${DIM}coverage → coverage.out${RESET}"
+    ok
 fi
 
+# 7) Optional govulncheck
 if [[ -n "${RUN_VULN:-}" ]]; then
-  step_start "govulncheck ./..."
-  govulncheck ./...
-  step_ok
+    step_start "govulncheck ./..."
+    govulncheck ./...
+    ok
 fi
 
-print_summary
+summary
 exit 0
