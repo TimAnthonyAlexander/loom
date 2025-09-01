@@ -163,15 +163,38 @@ Das Backend parst `provider:model_id` (siehe `internal/adapter/models.go`) und w
   - Cmd/Ctrl+S speichert die aktive Datei
 
 ## Tools und Freigaben
-Tools sind in `ui/main.go` registriert und unter `internal/tool/` implementiert:
-- `read_file`: sicheres, read-only Lesen
-- `search_code`: ripgrep-gestützte Suche
-- `list_dir`: Verzeichnisse auflisten
-- `edit_file`: präziser Änderungsvorschlag (CREATE/REPLACE/INSERT/DELETE/SEARCH_REPLACE) – erfordert Freigabe
-- `apply_edit`: freigegebene Änderung anwenden
-- `run_shell`: Shell-Befehl vorschlagen – erfordert Freigabe
-- `apply_shell`: freigegebenen Shell-Befehl ausführen
-- `http_request`: HTTP-Calls an Dev-Server/APIs
+
+Loom registriert eine umfassende Menge an Tools, um Code-Exploration, Bearbeitung, Projekt-Profiling und interaktive Workflows zu ermöglichen. Zerstörerische Aktionen erfordern eine explizite Freigabe in der UI, außer Auto-Freigabe ist in den Einstellungen aktiviert.
+
+### 1. Datei- / Verzeichnis- / Code-Exploration
+- **read_file** – Dateiinhalt lesen (read-only).
+- **list_dir** – Einträge eines Verzeichnisses auflisten.
+- **search_code** – Codebasis durchsuchen (ripgrep-Style).
+
+### 2. Datei-Bearbeitung & Shell
+- **edit_file** (Freigabe erforderlich) – Präzisen Datei-Edit vorschlagen.
+- **apply_edit** – Freigegebenen Edit anwenden.
+- **run_shell** (Freigabe erforderlich) – Shell-Befehl vorschlagen.
+- **apply_shell** – Freigegebenen Shell-Befehl ausführen.
+
+### 3. HTTP & Speicher & UI
+- **http_request** – HTTP-Call ausführen (z. B. gegen lokalen Dev-Server oder API).
+- **memories** – Langzeit-Memories hinzufügen, auflisten, ändern, löschen.
+- **todo_list** – To-do-Liste erstellen und verwalten (erstellen, hinzufügen, abhaken, auflisten, löschen).
+- **user_choice** (Freigabe erforderlich) – Benutzer auffordern, zwischen 2–4 Optionen zu wählen.
+
+### 4. Projekt-Profiling
+- **get_project_profile** – Strukturiertes Projekt-Metadatenprofil abrufen (Summary, wichtige Dateien, Skripte, Configs, Regeln, Komponenten).
+- **get_hotlist** – Die Top-N wichtigsten Dateien mit Scores und Begründung liefern.
+- **explain_file_importance** – Erklären, warum eine bestimmte Datei als wichtig eingestuft wurde.
+
+### 5. Symbolbasierte Code-Tools
+- **symbols_search** – Indizierte Sprach-Symbole nach Name oder Doku durchsuchen.
+- **symbols_def** – Definition eines Symbols abrufen.
+- **symbols_refs** – Alle Referenzen / Aufruf- / Importstellen eines Symbols finden.
+- **symbols_neighborhood** – Kleinen Code-Ausschnitt um die Symbol-Definition anzeigen.
+- **symbols_outline** – Hierarchisches Outline (AST-Style) einer Datei erzeugen.
+- **symbols_context_pack** – Definition + Referenz-Slices eines Symbols zu kompaktem Kontext bündeln.
 
 Destruktive Aktionen erfordern im UI eine explizite Freigabe, außer Auto-Freigabe ist in den Einstellungen aktiviert.
 
