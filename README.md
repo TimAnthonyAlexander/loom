@@ -162,15 +162,38 @@ The backend parses `provider:model_id` (see `internal/adapter/models.go`) and sw
   - Cmd/Ctrl+S saves the active file
 
 ## Tools and approvals
-Tools are registered in `ui/main.go` and implemented under `internal/tool/`:
-- `read_file`: Safe, read‑only file access
-- `search_code`: Ripgrep‑backed search
-- `list_dir`: Enumerate directories
-- `edit_file`: Propose a precise change (CREATE/REPLACE/INSERT/DELETE/SEARCH_REPLACE) — requires approval
-- `apply_edit`: Apply an approved edit
-- `run_shell`: Propose a shell command — requires approval
-- `apply_shell`: Execute an approved shell command
-- `http_request`: Perform HTTP calls to dev servers/APIs
+
+Loom registers a comprehensive set of tools to enable code exploration, editing, project profiling, and interactive workflows. Destructive actions require explicit user approval in the UI before execution, unless auto-approval is enabled in Settings.
+
+### 1. File / Directory / Code Exploration
+- **read_file** – Read the contents of a file.
+- **list_dir** – List the entries in a directory.
+- **search_code** – Search the codebase (ripgrep-style).
+
+### 2. File Editing & Shell
+- **edit_file** (requires approval) – Propose a precise file edit.
+- **apply_edit** – Apply an approved edit to the workspace.
+- **run_shell** (requires approval) – Propose running a shell command.
+- **apply_shell** – Execute an approved shell command.
+
+### 3. HTTP & Memory & UI
+- **http_request** – Make an HTTP call (e.g. to a local dev server or API).
+- **memories** – Add / list / update / delete long-term memory entries.
+- **todo_list** – Create and manage a todo list (create, add, complete, list, clear, remove).
+- **user_choice** (requires approval) – Prompt the user to choose from 2–4 options.
+
+### 4. Project Profiling
+- **get_project_profile** – Fetch structured project metadata (summary, important files, scripts, configs, rules, components).
+- **get_hotlist** – Return the top-N most important files with scores & breakdown.
+- **explain_file_importance** – Explain why a given file was scored as important.
+
+### 5. Symbol-aware Code Tools
+- **symbols_search** – Search indexed language symbols by name or doc excerpt.
+- **symbols_def** – Get a symbol’s definition.
+- **symbols_refs** – Find all references / call / import sites for a symbol.
+- **symbols_neighborhood** – Show a small code slice around where a symbol is defined.
+- **symbols_outline** – Produce a hierarchical outline (AST-style) of a file.
+- **symbols_context_pack** – Pack a symbol’s definition + reference slices into a compact context bundle.
 
 Destructive actions require explicit user approval in the UI before execution, unless auto‑approval is enabled in Settings.
 
