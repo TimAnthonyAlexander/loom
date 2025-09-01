@@ -635,24 +635,8 @@ func (a *App) SetWorkspace(path string) {
 	if a.tools != nil {
 		// Create a new registry to avoid stale state
 		newRegistry := tool.NewRegistry().WithUI(a)
-		// Re-register tools using main.registerTools equivalent
-		// We cannot import main.registerTools; re-register a minimal set here
-		// In this context, we expect the Registry to already contain tools registered at startup.
-		// For correctness, try to re-register using the same helpers.
-		// Note: we rely on tool package Register* functions.
-		_ = tool.RegisterReadFile(newRegistry, norm)
-		idx := indexer.NewRipgrepIndexer(norm)
-		_ = tool.RegisterSearchCode(newRegistry, idx)
-		_ = tool.RegisterEditFile(newRegistry, norm)
-		_ = tool.RegisterApplyEdit(newRegistry, norm)
-		_ = tool.RegisterListDir(newRegistry, norm)
-		_ = tool.RegisterRunShell(newRegistry, norm)
-		_ = tool.RegisterApplyShell(newRegistry, norm)
-		_ = tool.RegisterHTTPRequest(newRegistry)
-		_ = tool.RegisterMemories(newRegistry)
-		_ = tool.RegisterTodoList(newRegistry)
-		_ = tool.RegisterUserChoice(newRegistry)
-		_ = tool.RegisterProjectProfileTools(newRegistry, norm)
+		// Register all core tools using centralized function
+		tool.RegisterCoreTools(newRegistry, norm)
 		// Initialize and register Symbols tools with progress reporting
 		if ws := norm; ws != "" {
 			if sqliteSvc, err := symbols.NewSQLiteService(ws); err == nil {
@@ -777,20 +761,8 @@ func (a *App) ReloadMCP() {
 		return
 	}
 	newRegistry := tool.NewRegistry().WithUI(a)
-	// re-register core tools similar to SetWorkspace
-	_ = tool.RegisterReadFile(newRegistry, ws)
-	idx := indexer.NewRipgrepIndexer(ws)
-	_ = tool.RegisterSearchCode(newRegistry, idx)
-	_ = tool.RegisterEditFile(newRegistry, ws)
-	_ = tool.RegisterApplyEdit(newRegistry, ws)
-	_ = tool.RegisterListDir(newRegistry, ws)
-	_ = tool.RegisterRunShell(newRegistry, ws)
-	_ = tool.RegisterApplyShell(newRegistry, ws)
-	_ = tool.RegisterHTTPRequest(newRegistry)
-	_ = tool.RegisterMemories(newRegistry)
-	_ = tool.RegisterTodoList(newRegistry)
-	_ = tool.RegisterUserChoice(newRegistry)
-	_ = tool.RegisterProjectProfileTools(newRegistry, ws)
+	// Register all core tools using centralized function
+	tool.RegisterCoreTools(newRegistry, ws)
 	// Recreate Symbols for current workspace and register
 	if ws := strings.TrimSpace(a.engine.Workspace()); ws != "" {
 		if svc, err := symbols.NewService(ws); err == nil {
