@@ -1,83 +1,144 @@
 #!/usr/bin/env zsh
-# .git/hooks/pre-commit
-# Fast local checks mirroring CI (without building the frontend)
 
 set -euo pipefail
 
 root="$(git rev-parse --show-toplevel)"
 cd "$root"
 
-red() { printf "\033[31m%s\033[0m\n" "$*"; }
-green() { printf "\033[32m%s\033[0m\n" "$*"; }
-note() { printf "\033[36m%s\033[0m\n" "$*"; }
+zmodload zsh/datetime 2>/dev/null || true
+
+RESET=$'\033[0m'
+BOLD=$'\033[1m'
+DIM=$'\033[2m'
+RED=$'\033[31m'
+GREEN=$'\033[32m'
+YELLOW=$'\033[33m'
+CYAN=$'\033[36m'
+GRAY=$'\033[90m'
+
+typeset -a SUMMARY
+STATUS_OVERALL="passed"
+
+print_hr() { print -r -- "${GRAY}────────────────────────────────────────────────────────────${RESET}"; }
+print_title() {
+  local proj branch
+  proj="${PWD:t}"
+  branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
+  print -r -- "${BOLD}┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓${RESET}"
+  print -r -- "${BOLD}┃${RESET} ${BOLD}Pre-commit • ${proj} ${DIM}(${branch})${RESET}"
+  print -r -- "${BOLD}┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛${RESET}"
+}
 
 need() {
   if ! command -v "$1" >/dev/null 2>&1; then
-    red "Missing tool: $1"
+    print -r -- "${RED}✗ Missing tool:${RESET} $1"
     case "$1" in
-      golangci-lint) echo "brew install golangci-lint  # or: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest";;
-      govulncheck)   echo "go install golang.org/x/vuln/cmd/govulncheck@latest";;
+      golangci-lint) print -r -- "brew install golangci-lint"; print -r -- "go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest";;
+      govulncheck)   print -r -- "go install golang.org/x/vuln/cmd/govulncheck@latest";;
+      go)            print -r -- "brew install go";;
     esac
     exit 1
   fi
 }
 
-need go
-need golangci-lint || true
-[[ -n "${RUN_VULN:-}" ]] && need govulncheck
+typeset -gF 6 STEP_T0=0
+_now() {
+  if [[ -n ${EPOCHREALTIME-} ]]; then
+    print -r -- "$EPOCHREALTIME"
+  else
+    print -r -- "$SECONDS"
+  fi
+}
+step_start() {
+  STEP_NAME="$1"
+  typeset -gF 6 STEP_T0="$(_now)"
+  print -r -- "${CYAN}›${RESET} ${BOLD}${STEP_NAME}${RESET}"
+}
+_elapsed_str() {
+  local -F 6 now dt
+  now="$(_now)"
+  dt=$(( now - STEP_T0 ))
+  printf '(%0.2fs)' "$dt"
+}
+step_ok() {
+  print -r -- "  ${GREEN}✓${RESET} ${DIM}${STEP_NAME}${RESET} ${GRAY}$(_elapsed_str)${RESET}"
+  SUMMARY+=("${GREEN}✓${RESET} ${STEP_NAME} ${GRAY}$(_elapsed_str)${RESET}")
+}
+step_skip() {
+  local reason="$1"
+  print -r -- "  ${YELLOW}•${RESET} ${DIM}${STEP_NAME}${RESET} ${GRAY}[skipped: ${reason}] $(_elapsed_str)${RESET}"
+  SUMMARY+=("${YELLOW}•${RESET} ${STEP_NAME} ${GRAY}[skipped: ${reason}] $(_elapsed_str)${RESET}")
+}
+step_fail() {
+  STATUS_OVERALL="failed"
+  print -r -- "  ${RED}✗${RESET} ${BOLD}${STEP_NAME}${RESET} ${GRAY}$(_elapsed_str)${RESET}"
+  print_summary
+  exit 1
+}
 
-# 1) gofmt -s (fail if any file needs formatting)
-note "Running gofmt -s..."
+print_summary() {
+  print_hr
+  print -r -- "${BOLD}Summary${RESET}"
+  for line in "${SUMMARY[@]}"; do print -r -- "  $line"; done
+  print_hr
+  if [[ "$STATUS_OVERALL" = "passed" ]]; then
+    print -r -- "${GREEN}All pre-commit checks passed.${RESET}"
+  else
+    print -r -- "${RED}Pre-commit checks failed.${RESET}"
+  fi
+}
+
+print_title
+
+need go
+[[ -n "${RUN_VULN:-}" ]] && need govulncheck || true
+
+step_start "gofmt -s"
 fmt_out="$(gofmt -l -s .)"
 if [[ -n "$fmt_out" ]]; then
-  red "Files need gofmt -s:"
-  echo "$fmt_out"
-  exit 1
+  print -r -- "${RED}Files need gofmt -s:${RESET}"
+  print -r -- "$fmt_out"
+  step_fail
 fi
-green "gofmt -s OK"
+step_ok
 
-# 2) go mod tidy guard (leave changes for user to commit)
-note "Checking go mod tidy..."
+step_start "go mod tidy"
 go mod tidy
 if ! git diff --quiet -- go.mod go.sum; then
-  red "go.mod/go.sum changed. Run 'go mod tidy' and commit the result."
+  print -r -- "${RED}go.mod/go.sum changed. Run 'go mod tidy' and commit the result.${RESET}"
   git --no-pager diff --minimal --word-diff -- go.mod go.sum || true
-  exit 1
+  step_fail
 fi
-green "go mod tidy OK"
+step_ok
 
-# 3) go vet (limit to packages that don't require embedded UI)
-note "Running go vet on ./internal/..."
+step_start "go vet ./internal/..."
 go vet ./internal/...
-green "go vet OK"
+step_ok
 
-# 4) golangci-lint (skip UI dir to avoid //go:embed dist dependency)
-# If you implement build tags as discussed (embedui), you can replace the line with:
-#   golangci-lint run --build-tags '!embedui'
+step_start "golangci-lint (skip ui/)"
 if command -v golangci-lint >/dev/null 2>&1; then
-  note "Running golangci-lint (skipping ui/)..."
   golangci-lint run --timeout=5m --skip-dirs ui
-  green "golangci-lint OK"
+  step_ok
+else
+  step_skip "golangci-lint not installed"
 fi
 
-# 5) Unit tests (fast scope)
-note "Running unit tests on ./internal/... (-count=1)..."
+step_start "go test ./internal/... -count=1"
 go test ./internal/... -count=1
-green "go test OK"
+step_ok
 
-# 6) Optional: race + coverage (opt-in: export RUN_RACE=1)
 if [[ -n "${RUN_RACE:-}" ]]; then
-  note "Running race detector with coverage on ./internal/..."
+  step_start "race detector + coverage"
   go test -race ./internal/... -count=1 -coverprofile=coverage.out
-  green "race+coverage OK -> coverage.out"
+  print -r -- "  ${DIM}coverage → coverage.out${RESET}"
+  step_ok
 fi
 
-# 7) Optional: govulncheck (opt-in: export RUN_VULN=1)
 if [[ -n "${RUN_VULN:-}" ]]; then
-  note "Running govulncheck (this can be slow)..."
+  step_start "govulncheck ./..."
   govulncheck ./...
-  green "govulncheck OK"
+  step_ok
 fi
 
-green "Pre-commit checks passed."
+print_summary
 exit 0
