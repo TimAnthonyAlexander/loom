@@ -54,10 +54,11 @@ export default function App() {
                     </h1>
                     <p className="hero-sub">
                         Build, refactor, and explore your projects with an AI that understands your codebase, respects your approvals,
-                        and integrates into your workflow — no cloud lock‑in.
+                        and integrates into your workflow — no cloud lock‑in. With comprehensive tools, symbol indexing, MCP integration,
+                        and reasoning‑aware streaming.
                     </p>
                     <p>
-                        Use your own API keys or a local model. It's up to you.
+                        Connect to OpenAI, Anthropic, OpenRouter (thousands of models), or run locally with Ollama. It's up to you.
                     </p>
                     <div className="cta">
                         <a href="https://github.com/TimAnthonyAlexander/loom/releases/latest" className="btn primary">Download Loom</a>
@@ -83,12 +84,12 @@ export default function App() {
             {/* Trusted by */}
             <section className="section trusted">
                 <div className="container center">
-                    <p className="muted">Trusted by developers who build serious software</p>
+                    <p className="muted">Trusted by developers building production software</p>
                     <div className="logo-row" aria-label="trusted logos">
                         <span className="logo-pill">Open‑source maintainers</span>
-                        <span className="logo-pill">Indie devs</span>
-                        <span className="logo-pill">Internal tools teams</span>
-                        <span className="logo-pill">Data & infra engineers</span>
+                        <span className="logo-pill">Full‑stack developers</span>
+                        <span className="logo-pill">Platform & infrastructure teams</span>
+                        <span className="logo-pill">DevOps & automation engineers</span>
                     </div>
                 </div>
             </section>
@@ -101,22 +102,22 @@ export default function App() {
                         <div className="why-card">
                             <div className="why-icon"><IconCode /></div>
                             <div>
-                                <h3>Code‑aware</h3>
-                                <p>Loom reads, searches, and edits your code with precision.</p>
+                                <h3>Deeply code‑aware</h3>
+                                <p>Symbol indexing, semantic search, project profiling, and 20+ specialized tools for precise code understanding.</p>
                             </div>
                         </div>
                         <div className="why-card">
                             <div className="why-icon"><IconShield /></div>
                             <div>
-                                <h3>Safe</h3>
-                                <p>Every change and shell command requires your approval.</p>
+                                <h3>Approvals‑first safety</h3>
+                                <p>Every destructive action requires explicit approval. Optional auto‑approval for trusted workflows.</p>
                             </div>
                         </div>
                         <div className="why-card">
                             <div className="why-icon"><IconDevice /></div>
                             <div>
-                                <h3>Local‑first</h3>
-                                <p>Runs on your machine with full workspace context. No lock‑in.</p>
+                                <h3>Extensible & private</h3>
+                                <p>MCP integration, local‑first architecture, and comprehensive model provider support including local inference.</p>
                             </div>
                         </div>
                     </div>
@@ -129,8 +130,8 @@ export default function App() {
                     {/* 1 */}
                     <div className="feature">
                         <div>
-                            <h2>Explore your codebase</h2>
-                            <p>Semantic search powered by ripgrep. Ask Loom questions, jump to exact lines, and navigate dependencies without losing focus.</p>
+                            <h2>Deeply understand your code</h2>
+                            <p>Symbol indexing with SQLite + FTS search, semantic exploration via ripgrep, and heuristic project profiling. Find definitions, references, and get smart code neighborhoods with precision.</p>
                         </div>
                         <div className="visual">
                             <img src="/screenshot1.png" alt="Monaco editor with search results" />
@@ -176,8 +177,72 @@ Wails + Vite with live reload
                     {/* 5 */}
                     <div className="feature">
                         <div>
+                            <h2>Reasoning & cost insights</h2>
+                            <p>Streaming reasoning summaries from supported models (o3/o4/GPT‑5), comprehensive cost tracking across providers, and transparent token usage per project.</p>
+                        </div>
+                        <div className="visual">
+                            <pre>
+                                <code>{`💭 Reasoning:
+"Analyzing the error pattern...
+ Considering async handling...
+ Best approach: add await"
+
+💰 Cost tracking:
+Project: $2.34 | Session: $0.12
+Input: 1.2K tokens | Output: 856`}</code>
+                            </pre>
+                        </div>
+                    </div>
+
+                    {/* 6 */}
+                    <div className="feature">
+                        <div>
+                            <h2>Thousands of models</h2>
+                            <p>OpenAI, Anthropic Claude, OpenRouter (thousands of models with real‑time pricing), and local Ollama. From flagship models to cost‑effective alternatives, reasoning‑aware to lightning‑fast responses.</p>
+                        </div>
+                        <div className="visual">
+                            <pre>
+                                <code>{`Model Categories:
+• Flagship: Claude Opus 4, GPT‑5
+• Reasoning: o3, o4‑mini  
+• Fast: Claude Haiku, GPT‑4o‑mini
+• Cheap: Llama 3.3, Gemma
+• Local: Ollama (DeepSeek R1, etc.)
+
+OpenRouter: 1000+ models`}</code>
+                            </pre>
+                        </div>
+                    </div>
+
+                    {/* 7 */}
+                    <div className="feature">
+                        <div>
+                            <h2>Extensible with MCP</h2>
+                            <p>Connect external tools via Model Context Protocol. Integrate Jira, Confluence, Git, cloud APIs, and custom tools while maintaining Loom's approval‑first safety model.</p>
+                        </div>
+                        <div className="visual">
+                            <pre>
+                                <code>{`// .loom/mcp.json
+{
+  "mcpServers": {
+    "jira": {
+      "command": "uvx",
+      "args": ["mcp-atlassian", "--read-only"]
+    }
+  }
+}
+
+→ jira_search, jira_get_issue
+→ confluence_search, get_page`}</code>
+                            </pre>
+                        </div>
+                    </div>
+
+                    {/* 8 */}
+                    <div className="feature">
+                        <div>
                             <h2>Built for developers</h2>
-                            <p>Tabbed Monaco editor, file explorer, theming, and a calm, content‑forward UI. Everything you need, nothing you don’t.</p>
+                            <p>Tabbed Monaco editor, rules system for consistent AI behavior, workspace‑scoped memory, and a calm, content‑forward Material UI. Everything you need, nothing you don't.</p>
                         </div>
                         <div className="visual">
                             <img src="/screenshot1.png" alt="Tabbed editor and explorer" />
@@ -191,22 +256,34 @@ Wails + Vite with live reload
             >
                 <div className="container grid grid-2">
                     <div>
-                        <h2>Under the hood</h2>
+                        <h2>Comprehensive tool registry</h2>
                         <ul className="list">
-                            <li>Go + Wails backend — native app performance, cross‑platform packaging</li>
-                            <li>React + TypeScript frontend — familiar, customizable interface</li>
-                            <li>Explicit tool registry — extend Loom with safe or destructive tools</li>
-                            <li>Memory & indexing — per‑workspace persistence for predictable behavior</li>
+                            <li><strong>Code Exploration:</strong> read_file, list_dir, search_code</li>
+                            <li><strong>Safe Editing:</strong> edit_file, apply_edit (with approval)</li>
+                            <li><strong>Shell Execution:</strong> run_shell, apply_shell (with approval)</li>
+                            <li><strong>Project Intelligence:</strong> get_project_profile, get_hotlist, explain_file_importance</li>
+                            <li><strong>Symbol Tools:</strong> symbols_search, symbols_def, symbols_refs, symbols_neighborhood, symbols_outline</li>
+                            <li><strong>Workflow Tools:</strong> http_request, memories, todo_list, user_choice</li>
+                            <li><strong>MCP Integration:</strong> Dynamic external tool loading via Model Context Protocol</li>
                         </ul>
                     </div>
                     <div className="card">
                         <pre>
-                            <code>{`tools: [
-  search_code(),
-  edit_file(),
-  run_shell(),
-  http_request(), 
-]`}</code>
+                            <code>{`// 20+ specialized tools
+registry := ToolRegistry{
+  • Code: search, read, edit
+  • Symbols: def, refs, outline  
+  • Project: profile, hotlist
+  • Shell: propose, approve, exec
+  • Memory: persist, recall
+  • HTTP: requests, APIs
+  • MCP: jira, confluence, git
+}
+
+// Approval‑first safety
+if (tool.destructive) {
+  await promptApproval()
+}`}</code>
                         </pre>
                     </div>
                 </div>
@@ -244,15 +321,15 @@ onProposedCommand(cmd) {
 
             {/* Getting started */}
             <section id="getting-started" className="section">
-                <div className="container center">
-                    <h2>Getting started</h2>
-                    <p className="muted">Four steps to productive, safe assistance</p>
-                    <div className="grid grid-4 roadmap" style={{ marginTop: 24 }}>
-                        <div className="card">1. Download Loom</div>
-                        <div className="card">2. Connect model provider(s)</div>
-                        <div className="card">3. Open a workspace</div>
-                        <div className="card">4. Chat • Search • Edit • Run</div>
-                    </div>
+                                    <div className="container center">
+                        <h2>Getting started</h2>
+                        <p className="muted">Four steps to productive, safe assistance</p>
+                        <div className="grid grid-4 roadmap" style={{ marginTop: 24 }}>
+                            <div className="card">1. Download Loom</div>
+                            <div className="card">2. Connect providers (OpenAI, Claude, OpenRouter, Ollama)</div>
+                            <div className="card">3. Open workspace & configure MCP (optional)</div>
+                            <div className="card">4. Chat • Search • Edit • Profile • Extend</div>
+                        </div>
                     <div className="hero-visual" style={{ marginTop: 24 }}>
                         <img src="/screenshot1.png" alt="Loom getting started" />
                     </div>
@@ -264,10 +341,11 @@ onProposedCommand(cmd) {
                 <div className="container center">
                     <h2>Roadmap highlights</h2>
                     <div className="roadmap">
-                        <div className="card">Multi‑file refactors</div>
-                        <div className="card">Vector‑powered recall</div>
-                        <div className="card">Granular approvals</div>
-                        <div className="card">Custom theming</div>
+                        <div className="card">Multi‑file refactors & expanded toolset</div>
+                        <div className="card">Vector‑backed memory & richer recall</div>
+                        <div className="card">Granular approvals & audit trail</div>
+                        <div className="card">Theming toggle & accessibility</div>
+                        <div className="card">Enhanced provider streaming</div>
                     </div>
                 </div>
             </section>
