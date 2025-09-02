@@ -21,6 +21,7 @@ import (
 	"github.com/loom/loom/internal/engine"
 	"github.com/loom/loom/internal/indexer"
 	"github.com/loom/loom/internal/mcp"
+	"github.com/loom/loom/internal/memory"
 	"github.com/loom/loom/internal/profiler"
 	"github.com/loom/loom/internal/symbols"
 	"github.com/loom/loom/internal/tool"
@@ -51,6 +52,8 @@ type App struct {
 		IndexAll(context.Context) error
 		Count(context.Context) (int, error)
 	}
+	// memory store for creating new projects when switching workspaces
+	memoryStore *memory.Store
 }
 
 // NewApp creates a new App application struct.
@@ -83,6 +86,12 @@ func (a *App) WithSettings(s config.Settings) *App {
 	if a.engine != nil {
 		a.engine.SetAutoApprove(s.AutoApproveShell, s.AutoApproveEdits)
 	}
+	return a
+}
+
+// WithMemoryStore sets the memory store for the UI bridge.
+func (a *App) WithMemoryStore(store *memory.Store) *App {
+	a.memoryStore = store
 	return a
 }
 
@@ -624,12 +633,21 @@ func (a *App) SetWorkspace(path string) {
 		return
 	}
 	a.lastWorkspaceSet = now
-	// Update engine workspace
+	// Update engine workspace and memory for new workspace
 	if a.engine != nil {
 		a.engine.WithWorkspace(norm)
 		// Reset editor context since we're switching to a new workspace
 		// The old file path and cursor position are no longer relevant
 		a.engine.SetEditorContext("", 1, 1)
+
+		// Create new project memory for the new workspace
+		if a.memoryStore != nil {
+			if newProject, err := memory.NewProject(a.memoryStore, norm); err == nil {
+				a.engine.WithMemory(newProject)
+			} else {
+				log.Printf("Warning: Failed to create project memory for workspace %s: %v", norm, err)
+			}
+		}
 	}
 	// Re-register tools with new workspace paths
 	if a.tools != nil {
@@ -715,6 +733,12 @@ func (a *App) SetWorkspace(path string) {
 	a.settings.LastWorkspace = norm
 	a.settings.AddRecentWorkspace(norm, 10) // Keep max 10 recent workspaces
 	_ = config.Save(a.settings)
+
+	// Clear conversation UI state since we're switching to a different workspace
+	// The conversation history from the previous workspace should not be visible
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "chat:clear")
+	}
 
 	// Emit event to notify frontend that workspace has changed
 	// This allows UI components to update (e.g., symbol count, file explorer)

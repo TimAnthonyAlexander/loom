@@ -121,6 +121,10 @@ func main() {
 	app.WithTools(registry)
 	app.WithConfig(configAdapter)
 	app.WithSettings(settings)
+	// Pass the memory store so SetWorkspace can create new Projects
+	if store != nil {
+		app.WithMemoryStore(store)
+	}
 
 	// Connect the engine to the bridge
 	eng.SetBridge(app)

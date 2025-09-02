@@ -330,19 +330,22 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 				if strings.TrimSpace(chosen.name) == "" {
 					continue
 				}
-				// Gather and validate arguments. If missing or invalid, do not emit; let engine retry non-streaming.
+				// Gather and validate arguments. If missing or invalid, continue processing stream.
 				argsStr := strings.TrimSpace(chosen.args)
 				if argsStr == "" {
-					return
+					// Log the issue but continue processing the stream
+					continue
 				}
 
 				var argsMap map[string]interface{}
 				if err := json.Unmarshal([]byte(argsStr), &argsMap); err != nil {
-					return
+					// Log the issue but continue processing the stream
+					continue
 				}
 				// Validate required args for known tools
 				if !validateToolArgs(chosen.name, argsMap) {
-					return
+					// Log the issue but continue processing the stream
+					continue
 				}
 				if args, err := json.Marshal(argsMap); err == nil {
 					id := chosen.id
@@ -354,7 +357,7 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 					case <-ctx.Done():
 						return
 					case ch <- engine.TokenOrToolCall{ToolCall: call}:
-						return
+						// DO NOT return here - continue processing the stream for subsequent content
 					}
 				}
 			}
@@ -383,33 +386,30 @@ func (c *Client) handleStreamingResponse(ctx context.Context, body io.Reader, ch
 			}
 		}
 		if chosen != nil {
-			// If function name is still missing at end of stream, do not emit a tool call.
-			// This will signal the engine to perform a non-streaming retry.
+			// If function name is still missing at end of stream, skip this tool call
 			if strings.TrimSpace(chosen.name) == "" {
-				return
-			}
-			argsStr := strings.TrimSpace(chosen.args)
-			if argsStr == "" {
-				return
-			}
-			var argsMap map[string]interface{}
-			if err := json.Unmarshal([]byte(argsStr), &argsMap); err != nil {
-				return
-			}
-			if !validateToolArgs(chosen.name, argsMap) {
-				return
-			}
-			if args, err := json.Marshal(argsMap); err == nil {
-				id := chosen.id
-				if id == "" {
-					id = fmt.Sprintf("idx_%d", chosenIdx)
-				}
-				call := &engine.ToolCall{ID: id, Name: chosen.name, Args: args}
-				select {
-				case <-ctx.Done():
-					return
-				case ch <- engine.TokenOrToolCall{ToolCall: call}:
-					return
+				// Skip this incomplete tool call but continue processing
+			} else {
+				argsStr := strings.TrimSpace(chosen.args)
+				if argsStr == "" {
+					// Skip this incomplete tool call but continue processing
+				} else {
+					var argsMap map[string]interface{}
+					if err := json.Unmarshal([]byte(argsStr), &argsMap); err == nil && validateToolArgs(chosen.name, argsMap) {
+						if args, err := json.Marshal(argsMap); err == nil {
+							id := chosen.id
+							if id == "" {
+								id = fmt.Sprintf("idx_%d", chosenIdx)
+							}
+							call := &engine.ToolCall{ID: id, Name: chosen.name, Args: args}
+							select {
+							case <-ctx.Done():
+								return
+							case ch <- engine.TokenOrToolCall{ToolCall: call}:
+								// Continue processing - don't return immediately
+							}
+						}
+					}
 				}
 			}
 		}

@@ -2,12 +2,37 @@ package engine
 
 import (
 	"fmt"
+	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/loom/loom/internal/profiler"
 	"github.com/loom/loom/internal/tool"
 )
+
+// getCurrentGitBranch returns the current git branch name if in a git repository, otherwise returns empty string.
+func getCurrentGitBranch(workspaceRoot string) string {
+	// Check if git is available
+	if _, err := exec.LookPath("git"); err != nil {
+		return "" // git not available
+	}
+
+	// Try to get the current branch name
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	cmd.Dir = workspaceRoot
+	output, err := cmd.Output()
+	if err != nil {
+		return "" // not in a git repo or other error
+	}
+
+	branch := strings.TrimSpace(string(output))
+	// Return empty string for detached HEAD state
+	if branch == "HEAD" {
+		return ""
+	}
+
+	return branch
+}
 
 // GenerateSystemPrompt builds the system prompt shown to the model as the first message.
 // Uses a multiline template and injects the current date and tools list.
@@ -75,11 +100,16 @@ type MemoryEntry struct {
 }
 
 // GenerateSystemPromptWithRules augments the base prompt with user/project rules and memories.
-func GenerateSystemPromptWithRules(tools []tool.Schema, userRules []string, projectRules []string, memories []MemoryEntry) string {
+func GenerateSystemPromptWithRules(tools []tool.Schema, userRules []string, projectRules []string, memories []MemoryEntry, workspaceRoot string) string {
 	base := GenerateSystemPrompt(tools)
 
 	var b strings.Builder
 	b.WriteString(base)
+
+	// Inject git branch information if available
+	if branch := getCurrentGitBranch(workspaceRoot); branch != "" {
+		b.WriteString(fmt.Sprintf("\n\nCurrent Git Branch: %s", branch))
+	}
 	if len(memories) > 0 {
 		b.WriteString("\n\nMemories:\n")
 		for _, m := range memories {
@@ -121,6 +151,11 @@ func GenerateSystemPromptWithProjectContext(tools []tool.Schema, userRules []str
 
 	var b strings.Builder
 	b.WriteString(base)
+
+	// Inject git branch information if available
+	if branch := getCurrentGitBranch(workspaceRoot); branch != "" {
+		b.WriteString(fmt.Sprintf("\n\nCurrent Git Branch: %s", branch))
+	}
 
 	// Inject project context block if available
 	contextBuilder := profiler.NewFileSystemProjectContextBuilder()

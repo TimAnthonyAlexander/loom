@@ -27,7 +27,7 @@ func TestGenerateSystemPrompt_IncludesToolsAndSafety(t *testing.T) {
 func TestGenerateSystemPromptWithRules_IncludesMemoriesBlock(t *testing.T) {
 	tools := []tool.Schema{}
 	mems := []MemoryEntry{{ID: "pref", Text: "User prefers tabs"}}
-	prompt := GenerateSystemPromptWithRules(tools, nil, nil, mems)
+	prompt := GenerateSystemPromptWithRules(tools, nil, nil, mems, "")
 	if !strings.Contains(prompt, "Memories:") {
 		t.Fatalf("missing Memories block")
 	}
