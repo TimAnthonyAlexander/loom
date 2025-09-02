@@ -4,6 +4,7 @@ import {bridge} from '../models';
 import {adapter} from '../models';
 import {context} from '../models';
 import {engine} from '../models';
+import {memory} from '../models';
 import {config} from '../models';
 import {tool} from '../models';
 
@@ -122,6 +123,8 @@ export function WithConfig(arg1:adapter.Config):Promise<bridge.App>;
 export function WithContext(arg1:context.Context):Promise<bridge.App>;
 
 export function WithEngine(arg1:engine.Engine):Promise<bridge.App>;
+
+export function WithMemoryStore(arg1:memory.Store):Promise<bridge.App>;
 
 export function WithSettings(arg1:config.Settings):Promise<bridge.App>;
 

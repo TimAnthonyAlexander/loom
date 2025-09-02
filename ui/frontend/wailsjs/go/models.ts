@@ -168,6 +168,23 @@ export namespace engine {
 
 }
 
+export namespace memory {
+	
+	export class Store {
+	
+	
+	    static createFrom(source: any = {}) {
+	        return new Store(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	
+	    }
+	}
+
+}
+
 export namespace tool {
 	
 	export class Registry {

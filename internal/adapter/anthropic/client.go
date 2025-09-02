@@ -139,6 +139,11 @@ func lastAssistantTurnHasThinking(messages []engine.Message) bool {
 	return hasThinkingWithSignature
 }
 
+// isEmptyResponse checks if a response is effectively empty (only whitespace).
+func isEmptyResponse(content string) bool {
+	return strings.TrimSpace(content) == ""
+}
+
 // Chat implements the engine.LLM interface for Anthropic Claude.
 func (c *Client) Chat(
 	ctx context.Context,
@@ -155,7 +160,33 @@ func (c *Client) Chat(
 	// Create output channel for tokens/tool calls
 	resultCh := make(chan engine.TokenOrToolCall)
 
-	// Extract system prompt and convert messages (Anthropic expects system at top-level)
+	// Start a goroutine to handle the response with retry logic
+	go func() {
+		defer close(resultCh)
+		c.chatWithRetry(ctx, messages, tools, stream, resultCh)
+	}()
+
+	return resultCh, nil
+}
+
+// chatWithRetry implements retry logic for empty responses
+func (c *Client) chatWithRetry(ctx context.Context, messages []engine.Message, tools []engine.ToolSchema, stream bool, resultCh chan<- engine.TokenOrToolCall) {
+	// Try first attempt and track if we receive any content
+	contentReceived, toolCallReceived := c.attemptChat(ctx, messages, tools, stream, resultCh)
+
+	// If we got empty response, retry with opposite streaming mode
+	if !contentReceived && !toolCallReceived {
+		select {
+		case <-ctx.Done():
+			return
+		case resultCh <- engine.TokenOrToolCall{Token: "Retrying due to empty response..."}:
+		}
+		c.attemptChat(ctx, messages, tools, !stream, resultCh)
+	}
+}
+
+// attemptChat performs a single chat attempt and returns whether content/toolcalls were received
+func (c *Client) attemptChat(ctx context.Context, messages []engine.Message, tools []engine.ToolSchema, stream bool, resultCh chan<- engine.TokenOrToolCall) (contentReceived, toolCallReceived bool) {
 	var systemPrompt string
 	for _, m := range messages {
 		if strings.ToLower(m.Role) == "system" && m.Content != "" {
@@ -202,8 +233,6 @@ func (c *Client) Chat(
 	}
 	claudeTools := convertTools(tools)
 
-	// Removed verbose debug logging of converted Anthropic messages
-
 	// Prepare the request body
 	// Anthropic expects model IDs like "claude-opus-4-20250514" without provider prefix
 	// Ensure max_tokens is compatible with thinking budget when streaming
@@ -218,7 +247,6 @@ func (c *Client) Chat(
 		// Honor stream flag so we can deliver incremental messages & thinking
 		"stream": stream,
 	}
-	// enableThinking already decided above
 
 	if enableThinking {
 		// Constrain thinking budget to always be < max_tokens and within a reasonable cap
@@ -242,87 +270,75 @@ func (c *Client) Chat(
 		requestBody["system"] = systemPrompt
 	}
 
-	// Removed debug log for model selection
-
 	// Add tools if provided
 	if len(tools) > 0 {
 		requestBody["tools"] = claudeTools
 	}
 
-	// Start a goroutine to handle the streaming response
-	go func() {
-		defer close(resultCh)
+	// Prepare request body
+	reqBody, err := json.Marshal(requestBody)
+	if err != nil {
+		// Handle marshal error
+		return false, false
+	}
 
-		// Prepare request body
-		reqBody, err := json.Marshal(requestBody)
-		if err != nil {
-			// Handle marshal error - can't do much but close the channel
-			return
+	// Create request
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(reqBody))
+	if err != nil {
+		// Handle request creation error
+		return false, false
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	// Streaming responses are delivered via Server-Sent Events
+	if stream {
+		req.Header.Set("Accept", "text/event-stream")
+		req.Header.Set("Cache-Control", "no-cache")
+		req.Header.Set("Connection", "keep-alive")
+		// Opt-in to Anthropic interleaved thinking beta (no-op on unsupported models)
+		if enableThinking {
+			req.Header.Set("interleaved-thinking-2025-05-14", "true")
 		}
+	}
+	// Anthropic requires 'x-api-key' header, not 'Authorization'
+	req.Header.Set("x-api-key", c.apiKey)
 
-		// Create request
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(reqBody))
-		if err != nil {
-			// Handle request creation error
-			return
+	// API version is required for Anthropic
+	req.Header.Set("anthropic-version", c.apiVersion)
+
+	// Make the request
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		// Surface request error via token
+		select {
+		case <-ctx.Done():
+			return false, false
+		case resultCh <- engine.TokenOrToolCall{Token: fmt.Sprintf("Anthropic HTTP error: %v", err)}:
 		}
+		return false, false
+	}
+	defer func() { _ = resp.Body.Close() }()
 
-		// Set headers
-		req.Header.Set("Content-Type", "application/json")
-		// Streaming responses are delivered via Server-Sent Events
-		if stream {
-			req.Header.Set("Accept", "text/event-stream")
-			req.Header.Set("Cache-Control", "no-cache")
-			req.Header.Set("Connection", "keep-alive")
-			// Opt-in to Anthropic interleaved thinking beta (no-op on unsupported models)
-			if enableThinking {
-				req.Header.Set("interleaved-thinking-2025-05-14", "true")
-			}
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		// Surface non-200 status
+		errorResponse, _ := io.ReadAll(resp.Body)
+		msg := fmt.Sprintf("Anthropic API error (%d): %s", resp.StatusCode, string(errorResponse))
+		select {
+		case <-ctx.Done():
+			return false, false
+		case resultCh <- engine.TokenOrToolCall{Token: msg}:
 		}
-		// Removed debug log for API key
-		// Anthropic requires 'x-api-key' header, not 'Authorization'
-		req.Header.Set("x-api-key", c.apiKey)
+		return false, false
+	}
 
-		// API version is required for Anthropic
-		req.Header.Set("anthropic-version", c.apiVersion)
-
-		// Removed verbose request logging
-		// Make the request
-		resp, err := c.httpClient.Do(req)
-		if err != nil {
-			// Surface request error via token
-			select {
-			case <-ctx.Done():
-				return
-			case resultCh <- engine.TokenOrToolCall{Token: fmt.Sprintf("Anthropic HTTP error: %v", err)}:
-			}
-			return
-		}
-		defer func() { _ = resp.Body.Close() }()
-
-		// Check response status
-		if resp.StatusCode != http.StatusOK {
-			// Surface non-200 status
-			errorResponse, _ := io.ReadAll(resp.Body)
-			msg := fmt.Sprintf("Anthropic API error (%d): %s", resp.StatusCode, string(errorResponse))
-			select {
-			case <-ctx.Done():
-				return
-			case resultCh <- engine.TokenOrToolCall{Token: msg}:
-			}
-			return
-		}
-
-		// Removed verbose response status logging
-		// Handle response
-		if stream {
-			c.handleStreamingResponse(ctx, resp.Body, resultCh)
-		} else {
-			c.handleNonStreamingResponse(ctx, resp.Body, resultCh)
-		}
-	}()
-
-	return resultCh, nil
+	// Handle response with tracking
+	if stream {
+		return c.handleStreamingResponseWithTracking(ctx, resp.Body, resultCh)
+	} else {
+		return c.handleNonStreamingResponseWithTracking(ctx, resp.Body, resultCh)
+	}
 }
 
 // truncateString shortens a string for logging purposes
@@ -597,6 +613,283 @@ func (c *Client) handleNonStreamingResponse(ctx context.Context, body io.Reader,
 			}
 		}
 	}
+}
+
+// handleStreamingResponseWithTracking processes a streaming response and tracks content/tool calls
+func (c *Client) handleStreamingResponseWithTracking(ctx context.Context, body io.Reader, ch chan<- engine.TokenOrToolCall) (contentReceived, toolCallReceived bool) {
+	sc := bufio.NewScanner(body)
+	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+
+	type blockState struct {
+		BlockType   string
+		ToolID      string
+		ToolName    string
+		InputJSON   string
+		ThinkingBuf string
+		Signature   string
+	}
+	blocks := make(map[int]*blockState)
+	currentEvent := ""
+	// Track usage for billing: input once at message_start, output cumulative on message_delta
+	var inputTokens int64
+	var outputTokens int64
+	// Normalize model id (strip provider prefix if present)
+	normalizedModel := strings.TrimPrefix(c.model, "claude:")
+
+	for sc.Scan() {
+		line := sc.Text()
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "event: ") {
+			currentEvent = strings.TrimSpace(line[7:])
+			continue
+		}
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		payload := strings.TrimSpace(line[6:])
+		if payload == "" || payload == "[DONE]" {
+			continue
+		}
+
+		// Define a loose struct to capture common fields
+		var ev struct {
+			Type  string `json:"type"`
+			Index int    `json:"index"`
+			// content_block_start
+			ContentBlock *struct {
+				Type  string `json:"type"`
+				ID    string `json:"id,omitempty"`
+				Name  string `json:"name,omitempty"`
+				Input any    `json:"input,omitempty"`
+			} `json:"content_block,omitempty"`
+			// content_block_delta
+			Delta *struct {
+				Type        string `json:"type"`
+				Text        string `json:"text,omitempty"`
+				PartialJSON string `json:"partial_json,omitempty"`
+				Thinking    string `json:"thinking,omitempty"`
+				Signature   string `json:"signature,omitempty"`
+			} `json:"delta,omitempty"`
+			// message_delta
+			MessageDelta *struct {
+				StopReason string `json:"stop_reason,omitempty"`
+			} `json:"message_delta,omitempty"`
+			// error
+			Error *struct {
+				Type    string `json:"type"`
+				Message string `json:"message"`
+			} `json:"error,omitempty"`
+		}
+
+		if err := json.Unmarshal([]byte(payload), &ev); err != nil {
+			// Skip malformed SSE chunk silently
+			continue
+		}
+
+		switch currentEvent {
+		case "message_start":
+			// Capture input tokens from usage if present
+			var v struct {
+				Type    string `json:"type"`
+				Message struct {
+					Usage *struct {
+						InputTokens int64 `json:"input_tokens"`
+					} `json:"usage"`
+				} `json:"message"`
+			}
+			if err := json.Unmarshal([]byte(payload), &v); err == nil && v.Message.Usage != nil {
+				inputTokens = v.Message.Usage.InputTokens
+			}
+		case "content_block_start":
+			bs := &blockState{}
+			if ev.ContentBlock != nil {
+				bs.BlockType = ev.ContentBlock.Type
+				if ev.ContentBlock.Type == "tool_use" {
+					bs.ToolID = ev.ContentBlock.ID
+					bs.ToolName = ev.ContentBlock.Name
+				}
+			}
+			blocks[ev.Index] = bs
+		case "content_block_delta":
+			bs := blocks[ev.Index]
+			if bs == nil || ev.Delta == nil {
+				continue
+			}
+			switch ev.Delta.Type {
+			case "text_delta":
+				if ev.Delta.Text != "" && !isEmptyResponse(ev.Delta.Text) {
+					contentReceived = true
+					select {
+					case <-ctx.Done():
+						return
+					case ch <- engine.TokenOrToolCall{Token: ev.Delta.Text}:
+					}
+				}
+			case "input_json_delta":
+				bs.InputJSON += ev.Delta.PartialJSON
+			case "thinking_delta":
+				if ev.Delta.Thinking != "" {
+					bs.ThinkingBuf += ev.Delta.Thinking
+					select {
+					case <-ctx.Done():
+						return
+					case ch <- engine.TokenOrToolCall{Token: "[REASONING] " + ev.Delta.Thinking}:
+					}
+				}
+			case "signature_delta":
+				if ev.Delta.Signature != "" {
+					bs.Signature = ev.Delta.Signature
+					select {
+					case <-ctx.Done():
+						return
+					case ch <- engine.TokenOrToolCall{Token: "[REASONING_SIGNATURE] " + ev.Delta.Signature}:
+					}
+				}
+			}
+		case "content_block_stop":
+			bs := blocks[ev.Index]
+			if bs == nil {
+				continue
+			}
+			// If this was a tool use, emit a tool call now
+			if bs.BlockType == "tool_use" {
+				argsStr := strings.TrimSpace(bs.InputJSON)
+				if argsStr == "" {
+					argsStr = "{}"
+				}
+				var raw json.RawMessage
+				// Ensure valid JSON; if invalid, wrap as empty object
+				if json.Valid([]byte(argsStr)) {
+					raw = json.RawMessage(argsStr)
+				} else {
+					raw = json.RawMessage("{}")
+				}
+				tc := &engine.ToolCall{ID: bs.ToolID, Name: bs.ToolName, Args: raw}
+				toolCallReceived = true
+				select {
+				case <-ctx.Done():
+					return
+				case ch <- engine.TokenOrToolCall{ToolCall: tc}:
+					// Do not return immediately; allow following blocks like message_stop
+					// to be consumed, but we will break out by returning at message_stop.
+				}
+			}
+			if bs.BlockType == "thinking" {
+				// Emit final JSON payload with thinking + signature so the engine can persist
+				finalPayload := map[string]string{
+					"thinking":  bs.ThinkingBuf,
+					"signature": bs.Signature,
+				}
+				b, _ := json.Marshal(finalPayload)
+				select {
+				case <-ctx.Done():
+					return
+				case ch <- engine.TokenOrToolCall{Token: "[REASONING_JSON] " + string(b)}:
+				}
+				// Signal reasoning done so UI can collapse; no extra text needed
+				select {
+				case <-ctx.Done():
+					return
+				case ch <- engine.TokenOrToolCall{Token: "[REASONING_DONE] "}:
+				}
+			}
+			delete(blocks, ev.Index)
+		case "message_delta":
+			// Capture cumulative output tokens if present
+			var d struct {
+				Type  string `json:"type"`
+				Usage *struct {
+					OutputTokens int64 `json:"output_tokens"`
+				} `json:"usage"`
+			}
+			if err := json.Unmarshal([]byte(payload), &d); err == nil && d.Usage != nil {
+				outputTokens = d.Usage.OutputTokens
+			}
+		case "message_stop":
+			// End of assistant turn — emit usage marker for engine to compute costs/UI
+			usage := fmt.Sprintf("[USAGE] provider=anthropic model=%s in=%d out=%d", normalizedModel, inputTokens, outputTokens)
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- engine.TokenOrToolCall{Token: usage}:
+			}
+			// End of assistant turn
+			return
+		case "error":
+			if ev.Error != nil {
+				select {
+				case <-ctx.Done():
+					return
+				case ch <- engine.TokenOrToolCall{Token: fmt.Sprintf("Anthropic error: %s", ev.Error.Message)}:
+					return
+				}
+			}
+		default:
+			// Unknown/ignored events: ping, etc.
+		}
+	}
+	_ = sc.Err()
+	return
+}
+
+// handleNonStreamingResponseWithTracking processes a non-streaming response and tracks content/tool calls
+func (c *Client) handleNonStreamingResponseWithTracking(ctx context.Context, body io.Reader, ch chan<- engine.TokenOrToolCall) (contentReceived, toolCallReceived bool) {
+	// Read the entire response
+	respBody, err := io.ReadAll(body)
+	if err != nil {
+		return false, false
+	}
+
+	// Parse the response per Anthropic schema
+	var resp struct {
+		Type       string `json:"type"`
+		StopReason string `json:"stop_reason"`
+		Content    []struct {
+			Type  string          `json:"type"`
+			Text  string          `json:"text"`
+			ID    string          `json:"id"`
+			Name  string          `json:"name"`
+			Input json.RawMessage `json:"input"`
+		} `json:"content"`
+	}
+
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return false, false
+	}
+
+	// Prefer tool_use if present, regardless of stop_reason
+	for _, content := range resp.Content {
+		if strings.EqualFold(content.Type, "tool_use") {
+			toolCall := &engine.ToolCall{
+				ID:   content.ID,
+				Name: content.Name,
+				Args: content.Input,
+			}
+			toolCallReceived = true
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- engine.TokenOrToolCall{ToolCall: toolCall}:
+				return
+			}
+		}
+	}
+
+	// If no tool use, send the text content
+	for _, content := range resp.Content {
+		if content.Type == "text" && content.Text != "" && !isEmptyResponse(content.Text) {
+			contentReceived = true
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- engine.TokenOrToolCall{Token: content.Text}:
+			}
+		}
+	}
+
+	return
 }
 
 // convertMessages transforms engine messages to Anthropic Claude format.

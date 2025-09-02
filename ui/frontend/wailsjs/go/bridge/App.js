@@ -234,6 +234,10 @@ export function WithEngine(arg1) {
   return window['go']['bridge']['App']['WithEngine'](arg1);
 }
 
+export function WithMemoryStore(arg1) {
+  return window['go']['bridge']['App']['WithMemoryStore'](arg1);
+}
+
 export function WithSettings(arg1) {
   return window['go']['bridge']['App']['WithSettings'](arg1);
 }
