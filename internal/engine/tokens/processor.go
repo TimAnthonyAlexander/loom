@@ -176,7 +176,6 @@ func (tp *TokenProcessor) handleReasoningDone(token string) {
 // SetReasoningAccumulated handles reasoning accumulation state
 func (tp *TokenProcessor) SetReasoningAccumulated(accumulated bool) {
 	// This can be used by callers to track reasoning state
-	if tp.debug {
-		// Debug logging if needed
-	}
+	// Debug logging could be added here if needed in the future
+	_ = accumulated // Avoid unused parameter warning
 }

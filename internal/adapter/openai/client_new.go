@@ -77,7 +77,7 @@ func (c *NewClient) attemptChat(
 		c.SendErrorToken(ctx, out, "OpenAI error: %v", err)
 		return false, false
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		err := c.HandleErrorResponse(resp)
