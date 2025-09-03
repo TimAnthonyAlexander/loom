@@ -119,22 +119,7 @@ function EditorPanel({ openTabs, activeTab, onChangeActiveTab, onCloseTab, onUpd
                             scrollbar: {
                                 horizontal: 'auto',
                                 vertical: 'auto'
-                            },
-                            // Prevent Monaco from enforcing minimum widths
-                            layoutInfo: {
-                                glyphMarginWidth: 0,
-                                lineDecorationsWidth: 0
-                            },
-                            // Disable features that might affect width calculations
-                            glyphMargin: false,
-                            folding: false,
-                            lineDecorationsWidth: 0,
-                            lineNumbersMinChars: 3,
-                            // Ensure horizontal scrolling instead of expanding
-                            wordWrapColumn: 80,
-                            rulers: [],
-                            overviewRulerLanes: 0,
-                            overviewRulerBorder: false
+                            }
                         }}
                         />
                     </div>
