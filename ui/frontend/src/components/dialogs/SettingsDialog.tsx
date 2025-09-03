@@ -1,5 +1,6 @@
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Stack, TextField, Tooltip, Chip, Link, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 import { OpenProjectDataDir } from '../../../wailsjs/go/bridge/App';
+import { AVAILABLE_THEMES } from '../../themes/themeConfig';
 
 type Props = {
     open: boolean;
@@ -54,8 +55,9 @@ export default function SettingsDialog(props: Props) {
                     <FormControl fullWidth>
                         <InputLabel>Theme</InputLabel>
                         <Select value={currentTheme} onChange={(e) => setCurrentTheme(e.target.value)} label="Theme">
-                            <MenuItem value="catppuccin">Catppuccin</MenuItem>
-                            <MenuItem value="teal">Teal</MenuItem>
+                            {Object.entries(AVAILABLE_THEMES).map(([key, config]) => (
+                                <MenuItem key={key} value={key}>{config.name}</MenuItem>
+                            ))}
                         </Select>
                     </FormControl>
                     <Stack direction="row" spacing={2} alignItems="center">
