@@ -8,22 +8,30 @@ import { guessLanguage } from '../../utils/language';
 type Props = {
     openTabs: EditorTabItem[];
     activeTab: string;
+    currentTheme: string;
     onChangeActiveTab: (path: string) => void;
     onCloseTab: (path: string) => void;
     onUpdateTab: (path: string, patch: Partial<EditorTabItem>) => void;
     onSaveTab: (path: string) => Promise<void>;
 };
 
-function EditorPanel({ openTabs, activeTab, onChangeActiveTab, onCloseTab, onUpdateTab, onSaveTab }: Props) {
+function EditorPanel({ openTabs, activeTab, currentTheme, onChangeActiveTab, onCloseTab, onUpdateTab, onSaveTab }: Props) {
     const tab = openTabs.find((t) => t.path === activeTab);
     const editorRef = React.useRef<any>(null);
     const monacoRef = React.useRef<any>(null);
 
     const handleMount: OnMount = (editor, monaco) => {
-        import('../../themes/teal_converted.json').then((data: any) => {
-            monaco.editor.defineTheme('catppuccin-mocha', data);
-            monaco.editor.setTheme('catppuccin-mocha');
-        });
+        if (currentTheme === 'catppuccin') {
+            import('../../themes/mocha_converted.json').then((data: any) => {
+                monaco.editor.defineTheme('catppuccin-mocha', data);
+                monaco.editor.setTheme('catppuccin-mocha');
+            });
+        } else {
+            import('../../themes/teal_converted.json').then((data: any) => {
+                monaco.editor.defineTheme('teal-theme', data);
+                monaco.editor.setTheme('teal-theme');
+            });
+        }
 
         editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
             if (tab?.path) onSaveTab(tab.path);
@@ -46,6 +54,24 @@ function EditorPanel({ openTabs, activeTab, onChangeActiveTab, onCloseTab, onUpd
         editor.setPosition({ lineNumber: tab.cursor.line, column: tab.cursor.column });
         editor.revealPositionInCenter({ lineNumber: tab.cursor.line, column: tab.cursor.column });
     }, [tab?.cursor?.line, tab?.cursor?.column, tab?.path]);
+
+    // Handle theme changes
+    React.useEffect(() => {
+        const monaco = monacoRef.current;
+        if (!monaco) return;
+        
+        if (currentTheme === 'catppuccin') {
+            import('../../themes/mocha_converted.json').then((data: any) => {
+                monaco.editor.defineTheme('catppuccin-mocha', data);
+                monaco.editor.setTheme('catppuccin-mocha');
+            });
+        } else {
+            import('../../themes/teal_converted.json').then((data: any) => {
+                monaco.editor.defineTheme('teal-theme', data);
+                monaco.editor.setTheme('teal-theme');
+            });
+        }
+    }, [currentTheme]);
 
     const handleChange = (value?: string) => {
         if (!tab) return;

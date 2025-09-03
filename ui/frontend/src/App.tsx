@@ -18,6 +18,7 @@ import MemoriesDialog from './components/dialogs/MemoriesDialog';
 import { ChatMessage, ApprovalRequest, UIFileEntry, UIListDirResult, ConversationListItem, EditorTabItem } from './types/ui';
 import { guessLanguage } from './utils/language';
 import { writeFile } from './services/files';
+import { DynamicThemeProvider } from './components/DynamicThemeProvider';
 
 // Types moved to ./types/ui
 
@@ -39,6 +40,7 @@ const App: React.FC = () => {
     const [ollamaEndpoint, setOllamaEndpoint] = useState<string>('');
     const [autoApproveShell, setAutoApproveShell] = useState<boolean>(false);
     const [autoApproveEdits, setAutoApproveEdits] = useState<boolean>(false);
+    const [currentTheme, setCurrentTheme] = useState<string>('catppuccin');
     const [rulesOpen, setRulesOpen] = useState<boolean>(false);
     const [memoriesOpen, setMemoriesOpen] = useState<boolean>(false);
     const [userRules, setUserRules] = useState<string[]>([]);
@@ -297,6 +299,7 @@ const App: React.FC = () => {
                 setOllamaEndpoint(s?.ollama_endpoint || '');
                 setAutoApproveShell(String(s?.auto_approve_shell).toLowerCase() === 'true');
                 setAutoApproveEdits(String(s?.auto_approve_edits).toLowerCase() === 'true');
+                setCurrentTheme(s?.theme || 'catppuccin');
                 const last = s?.last_workspace || '';
                 if (last) {
                     setWorkspacePath(last);
@@ -827,7 +830,8 @@ const App: React.FC = () => {
     }, []);
 
     return (
-        <Box ref={containerRef} display="flex" height="100vh" sx={{ bgcolor: 'background.default' }}>
+        <DynamicThemeProvider currentTheme={currentTheme}>
+            <Box ref={containerRef} display="flex" height="100vh" sx={{ bgcolor: 'background.default' }}>
             {/* Left: Sidebar */}
             <Box sx={{ minWidth: SIDEBAR_MIN_WIDTH, width: sidebarWidth, borderRight: 1, borderColor: 'divider' }}>
                 <Sidebar
@@ -857,6 +861,7 @@ const App: React.FC = () => {
                 <EditorPanel
                     openTabs={openTabs}
                     activeTab={activeTab}
+                    currentTheme={currentTheme}
                     onChangeActiveTab={(p: string) => {
                         setActiveTab(p);
                         if (p) {
@@ -939,7 +944,9 @@ const App: React.FC = () => {
                 setAutoApproveShell={setAutoApproveShell}
                 autoApproveEdits={autoApproveEdits}
                 setAutoApproveEdits={setAutoApproveEdits}
-                onSave={() => { SaveSettings({ openai_api_key: openaiKey, anthropic_api_key: anthropicKey, openrouter_api_key: openrouterKey, ollama_endpoint: ollamaEndpoint, auto_approve_shell: String(autoApproveShell), auto_approve_edits: String(autoApproveEdits) }).finally(() => setSettingsOpen(false)); }}
+                currentTheme={currentTheme}
+                setCurrentTheme={setCurrentTheme}
+                onSave={() => { SaveSettings({ openai_api_key: openaiKey, anthropic_api_key: anthropicKey, openrouter_api_key: openrouterKey, ollama_endpoint: ollamaEndpoint, auto_approve_shell: String(autoApproveShell), auto_approve_edits: String(autoApproveEdits), theme: currentTheme }).finally(() => setSettingsOpen(false)); }}
                 onClose={() => setSettingsOpen(false)}
             />
             <WorkspaceDialog
@@ -1021,6 +1028,7 @@ const App: React.FC = () => {
                 gPerModel={gPerModel}
             />
         </Box>
+        </DynamicThemeProvider>
     );
 };
 

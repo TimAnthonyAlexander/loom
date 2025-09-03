@@ -1,4 +1,4 @@
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Stack, TextField, Tooltip, Chip, Link } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Stack, TextField, Tooltip, Chip, Link, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 import { OpenProjectDataDir } from '../../../wailsjs/go/bridge/App';
 
 type Props = {
@@ -15,6 +15,8 @@ type Props = {
     setAutoApproveShell: (v: boolean) => void;
     autoApproveEdits: boolean;
     setAutoApproveEdits: (v: boolean) => void;
+    currentTheme: string;
+    setCurrentTheme: (v: string) => void;
     onSave: () => void;
     onClose: () => void;
 };
@@ -34,6 +36,8 @@ export default function SettingsDialog(props: Props) {
         setAutoApproveShell,
         autoApproveEdits,
         setAutoApproveEdits,
+        currentTheme,
+        setCurrentTheme,
         onSave,
         onClose,
     } = props;
@@ -47,6 +51,13 @@ export default function SettingsDialog(props: Props) {
                     <TextField label="Anthropic API Key" type="password" autoComplete="off" value={anthropicKey} onChange={(e) => setAnthropicKey(e.target.value)} placeholder="sk-ant-..." fullWidth />
                     <TextField label="OpenRouter API Key" type="password" autoComplete="off" value={openrouterKey} onChange={(e) => setOpenrouterKey(e.target.value)} placeholder="sk-or-..." fullWidth />
                     <TextField label="Ollama Endpoint" value={ollamaEndpoint} onChange={(e) => setOllamaEndpoint(e.target.value)} placeholder="http://localhost:11434" fullWidth />
+                    <FormControl fullWidth>
+                        <InputLabel>Theme</InputLabel>
+                        <Select value={currentTheme} onChange={(e) => setCurrentTheme(e.target.value)} label="Theme">
+                            <MenuItem value="catppuccin">Catppuccin</MenuItem>
+                            <MenuItem value="teal">Teal</MenuItem>
+                        </Select>
+                    </FormControl>
                     <Stack direction="row" spacing={2} alignItems="center">
                         <Link component="button" underline="hover" onClick={() => OpenProjectDataDir()}>
                             Open project data folder
