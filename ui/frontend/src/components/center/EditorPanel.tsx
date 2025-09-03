@@ -20,7 +20,7 @@ function EditorPanel({ openTabs, activeTab, onChangeActiveTab, onCloseTab, onUpd
     const monacoRef = React.useRef<any>(null);
 
     const handleMount: OnMount = (editor, monaco) => {
-        import('../../themes/mocha_converted.json').then((data: any) => {
+        import('../../themes/teal_converted.json').then((data: any) => {
             monaco.editor.defineTheme('catppuccin-mocha', data);
             monaco.editor.setTheme('catppuccin-mocha');
         });
@@ -57,12 +57,12 @@ function EditorPanel({ openTabs, activeTab, onChangeActiveTab, onCloseTab, onUpd
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0, maxWidth: '100%', height: '100vh', borderRight: 1, borderColor: 'divider' }}>
             <Box sx={{ px: 2, pt: 1, borderBottom: 1, borderColor: 'divider', minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
-                <Tabs 
-                    value={activeTab} 
-                    onChange={(_, v) => onChangeActiveTab(v)} 
-                    variant="scrollable" 
+                <Tabs
+                    value={activeTab}
+                    onChange={(_, v) => onChangeActiveTab(v)}
+                    variant="scrollable"
                     scrollButtons="auto"
-                    sx={{ 
+                    sx={{
                         minHeight: 36,
                         minWidth: 0,
                         maxWidth: '100%',
@@ -105,22 +105,22 @@ function EditorPanel({ openTabs, activeTab, onChangeActiveTab, onCloseTab, onUpd
                             value={tab.content}
                             onChange={handleChange}
                             onMount={handleMount}
-                        options={{
-                            fontSize: 13,
-                            minimap: { enabled: false },
-                            wordWrap: 'off',
-                            lineNumbers: 'on',
-                            automaticLayout: true,
-                            renderWhitespace: 'selection',
-                            tabSize: 4,
-                            insertSpaces: true,
-                            smoothScrolling: true,
-                            scrollBeyondLastLine: false,
-                            scrollbar: {
-                                horizontal: 'auto',
-                                vertical: 'auto'
-                            }
-                        }}
+                            options={{
+                                fontSize: 13,
+                                minimap: { enabled: false },
+                                wordWrap: 'off',
+                                lineNumbers: 'on',
+                                automaticLayout: true,
+                                renderWhitespace: 'selection',
+                                tabSize: 4,
+                                insertSpaces: true,
+                                smoothScrolling: true,
+                                scrollBeyondLastLine: false,
+                                scrollbar: {
+                                    horizontal: 'auto',
+                                    vertical: 'auto'
+                                }
+                            }}
                         />
                     </div>
                 ) : (
