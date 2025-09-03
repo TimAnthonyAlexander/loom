@@ -27,6 +27,10 @@ function EditorPanel({ openTabs, activeTab, currentTheme, onChangeActiveTab, onC
             light: { file: 'light_converted.json', name: 'light-theme' },
             purple: { file: 'purple_converted.json', name: 'purple-theme' },
             forest: { file: 'forest_converted.json', name: 'forest-theme' },
+            ocean: { file: 'ocean_converted.json', name: 'ocean-theme' },
+            sunset: { file: 'sunset_converted.json', name: 'sunset-theme' },
+            mint: { file: 'mint_converted.json', name: 'mint-theme' },
+            lavender: { file: 'lavender_converted.json', name: 'lavender-theme' },
         };
 
         const themeConfig = themeMap[theme] || themeMap.catppuccin;

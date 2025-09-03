@@ -335,6 +335,274 @@ const forestTheme = createTheme({
     },
 });
 
+const oceanTheme = createTheme({
+    palette: {
+        mode: 'dark',
+        // Deep ocean blue theme
+        primary: { main: '#1565c0', contrastText: '#ffffff' }, // ocean blue
+        secondary: { main: '#64b5f6', contrastText: '#000000' }, // light blue
+        background: { default: '#0d1a2e', paper: '#1e2a3a' },
+        text: { primary: '#ffffff', secondary: '#b0bec5' },
+        divider: '#37474f',
+        error: { main: '#ef5350' },
+        warning: { main: '#ffa726' },
+        info: { main: '#29b6f6' },
+        success: { main: '#66bb6a' },
+    },
+    shape: { borderRadius: 12 },
+    typography: {
+        fontFamily:
+            "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'",
+    },
+    components: {
+        MuiCssBaseline: {
+            styleOverrides: {
+                body: {
+                    backgroundColor: '#0d1a2e',
+                    color: '#ffffff',
+                },
+            },
+        },
+        MuiButton: {
+            styleOverrides: {
+                root: { textTransform: 'none' },
+                containedPrimary: {
+                    backgroundColor: '#1565c0',
+                    color: '#ffffff',
+                    '&:hover': { backgroundColor: '#42a5f5' },
+                },
+                outlined: {
+                    borderColor: '#1565c0',
+                },
+            },
+        },
+        MuiPaper: {
+            styleOverrides: {
+                root: {
+                    backgroundImage: 'none',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.6)',
+                },
+            },
+        },
+        MuiDivider: {
+            styleOverrides: { root: { borderColor: '#37474f' } },
+        },
+        MuiTooltip: {
+            styleOverrides: {
+                tooltip: { backgroundColor: '#37474f', color: '#ffffff' },
+            },
+        },
+        MuiTypography: {
+            styleOverrides: {
+                root: {
+                    color: '#ffffff',
+                },
+            },
+        },
+    },
+});
+
+const sunsetTheme = createTheme({
+    palette: {
+        mode: 'dark',
+        // Warm sunset theme
+        primary: { main: '#ff6f3c', contrastText: '#ffffff' }, // sunset orange
+        secondary: { main: '#ffd23f', contrastText: '#000000' }, // golden yellow
+        background: { default: '#1a1210', paper: '#2a1f1c' },
+        text: { primary: '#ffffff', secondary: '#b0bec5' },
+        divider: '#37474f',
+        error: { main: '#ef5350' },
+        warning: { main: '#ffa726' },
+        info: { main: '#29b6f6' },
+        success: { main: '#66bb6a' },
+    },
+    shape: { borderRadius: 12 },
+    typography: {
+        fontFamily:
+            "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'",
+    },
+    components: {
+        MuiCssBaseline: {
+            styleOverrides: {
+                body: {
+                    backgroundColor: '#1a1210',
+                    color: '#ffffff',
+                },
+            },
+        },
+        MuiButton: {
+            styleOverrides: {
+                root: { textTransform: 'none' },
+                containedPrimary: {
+                    backgroundColor: '#ff6f3c',
+                    color: '#ffffff',
+                    '&:hover': { backgroundColor: '#ff8f65' },
+                },
+                outlined: {
+                    borderColor: '#ff6f3c',
+                },
+            },
+        },
+        MuiPaper: {
+            styleOverrides: {
+                root: {
+                    backgroundImage: 'none',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.6)',
+                },
+            },
+        },
+        MuiDivider: {
+            styleOverrides: { root: { borderColor: '#37474f' } },
+        },
+        MuiTooltip: {
+            styleOverrides: {
+                tooltip: { backgroundColor: '#37474f', color: '#ffffff' },
+            },
+        },
+        MuiTypography: {
+            styleOverrides: {
+                root: {
+                    color: '#ffffff',
+                },
+            },
+        },
+    },
+});
+
+const mintTheme = createTheme({
+    palette: {
+        mode: 'light',
+        // Fresh mint green light theme
+        primary: { main: '#26a69a', contrastText: '#ffffff' }, // mint green
+        secondary: { main: '#66bb6a', contrastText: '#ffffff' }, // light green
+        background: { default: '#f8fffe', paper: '#f0fffe' },
+        text: { primary: '#000000', secondary: '#666666' },
+        divider: '#e0f2f1',
+        error: { main: '#d32f2f' },
+        warning: { main: '#f57c00' },
+        info: { main: '#0097a7' },
+        success: { main: '#388e3c' },
+    },
+    shape: { borderRadius: 12 },
+    typography: {
+        fontFamily:
+            "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'",
+    },
+    components: {
+        MuiCssBaseline: {
+            styleOverrides: {
+                body: {
+                    backgroundColor: '#f8fffe',
+                    color: '#000000',
+                },
+            },
+        },
+        MuiButton: {
+            styleOverrides: {
+                root: { textTransform: 'none' },
+                containedPrimary: {
+                    backgroundColor: '#26a69a',
+                    color: '#ffffff',
+                    '&:hover': { backgroundColor: '#4db6ac' },
+                },
+                outlined: {
+                    borderColor: '#26a69a',
+                },
+            },
+        },
+        MuiPaper: {
+            styleOverrides: {
+                root: {
+                    backgroundImage: 'none',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)',
+                },
+            },
+        },
+        MuiDivider: {
+            styleOverrides: { root: { borderColor: '#e0f2f1' } },
+        },
+        MuiTooltip: {
+            styleOverrides: {
+                tooltip: { backgroundColor: '#616161', color: '#ffffff' },
+            },
+        },
+        MuiTypography: {
+            styleOverrides: {
+                root: {
+                    color: '#000000',
+                },
+            },
+        },
+    },
+});
+
+const lavenderTheme = createTheme({
+    palette: {
+        mode: 'light',
+        // Soft lavender light theme
+        primary: { main: '#9c88ff', contrastText: '#ffffff' }, // lavender purple
+        secondary: { main: '#ab47bc', contrastText: '#ffffff' }, // medium purple
+        background: { default: '#fdfcff', paper: '#f8f7ff' },
+        text: { primary: '#000000', secondary: '#666666' },
+        divider: '#f3e5f5',
+        error: { main: '#d32f2f' },
+        warning: { main: '#f57c00' },
+        info: { main: '#7b1fa2' },
+        success: { main: '#388e3c' },
+    },
+    shape: { borderRadius: 12 },
+    typography: {
+        fontFamily:
+            "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'",
+    },
+    components: {
+        MuiCssBaseline: {
+            styleOverrides: {
+                body: {
+                    backgroundColor: '#fdfcff',
+                    color: '#000000',
+                },
+            },
+        },
+        MuiButton: {
+            styleOverrides: {
+                root: { textTransform: 'none' },
+                containedPrimary: {
+                    backgroundColor: '#9c88ff',
+                    color: '#ffffff',
+                    '&:hover': { backgroundColor: '#b39dff' },
+                },
+                outlined: {
+                    borderColor: '#9c88ff',
+                },
+            },
+        },
+        MuiPaper: {
+            styleOverrides: {
+                root: {
+                    backgroundImage: 'none',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)',
+                },
+            },
+        },
+        MuiDivider: {
+            styleOverrides: { root: { borderColor: '#f3e5f5' } },
+        },
+        MuiTooltip: {
+            styleOverrides: {
+                tooltip: { backgroundColor: '#616161', color: '#ffffff' },
+            },
+        },
+        MuiTypography: {
+            styleOverrides: {
+                root: {
+                    color: '#000000',
+                },
+            },
+        },
+    },
+});
+
 // Theme registry for easy extensibility
 // To add a new theme:
 // 1. Create a Material-UI theme object (copy existing theme as starting point)
@@ -346,6 +614,10 @@ export const AVAILABLE_THEMES = {
     light: { name: 'Light', theme: lightTheme, mode: 'light' },
     purple: { name: 'Purple', theme: purpleTheme, mode: 'dark' },
     forest: { name: 'Forest', theme: forestTheme, mode: 'dark' },
+    ocean: { name: 'Ocean', theme: oceanTheme, mode: 'dark' },
+    sunset: { name: 'Sunset', theme: sunsetTheme, mode: 'dark' },
+    mint: { name: 'Mint', theme: mintTheme, mode: 'light' },
+    lavender: { name: 'Lavender', theme: lavenderTheme, mode: 'light' },
 } as const;
 
 export type ThemeName = keyof typeof AVAILABLE_THEMES;
