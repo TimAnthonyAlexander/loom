@@ -853,7 +853,7 @@ const App: React.FC = () => {
             />
 
             {/* Center: Tabbed Editor */}
-            <Box sx={{ flex: 1 }}>
+            <Box sx={{ flex: 1, minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
                 <EditorPanel
                     openTabs={openTabs}
                     activeTab={activeTab}

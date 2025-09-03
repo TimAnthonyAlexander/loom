@@ -55,15 +55,31 @@ function EditorPanel({ openTabs, activeTab, onChangeActiveTab, onCloseTab, onUpd
     const language = tab?.language || (tab ? guessLanguage(tab.path) : 'text');
 
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0, height: '100vh', borderRight: 1, borderColor: 'divider' }}>
-            <Box sx={{ px: 2, pt: 1, borderBottom: 1, borderColor: 'divider' }}>
-                <Tabs value={activeTab} onChange={(_, v) => onChangeActiveTab(v)} variant="scrollable" scrollButtons={false} sx={{ minHeight: 36 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0, maxWidth: '100%', height: '100vh', borderRight: 1, borderColor: 'divider' }}>
+            <Box sx={{ px: 2, pt: 1, borderBottom: 1, borderColor: 'divider', minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
+                <Tabs 
+                    value={activeTab} 
+                    onChange={(_, v) => onChangeActiveTab(v)} 
+                    variant="scrollable" 
+                    scrollButtons="auto"
+                    sx={{ 
+                        minHeight: 36,
+                        minWidth: 0,
+                        maxWidth: '100%',
+                        '& .MuiTabs-scroller': {
+                            overflow: 'hidden !important'
+                        },
+                        '& .MuiTabs-flexContainer': {
+                            minWidth: 0
+                        }
+                    }}
+                >
                     {openTabs.map((t) => (
                         <Tab
                             key={t.path}
                             label={
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <span style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, maxWidth: 200 }}>
+                                    <span style={{ maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
                                         {t.title}{t.isDirty ? ' •' : ''}
                                     </span>
                                     <IconButton size="small" onClick={(e) => { e.stopPropagation(); onCloseTab(t.path); }}>
@@ -72,21 +88,23 @@ function EditorPanel({ openTabs, activeTab, onChangeActiveTab, onCloseTab, onUpd
                                 </Box>
                             }
                             value={t.path}
-                            sx={{ minHeight: 32, fontSize: 12 }}
+                            sx={{ minHeight: 32, fontSize: 12, minWidth: 0, maxWidth: 200 }}
                         />
                     ))}
                 </Tabs>
             </Box>
 
-            <Box sx={{ flex: 1, minHeight: 0 }}>
+            <Box sx={{ flex: 1, minHeight: 0, minWidth: 0, maxWidth: '100%', overflow: 'hidden', width: '100%' }}>
                 {tab ? (
-                    <Editor
-                        height="100%"
-                        defaultLanguage={language}
-                        language={language}
-                        value={tab.content}
-                        onChange={handleChange}
-                        onMount={handleMount}
+                    <div style={{ width: '100%', height: '100%', maxWidth: '100%', overflow: 'hidden' }}>
+                        <Editor
+                            width="100%"
+                            height="100%"
+                            defaultLanguage={language}
+                            language={language}
+                            value={tab.content}
+                            onChange={handleChange}
+                            onMount={handleMount}
                         options={{
                             fontSize: 13,
                             minimap: { enabled: false },
@@ -98,8 +116,28 @@ function EditorPanel({ openTabs, activeTab, onChangeActiveTab, onCloseTab, onUpd
                             insertSpaces: true,
                             smoothScrolling: true,
                             scrollBeyondLastLine: false,
+                            scrollbar: {
+                                horizontal: 'auto',
+                                vertical: 'auto'
+                            },
+                            // Prevent Monaco from enforcing minimum widths
+                            layoutInfo: {
+                                glyphMarginWidth: 0,
+                                lineDecorationsWidth: 0
+                            },
+                            // Disable features that might affect width calculations
+                            glyphMargin: false,
+                            folding: false,
+                            lineDecorationsWidth: 0,
+                            lineNumbersMinChars: 3,
+                            // Ensure horizontal scrolling instead of expanding
+                            wordWrapColumn: 80,
+                            rulers: [],
+                            overviewRulerLanes: 0,
+                            overviewRulerBorder: false
                         }}
-                    />
+                        />
+                    </div>
                 ) : (
                     <Box sx={{ p: 4, color: 'text.secondary' }}></Box>
                 )}
