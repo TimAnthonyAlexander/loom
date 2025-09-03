@@ -396,6 +396,7 @@ func (a *App) GetSettings() map[string]string {
 		"last_model":         s.LastModel,
 		"auto_approve_shell": boolToStr(s.AutoApproveShell),
 		"auto_approve_edits": boolToStr(s.AutoApproveEdits),
+		"theme":              s.Theme,
 	}
 }
 
@@ -614,6 +615,9 @@ func (a *App) SaveSettings(settings map[string]string) {
 	}
 	if v, ok := settings["auto_approve_edits"]; ok {
 		s.AutoApproveEdits = strToBool(v)
+	}
+	if v, ok := settings["theme"]; ok {
+		s.Theme = v
 	}
 
 	a.applyAndSaveSettings(s)

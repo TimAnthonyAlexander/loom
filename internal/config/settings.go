@@ -20,6 +20,8 @@ type Settings struct {
 	// Feature flags
 	AutoApproveShell bool `json:"auto_approve_shell,omitempty"`
 	AutoApproveEdits bool `json:"auto_approve_edits,omitempty"`
+	// UI preferences
+	Theme string `json:"theme,omitempty"`
 	// Recent workspaces (max 10, ordered from most recent)
 	RecentWorkspaces []string `json:"recent_workspaces,omitempty"`
 }
