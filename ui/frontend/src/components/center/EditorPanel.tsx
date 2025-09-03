@@ -31,6 +31,7 @@ function EditorPanel({ openTabs, activeTab, currentTheme, onChangeActiveTab, onC
             sunset: { file: 'sunset_converted.json', name: 'sunset-theme' },
             mint: { file: 'mint_converted.json', name: 'mint-theme' },
             lavender: { file: 'lavender_converted.json', name: 'lavender-theme' },
+            slate: { file: 'slate_converted.json', name: 'slate-theme' },
         };
 
         const themeConfig = themeMap[theme] || themeMap.catppuccin;

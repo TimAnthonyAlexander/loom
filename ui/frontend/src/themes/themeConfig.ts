@@ -603,6 +603,73 @@ const lavenderTheme = createTheme({
     },
 });
 
+const slateTheme = createTheme({
+    palette: {
+        mode: 'dark',
+        // Cool slate gray theme
+        primary: { main: '#607d8b', contrastText: '#ffffff' }, // slate blue-gray
+        secondary: { main: '#90a4ae', contrastText: '#000000' }, // light slate
+        background: { default: '#1a1c20', paper: '#2a2d32' },
+        text: { primary: '#ffffff', secondary: '#b0bec5' },
+        divider: '#37474f',
+        error: { main: '#ef5350' },
+        warning: { main: '#ffa726' },
+        info: { main: '#29b6f6' },
+        success: { main: '#66bb6a' },
+    },
+    shape: { borderRadius: 12 },
+    typography: {
+        fontFamily:
+            "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'",
+    },
+    components: {
+        MuiCssBaseline: {
+            styleOverrides: {
+                body: {
+                    backgroundColor: '#1a1c20',
+                    color: '#ffffff',
+                },
+            },
+        },
+        MuiButton: {
+            styleOverrides: {
+                root: { textTransform: 'none' },
+                containedPrimary: {
+                    backgroundColor: '#607d8b',
+                    color: '#ffffff',
+                    '&:hover': { backgroundColor: '#78909c' },
+                },
+                outlined: {
+                    borderColor: '#607d8b',
+                },
+            },
+        },
+        MuiPaper: {
+            styleOverrides: {
+                root: {
+                    backgroundImage: 'none',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.6)',
+                },
+            },
+        },
+        MuiDivider: {
+            styleOverrides: { root: { borderColor: '#37474f' } },
+        },
+        MuiTooltip: {
+            styleOverrides: {
+                tooltip: { backgroundColor: '#37474f', color: '#ffffff' },
+            },
+        },
+        MuiTypography: {
+            styleOverrides: {
+                root: {
+                    color: '#ffffff',
+                },
+            },
+        },
+    },
+});
+
 // Theme registry for easy extensibility
 // To add a new theme:
 // 1. Create a Material-UI theme object (copy existing theme as starting point)
@@ -618,6 +685,7 @@ export const AVAILABLE_THEMES = {
     sunset: { name: 'Sunset', theme: sunsetTheme, mode: 'dark' },
     mint: { name: 'Mint', theme: mintTheme, mode: 'light' },
     lavender: { name: 'Lavender', theme: lavenderTheme, mode: 'light' },
+    slate: { name: 'Slate', theme: slateTheme, mode: 'dark' },
 } as const;
 
 export type ThemeName = keyof typeof AVAILABLE_THEMES;
