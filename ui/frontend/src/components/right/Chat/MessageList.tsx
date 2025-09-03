@@ -99,8 +99,8 @@ const MessageItem = React.memo(function MessageItem({
     }
 
     const containerProps = isUser
-        ? { component: Box, sx: { p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2, fontSize: '0.9rem', bgcolor: 'action.hover' } }
-        : { component: Box, sx: { py: 1, borderColor: 'divider', fontSize: '0.9rem' } };
+        ? { component: Box, sx: { p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2, fontSize: '0.9rem', bgcolor: 'action.hover', color: 'text.primary' } }
+        : { component: Box, sx: { py: 1, borderColor: 'divider', fontSize: '0.9rem', color: 'text.primary' } };
 
     return (
         <Box
