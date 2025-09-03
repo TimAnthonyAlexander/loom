@@ -10,53 +10,33 @@ import (
 	"github.com/loom/loom/internal/tool"
 )
 
-// getCurrentGitBranch returns the current git branch name if in a git repository, otherwise returns empty string.
-func getCurrentGitBranch(workspaceRoot string) string {
-	// Check if git is available
-	if _, err := exec.LookPath("git"); err != nil {
-		return "" // git not available
-	}
-
-	// Try to get the current branch name
-	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
-	cmd.Dir = workspaceRoot
-	output, err := cmd.Output()
-	if err != nil {
-		return "" // not in a git repo or other error
-	}
-
-	branch := strings.TrimSpace(string(output))
-	// Return empty string for detached HEAD state
-	if branch == "HEAD" {
-		return ""
-	}
-
-	return branch
+// MemoryEntry is a lightweight representation of a memory for prompt injection.
+type MemoryEntry struct {
+	ID   string
+	Text string
 }
 
-// GenerateSystemPrompt builds the system prompt shown to the model as the first message.
-// Uses a multiline template and injects the current date and tools list.
-func GenerateSystemPrompt(tools []tool.Schema) string {
+// SystemPromptOptions configures system prompt generation
+type SystemPromptOptions struct {
+	Tools                 []tool.Schema
+	UserRules             []string
+	ProjectRules          []string
+	Memories              []MemoryEntry
+	WorkspaceRoot         string
+	IncludeProjectContext bool // Whether to include profiler context
+}
+
+// GenerateSystemPromptUnified consolidates all system prompt generation
+// This replaces 3 nearly identical functions with 80%+ duplication
+func GenerateSystemPromptUnified(opts SystemPromptOptions) string {
+	var b strings.Builder
+
+	// Base system prompt
 	today := time.Now().Format("2006-01-02")
+	toolsBlock := buildToolsBlock(opts.Tools)
 
-	// Render tools block
-	var toolLines []string
-	if len(tools) == 0 {
-		toolLines = []string{"(none registered)"}
-	} else {
-		for _, t := range tools {
-			safety := "safe"
-			if !t.Safe {
-				safety = "requires approval"
-			}
-			toolLines = append(toolLines, fmt.Sprintf("- %s: %s (%s)", t.Name, t.Description, safety))
-		}
-	}
-	toolsBlock := strings.Join(toolLines, "\n")
-
-	// Multiline prompt template
 	template := `Loom System Prompt v%s
-		Use MarkDown-rich text in user-facing messages. 
+		Use MarkDown-rich text in user-facing messages.
 		Be concise. Be clear. Be friendly. Be professional. You are an expert at everything.
 		You are an autonomous, intelligent agent designed to assist with software development tasks.
 		You can do 50 steps of tool use if the task requires it. Be thorough.
@@ -90,118 +70,159 @@ func GenerateSystemPrompt(tools []tool.Schema) string {
 		Never only reply on the automatically injected project context such as entrypoints and file hotlists. Explore.
 		`
 
-	return fmt.Sprintf(template, today, toolsBlock)
-}
+	b.WriteString(fmt.Sprintf(template, today, toolsBlock))
 
-// MemoryEntry is a lightweight representation of a memory for prompt injection.
-type MemoryEntry struct {
-	ID   string
-	Text string
-}
-
-// GenerateSystemPromptWithRules augments the base prompt with user/project rules and memories.
-func GenerateSystemPromptWithRules(tools []tool.Schema, userRules []string, projectRules []string, memories []MemoryEntry, workspaceRoot string) string {
-	base := GenerateSystemPrompt(tools)
-
-	var b strings.Builder
-	b.WriteString(base)
-
-	// Inject git branch information if available
-	if branch := getCurrentGitBranch(workspaceRoot); branch != "" {
-		b.WriteString(fmt.Sprintf("\n\nCurrent Git Branch: %s", branch))
-	}
-	if len(memories) > 0 {
-		b.WriteString("\n\nMemories:\n")
-		for _, m := range memories {
-			if strings.TrimSpace(m.ID) != "" {
-				b.WriteString("- ")
-				b.WriteString(m.ID)
-				b.WriteString(": ")
-				b.WriteString(m.Text)
-				b.WriteString("\n")
-			} else {
-				b.WriteString("- ")
-				b.WriteString(m.Text)
-				b.WriteString("\n")
-			}
+	// Add git branch if available
+	if opts.WorkspaceRoot != "" {
+		if branch := getCurrentGitBranch(opts.WorkspaceRoot); branch != "" {
+			b.WriteString(fmt.Sprintf("\n\nCurrent Git Branch: %s", branch))
 		}
 	}
-	if len(userRules) > 0 {
-		b.WriteString("\n\nUser Rules:\n")
-		for _, r := range userRules {
-			b.WriteString("- ")
-			b.WriteString(r)
-			b.WriteString("\n")
-		}
+
+	// Add project context if requested
+	if opts.IncludeProjectContext && opts.WorkspaceRoot != "" {
+		addProjectContext(&b, opts.WorkspaceRoot)
 	}
-	if len(projectRules) > 0 {
-		b.WriteString("\nProject Rules:\n")
-		for _, r := range projectRules {
-			b.WriteString("- ")
-			b.WriteString(r)
-			b.WriteString("\n")
-		}
-	}
+
+	// Add memories, user rules, project rules
+	addMemories(&b, opts.Memories)
+	addUserRules(&b, opts.UserRules)
+	addProjectRules(&b, opts.ProjectRules)
+
 	return strings.TrimSpace(b.String())
 }
 
-// GenerateSystemPromptWithProjectContext augments the base prompt with project context, rules, and memories.
-func GenerateSystemPromptWithProjectContext(tools []tool.Schema, userRules []string, projectRules []string, memories []MemoryEntry, workspaceRoot string) string {
-	base := GenerateSystemPrompt(tools)
+// buildToolsBlock creates the tools section
+func buildToolsBlock(tools []tool.Schema) string {
+	var toolLines []string
+	if len(tools) == 0 {
+		toolLines = []string{"(none registered)"}
+	} else {
+		for _, t := range tools {
+			safety := "safe"
+			if !t.Safe {
+				safety = "requires approval"
+			}
+			toolLines = append(toolLines, fmt.Sprintf("- %s: %s (%s)", t.Name, t.Description, safety))
+		}
+	}
+	return strings.Join(toolLines, "\n")
+}
 
-	var b strings.Builder
-	b.WriteString(base)
-
-	// Inject git branch information if available
-	if branch := getCurrentGitBranch(workspaceRoot); branch != "" {
-		b.WriteString(fmt.Sprintf("\n\nCurrent Git Branch: %s", branch))
+// getCurrentGitBranch gets git branch (unified version)
+func getCurrentGitBranch(workspaceRoot string) string {
+	if _, err := exec.LookPath("git"); err != nil {
+		return ""
 	}
 
-	// Inject project context block if available
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	cmd.Dir = workspaceRoot
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+
+	branch := strings.TrimSpace(string(output))
+	if branch == "HEAD" {
+		return ""
+	}
+	return branch
+}
+
+// addProjectContext adds profiler context if available
+func addProjectContext(b *strings.Builder, workspaceRoot string) {
 	contextBuilder := profiler.NewFileSystemProjectContextBuilder()
 	if projectContext, err := contextBuilder.BuildProjectContextBlock(workspaceRoot); err == nil {
 		b.WriteString("\n\n")
 		b.WriteString(projectContext)
 	}
 
-	// Inject compact rules if available
+	// Add compact rules if available
 	if compactRules, err := contextBuilder.BuildRulesBlock(workspaceRoot, 600); err == nil && compactRules != "" {
 		b.WriteString("\n\nProject Rules (from profile):\n")
 		b.WriteString(compactRules)
 		b.WriteString("\n")
 	}
+}
 
-	if len(memories) > 0 {
-		b.WriteString("\n\nMemories:\n")
-		for _, m := range memories {
-			if strings.TrimSpace(m.ID) != "" {
-				b.WriteString("- ")
-				b.WriteString(m.ID)
-				b.WriteString(": ")
-				b.WriteString(m.Text)
-				b.WriteString("\n")
-			} else {
-				b.WriteString("- ")
-				b.WriteString(m.Text)
-				b.WriteString("\n")
-			}
-		}
+// addMemories adds memory entries to prompt
+func addMemories(b *strings.Builder, memories []MemoryEntry) {
+	if len(memories) == 0 {
+		return
 	}
-	if len(userRules) > 0 {
-		b.WriteString("\n\nUser Rules:\n")
-		for _, r := range userRules {
+
+	b.WriteString("\n\nMemories:\n")
+	for _, m := range memories {
+		if strings.TrimSpace(m.ID) != "" {
 			b.WriteString("- ")
-			b.WriteString(r)
+			b.WriteString(m.ID)
+			b.WriteString(": ")
+			b.WriteString(m.Text)
+			b.WriteString("\n")
+		} else {
+			b.WriteString("- ")
+			b.WriteString(m.Text)
 			b.WriteString("\n")
 		}
 	}
-	if len(projectRules) > 0 {
-		b.WriteString("\nProject Rules (additional):\n")
-		for _, r := range projectRules {
-			b.WriteString("- ")
-			b.WriteString(r)
-			b.WriteString("\n")
-		}
+}
+
+// addUserRules adds user rules to prompt
+func addUserRules(b *strings.Builder, userRules []string) {
+	if len(userRules) == 0 {
+		return
 	}
-	return strings.TrimSpace(b.String())
+
+	b.WriteString("\n\nUser Rules:\n")
+	for _, r := range userRules {
+		b.WriteString("- ")
+		b.WriteString(r)
+		b.WriteString("\n")
+	}
+}
+
+// addProjectRules adds project rules to prompt
+func addProjectRules(b *strings.Builder, projectRules []string) {
+	if len(projectRules) == 0 {
+		return
+	}
+
+	b.WriteString("\nProject Rules (additional):\n")
+	for _, r := range projectRules {
+		b.WriteString("- ")
+		b.WriteString(r)
+		b.WriteString("\n")
+	}
+}
+
+// Legacy compatibility functions - use the unified version internally
+
+// GenerateSystemPrompt builds the basic system prompt
+func GenerateSystemPrompt(tools []tool.Schema) string {
+	return GenerateSystemPromptUnified(SystemPromptOptions{
+		Tools: tools,
+	})
+}
+
+// GenerateSystemPromptWithRules builds system prompt with rules and memories
+func GenerateSystemPromptWithRules(tools []tool.Schema, userRules []string, projectRules []string, memories []MemoryEntry, workspaceRoot string) string {
+	return GenerateSystemPromptUnified(SystemPromptOptions{
+		Tools:         tools,
+		UserRules:     userRules,
+		ProjectRules:  projectRules,
+		Memories:      memories,
+		WorkspaceRoot: workspaceRoot,
+	})
+}
+
+// GenerateSystemPromptWithProjectContext builds system prompt with full project context
+func GenerateSystemPromptWithProjectContext(tools []tool.Schema, userRules []string, projectRules []string, memories []MemoryEntry, workspaceRoot string) string {
+	return GenerateSystemPromptUnified(SystemPromptOptions{
+		Tools:                 tools,
+		UserRules:             userRules,
+		ProjectRules:          projectRules,
+		Memories:              memories,
+		WorkspaceRoot:         workspaceRoot,
+		IncludeProjectContext: true,
+	})
 }
