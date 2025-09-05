@@ -876,11 +876,7 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 			convo.AddAssistant(currentContent)
 			// Reset empty response counter since we got content
 			consecutiveEmptyAfterTools = 0
-			// If any tools were used earlier in this turn, continue the loop to allow for more interactions
-			if toolsUsed {
-				continue
-			}
-			// Pure conversational response with no tools used — end the turn
+			// Content received means conversation is complete, regardless of whether tools were used
 			return nil
 		}
 
@@ -1015,10 +1011,7 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 				e.bridge.EmitAssistant(currentContent)
 				// Reset empty response counter since we got content
 				consecutiveEmptyAfterTools = 0
-				// If tools were used in this turn, continue the loop to allow for more interactions
-				if toolsUsed {
-					continue
-				}
+				// Content received means conversation is complete, regardless of whether tools were used
 				return nil
 			}
 			// Still nothing
