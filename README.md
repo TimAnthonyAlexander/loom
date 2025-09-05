@@ -15,10 +15,19 @@ Loom pairs a Go orchestrator and tooling layer with a modern React UI. It’s de
 
 Some screenshots of the interface and Loom in action:
 
+General UI:
 ![Loom Screenshot](screenshot1.png)
+
+Different Personalities:
 ![Loom Screenshot](screenshot2.png)
+
+Chat UI:
 ![Loom Screenshot](screenshot3.png)
+
+Costs:
 ![Loom Screenshot](screenshot4.png)
+
+Settings:
 ![Loom Screenshot](screenshot5.png)
 
 ## Key features
