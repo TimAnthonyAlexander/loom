@@ -65,7 +65,6 @@ function Composer2Component({
     const inputRef = React.useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
     const attachBtnRef = React.useRef<HTMLButtonElement | null>(null);
     const [isDragOver, setIsDragOver] = React.useState(false);
-    const [showPersonalityTooltip, setShowPersonalityTooltip] = React.useState(false);
 
     React.useEffect(() => {
         if (focusToken === undefined) return;
@@ -105,8 +104,6 @@ function Composer2Component({
         e.preventDefault();
         setIsDragOver(false);
     }, []);
-
-    const personalityConfig = personalities[currentPersonality];
 
     return (
         <Paper
