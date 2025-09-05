@@ -156,13 +156,14 @@ const ModelSelector = React.memo(function ModelSelector({ onSelect, currentModel
         if (currentModel) setSelected(currentModel)
     }, [currentModel])
 
-    const value = models.find((m) => m.id === selected) || null
+    // @ts-ignore
+    const value = models.find((m) => m.id === selected) || null;
 
     return (
         <Autocomplete
             size="small"
             options={models}
-            value={value}
+            value={value!}
             onChange={(_, option) => {
                 const id = option?.id || '';
                 setSelected(id);
@@ -227,8 +228,8 @@ const ModelSelector = React.memo(function ModelSelector({ onSelect, currentModel
                 <TextField
                     {...params}
                     placeholder="Select a model"
-                    sx={{ 
-                        width: '100%', 
+                    sx={{
+                        width: '100%',
                         minWidth: 180,
                         '& .MuiOutlinedInput-root': {
                             '& fieldset': {

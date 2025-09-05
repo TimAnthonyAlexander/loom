@@ -58,6 +58,8 @@ export function GetSymbolsDebug():Promise<Record<string, any>>;
 
 export function GetTools():Promise<Array<Record<string, any>>>;
 
+export function GetUILayout():Promise<Record<string, any>>;
+
 export function GetUsage():Promise<Record<string, any>>;
 
 export function IndexDone(arg1:number):Promise<void>;
@@ -99,6 +101,8 @@ export function RunQuickProfiler():Promise<Record<string, any>>;
 export function SaveRules(arg1:Record<string, Array<string>>):Promise<void>;
 
 export function SaveSettings(arg1:Record<string, string>):Promise<void>;
+
+export function SaveUILayout(arg1:Record<string, any>):Promise<void>;
 
 export function SearchCode(arg1:string,arg2:string,arg3:number):Promise<Array<Record<string, any>>>;
 

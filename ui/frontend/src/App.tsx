@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { EventsOn, LogInfo } from '../wailsjs/runtime/runtime';
-import { SendUserMessage, Approve, SetModel, GetSettings, SaveSettings, SetWorkspace, ClearConversation, GetConversations, LoadConversation, NewConversation } from '../wailsjs/go/bridge/App';
+import { SendUserMessage, Approve, SetModel, GetSettings, SaveSettings, SetWorkspace, ClearConversation, GetConversations, LoadConversation, NewConversation, SaveUILayout, GetUILayout } from '../wailsjs/go/bridge/App';
 import * as Bridge from '../wailsjs/go/bridge/App';
 import * as AppBridge from '../wailsjs/go/bridge/App';
 import { Box } from '@mui/material';
@@ -313,6 +313,7 @@ const App: React.FC = () => {
                 setAutoApproveEdits(String(s?.auto_approve_edits).toLowerCase() === 'true');
                 setCurrentTheme(s?.theme || 'catppuccin');
                 setCurrentPersonality(s?.personality || 'coder');
+                setHasLoadedInitialSettings(true);
                 const last = s?.last_workspace || '';
                 if (last) {
                     setWorkspacePath(last);
@@ -454,6 +455,19 @@ const App: React.FC = () => {
             messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
         }
     }, [messages]);
+
+    // Auto-save personality when it changes (but not on initial load)
+    const [hasLoadedInitialSettings, setHasLoadedInitialSettings] = useState(false);
+    useEffect(() => {
+        if (hasLoadedInitialSettings && currentPersonality) {
+            // Auto-save the personality setting when it changes
+            SaveSettings({
+                personality: currentPersonality
+            }).catch(() => {
+                console.error('Failed to save personality setting');
+            });
+        }
+    }, [currentPersonality, hasLoadedInitialSettings]);
 
     const handleSend = useCallback((text: string) => {
         if (!text.trim() || busy) return;
@@ -848,6 +862,77 @@ const App: React.FC = () => {
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
     }, []);
+
+    // Save layout when it changes (debounced)
+    useEffect(() => {
+        const saveTimer = setTimeout(() => {
+            const layout = {
+                sidebarWidth,
+                chatWidth,
+                tabs: openTabs.map(tab => ({
+                    path: tab.path,
+                    line: tab.cursor?.line || 1,
+                    column: tab.cursor?.column || 1,
+                })),
+                activeTab,
+            };
+            SaveUILayout(layout).catch(() => { /* ignore save errors */ });
+        }, 500); // Debounce saves by 500ms
+        
+        return () => clearTimeout(saveTimer);
+    }, [sidebarWidth, chatWidth, openTabs, activeTab]);
+
+    // Restore layout on workspace change
+    useEffect(() => {
+        if (!workspacePath) return;
+        
+        GetUILayout().then((layout) => {
+            // Restore panel widths
+            if (layout.sidebarWidth > SIDEBAR_MIN_WIDTH) {
+                setSidebarWidth(layout.sidebarWidth);
+            }
+            if (layout.chatWidth > CHAT_MIN_WIDTH) {
+                setChatWidth(layout.chatWidth);
+            }
+            
+            // Restore tabs
+            if (layout.tabs && Array.isArray(layout.tabs)) {
+                layout.tabs.forEach((tab: any) => {
+                    if (tab.path) {
+                        openFile(tab.path, tab.line || 1, tab.column || 1);
+                    }
+                });
+                
+                // Set active tab after a brief delay to ensure tabs are loaded
+                if (layout.activeTab) {
+                    setTimeout(() => setActiveTab(layout.activeTab), 100);
+                }
+            }
+        }).catch(() => { /* ignore restore errors */ });
+    }, [workspacePath]);
+
+    // Save layout on window close
+    useEffect(() => {
+        const handleBeforeUnload = () => {
+            const layout = {
+                sidebarWidth,
+                chatWidth,
+                tabs: openTabs.map(tab => ({
+                    path: tab.path,
+                    line: tab.cursor?.line || 1,
+                    column: tab.cursor?.column || 1,
+                })),
+                activeTab,
+            };
+            // Use synchronous call for beforeunload (though it might not work in all cases)
+            try {
+                SaveUILayout(layout);
+            } catch { /* ignore */ }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [sidebarWidth, chatWidth, openTabs, activeTab]);
 
     return (
         <DynamicThemeProvider currentTheme={currentTheme}>

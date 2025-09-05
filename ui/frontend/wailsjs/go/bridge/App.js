@@ -102,6 +102,10 @@ export function GetTools() {
   return window['go']['bridge']['App']['GetTools']();
 }
 
+export function GetUILayout() {
+  return window['go']['bridge']['App']['GetUILayout']();
+}
+
 export function GetUsage() {
   return window['go']['bridge']['App']['GetUsage']();
 }
@@ -184,6 +188,10 @@ export function SaveRules(arg1) {
 
 export function SaveSettings(arg1) {
   return window['go']['bridge']['App']['SaveSettings'](arg1);
+}
+
+export function SaveUILayout(arg1) {
+  return window['go']['bridge']['App']['SaveUILayout'](arg1);
 }
 
 export function SearchCode(arg1, arg2, arg3) {

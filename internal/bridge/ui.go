@@ -2425,3 +2425,65 @@ edition = "2021"
 	mainPath := filepath.Join(srcDir, "main.rs")
 	return os.WriteFile(mainPath, []byte(mainContent), 0o644)
 }
+
+// SaveUILayout persists the current UI layout state
+func (a *App) SaveUILayout(layout map[string]interface{}) {
+	a.ensureSettingsLoaded()
+
+	// Extract and save panel widths
+	if w, ok := layout["sidebarWidth"].(float64); ok && w > 0 {
+		a.settings.UILayout.SidebarWidth = int(w)
+	}
+	if w, ok := layout["chatWidth"].(float64); ok && w > 0 {
+		a.settings.UILayout.ChatWidth = int(w)
+	}
+
+	// Extract and save tabs
+	if tabsRaw, ok := layout["tabs"].([]interface{}); ok {
+		tabs := make([]config.Tab, 0, len(tabsRaw))
+		for _, tabRaw := range tabsRaw {
+			if tabData, ok := tabRaw.(map[string]interface{}); ok {
+				if path, ok := tabData["path"].(string); ok && path != "" {
+					tab := config.Tab{Path: path}
+					if line, ok := tabData["line"].(float64); ok {
+						tab.Line = int(line)
+					}
+					if col, ok := tabData["column"].(float64); ok {
+						tab.Column = int(col)
+					}
+					tabs = append(tabs, tab)
+				}
+			}
+		}
+		a.settings.UILayout.OpenTabs = tabs
+	}
+
+	// Extract and save active tab
+	if activeTab, ok := layout["activeTab"].(string); ok {
+		a.settings.UILayout.ActiveTab = activeTab
+	}
+
+	// Persist to disk
+	_ = config.Save(a.settings)
+}
+
+// GetUILayout returns the saved UI layout for restoration
+func (a *App) GetUILayout() map[string]interface{} {
+	a.ensureSettingsLoaded()
+
+	tabs := make([]map[string]interface{}, len(a.settings.UILayout.OpenTabs))
+	for i, tab := range a.settings.UILayout.OpenTabs {
+		tabs[i] = map[string]interface{}{
+			"path":   tab.Path,
+			"line":   tab.Line,
+			"column": tab.Column,
+		}
+	}
+
+	return map[string]interface{}{
+		"sidebarWidth": a.settings.UILayout.SidebarWidth,
+		"chatWidth":    a.settings.UILayout.ChatWidth,
+		"tabs":         tabs,
+		"activeTab":    a.settings.UILayout.ActiveTab,
+	}
+}
