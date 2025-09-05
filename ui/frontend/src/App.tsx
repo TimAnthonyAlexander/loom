@@ -743,7 +743,7 @@ const App: React.FC = () => {
                 path: settingsPath,
                 title: 'Settings',
                 content: '', // Not used for settings tab
-                language: '',
+                language: 'text',
                 isDirty: false,
                 version: 1,
                 serverRev: '',
@@ -905,14 +905,14 @@ const App: React.FC = () => {
             };
             SaveUILayout(layout).catch(() => { /* ignore save errors */ });
         }, 500); // Debounce saves by 500ms
-        
+
         return () => clearTimeout(saveTimer);
     }, [sidebarWidth, chatWidth, openTabs, activeTab]);
 
     // Restore layout on workspace change
     useEffect(() => {
         if (!workspacePath) return;
-        
+
         GetUILayout().then((layout) => {
             // Restore panel widths
             if (layout.sidebarWidth > SIDEBAR_MIN_WIDTH) {
@@ -921,7 +921,7 @@ const App: React.FC = () => {
             if (layout.chatWidth > CHAT_MIN_WIDTH) {
                 setChatWidth(layout.chatWidth);
             }
-            
+
             // Restore tabs
             if (layout.tabs && Array.isArray(layout.tabs)) {
                 layout.tabs.forEach((tab: any) => {
@@ -929,7 +929,7 @@ const App: React.FC = () => {
                         openFile(tab.path, tab.line || 1, tab.column || 1);
                     }
                 });
-                
+
                 // Set active tab after a brief delay to ensure tabs are loaded
                 if (layout.activeTab) {
                     setTimeout(() => setActiveTab(layout.activeTab), 100);
@@ -1036,7 +1036,7 @@ const App: React.FC = () => {
                                 theme: currentTheme,
                                 personality: currentPersonality,
                                 selected_models: selectedModels
-                            }).catch(() => {});
+                            }).catch(() => { });
                         }}
                     />
                 </Box>
