@@ -67,7 +67,7 @@ export default function App() {
 
                     <div className="hero-visual">
                         <img
-                            src="/screenshot1.png"
+                            src="/screenshot_1.png"
                             alt="Loom screenshot"
                             style={{
                                 width: '100%',
@@ -134,7 +134,7 @@ export default function App() {
                             <p>Symbol indexing with SQLite + FTS search, semantic exploration via ripgrep, and heuristic project profiling. Find definitions, references, and get smart code neighborhoods with precision.</p>
                         </div>
                         <div className="visual">
-                            <img src="/screenshot1.png" alt="Monaco editor with search results" />
+                            <img src="/screenshot_1.png" alt="Monaco editor with search results" />
                         </div>
                     </div>
 
@@ -245,7 +245,7 @@ OpenRouter: 1000+ models`}</code>
                             <p>Tabbed Monaco editor, rules system for consistent AI behavior, workspace‑scoped memory, and a calm, content‑forward Material UI. Everything you need, nothing you don't.</p>
                         </div>
                         <div className="visual">
-                            <img src="/screenshot1.png" alt="Tabbed editor and explorer" />
+                            <img src="/screenshot_1.png" alt="Tabbed editor and explorer" />
                         </div>
                     </div>
                 </div>
@@ -321,17 +321,17 @@ onProposedCommand(cmd) {
 
             {/* Getting started */}
             <section id="getting-started" className="section">
-                                    <div className="container center">
-                        <h2>Getting started</h2>
-                        <p className="muted">Four steps to productive, safe assistance</p>
-                        <div className="grid grid-4 roadmap" style={{ marginTop: 24 }}>
-                            <div className="card">1. Download Loom</div>
-                            <div className="card">2. Connect providers (OpenAI, Claude, OpenRouter, Ollama)</div>
-                            <div className="card">3. Open workspace & configure MCP (optional)</div>
-                            <div className="card">4. Chat • Search • Edit • Profile • Extend</div>
-                        </div>
+                <div className="container center">
+                    <h2>Getting started</h2>
+                    <p className="muted">Four steps to productive, safe assistance</p>
+                    <div className="grid grid-4 roadmap" style={{ marginTop: 24 }}>
+                        <div className="card">1. Download Loom</div>
+                        <div className="card">2. Connect providers (OpenAI, Claude, OpenRouter, Ollama)</div>
+                        <div className="card">3. Open workspace & configure MCP (optional)</div>
+                        <div className="card">4. Chat • Search • Edit • Profile • Extend</div>
+                    </div>
                     <div className="hero-visual" style={{ marginTop: 24 }}>
-                        <img src="/screenshot1.png" alt="Loom getting started" />
+                        <img src="/screenshot_1.png" alt="Loom getting started" />
                     </div>
                 </div>
             </section>
