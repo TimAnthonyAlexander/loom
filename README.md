@@ -19,6 +19,7 @@ Some screenshots of the interface and Loom in action:
 ![Loom Screenshot](screenshot2.png)
 ![Loom Screenshot](screenshot3.png)
 ![Loom Screenshot](screenshot4.png)
+![Loom Screenshot](screenshot5.png)
 
 ## Key features
 - Desktop app via Wails: native windowing, compact packaging, and system integration

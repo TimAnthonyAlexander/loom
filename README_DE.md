@@ -18,6 +18,7 @@ Einige Screenshots der Oberfläche und Loom in Aktion:
 ![Loom Screenshot](screenshot2.png)
 ![Loom Screenshot](screenshot3.png)
 ![Loom Screenshot](screenshot4.png)
+![Loom Screenshot](screenshot5.png)
 
 ## Hauptfunktionen
 - Desktop-App via Wails: native Fenster, kompaktes Packaging und Systemintegration
