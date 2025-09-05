@@ -204,10 +204,8 @@ function Composer2Component({
                                         'debugger',
                                         'reviewer',
                                         'founder',
+                                        'annoyed_girlfriend',
                                         'scientist',
-                                        'comedian',
-                                        'pirate',
-                                        'bavarian',
                                         'waifu',
                                     ]
                                         .filter((key) => personalities[key])
