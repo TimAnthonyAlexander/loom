@@ -521,6 +521,10 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 	// Track whether any tool has been used since the latest user message
 	toolsUsed := false
 
+	// Track consecutive empty responses after tool usage to prevent pathological cases
+	consecutiveEmptyAfterTools := 0
+	maxConsecutiveEmpty := 3 // Allow up to 3 consecutive empty responses after tools before giving up
+
 	// Set a configurable maximum depth to prevent infinite loops but allow long tool chains
 	maxDepth := 64
 	if v := os.Getenv("LOOM_MAX_STEPS"); v != "" {
@@ -734,6 +738,8 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 		if toolCallReceived != nil {
 			// Mark that at least one tool was used in this turn
 			toolsUsed = true
+			// Reset empty response counter since we got a tool call
+			consecutiveEmptyAfterTools = 0
 			// Execute the tool
 			execResult, err := e.tools.InvokeToolCall(ctx, toolCallReceived)
 			if err != nil {
@@ -868,9 +874,11 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 		// If we reach here with content but no tool call, record it
 		if currentContent != "" {
 			convo.AddAssistant(currentContent)
-			// If any tools were used earlier in this turn, nudge the model to finalize; otherwise end here
+			// Reset empty response counter since we got content
+			consecutiveEmptyAfterTools = 0
+			// If any tools were used earlier in this turn, continue the loop to allow for more interactions
 			if toolsUsed {
-				return nil
+				continue
 			}
 			// Pure conversational response with no tools used — end the turn
 			return nil
@@ -1005,9 +1013,11 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 			if currentContent != "" {
 				convo.AddAssistant(currentContent)
 				e.bridge.EmitAssistant(currentContent)
-				// If tools were used in this turn, nudge to finalize; otherwise stop
+				// Reset empty response counter since we got content
+				consecutiveEmptyAfterTools = 0
+				// If tools were used in this turn, continue the loop to allow for more interactions
 				if toolsUsed {
-					return nil
+					continue
 				}
 				return nil
 			}
@@ -1015,10 +1025,20 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 			if os.Getenv("LOOM_DEBUG_ENGINE") == "1" || strings.EqualFold(os.Getenv("LOOM_DEBUG_ENGINE"), "true") {
 				e.bridge.SendChat("system", "[debug] Fallback non-stream returned no content and no tool calls")
 			}
-			// If tools were used in this turn, empty responses are acceptable
-			if !toolsUsed {
-				e.bridge.SendChat("system", "No response from model.")
+			// If tools were used but we got empty response, continue to reprompt the model
+			if toolsUsed {
+				consecutiveEmptyAfterTools++
+				if consecutiveEmptyAfterTools >= maxConsecutiveEmpty {
+					e.bridge.SendChat("system", fmt.Sprintf("Model failed to respond after %d attempts following tool execution. Ending conversation.", maxConsecutiveEmpty))
+					return errors.New("model failed to respond after tool execution")
+				}
+				if os.Getenv("LOOM_DEBUG_ENGINE") == "1" || strings.EqualFold(os.Getenv("LOOM_DEBUG_ENGINE"), "true") {
+					e.bridge.SendChat("system", fmt.Sprintf("[debug] Reprompting model after tool execution with empty response (attempt %d/%d)", consecutiveEmptyAfterTools, maxConsecutiveEmpty))
+				}
+				continue
 			}
+			// If no tools were used and we have an empty response, that's an error
+			e.bridge.SendChat("system", "No response from model.")
 			return nil
 		}
 	}

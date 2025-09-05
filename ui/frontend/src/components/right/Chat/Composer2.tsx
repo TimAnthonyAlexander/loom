@@ -175,6 +175,12 @@ function Composer2Component({
                                     displayEmpty
                                     variant="outlined"
                                     startAdornment={<PersonRounded sx={{ mr: 0.5, fontSize: 16 }} />}
+                                    renderValue={(val) =>
+                                        val ? personalities[val as string]?.name ?? '' : ''
+                                    }
+                                    MenuProps={{
+                                        PaperProps: { sx: { mt: 0.5 } },
+                                    }}
                                     sx={{
                                         height: 36,
                                         borderRadius: 1.5,
@@ -182,75 +188,58 @@ function Composer2Component({
                                         backgroundColor: 'rgba(255,255,255,0.03)',
                                         backdropFilter: 'blur(8px)',
                                         border: '1px solid transparent',
-                                        '& .MuiSelect-select': {
-                                            py: 0.5,
-                                            px: 1,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                        },
-                                        '& .MuiOutlinedInput-notchedOutline': {
-                                            border: 'none',
-                                        },
-                                        '&:hover .MuiOutlinedInput-notchedOutline': {
-                                            border: 'none',
-                                        },
-                                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                                            border: 'none',
-                                        },
-                                        '&:hover': {
-                                            backgroundColor: 'rgba(255,255,255,0.06)',
-                                            borderColor: 'primary.main',
-                                        },
+                                        '& .MuiSelect-select': { py: 0.5, px: 1, display: 'flex', alignItems: 'center' },
+                                        '& .MuiOutlinedInput-notchedOutline': { border: 'none' },
+                                        '&:hover .MuiOutlinedInput-notchedOutline': { border: 'none' },
+                                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': { border: 'none' },
+                                        '&:hover': { backgroundColor: 'rgba(255,255,255,0.06)', borderColor: 'primary.main' },
                                         '&.Mui-focused': {
                                             borderColor: 'primary.main',
                                             backgroundColor: 'primary.main',
                                             color: 'primary.contrastText',
-                                            '& .MuiSvgIcon-root': {
-                                                color: 'primary.contrastText'
-                                            }
+                                            '& .MuiSvgIcon-root': { color: 'primary.contrastText' },
                                         },
                                     }}
                                 >
                                     {[
-                                        'coder',      // The Coder (default)
-                                        'architect',  // The Architect
-                                        'debugger',   // The Debugger
-                                        'reviewer',   // The Reviewer
-                                        'founder',    // The Founder
-                                        'scientist',  // Mad Scientist
-                                        'comedian',   // Stand-up Comedian
-                                        'pirate',     // Pirate Captain
-                                        'bavarian',   // The Bavarian Boy
-                                        'waifu',      // Anime Waifu
+                                        'coder',
+                                        'architect',
+                                        'debugger',
+                                        'reviewer',
+                                        'founder',
+                                        'scientist',
+                                        'comedian',
+                                        'pirate',
+                                        'bavarian',
+                                        'waifu',
                                     ]
-                                        .filter(key => personalities[key])
+                                        .filter((key) => personalities[key])
                                         .map((key) => {
                                             const config = personalities[key];
                                             return (
-                                                <Tooltip
-                                                    key={key}
-                                                    title={
-                                                        <Box>
-                                                            <Typography variant="subtitle1" fontWeight="bold">
+                                                <MenuItem key={key} value={key}>
+                                                    <Tooltip
+                                                        title={
+                                                            <Box>
+                                                                <Typography variant="subtitle1" fontWeight="bold">
+                                                                    {config.name}
+                                                                </Typography>
+                                                                <Typography variant="body2" sx={{ mt: 0.5 }}>
+                                                                    {config.description}
+                                                                </Typography>
+                                                            </Box>
+                                                        }
+                                                        placement="right"
+                                                        arrow
+                                                        enterDelay={0}
+                                                    >
+                                                        <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                                                            <Typography variant="body2" fontWeight={500}>
                                                                 {config.name}
                                                             </Typography>
-                                                            <Typography variant="body2" sx={{ mt: 0.5 }}>
-                                                                {config.description}
-                                                            </Typography>
                                                         </Box>
-                                                    }
-                                                    placement="top"
-                                                    arrow
-                                                    open={showPersonalityTooltip ? true : undefined}
-                                                    onOpen={() => setShowPersonalityTooltip(true)}
-                                                    onClose={() => setShowPersonalityTooltip(false)}
-                                                >
-                                                    <MenuItem key={key} value={key}>
-                                                        <Typography variant="body2" fontWeight={500}>
-                                                            {config.name}
-                                                        </Typography>
-                                                    </MenuItem>
-                                                </Tooltip>
+                                                    </Tooltip>
+                                                </MenuItem>
                                             );
                                         })}
                                 </Select>
