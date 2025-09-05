@@ -156,7 +156,7 @@ const ModelSelector = React.memo(function ModelSelector({ onSelect, currentModel
         if (currentModel) setSelected(currentModel)
     }, [currentModel])
 
-    const value = models.find((m) => m.id === selected) || undefined
+    const value = models.find((m) => m.id === selected) || null
 
     return (
         <Autocomplete

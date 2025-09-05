@@ -66,34 +66,6 @@ export default function SettingsDialog(props: Props) {
                             ))}
                         </Select>
                     </FormControl>
-                    <FormControl fullWidth>
-                        <InputLabel>Personality</InputLabel>
-                        <Select value={currentPersonality} onChange={(e) => setCurrentPersonality(e.target.value)} label="Personality">
-                            {[
-                                'coder',      // The Coder (default, most common)
-                                'architect',  // The Architect (planning-heavy)
-                                'debugger',   // The Debugger (problem-solving)
-                                'reviewer',   // The Reviewer (review and quality)
-                                'founder',    // The Founder (business-driven)
-                                'scientist',  // Mad Scientist (playful but still technical)
-                                'comedian',   // Stand-up Comedian
-                                'pirate',     // Pirate Captain
-                                'bavarian',   // The Bavarian Boy
-                                'waifu',      // Anime Waifu
-                            ]
-                                .filter(key => personalities[key]) // Only show personalities that exist
-                                .map((key) => {
-                                    const config = personalities[key];
-                                    return (
-                                        <MenuItem key={key} value={key}>
-                                            <Tooltip title={config.description} placement="right">
-                                                <span>{config.name}</span>
-                                            </Tooltip>
-                                        </MenuItem>
-                                    );
-                                })}
-                        </Select>
-                    </FormControl>
                     <Stack direction="row" spacing={2} alignItems="center">
                         <Link component="button" underline="hover" onClick={() => OpenProjectDataDir()}>
                             Open project data folder
