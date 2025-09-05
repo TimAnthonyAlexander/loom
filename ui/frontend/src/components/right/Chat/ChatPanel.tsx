@@ -276,8 +276,10 @@ function ChatPanelComponent(props: Props) {
                         sx={{
                             color: 'text.secondary',
                             '&:hover': {
-                                color: 'primary.main',
-                                backgroundColor: 'primary.main'
+                                backgroundColor: 'primary.main',
+                                '& .MuiSvgIcon-root': {
+                                    color: 'primary.contrastText'
+                                }
                             }
                         }}
                     >
@@ -289,8 +291,10 @@ function ChatPanelComponent(props: Props) {
                         sx={{
                             color: 'text.secondary',
                             '&:hover': {
-                                color: 'primary.main',
-                                backgroundColor: 'primary.main'
+                                backgroundColor: 'primary.main',
+                                '& .MuiSvgIcon-root': {
+                                    color: 'primary.contrastText'
+                                }
                             }
                         }}
                     >

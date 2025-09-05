@@ -130,9 +130,8 @@ const MessageItem = React.memo(function MessageItem({
                             sx={{
                                 color: 'text.secondary',
                                 '&:hover': {
-                                    color: 'primary.main',
                                     backgroundColor: 'primary.main',
-                                    '& svg': {
+                                    '& .MuiSvgIcon-root': {
                                         color: 'primary.contrastText'
                                     }
                                 },
