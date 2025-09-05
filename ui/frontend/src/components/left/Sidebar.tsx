@@ -107,8 +107,8 @@ function Sidebar(props: SidebarProps) {
             <Box sx={{ pt: 4 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                     <Box component="img" src="/logo.png" alt="Loom" sx={{ width: 28, height: 28, borderRadius: 0.5 }} />
-                    <Typography 
-                        variant="h6" 
+                    <Typography
+                        variant="h6"
                         fontWeight={700}
                         sx={{
                             background: 'linear-gradient(45deg, currentColor, primary.main)',
@@ -121,8 +121,8 @@ function Sidebar(props: SidebarProps) {
                     </Typography>
                     <Box sx={{ flex: 1 }} />
                     <Tooltip title="Select Workspace">
-                        <IconButton 
-                            size="small" 
+                        <IconButton
+                            size="small"
                             onClick={onOpenWorkspace}
                             sx={{
                                 color: 'text.secondary',
@@ -140,8 +140,8 @@ function Sidebar(props: SidebarProps) {
                         </IconButton>
                     </Tooltip>
                     <Tooltip title="Rules">
-                        <IconButton 
-                            size="small" 
+                        <IconButton
+                            size="small"
                             onClick={onOpenRules}
                             sx={{
                                 color: 'text.secondary',
@@ -157,8 +157,8 @@ function Sidebar(props: SidebarProps) {
                         </IconButton>
                     </Tooltip>
                     <Tooltip title="Memories">
-                        <IconButton 
-                            size="small" 
+                        <IconButton
+                            size="small"
                             onClick={onOpenMemories}
                             sx={{
                                 color: 'text.secondary',
@@ -174,8 +174,8 @@ function Sidebar(props: SidebarProps) {
                         </IconButton>
                     </Tooltip>
                     <Tooltip title="Settings">
-                        <IconButton 
-                            size="small" 
+                        <IconButton
+                            size="small"
                             onClick={onOpenSettings}
                             sx={{
                                 color: 'text.secondary',
@@ -257,74 +257,55 @@ function Sidebar(props: SidebarProps) {
                     minHeight: 0,
                     display: 'flex',
                     flexDirection: 'column',
+                    overflowY: 'auto',
                 }}
             >
-                <Paper
-                    variant="outlined"
-                    sx={{
-                        flex: 1,
-                        overflowY: 'auto',
-                        display: 'flex',
-                        flexDirection: 'column',
-                    }}
-                >
-                    <FileExplorer
-                        dirCache={dirCache}
-                        expandedDirs={expandedDirs}
-                        onToggleDir={onToggleDir}
-                        onOpenFile={onOpenFile}
-                        rootPath=""
-                    />
-                </Paper>
+                <FileExplorer
+                    dirCache={dirCache}
+                    expandedDirs={expandedDirs}
+                    onToggleDir={onToggleDir}
+                    onOpenFile={onOpenFile}
+                    rootPath=""
+                />
             </Box>
 
             {/* Bottom: Costs summary */}
-            <Box sx={{ mt: 1, mb: 2 }}>
-                <Paper 
-                    variant="outlined" 
-                    sx={{ 
-                        px: 1.5, 
-                        py: 1, 
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease-in-out',
-                        '&:hover': {
-                            borderColor: 'primary.main',
-                            backgroundColor: 'primary.main',
-                            color: 'primary.contrastText',
-                            '& .MuiTypography-root': {
+            <Box
+                sx={{
+                    px: 1.5,
+                    py: 1,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease-in-out',
+                    borderTop: '0.1px solid #ccc',
+                }}
+                onClick={onOpenCosts}
+            >
+                <Typography variant="subtitle2" fontWeight={600} mb={0.5}>
+                    Costs so far
+                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
+                    <Typography variant="caption" color="text.secondary">Total</Typography>
+                    <Typography
+                        variant="caption"
+                        fontWeight={600}
+                        sx={{
+                            color: 'primary.main',
+                            '.MuiPaper-root:hover &': {
                                 color: 'inherit'
                             }
-                        }
-                    }} 
-                    onClick={onOpenCosts}
-                >
-                    <Typography variant="subtitle2" fontWeight={600} mb={0.5}>
-                        Costs so far
+                        }}
+                    >
+                        ${((totalInUSD + totalOutUSD) || 0).toFixed(2)}
                     </Typography>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
-                        <Typography variant="caption" color="text.secondary">Total</Typography>
-                        <Typography 
-                            variant="caption" 
-                            fontWeight={600}
-                            sx={{ 
-                                color: 'primary.main',
-                                '.MuiPaper-root:hover &': {
-                                    color: 'inherit'
-                                }
-                            }}
-                        >
-                            ${((totalInUSD + totalOutUSD) || 0).toFixed(2)}
-                        </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography variant="caption" color="text.secondary">In</Typography>
-                        <Typography variant="caption" fontWeight={600}>${(totalInUSD || 0).toFixed(2)}</Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography variant="caption" color="text.secondary">Out</Typography>
-                        <Typography variant="caption" fontWeight={600}>${(totalOutUSD || 0).toFixed(2)}</Typography>
-                    </Box>
-                </Paper>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="caption" color="text.secondary">In</Typography>
+                    <Typography variant="caption" fontWeight={600}>${(totalInUSD || 0).toFixed(2)}</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="caption" color="text.secondary">Out</Typography>
+                    <Typography variant="caption" fontWeight={600}>${(totalOutUSD || 0).toFixed(2)}</Typography>
+                </Box>
             </Box>
 
             <ProfileDialog
