@@ -105,14 +105,6 @@ func (ch *ConversationHandler) AddTransientContext(
 		})
 	}
 
-	// Inject workflow state if available
-	if workflow := strings.TrimSpace(workflowContext); workflow != "" {
-		messages = append(messages, engine.Message{
-			Role:    "system",
-			Content: workflow,
-		})
-	}
-
 	return messages
 }
 

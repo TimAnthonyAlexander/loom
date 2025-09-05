@@ -510,16 +510,6 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 		if ui := strings.TrimSpace(e.formatEditorContext()); ui != "" {
 			engineMessages = append(engineMessages, Message{Role: "system", Content: "UI Context: " + ui})
 		}
-		// Inject compact workflow state and recent events if enabled
-		if e.wf != nil {
-			if st, err := e.wf.Load(); err == nil {
-				recent := workflow.RecentEventsForPrompt(e.workspaceDir, st.Budget.MaxEventsInPrompt)
-				block := workflow.BuildPromptFromStore(ctx, e.workspaceDir, st, recent)
-				if strings.TrimSpace(block) != "" {
-					engineMessages = append(engineMessages, Message{Role: "system", Content: block})
-				}
-			}
-		}
 		// No longer inject attachments as system context; they are appended to the user message on send
 
 		// Call the LLM with the conversation history (+ transient UI hint)
