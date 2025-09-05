@@ -8,7 +8,6 @@ import Sidebar from './components/left/Sidebar';
 import EditorPanel from './components/center/EditorPanel';
 import ChatPanel from './components/right/Chat/ChatPanel';
 import ApprovalDialog from './components/dialogs/ApprovalDialog';
-import SettingsDialog from './components/dialogs/SettingsDialog';
 import RulesDialog from './components/dialogs/RulesDialog';
 import CostsDialog from './components/dialogs/CostsDialog';
 import WorkspaceDialog from './components/dialogs/WorkspaceDialog';
@@ -728,6 +727,33 @@ const App: React.FC = () => {
             .catch(() => { });
     }, [openTabs, workspacePath, onUpdateTab, reloadFile]);
 
+    const openSettingsTab = useCallback(() => {
+        const settingsPath = 'settings://main';
+        // Check if settings tab is already open
+        const exists = openTabs.find((t) => t.path === settingsPath);
+        if (exists) {
+            setActiveTab(exists.path);
+            return;
+        }
+        // Create new settings tab
+        setOpenTabs((prev) => {
+            const next = prev.filter((t) => t.path !== settingsPath);
+            next.push({
+                path: settingsPath,
+                title: 'Settings',
+                content: '', // Not used for settings tab
+                language: '',
+                isDirty: false,
+                version: 1,
+                serverRev: '',
+                cursor: { line: 1, column: 1 },
+                scrollTop: 0,
+            });
+            return next;
+        });
+        setActiveTab(settingsPath);
+    }, [openTabs]);
+
     const closeTab = useCallback((path: string) => {
         setOpenTabs((prev) => {
             const filtered = prev.filter((t) => t.path !== path);
@@ -943,7 +969,7 @@ const App: React.FC = () => {
                         onOpenWorkspace={() => setWorkspaceOpen(true)}
                         onOpenRules={() => setRulesOpen(true)}
                         onOpenMemories={() => setMemoriesOpen(true)}
-                        onOpenSettings={() => setSettingsOpen(true)}
+                        onOpenSettings={openSettingsTab}
                         onOpenCosts={() => setCostsOpen(true)}
                         totalInUSD={gTotalInUSD}
                         totalOutUSD={gTotalOutUSD}
@@ -969,7 +995,7 @@ const App: React.FC = () => {
                         currentTheme={currentTheme}
                         onChangeActiveTab={(p: string) => {
                             setActiveTab(p);
-                            if (p) {
+                            if (p && !p.startsWith('settings://')) {
                                 Bridge.ReadWorkspaceFile(p)
                                     .then((res: any) => {
                                         const content = String(res?.content || '');
@@ -983,6 +1009,31 @@ const App: React.FC = () => {
                         onCloseTab={closeTab}
                         onUpdateTab={onUpdateTab}
                         onSaveTab={onSaveTab}
+                        openaiKey={openaiKey}
+                        setOpenaiKey={setOpenaiKey}
+                        anthropicKey={anthropicKey}
+                        setAnthropicKey={setAnthropicKey}
+                        openrouterKey={openrouterKey}
+                        setOpenrouterKey={setOpenrouterKey}
+                        ollamaEndpoint={ollamaEndpoint}
+                        setOllamaEndpoint={setOllamaEndpoint}
+                        autoApproveShell={autoApproveShell}
+                        setAutoApproveShell={setAutoApproveShell}
+                        autoApproveEdits={autoApproveEdits}
+                        setAutoApproveEdits={setAutoApproveEdits}
+                        setCurrentTheme={setCurrentTheme}
+                        onSaveSettings={() => {
+                            SaveSettings({
+                                openai_api_key: openaiKey,
+                                anthropic_api_key: anthropicKey,
+                                openrouter_api_key: openrouterKey,
+                                ollama_endpoint: ollamaEndpoint,
+                                auto_approve_shell: String(autoApproveShell),
+                                auto_approve_edits: String(autoApproveEdits),
+                                theme: currentTheme,
+                                personality: currentPersonality
+                            }).catch(() => {});
+                        }}
                     />
                 </Box>
 

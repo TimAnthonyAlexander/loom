@@ -4,6 +4,7 @@ import { EditorTabItem } from '../../types/ui';
 import Editor, { OnMount } from '@monaco-editor/react';
 import React from 'react';
 import { guessLanguage } from '../../utils/language';
+import SettingsTab from './SettingsTab';
 
 type Props = {
     openTabs: EditorTabItem[];
@@ -13,9 +14,46 @@ type Props = {
     onCloseTab: (path: string) => void;
     onUpdateTab: (path: string, patch: Partial<EditorTabItem>) => void;
     onSaveTab: (path: string) => Promise<void>;
+    // Settings props for special tabs
+    openaiKey: string;
+    setOpenaiKey: (v: string) => void;
+    anthropicKey: string;
+    setAnthropicKey: (v: string) => void;
+    openrouterKey: string;
+    setOpenrouterKey: (v: string) => void;
+    ollamaEndpoint: string;
+    setOllamaEndpoint: (v: string) => void;
+    autoApproveShell: boolean;
+    setAutoApproveShell: (v: boolean) => void;
+    autoApproveEdits: boolean;
+    setAutoApproveEdits: (v: boolean) => void;
+    setCurrentTheme: (v: string) => void;
+    onSaveSettings: () => void;
 };
 
-function EditorPanel({ openTabs, activeTab, currentTheme, onChangeActiveTab, onCloseTab, onUpdateTab, onSaveTab }: Props) {
+function EditorPanel({ 
+    openTabs, 
+    activeTab, 
+    currentTheme, 
+    onChangeActiveTab, 
+    onCloseTab, 
+    onUpdateTab, 
+    onSaveTab,
+    openaiKey,
+    setOpenaiKey,
+    anthropicKey,
+    setAnthropicKey,
+    openrouterKey,
+    setOpenrouterKey,
+    ollamaEndpoint,
+    setOllamaEndpoint,
+    autoApproveShell,
+    setAutoApproveShell,
+    autoApproveEdits,
+    setAutoApproveEdits,
+    setCurrentTheme,
+    onSaveSettings
+}: Props) {
     const tab = openTabs.find((t) => t.path === activeTab);
     const editorRef = React.useRef<any>(null);
     const monacoRef = React.useRef<any>(null);
@@ -121,33 +159,54 @@ function EditorPanel({ openTabs, activeTab, currentTheme, onChangeActiveTab, onC
 
             <Box sx={{ flex: 1, minHeight: 0, minWidth: 0, maxWidth: '100%', overflow: 'hidden', width: '100%' }}>
                 {tab ? (
-                    <div style={{ width: '100%', height: '100%', maxWidth: '100%', overflow: 'hidden' }}>
-                        <Editor
-                            width="100%"
-                            height="100%"
-                            defaultLanguage={language}
-                            language={language}
-                            value={tab.content}
-                            onChange={handleChange}
-                            onMount={handleMount}
-                            options={{
-                                fontSize: 13,
-                                minimap: { enabled: false },
-                                wordWrap: 'off',
-                                lineNumbers: 'on',
-                                automaticLayout: true,
-                                renderWhitespace: 'selection',
-                                tabSize: 4,
-                                insertSpaces: true,
-                                smoothScrolling: true,
-                                scrollBeyondLastLine: false,
-                                scrollbar: {
-                                    horizontal: 'auto',
-                                    vertical: 'auto'
-                                }
-                            }}
+                    // Check if this is a special tab (settings, etc.)
+                    activeTab.startsWith('settings://') ? (
+                        <SettingsTab
+                            openaiKey={openaiKey}
+                            setOpenaiKey={setOpenaiKey}
+                            anthropicKey={anthropicKey}
+                            setAnthropicKey={setAnthropicKey}
+                            openrouterKey={openrouterKey}
+                            setOpenrouterKey={setOpenrouterKey}
+                            ollamaEndpoint={ollamaEndpoint}
+                            setOllamaEndpoint={setOllamaEndpoint}
+                            autoApproveShell={autoApproveShell}
+                            setAutoApproveShell={setAutoApproveShell}
+                            autoApproveEdits={autoApproveEdits}
+                            setAutoApproveEdits={setAutoApproveEdits}
+                            currentTheme={currentTheme}
+                            setCurrentTheme={setCurrentTheme}
+                            onSave={onSaveSettings}
                         />
-                    </div>
+                    ) : (
+                        <div style={{ width: '100%', height: '100%', maxWidth: '100%', overflow: 'hidden' }}>
+                            <Editor
+                                width="100%"
+                                height="100%"
+                                defaultLanguage={language}
+                                language={language}
+                                value={tab.content}
+                                onChange={handleChange}
+                                onMount={handleMount}
+                                options={{
+                                    fontSize: 13,
+                                    minimap: { enabled: false },
+                                    wordWrap: 'off',
+                                    lineNumbers: 'on',
+                                    automaticLayout: true,
+                                    renderWhitespace: 'selection',
+                                    tabSize: 4,
+                                    insertSpaces: true,
+                                    smoothScrolling: true,
+                                    scrollBeyondLastLine: false,
+                                    scrollbar: {
+                                        horizontal: 'auto',
+                                        vertical: 'auto'
+                                    }
+                                }}
+                            />
+                        </div>
+                    )
                 ) : (
                     <Box sx={{ p: 4, color: 'text.secondary' }}></Box>
                 )}
@@ -164,7 +223,21 @@ export default React.memo(EditorPanel, (prev, next) => {
         prev.onChangeActiveTab === next.onChangeActiveTab &&
         prev.onCloseTab === next.onCloseTab &&
         prev.onUpdateTab === next.onUpdateTab &&
-        prev.onSaveTab === next.onSaveTab
+        prev.onSaveTab === next.onSaveTab &&
+        prev.openaiKey === next.openaiKey &&
+        prev.setOpenaiKey === next.setOpenaiKey &&
+        prev.anthropicKey === next.anthropicKey &&
+        prev.setAnthropicKey === next.setAnthropicKey &&
+        prev.openrouterKey === next.openrouterKey &&
+        prev.setOpenrouterKey === next.setOpenrouterKey &&
+        prev.ollamaEndpoint === next.ollamaEndpoint &&
+        prev.setOllamaEndpoint === next.setOllamaEndpoint &&
+        prev.autoApproveShell === next.autoApproveShell &&
+        prev.setAutoApproveShell === next.setAutoApproveShell &&
+        prev.autoApproveEdits === next.autoApproveEdits &&
+        prev.setAutoApproveEdits === next.setAutoApproveEdits &&
+        prev.setCurrentTheme === next.setCurrentTheme &&
+        prev.onSaveSettings === next.onSaveSettings
     );
 });
 
