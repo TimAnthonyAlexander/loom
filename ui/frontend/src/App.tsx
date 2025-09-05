@@ -925,6 +925,9 @@ const App: React.FC = () => {
                         onSelectConversation={handleSelectConversation}
                         currentModel={currentModel}
                         onSelectModel={handleModelSelect}
+                        currentPersonality={currentPersonality}
+                        setCurrentPersonality={setCurrentPersonality}
+                        personalities={personalities}
                     />
                 </Box>
 

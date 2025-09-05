@@ -4,7 +4,7 @@ import { EventsOn } from '../../../../wailsjs/runtime/runtime';
 import * as AppBridge from '../../../../wailsjs/go/bridge/App';
 import * as Bridge from '../../../../wailsjs/go/bridge/App';
 import MessageList from './MessageList';
-import Composer from './Composer';
+import Composer from './Composer2';
 import { ChatMessage, ConversationListItem } from '../../../types/ui';
 import ConversationList from '@/components/left/Conversations/ConversationList';
 import ModelSelector from '@/ModelSelector';
@@ -26,6 +26,9 @@ type Props = {
     onSelectConversation: (id: string) => void;
     currentModel: string;
     onSelectModel: (model: string) => void;
+    currentPersonality: string;
+    setCurrentPersonality: (personality: string) => void;
+    personalities: Record<string, { name: string; description: string; prompt: string }>;
 };
 
 function ChatPanelComponent(props: Props) {
@@ -45,6 +48,9 @@ function ChatPanelComponent(props: Props) {
         onSelectConversation,
         currentModel,
         onSelectModel,
+        currentPersonality,
+        setCurrentPersonality,
+        personalities,
     } = props;
 
     const focusTokenRef = React.useRef<number>(0);
@@ -422,6 +428,9 @@ function ChatPanelComponent(props: Props) {
                     onRemoveAttachment={(p) => setAttachments((prev) => prev.filter((x) => x !== p))}
                     onOpenAttach={(el) => { setAttachAnchor(el); setAttachOpen(true); }}
                     onAttachButtonRef={(el) => setAttachAnchor(el)}
+                    currentPersonality={currentPersonality}
+                    setCurrentPersonality={setCurrentPersonality}
+                    personalities={personalities}
                 />
             </Box>
             <Popover
@@ -556,7 +565,10 @@ export default React.memo(ChatPanelComponent, (prev, next) => {
         prev.currentConversationId === next.currentConversationId &&
         prev.onSelectConversation === next.onSelectConversation &&
         prev.currentModel === next.currentModel &&
-        prev.onSelectModel === next.onSelectModel
+        prev.onSelectModel === next.onSelectModel &&
+        prev.currentPersonality === next.currentPersonality &&
+        prev.setCurrentPersonality === next.setCurrentPersonality &&
+        prev.personalities === next.personalities
     );
 });
 
