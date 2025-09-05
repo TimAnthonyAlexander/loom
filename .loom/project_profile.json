@@ -1,6 +1,6 @@
 {
   "workspace_root": "/Users/tim.alexander/loom",
-  "created_at_unix": 1757081761,
+  "created_at_unix": 1757089612,
   "languages": [
     "typescript",
     "go"
@@ -42,6 +42,12 @@
   ],
   "scripts": [
     {
+      "name": "build",
+      "source": "package.json",
+      "cmd": "tsc \u0026\u0026 vite build",
+      "paths": null
+    },
+    {
       "name": "preview",
       "source": "package.json",
       "cmd": "vite preview",
@@ -60,9 +66,9 @@
       "paths": null
     },
     {
-      "name": "build",
+      "name": "dev",
       "source": "package.json",
-      "cmd": "tsc \u0026\u0026 vite build",
+      "cmd": "screen -dmS loom-frontend-web vite --port 8444",
       "paths": null
     },
     {
@@ -81,12 +87,6 @@
       "name": "preview",
       "source": "package.json",
       "cmd": "vite preview",
-      "paths": null
-    },
-    {
-      "name": "dev",
-      "source": "package.json",
-      "cmd": "screen -dmS loom-frontend-web vite --port 8444",
       "paths": null
     },
     {
@@ -740,12 +740,12 @@
     },
     {
       "path": "ui/frontend/src/types/ui.ts",
-      "score": 0.36026618062500004,
+      "score": 0.3422744840039063,
       "reasons": [
         "graph_central"
       ],
       "components": {
-        "centrality": 0.36026618062500004,
+        "centrality": 0.3422744840039063,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -762,13 +762,13 @@
     },
     {
       "path": "ui/frontend/wailsjs/go/bridge/App.js",
-      "score": 0.30615506875,
+      "score": 0.31402827314453136,
       "reasons": [
         "graph_central",
         "entrypoint"
       ],
       "components": {
-        "centrality": 0.29615506875,
+        "centrality": 0.30402827314453135,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -785,12 +785,12 @@
     },
     {
       "path": "ui/frontend/wailsjs/runtime/runtime.js",
-      "score": 0.177381646875,
+      "score": 0.17772284355468757,
       "reasons": [
         "graph_central"
       ],
       "components": {
-        "centrality": 0.177381646875,
+        "centrality": 0.17772284355468757,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -807,13 +807,13 @@
     },
     {
       "path": "ui/frontend/src/themes/themeConfig.ts",
-      "score": 0.15859715625,
+      "score": 0.16576205361328128,
       "reasons": [
         "graph_central",
         "config"
       ],
       "components": {
-        "centrality": 0.15859715625,
+        "centrality": 0.16576205361328128,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -852,10 +852,10 @@
     },
     {
       "path": "ui/frontend/src/components/diff/DiffViewer.tsx",
-      "score": 0.12823143750000002,
+      "score": 0.12844121484375004,
       "reasons": null,
       "components": {
-        "centrality": 0.12823143750000002,
+        "centrality": 0.12844121484375004,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -912,10 +912,10 @@
     },
     {
       "path": "ui/frontend/src/components/markdown/MarkdownErrorBoundary.tsx",
-      "score": 0.12030539143359376,
+      "score": 0.12031809607397465,
       "reasons": null,
       "components": {
-        "centrality": 0.12030539143359376,
+        "centrality": 0.12031809607397465,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -932,10 +932,10 @@
     },
     {
       "path": "ui/frontend/src/components/markdown/MarkdownRenderer.tsx",
-      "score": 0.12030539143359376,
+      "score": 0.12031809607397465,
       "reasons": null,
       "components": {
-        "centrality": 0.12030539143359376,
+        "centrality": 0.12031809607397465,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -973,11 +973,11 @@
       "is_generated": false
     },
     {
-      "path": "ui/frontend/src/utils/language.ts",
-      "score": 0.10181446875000003,
+      "path": "web/src/index.css",
+      "score": 0.09618750000000001,
       "reasons": null,
       "components": {
-        "centrality": 0.10181446875000003,
+        "centrality": 0.09618750000000001,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -993,11 +993,11 @@
       "is_generated": false
     },
     {
-      "path": "web/src/index.css",
-      "score": 0.09618750000000001,
+      "path": "ui/frontend/src/utils/language.ts",
+      "score": 0.09200928515625002,
       "reasons": null,
       "components": {
-        "centrality": 0.09618750000000001,
+        "centrality": 0.09200928515625002,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -1035,11 +1035,31 @@
       "is_generated": false
     },
     {
-      "path": "ui/frontend/src/components/right/Chat/ReasoningPanel.tsx",
-      "score": 0.08442483609375002,
+      "path": "ui/frontend/src/components/center/SettingsTab.tsx",
+      "score": 0.08781373828125003,
       "reasons": null,
       "components": {
-        "centrality": 0.08442483609375002,
+        "centrality": 0.08781373828125003,
+        "doc_mentions": 0,
+        "git_frequency": 0,
+        "git_recency": 0,
+        "script_ci_refs": 0
+      },
+      "penalties": {
+        "generated": 0,
+        "large": 0,
+        "test": 0,
+        "vendored": 0
+      },
+      "confidence": 0.8,
+      "is_generated": false
+    },
+    {
+      "path": "ui/frontend/src/components/right/Chat/ReasoningPanel.tsx",
+      "score": 0.0844337516308594,
+      "reasons": null,
+      "components": {
+        "centrality": 0.0844337516308594,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -1056,10 +1076,10 @@
     },
     {
       "path": "ui/frontend/src/components/dialogs/ProfileDialog.tsx",
-      "score": 0.08268285937500001,
+      "score": 0.08273530371093753,
       "reasons": null,
       "components": {
-        "centrality": 0.08268285937500001,
+        "centrality": 0.08273530371093753,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -1076,10 +1096,10 @@
     },
     {
       "path": "ui/frontend/src/components/left/Files/FileExplorer.tsx",
-      "score": 0.08268285937500001,
+      "score": 0.08273530371093753,
       "reasons": null,
       "components": {
-        "centrality": 0.08268285937500001,
+        "centrality": 0.08273530371093753,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -1096,10 +1116,10 @@
     },
     {
       "path": "ui/frontend/src/components/right/Chat/Composer2.tsx",
-      "score": 0.0796462875,
+      "score": 0.07968824296875002,
       "reasons": null,
       "components": {
-        "centrality": 0.0796462875,
+        "centrality": 0.07968824296875002,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -1116,10 +1136,10 @@
     },
     {
       "path": "ui/frontend/src/components/right/Chat/MessageList.tsx",
-      "score": 0.0796462875,
+      "score": 0.07968824296875002,
       "reasons": null,
       "components": {
-        "centrality": 0.0796462875,
+        "centrality": 0.07968824296875002,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -1196,10 +1216,10 @@
     },
     {
       "path": "ui/frontend/src/components/DynamicThemeProvider.tsx",
-      "score": 0.07144875000000002,
+      "score": 0.07169554687500002,
       "reasons": null,
       "components": {
-        "centrality": 0.07144875000000002,
+        "centrality": 0.07169554687500002,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -1216,10 +1236,10 @@
     },
     {
       "path": "ui/frontend/src/components/center/EditorPanel.tsx",
-      "score": 0.07144875000000002,
+      "score": 0.07169554687500002,
       "reasons": null,
       "components": {
-        "centrality": 0.07144875000000002,
+        "centrality": 0.07169554687500002,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -1236,10 +1256,10 @@
     },
     {
       "path": "ui/frontend/src/components/dialogs/ApprovalDialog.tsx",
-      "score": 0.07144875000000002,
+      "score": 0.07169554687500002,
       "reasons": null,
       "components": {
-        "centrality": 0.07144875000000002,
+        "centrality": 0.07169554687500002,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -1256,10 +1276,10 @@
     },
     {
       "path": "ui/frontend/src/components/dialogs/CostsDialog.tsx",
-      "score": 0.07144875000000002,
+      "score": 0.07169554687500002,
       "reasons": null,
       "components": {
-        "centrality": 0.07144875000000002,
+        "centrality": 0.07169554687500002,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -1276,10 +1296,10 @@
     },
     {
       "path": "ui/frontend/src/components/dialogs/MemoriesDialog.tsx",
-      "score": 0.07144875000000002,
+      "score": 0.07169554687500002,
       "reasons": null,
       "components": {
-        "centrality": 0.07144875000000002,
+        "centrality": 0.07169554687500002,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -1296,10 +1316,10 @@
     },
     {
       "path": "ui/frontend/src/components/dialogs/NewProjectDialog.tsx",
-      "score": 0.07144875000000002,
+      "score": 0.07169554687500002,
       "reasons": null,
       "components": {
-        "centrality": 0.07144875000000002,
+        "centrality": 0.07169554687500002,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -1316,10 +1336,10 @@
     },
     {
       "path": "ui/frontend/src/components/dialogs/RulesDialog.tsx",
-      "score": 0.07144875000000002,
+      "score": 0.07169554687500002,
       "reasons": null,
       "components": {
-        "centrality": 0.07144875000000002,
+        "centrality": 0.07169554687500002,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -1336,30 +1356,10 @@
     },
     {
       "path": "ui/frontend/src/components/dialogs/SearchDialog.tsx",
-      "score": 0.07144875000000002,
+      "score": 0.07169554687500002,
       "reasons": null,
       "components": {
-        "centrality": 0.07144875000000002,
-        "doc_mentions": 0,
-        "git_frequency": 0,
-        "git_recency": 0,
-        "script_ci_refs": 0
-      },
-      "penalties": {
-        "generated": 0,
-        "large": 0,
-        "test": 0,
-        "vendored": 0
-      },
-      "confidence": 0.8,
-      "is_generated": false
-    },
-    {
-      "path": "ui/frontend/src/components/dialogs/SettingsDialog.tsx",
-      "score": 0.07144875000000002,
-      "reasons": null,
-      "components": {
-        "centrality": 0.07144875000000002,
+        "centrality": 0.07169554687500002,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -1376,10 +1376,10 @@
     },
     {
       "path": "ui/frontend/src/components/dialogs/WorkspaceDialog.tsx",
-      "score": 0.07144875000000002,
+      "score": 0.07169554687500002,
       "reasons": null,
       "components": {
-        "centrality": 0.07144875000000002,
+        "centrality": 0.07169554687500002,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -1396,10 +1396,10 @@
     },
     {
       "path": "ui/frontend/src/components/left/Sidebar.tsx",
-      "score": 0.07144875000000002,
+      "score": 0.07169554687500002,
       "reasons": null,
       "components": {
-        "centrality": 0.07144875000000002,
+        "centrality": 0.07169554687500002,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -1416,10 +1416,10 @@
     },
     {
       "path": "ui/frontend/src/components/right/Chat/ChatPanel.tsx",
-      "score": 0.07144875000000002,
+      "score": 0.07169554687500002,
       "reasons": null,
       "components": {
-        "centrality": 0.07144875000000002,
+        "centrality": 0.07169554687500002,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -1436,10 +1436,10 @@
     },
     {
       "path": "ui/frontend/src/services/files.ts",
-      "score": 0.07144875000000002,
+      "score": 0.07169554687500002,
       "reasons": null,
       "components": {
-        "centrality": 0.07144875000000002,
+        "centrality": 0.07169554687500002,
         "doc_mentions": 0,
         "git_frequency": 0,
         "git_recency": 0,
@@ -1845,14 +1845,14 @@
     },
     "tsconfig_hash": "",
     "readme_hash": "a74bd85a79e3da4e369edb67d3c648f5858c8a4db17f8c3658c4dda67cf30623",
-    "mtime_max": 1756719122
+    "mtime_max": 1756725004
   },
   "metrics": {
-    "files": 208,
+    "files": 359,
     "edges": 67,
     "pagerank_iters": 7,
-    "duration_ms": 89,
-    "rank_churn": 0.33333333333333337
+    "duration_ms": 107,
+    "rank_churn": 0.09523809523809523
   },
   "version": "2"
 }

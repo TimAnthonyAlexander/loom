@@ -17,9 +17,10 @@ ui/frontend/wailsjs/go/models.ts
 ui/frontend/src/components/markdown/MarkdownErrorBoundary.tsx
 ui/frontend/src/components/markdown/MarkdownRenderer.tsx
 web/src/App.tsx
-ui/frontend/src/utils/language.ts
 web/src/index.css
+ui/frontend/src/utils/language.ts
 ui/frontend/src/App.tsx
+ui/frontend/src/components/center/SettingsTab.tsx
 ui/frontend/src/components/right/Chat/ReasoningPanel.tsx
 ui/frontend/src/components/dialogs/ProfileDialog.tsx
 ui/frontend/src/components/left/Files/FileExplorer.tsx
@@ -36,7 +37,6 @@ ui/frontend/src/components/dialogs/MemoriesDialog.tsx
 ui/frontend/src/components/dialogs/NewProjectDialog.tsx
 ui/frontend/src/components/dialogs/RulesDialog.tsx
 ui/frontend/src/components/dialogs/SearchDialog.tsx
-ui/frontend/src/components/dialogs/SettingsDialog.tsx
 ui/frontend/src/components/dialogs/WorkspaceDialog.tsx
 ui/frontend/src/components/left/Sidebar.tsx
 ui/frontend/src/components/right/Chat/ChatPanel.tsx
