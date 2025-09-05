@@ -69,7 +69,9 @@ export default function SettingsDialog(props: Props) {
                     <FormControl fullWidth>
                         <InputLabel>Personality</InputLabel>
                         <Select value={currentPersonality} onChange={(e) => setCurrentPersonality(e.target.value)} label="Personality">
-                            {Object.entries(personalities).map(([key, config]) => (
+                            {Object.entries(personalities)
+                                .sort(([a], [b]) => a.localeCompare(b))
+                                .map(([key, config]) => (
                                 <MenuItem key={key} value={key}>
                                     <Tooltip title={config.description} placement="right">
                                         <span>{config.name}</span>
