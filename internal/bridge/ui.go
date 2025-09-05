@@ -82,9 +82,10 @@ func (a *App) WithConfig(config adapter.Config) *App {
 // WithSettings sets persisted settings for the UI bridge.
 func (a *App) WithSettings(s config.Settings) *App {
 	a.settings = s
-	// Apply auto-approve flags to engine if available
+	// Apply settings to engine if available
 	if a.engine != nil {
 		a.engine.SetAutoApprove(s.AutoApproveShell, s.AutoApproveEdits)
+		a.engine.SetPersonality(s.Personality)
 	}
 	return a
 }
@@ -193,6 +194,19 @@ func (a *App) GetTools() []map[string]interface{} {
 		result[i] = toolInfo
 	}
 
+	return result
+}
+
+// GetPersonalities returns all available personalities from the registry
+func (a *App) GetPersonalities() map[string]interface{} {
+	result := make(map[string]interface{})
+	for key, config := range config.PersonalityRegistry {
+		result[key] = map[string]interface{}{
+			"name":        config.Name,
+			"description": config.Description,
+			"prompt":      config.Prompt,
+		}
+	}
 	return result
 }
 
@@ -311,9 +325,10 @@ func (a *App) applyAndSaveSettings(s config.Settings) {
 		}
 	}
 
-	// Apply engine flags for auto-approve regardless of LLM update
+	// Apply engine flags for auto-approve and personality regardless of LLM update
 	if a.engine != nil {
 		a.engine.SetAutoApprove(s.AutoApproveShell, s.AutoApproveEdits)
+		a.engine.SetPersonality(s.Personality)
 	}
 }
 
@@ -397,6 +412,7 @@ func (a *App) GetSettings() map[string]string {
 		"auto_approve_shell": boolToStr(s.AutoApproveShell),
 		"auto_approve_edits": boolToStr(s.AutoApproveEdits),
 		"theme":              s.Theme,
+		"personality":        s.Personality,
 	}
 }
 
@@ -618,6 +634,9 @@ func (a *App) SaveSettings(settings map[string]string) {
 	}
 	if v, ok := settings["theme"]; ok {
 		s.Theme = v
+	}
+	if v, ok := settings["personality"]; ok {
+		s.Personality = v
 	}
 
 	a.applyAndSaveSettings(s)

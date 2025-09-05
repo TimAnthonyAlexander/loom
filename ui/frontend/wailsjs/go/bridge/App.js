@@ -54,6 +54,10 @@ export function GetMemories() {
   return window['go']['bridge']['App']['GetMemories']();
 }
 
+export function GetPersonalities() {
+  return window['go']['bridge']['App']['GetPersonalities']();
+}
+
 export function GetProfileData(arg1, arg2) {
   return window['go']['bridge']['App']['GetProfileData'](arg1, arg2);
 }

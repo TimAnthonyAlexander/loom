@@ -130,6 +130,7 @@ export namespace config {
 	    auto_approve_shell?: boolean;
 	    auto_approve_edits?: boolean;
 	    theme?: string;
+	    personality?: string;
 	    recent_workspaces?: string[];
 	
 	    static createFrom(source: any = {}) {
@@ -147,6 +148,7 @@ export namespace config {
 	        this.auto_approve_shell = source["auto_approve_shell"];
 	        this.auto_approve_edits = source["auto_approve_edits"];
 	        this.theme = source["theme"];
+	        this.personality = source["personality"];
 	        this.recent_workspaces = source["recent_workspaces"];
 	    }
 	}

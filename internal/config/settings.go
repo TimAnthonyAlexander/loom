@@ -22,6 +22,8 @@ type Settings struct {
 	AutoApproveEdits bool `json:"auto_approve_edits,omitempty"`
 	// UI preferences
 	Theme string `json:"theme,omitempty"`
+	// AI personality selection
+	Personality string `json:"personality,omitempty"`
 	// Recent workspaces (max 10, ordered from most recent)
 	RecentWorkspaces []string `json:"recent_workspaces,omitempty"`
 }

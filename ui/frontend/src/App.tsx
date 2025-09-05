@@ -41,6 +41,8 @@ const App: React.FC = () => {
     const [autoApproveShell, setAutoApproveShell] = useState<boolean>(false);
     const [autoApproveEdits, setAutoApproveEdits] = useState<boolean>(false);
     const [currentTheme, setCurrentTheme] = useState<string>('catppuccin');
+    const [currentPersonality, setCurrentPersonality] = useState<string>('coder');
+    const [personalities, setPersonalities] = useState<Record<string, { name: string; description: string; prompt: string }>>({});
     const [rulesOpen, setRulesOpen] = useState<boolean>(false);
     const [memoriesOpen, setMemoriesOpen] = useState<boolean>(false);
     const [userRules, setUserRules] = useState<string[]>([]);
@@ -290,6 +292,16 @@ const App: React.FC = () => {
             setIndexing({ status, total, done, file });
         });
 
+        // Load personalities from backend
+        (AppBridge as any).GetPersonalities()
+            .then((p: any) => {
+                setPersonalities(p || {});
+            })
+            .catch(() => {
+                console.error('Failed to load personalities');
+                setPersonalities({});
+            });
+
         // Load settings
         GetSettings()
             .then((s: any) => {
@@ -300,6 +312,7 @@ const App: React.FC = () => {
                 setAutoApproveShell(String(s?.auto_approve_shell).toLowerCase() === 'true');
                 setAutoApproveEdits(String(s?.auto_approve_edits).toLowerCase() === 'true');
                 setCurrentTheme(s?.theme || 'catppuccin');
+                setCurrentPersonality(s?.personality || 'coder');
                 const last = s?.last_workspace || '';
                 if (last) {
                     setWorkspacePath(last);
@@ -444,6 +457,13 @@ const App: React.FC = () => {
 
     const handleSend = useCallback((text: string) => {
         if (!text.trim() || busy) return;
+        // Clear reasoning text when sending a new message
+        setReasoningText('');
+        setReasoningOpen(false);
+        if (collapseTimerRef.current) {
+            clearTimeout(collapseTimerRef.current);
+            collapseTimerRef.current = null;
+        }
         SendUserMessage(text);
     }, [busy]);
 
@@ -489,39 +509,39 @@ const App: React.FC = () => {
                 // Project created successfully, open it as workspace
                 const projectPath = String(result.path);
                 setWorkspacePath(projectPath);
-                
+
                 // Open the new project as workspace
                 await SetWorkspace(projectPath);
-                
+
                 // Reset and reload file explorer for the new workspace
                 setDirCache({});
                 setExpandedDirs({});
                 setOpenTabs([]);
                 setActiveTab('');
-                
+
                 const dirResult = await Bridge.ListWorkspaceDir('');
                 const r = dirResult as UIListDirResult;
                 if (r && Array.isArray(r.entries)) {
                     setDirCache((prev) => ({ ...prev, [r.path || '']: r.entries }));
                     setExpandedDirs((prev) => ({ ...prev, [r.path || '']: true }));
                 }
-                
+
                 // Refresh rules and conversation
                 const rules = await AppBridge.GetRules() as any;
                 setUserRules(Array.isArray(rules?.user) ? rules.user : []);
                 setProjectRules(Array.isArray(rules?.project) ? rules.project : []);
-                
+
                 const newConversationId = await NewConversation();
                 setCurrentConversationId(newConversationId);
-                
+
                 const conversations = await GetConversations() as any;
                 const list = Array.isArray(conversations?.conversations) ? conversations.conversations : [];
-                setConversations(list.map((c: any) => ({ 
-                    id: String(c.id), 
-                    title: String(c.title || c.id), 
-                    updated_at: String(c.updated_at || '') 
+                setConversations(list.map((c: any) => ({
+                    id: String(c.id),
+                    title: String(c.title || c.id),
+                    updated_at: String(c.updated_at || '')
                 })));
-                
+
                 // Close the new project dialog
                 setNewProjectOpen(false);
             } else {
@@ -549,7 +569,7 @@ const App: React.FC = () => {
     // Load recent workspaces on mount and when workspace changes
     useEffect(() => {
         loadRecentWorkspaces();
-        
+
         const unsubscribe = EventsOn('workspace:changed', () => {
             loadRecentWorkspaces();
         });
@@ -562,39 +582,39 @@ const App: React.FC = () => {
     // Handle opening a recent workspace
     const handleOpenRecentWorkspace = useCallback(async (path: string) => {
         if (!path) return;
-        
+
         try {
             setWorkspacePath(path);
-            
+
             await SetWorkspace(path);
-            
+
             // Reset and reload file explorer for the new workspace
             setDirCache({});
             setExpandedDirs({});
             setOpenTabs([]);
             setActiveTab('');
-            
+
             const dirResult = await Bridge.ListWorkspaceDir('');
             const r = dirResult as UIListDirResult;
             if (r && Array.isArray(r.entries)) {
                 setDirCache((prev) => ({ ...prev, [r.path || '']: r.entries }));
                 setExpandedDirs((prev) => ({ ...prev, [r.path || '']: true }));
             }
-            
+
             // Refresh rules and conversation
             const rules = await AppBridge.GetRules() as any;
             setUserRules(Array.isArray(rules?.user) ? rules.user : []);
             setProjectRules(Array.isArray(rules?.project) ? rules.project : []);
-            
+
             const newConversationId = await NewConversation();
             setCurrentConversationId(newConversationId);
-            
+
             const conversations = await GetConversations() as any;
             const list = Array.isArray(conversations?.conversations) ? conversations.conversations : [];
-            setConversations(list.map((c: any) => ({ 
-                id: String(c.id), 
-                title: String(c.title || c.id), 
-                updated_at: String(c.updated_at || '') 
+            setConversations(list.map((c: any) => ({
+                id: String(c.id),
+                title: String(c.title || c.id),
+                updated_at: String(c.updated_at || '')
             })));
         } catch (error) {
             console.error('Failed to open recent workspace:', error);
@@ -832,105 +852,105 @@ const App: React.FC = () => {
     return (
         <DynamicThemeProvider currentTheme={currentTheme}>
             <Box ref={containerRef} display="flex" height="100vh" sx={{ bgcolor: 'background.default' }}>
-            {/* Left: Sidebar */}
-            <Box sx={{ minWidth: SIDEBAR_MIN_WIDTH, width: sidebarWidth, borderRight: 1, borderColor: 'divider' }}>
-                <Sidebar
-                    onOpenWorkspace={() => setWorkspaceOpen(true)}
-                    onOpenRules={() => setRulesOpen(true)}
-                    onOpenMemories={() => setMemoriesOpen(true)}
-                    onOpenSettings={() => setSettingsOpen(true)}
-                    onOpenCosts={() => setCostsOpen(true)}
-                    totalInUSD={gTotalInUSD}
-                    totalOutUSD={gTotalOutUSD}
-                    dirCache={dirCache}
-                    expandedDirs={expandedDirs}
-                    onToggleDir={toggleDir}
-                    onOpenFile={openFile}
-                    indexing={indexing}
+                {/* Left: Sidebar */}
+                <Box sx={{ minWidth: SIDEBAR_MIN_WIDTH, width: sidebarWidth, borderRight: 1, borderColor: 'divider' }}>
+                    <Sidebar
+                        onOpenWorkspace={() => setWorkspaceOpen(true)}
+                        onOpenRules={() => setRulesOpen(true)}
+                        onOpenMemories={() => setMemoriesOpen(true)}
+                        onOpenSettings={() => setSettingsOpen(true)}
+                        onOpenCosts={() => setCostsOpen(true)}
+                        totalInUSD={gTotalInUSD}
+                        totalOutUSD={gTotalOutUSD}
+                        dirCache={dirCache}
+                        expandedDirs={expandedDirs}
+                        onToggleDir={toggleDir}
+                        onOpenFile={openFile}
+                        indexing={indexing}
+                    />
+                </Box>
+
+                {/* Left Resizer */}
+                <Box
+                    onMouseDown={startLeftResize}
+                    sx={{ width: RESIZER_WIDTH, cursor: 'col-resize', bgcolor: 'divider' }}
                 />
-            </Box>
 
-            {/* Left Resizer */}
-            <Box
-                onMouseDown={startLeftResize}
-                sx={{ width: RESIZER_WIDTH, cursor: 'col-resize', bgcolor: 'divider' }}
-            />
+                {/* Center: Tabbed Editor */}
+                <Box sx={{ flex: 1, minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
+                    <EditorPanel
+                        openTabs={openTabs}
+                        activeTab={activeTab}
+                        currentTheme={currentTheme}
+                        onChangeActiveTab={(p: string) => {
+                            setActiveTab(p);
+                            if (p) {
+                                Bridge.ReadWorkspaceFile(p)
+                                    .then((res: any) => {
+                                        const content = String(res?.content || '');
+                                        const serverRev = String(res?.serverRev || '');
+                                        const language = guessLanguage(p);
+                                        setOpenTabs((prev) => prev.map((t) => t.path === p ? { ...t, content, serverRev, language, isDirty: false } : t));
+                                    })
+                                    .catch(() => { });
+                            }
+                        }}
+                        onCloseTab={closeTab}
+                        onUpdateTab={onUpdateTab}
+                        onSaveTab={onSaveTab}
+                    />
+                </Box>
 
-            {/* Center: Tabbed Editor */}
-            <Box sx={{ flex: 1, minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
-                <EditorPanel
-                    openTabs={openTabs}
-                    activeTab={activeTab}
-                    currentTheme={currentTheme}
-                    onChangeActiveTab={(p: string) => {
-                        setActiveTab(p);
-                        if (p) {
-                            Bridge.ReadWorkspaceFile(p)
-                                .then((res: any) => {
-                                    const content = String(res?.content || '');
-                                    const serverRev = String(res?.serverRev || '');
-                                    const language = guessLanguage(p);
-                                    setOpenTabs((prev) => prev.map((t) => t.path === p ? { ...t, content, serverRev, language, isDirty: false } : t));
-                                })
-                                .catch(() => { });
-                        }
-                    }}
-                    onCloseTab={closeTab}
-                    onUpdateTab={onUpdateTab}
-                    onSaveTab={onSaveTab}
+                {/* Right Resizer */}
+                <Box
+                    onMouseDown={startRightResize}
+                    sx={{ width: RESIZER_WIDTH, cursor: 'col-resize', bgcolor: 'divider' }}
                 />
-            </Box>
 
-            {/* Right Resizer */}
-            <Box
-                onMouseDown={startRightResize}
-                sx={{ width: RESIZER_WIDTH, cursor: 'col-resize', bgcolor: 'divider' }}
-            />
+                {/* Right: Chat */}
+                <Box sx={{ minWidth: CHAT_MIN_WIDTH, width: chatWidth, borderLeft: 1, borderColor: 'divider' }}>
+                    <ChatPanel
+                        messages={messages}
+                        busy={busy}
+                        lastUserIdx={lastUserIdx}
+                        reasoningText={reasoningText}
+                        reasoningOpen={reasoningOpen}
+                        onToggleReasoning={setReasoningOpen}
+                        onSend={handleSend}
+                        onClear={() => { setMessages([]); ClearConversation(); }}
+                        messagesEndRef={messagesEndRef}
+                        onNewConversation={handleNewConversation}
+                        conversations={orderedConversations}
+                        currentConversationId={currentConversationId}
+                        onSelectConversation={handleSelectConversation}
+                        currentModel={currentModel}
+                        onSelectModel={handleModelSelect}
+                    />
+                </Box>
 
-            {/* Right: Chat */}
-            <Box sx={{ minWidth: CHAT_MIN_WIDTH, width: chatWidth, borderLeft: 1, borderColor: 'divider' }}>
-                <ChatPanel
-                    messages={messages}
-                    busy={busy}
-                    lastUserIdx={lastUserIdx}
-                    reasoningText={reasoningText}
-                    reasoningOpen={reasoningOpen}
-                    onToggleReasoning={setReasoningOpen}
-                    onSend={handleSend}
-                    onClear={() => { setMessages([]); ClearConversation(); }}
-                    messagesEndRef={messagesEndRef}
-                    onNewConversation={handleNewConversation}
-                    conversations={orderedConversations}
-                    currentConversationId={currentConversationId}
-                    onSelectConversation={handleSelectConversation}
-                    currentModel={currentModel}
-                    onSelectModel={handleModelSelect}
+                <ApprovalDialog
+                    open={!!approvalRequest}
+                    summary={approvalRequest?.summary}
+                    diff={approvalRequest?.diff}
+                    onApprove={() => handleApproval(true)}
+                    onReject={() => handleApproval(false)}
+                    onClose={() => setApprovalRequest(null)}
                 />
-            </Box>
-
-            <ApprovalDialog
-                open={!!approvalRequest}
-                summary={approvalRequest?.summary}
-                diff={approvalRequest?.diff}
-                onApprove={() => handleApproval(true)}
-                onReject={() => handleApproval(false)}
-                onClose={() => setApprovalRequest(null)}
-            />
-            <RulesDialog
-                open={rulesOpen}
-                userRules={userRules}
-                setUserRules={setUserRules}
-                projectRules={projectRules}
-                setProjectRules={setProjectRules}
-                newUserRule={newUserRule}
-                setNewUserRule={setNewUserRule}
-                newProjectRule={newProjectRule}
-                setNewProjectRule={setNewProjectRule}
-                onSave={() => { AppBridge.SaveRules({ user: userRules, project: projectRules }).finally(() => setRulesOpen(false)); }}
-                onClose={() => setRulesOpen(false)}
-            />
-            <MemoriesDialog open={memoriesOpen} onClose={() => setMemoriesOpen(false)} />
-            <SettingsDialog
+                <RulesDialog
+                    open={rulesOpen}
+                    userRules={userRules}
+                    setUserRules={setUserRules}
+                    projectRules={projectRules}
+                    setProjectRules={setProjectRules}
+                    newUserRule={newUserRule}
+                    setNewUserRule={setNewUserRule}
+                    newProjectRule={newProjectRule}
+                    setNewProjectRule={setNewProjectRule}
+                    onSave={() => { AppBridge.SaveRules({ user: userRules, project: projectRules }).finally(() => setRulesOpen(false)); }}
+                    onClose={() => setRulesOpen(false)}
+                />
+                <MemoriesDialog open={memoriesOpen} onClose={() => setMemoriesOpen(false)} />
+                            <SettingsDialog
                 open={settingsOpen}
                 openaiKey={openaiKey}
                 setOpenaiKey={setOpenaiKey}
@@ -946,88 +966,91 @@ const App: React.FC = () => {
                 setAutoApproveEdits={setAutoApproveEdits}
                 currentTheme={currentTheme}
                 setCurrentTheme={setCurrentTheme}
-                onSave={() => { SaveSettings({ openai_api_key: openaiKey, anthropic_api_key: anthropicKey, openrouter_api_key: openrouterKey, ollama_endpoint: ollamaEndpoint, auto_approve_shell: String(autoApproveShell), auto_approve_edits: String(autoApproveEdits), theme: currentTheme }).finally(() => setSettingsOpen(false)); }}
+                currentPersonality={currentPersonality}
+                setCurrentPersonality={setCurrentPersonality}
+                personalities={personalities}
+                onSave={() => { SaveSettings({ openai_api_key: openaiKey, anthropic_api_key: anthropicKey, openrouter_api_key: openrouterKey, ollama_endpoint: ollamaEndpoint, auto_approve_shell: String(autoApproveShell), auto_approve_edits: String(autoApproveEdits), theme: currentTheme, personality: currentPersonality }).finally(() => setSettingsOpen(false)); }}
                 onClose={() => setSettingsOpen(false)}
             />
-            <WorkspaceDialog
-                open={workspaceOpen}
-                workspacePath={workspacePath}
-                setWorkspacePath={setWorkspacePath}
-                onBrowse={() => { Bridge.ChooseWorkspace().then((path: string) => { if (path) setWorkspacePath(path); }); }}
-                onUse={() => {
-                    const p = workspacePath.trim();
-                    if (p) {
-                        SetWorkspace(p)
-                            .then(() => {
-                                // Reset and reload file explorer for the new workspace
-                                setDirCache({});
-                                setExpandedDirs({});
-                                setOpenTabs([]);
-                                setActiveTab('');
-                                return Bridge.ListWorkspaceDir('');
-                            })
-                            .then((res: any) => {
-                                const r = res as UIListDirResult;
-                                if (r && Array.isArray(r.entries)) {
-                                    setDirCache((prev) => ({ ...prev, [r.path || '']: r.entries }));
-                                    setExpandedDirs((prev) => ({ ...prev, [r.path || '']: true }));
-                                }
-                                return AppBridge.GetRules();
-                            })
-                            .then((r: any) => {
-                                setUserRules(Array.isArray(r?.user) ? r.user : []);
-                                setProjectRules(Array.isArray(r?.project) ? r.project : []);
-                                return NewConversation();
-                            })
-                            .then((id: string) => {
-                                setCurrentConversationId(id);
-                                return GetConversations();
-                            })
-                            .then((res: any) => {
-                                setCurrentConversationId(res?.current_id || '');
-                                const list = Array.isArray(res?.conversations) ? res.conversations : [];
-                                setConversations(list.map((c: any) => ({ id: String(c.id), title: String(c.title || c.id), updated_at: String(c.updated_at || '') })));
-                            })
-                            .finally(() => setWorkspaceOpen(false));
-                    }
-                }}
-                onClose={() => setWorkspaceOpen(false)}
-                onNewProject={() => setNewProjectOpen(true)}
-                recentWorkspaces={recentWorkspaces}
-                onOpenRecent={handleOpenRecentWorkspace}
-            />
-            <NewProjectDialog
-                open={newProjectOpen}
-                onClose={() => setNewProjectOpen(false)}
-                onCreate={handleCreateProject}
-                onBrowsePath={() => Bridge.ChooseWorkspace()}
-            />
-            <SearchDialog
-                open={searchOpen}
-                initialMode={searchMode}
-                onClose={() => setSearchOpen(false)}
-                onOpenFile={(p, line, col) => {
-                    setSearchOpen(false);
-                    if (p) openFile(p, line, col);
-                }}
-            />
-            <CostsDialog
-                open={costsOpen}
-                onClose={() => setCostsOpen(false)}
-                totalInUSD={totalInUSD}
-                totalOutUSD={totalOutUSD}
-                totalInTokens={totalInTokens}
-                totalOutTokens={totalOutTokens}
-                perProvider={perProvider}
-                perModel={perModel}
-                gTotalInUSD={gTotalInUSD}
-                gTotalOutUSD={gTotalOutUSD}
-                gTotalInTokens={gTotalInTokens}
-                gTotalOutTokens={gTotalOutTokens}
-                gPerProvider={gPerProvider}
-                gPerModel={gPerModel}
-            />
-        </Box>
+                <WorkspaceDialog
+                    open={workspaceOpen}
+                    workspacePath={workspacePath}
+                    setWorkspacePath={setWorkspacePath}
+                    onBrowse={() => { Bridge.ChooseWorkspace().then((path: string) => { if (path) setWorkspacePath(path); }); }}
+                    onUse={() => {
+                        const p = workspacePath.trim();
+                        if (p) {
+                            SetWorkspace(p)
+                                .then(() => {
+                                    // Reset and reload file explorer for the new workspace
+                                    setDirCache({});
+                                    setExpandedDirs({});
+                                    setOpenTabs([]);
+                                    setActiveTab('');
+                                    return Bridge.ListWorkspaceDir('');
+                                })
+                                .then((res: any) => {
+                                    const r = res as UIListDirResult;
+                                    if (r && Array.isArray(r.entries)) {
+                                        setDirCache((prev) => ({ ...prev, [r.path || '']: r.entries }));
+                                        setExpandedDirs((prev) => ({ ...prev, [r.path || '']: true }));
+                                    }
+                                    return AppBridge.GetRules();
+                                })
+                                .then((r: any) => {
+                                    setUserRules(Array.isArray(r?.user) ? r.user : []);
+                                    setProjectRules(Array.isArray(r?.project) ? r.project : []);
+                                    return NewConversation();
+                                })
+                                .then((id: string) => {
+                                    setCurrentConversationId(id);
+                                    return GetConversations();
+                                })
+                                .then((res: any) => {
+                                    setCurrentConversationId(res?.current_id || '');
+                                    const list = Array.isArray(res?.conversations) ? res.conversations : [];
+                                    setConversations(list.map((c: any) => ({ id: String(c.id), title: String(c.title || c.id), updated_at: String(c.updated_at || '') })));
+                                })
+                                .finally(() => setWorkspaceOpen(false));
+                        }
+                    }}
+                    onClose={() => setWorkspaceOpen(false)}
+                    onNewProject={() => setNewProjectOpen(true)}
+                    recentWorkspaces={recentWorkspaces}
+                    onOpenRecent={handleOpenRecentWorkspace}
+                />
+                <NewProjectDialog
+                    open={newProjectOpen}
+                    onClose={() => setNewProjectOpen(false)}
+                    onCreate={handleCreateProject}
+                    onBrowsePath={() => Bridge.ChooseWorkspace()}
+                />
+                <SearchDialog
+                    open={searchOpen}
+                    initialMode={searchMode}
+                    onClose={() => setSearchOpen(false)}
+                    onOpenFile={(p, line, col) => {
+                        setSearchOpen(false);
+                        if (p) openFile(p, line, col);
+                    }}
+                />
+                <CostsDialog
+                    open={costsOpen}
+                    onClose={() => setCostsOpen(false)}
+                    totalInUSD={totalInUSD}
+                    totalOutUSD={totalOutUSD}
+                    totalInTokens={totalInTokens}
+                    totalOutTokens={totalOutTokens}
+                    perProvider={perProvider}
+                    perModel={perModel}
+                    gTotalInUSD={gTotalInUSD}
+                    gTotalOutUSD={gTotalOutUSD}
+                    gTotalInTokens={gTotalInTokens}
+                    gTotalOutTokens={gTotalOutTokens}
+                    gPerProvider={gPerProvider}
+                    gPerModel={gPerModel}
+                />
+            </Box>
         </DynamicThemeProvider>
     );
 };

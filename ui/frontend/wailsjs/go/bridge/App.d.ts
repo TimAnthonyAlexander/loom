@@ -34,6 +34,8 @@ export function GetGlobalUsage():Promise<Record<string, any>>;
 
 export function GetMemories():Promise<Array<Record<string, string>>>;
 
+export function GetPersonalities():Promise<Record<string, any>>;
+
 export function GetProfileData(arg1:number,arg2:number):Promise<Record<string, any>>;
 
 export function GetProjectHotlist():Promise<Array<string>>;

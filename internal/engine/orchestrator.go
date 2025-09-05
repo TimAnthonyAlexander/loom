@@ -86,6 +86,8 @@ type Engine struct {
 	// Settings-backed flags
 	autoApproveShell bool
 	autoApproveEdits bool
+	// AI personality setting
+	personality string
 	// model label like "openai:gpt-4o" for titling
 	currentModelLabel string
 	// latest editor context as reported by the UI (workspace-relative path)
@@ -198,6 +200,13 @@ func (e *Engine) SetAutoApprove(shell bool, edits bool) {
 	defer e.mu.Unlock()
 	e.autoApproveShell = shell
 	e.autoApproveEdits = edits
+}
+
+// SetPersonality sets the AI personality for system prompt injection
+func (e *Engine) SetPersonality(personality string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.personality = personality
 }
 
 // SetLLM updates the LLM used by the engine.
@@ -464,7 +473,18 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 		// Load dynamic rules and inject into system prompt with project context
 		userRules, projectRules, _ := config.LoadRules(e.workspaceDir)
 		mems := loadUserMemoriesForPrompt()
-		base := GenerateSystemPromptWithProjectContext(toolSchemas, userRules, projectRules, mems, e.workspaceDir)
+		e.mu.RLock()
+		currentPersonality := e.personality
+		e.mu.RUnlock()
+		base := GenerateSystemPromptUnified(SystemPromptOptions{
+			Tools:                 toolSchemas,
+			UserRules:             userRules,
+			ProjectRules:          projectRules,
+			Memories:              mems,
+			Personality:           currentPersonality,
+			WorkspaceRoot:         e.workspaceDir,
+			IncludeProjectContext: true,
+		})
 		if ui := strings.TrimSpace(e.formatEditorContext()); ui != "" {
 			base = strings.TrimSpace(base) + "\n\nUI Context:\n- " + ui
 		}

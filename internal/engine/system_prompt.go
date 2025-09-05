@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/loom/loom/internal/config"
 	"github.com/loom/loom/internal/profiler"
 	"github.com/loom/loom/internal/tool"
 )
@@ -22,6 +23,7 @@ type SystemPromptOptions struct {
 	UserRules             []string
 	ProjectRules          []string
 	Memories              []MemoryEntry
+	Personality           string
 	WorkspaceRoot         string
 	IncludeProjectContext bool // Whether to include profiler context
 }
@@ -88,6 +90,9 @@ func GenerateSystemPromptUnified(opts SystemPromptOptions) string {
 	addMemories(&b, opts.Memories)
 	addUserRules(&b, opts.UserRules)
 	addProjectRules(&b, opts.ProjectRules)
+
+	// Add personality section at the end so it has the final say
+	addPersonality(&b, opts.Personality)
 
 	return strings.TrimSpace(b.String())
 }
@@ -193,6 +198,23 @@ func addProjectRules(b *strings.Builder, projectRules []string) {
 		b.WriteString(r)
 		b.WriteString("\n")
 	}
+}
+
+// addPersonality adds personality prompt to system prompt
+func addPersonality(b *strings.Builder, personalityKey string) {
+	if strings.TrimSpace(personalityKey) == "" {
+		return
+	}
+
+	// Resolve the personality key to get the actual prompt
+	personalityPrompt := config.GetPersonalityPrompt(personalityKey)
+	if personalityPrompt == "" {
+		return
+	}
+
+	b.WriteString("\n\nPERSONALITY:\n")
+	b.WriteString(personalityPrompt)
+	b.WriteString("\n")
 }
 
 // Legacy compatibility functions - use the unified version internally

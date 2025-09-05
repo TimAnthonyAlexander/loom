@@ -18,6 +18,9 @@ type Props = {
     setAutoApproveEdits: (v: boolean) => void;
     currentTheme: string;
     setCurrentTheme: (v: string) => void;
+    currentPersonality: string;
+    setCurrentPersonality: (v: string) => void;
+    personalities: Record<string, { name: string; description: string; prompt: string }>;
     onSave: () => void;
     onClose: () => void;
 };
@@ -39,6 +42,9 @@ export default function SettingsDialog(props: Props) {
         setAutoApproveEdits,
         currentTheme,
         setCurrentTheme,
+        currentPersonality,
+        setCurrentPersonality,
+        personalities,
         onSave,
         onClose,
     } = props;
@@ -57,6 +63,18 @@ export default function SettingsDialog(props: Props) {
                         <Select value={currentTheme} onChange={(e) => setCurrentTheme(e.target.value)} label="Theme">
                             {Object.entries(AVAILABLE_THEMES).map(([key, config]) => (
                                 <MenuItem key={key} value={key}>{config.name}</MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                    <FormControl fullWidth>
+                        <InputLabel>Personality</InputLabel>
+                        <Select value={currentPersonality} onChange={(e) => setCurrentPersonality(e.target.value)} label="Personality">
+                            {Object.entries(personalities).map(([key, config]) => (
+                                <MenuItem key={key} value={key}>
+                                    <Tooltip title={config.description} placement="right">
+                                        <span>{config.name}</span>
+                                    </Tooltip>
+                                </MenuItem>
                             ))}
                         </Select>
                     </FormControl>
