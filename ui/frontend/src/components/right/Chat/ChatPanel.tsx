@@ -7,7 +7,6 @@ import MessageList from './MessageList';
 import Composer from './Composer2';
 import { ChatMessage, ConversationListItem } from '../../../types/ui';
 import ConversationList from '@/components/left/Conversations/ConversationList';
-import ModelSelector from '@/ModelSelector';
 import { AddRounded, SettingsSuggestRounded, CheckCircleRounded } from '@mui/icons-material';
 
 type Props = {
@@ -248,7 +247,11 @@ function ChatPanelComponent(props: Props) {
                     borderColor: 'divider',
                 }}
             >
-                <ModelSelector onSelect={onSelectModel} currentModel={currentModel} />
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Typography variant="h6" fontWeight={600} color="text.primary">
+                        Loom
+                    </Typography>
+                </Box>
                 <Box
                     sx={{
                         p: 1,
@@ -431,6 +434,8 @@ function ChatPanelComponent(props: Props) {
                     currentPersonality={currentPersonality}
                     setCurrentPersonality={setCurrentPersonality}
                     personalities={personalities}
+                    currentModel={currentModel}
+                    onSelectModel={onSelectModel}
                 />
             </Box>
             <Popover

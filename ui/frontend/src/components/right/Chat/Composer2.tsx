@@ -21,6 +21,7 @@ import {
     PersonRounded,
     DragIndicatorRounded
 } from '@mui/icons-material';
+import ModelSelector from '@/ModelSelector';
 
 type Props = {
     input: string;
@@ -39,6 +40,9 @@ type Props = {
     currentPersonality?: string;
     setCurrentPersonality?: (personality: string) => void;
     personalities?: Record<string, { name: string; description: string; prompt: string }>;
+    // Model integration
+    currentModel?: string;
+    onSelectModel?: (model: string) => void;
 };
 
 function Composer2Component({ 
@@ -54,7 +58,9 @@ function Composer2Component({
     onAttachButtonRef,
     currentPersonality = 'coder',
     setCurrentPersonality,
-    personalities = {}
+    personalities = {},
+    currentModel = '',
+    onSelectModel
 }: Props) {
     const inputRef = React.useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
     const attachBtnRef = React.useRef<HTMLButtonElement | null>(null);
@@ -100,18 +106,17 @@ function Composer2Component({
         setIsDragOver(false);
     }, []);
 
-    const hasContent = input.trim() || attachments.length > 0;
     const personalityConfig = personalities[currentPersonality];
 
     return (
         <Paper
-            elevation={3}
+            elevation={2}
             onDrop={handleDrop}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             sx={{
                 position: 'relative',
-                borderRadius: 3,
+                borderRadius: 1.5,
                 background: 'linear-gradient(135deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.01) 100%)',
                 backdropFilter: 'blur(20px)',
                 border: '1px solid',
@@ -119,11 +124,11 @@ function Composer2Component({
                 transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                 '&:hover': {
                     borderColor: 'primary.main',
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
                 },
                 '&:focus-within': {
                     borderColor: 'primary.main',
-                    boxShadow: '0 0 0 2px rgba(25, 118, 210, 0.12)',
+                    boxShadow: '0 0 0 1px rgba(25, 118, 210, 0.12)',
                 },
                 ...(isDragOver && {
                     borderColor: 'primary.main',
@@ -140,16 +145,16 @@ function Composer2Component({
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            borderRadius: 3,
+                            borderRadius: 1.5,
                             backgroundColor: 'rgba(25, 118, 210, 0.08)',
                             border: '2px dashed',
                             borderColor: 'primary.main',
                             zIndex: 10,
                         }}
                     >
-                        <Stack alignItems="center" spacing={1}>
-                            <DragIndicatorRounded sx={{ fontSize: 48, color: 'primary.main', opacity: 0.7 }} />
-                            <Typography variant="h6" color="primary.main" fontWeight={600}>
+                        <Stack alignItems="center" spacing={0.5}>
+                            <DragIndicatorRounded sx={{ fontSize: 32, color: 'primary.main', opacity: 0.7 }} />
+                            <Typography variant="body2" color="primary.main" fontWeight={500}>
                                 Drop files to attach
                             </Typography>
                         </Stack>
@@ -157,9 +162,137 @@ function Composer2Component({
                 </Fade>
             )}
 
-            <Box sx={{ p: 2 }}>
-                {/* Top row: Personality selector and chips */}
-                <Stack direction="row" spacing={1} sx={{ mb: hasContent ? 1.5 : 0 }}>
+            <Box sx={{ p: 1.25 }}>
+                {/* Top row: Attachment Chips only */}
+                {attachments.length > 0 && (
+                    <Stack direction="row" spacing={0.5} sx={{ mb: 0.75, flexWrap: 'wrap' }}>
+                        {attachments.map((attachment, index) => (
+                            <Chip
+                                key={`${attachment}-${index}`}
+                                size="small"
+                                label={attachment.split('/').pop() || attachment}
+                                onDelete={onRemoveAttachment ? () => onRemoveAttachment(attachment) : undefined}
+                                deleteIcon={<CloseRounded fontSize="inherit" />}
+                                variant="outlined"
+                                sx={{
+                                    maxWidth: 140,
+                                    height: 24,
+                                    borderRadius: 1.5,
+                                    backgroundColor: 'rgba(25, 118, 210, 0.08)',
+                                    borderColor: 'primary.main',
+                                    color: 'primary.main',
+                                    '& .MuiChip-label': {
+                                        px: 1,
+                                        fontWeight: 500,
+                                        fontSize: '0.65rem',
+                                    },
+                                    '& .MuiChip-deleteIcon': {
+                                        fontSize: '0.875rem',
+                                        color: 'primary.main',
+                                        '&:hover': {
+                                            color: 'primary.dark',
+                                        }
+                                    }
+                                }}
+                            />
+                        ))}
+                    </Stack>
+                )}
+
+                {/* Text Input Container */}
+                <Box sx={{ mb: 0.75 }}>
+                    <TextField
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        inputRef={inputRef as any}
+                        onKeyDown={(e) => {
+                            if ((e as any).key === 'Enter' && !(e as any).shiftKey) {
+                                e.preventDefault();
+                                if (!busy && input.trim()) onSend();
+                            }
+                        }}
+                        placeholder="Ask Loom anything…"
+                        disabled={busy}
+                        multiline
+                        minRows={1}
+                        maxRows={12}
+                        fullWidth
+                        variant="outlined"
+                        sx={{
+                            '& .MuiOutlinedInput-root': {
+                                borderRadius: 1.5,
+                                backgroundColor: 'transparent',
+                                '& fieldset': {
+                                    border: 'none',
+                                },
+                                '& textarea': {
+                                    resize: 'none',
+                                    scrollbarWidth: 'thin',
+                                    '&::-webkit-scrollbar': {
+                                        width: 4,
+                                    },
+                                    '&::-webkit-scrollbar-track': {
+                                        background: 'transparent',
+                                    },
+                                    '&::-webkit-scrollbar-thumb': {
+                                        background: 'rgba(255,255,255,0.2)',
+                                        borderRadius: 2,
+                                    },
+                                    '&::-webkit-scrollbar-thumb:hover': {
+                                        background: 'rgba(255,255,255,0.3)',
+                                    },
+                                }
+                            },
+                            '& .MuiInputBase-input': {
+                                fontSize: '0.875rem',
+                                lineHeight: 1.4,
+                                py: 0.75,
+                                '&::placeholder': {
+                                    color: 'text.secondary',
+                                    opacity: 0.7,
+                                }
+                            }
+                        }}
+                    />
+                </Box>
+
+                {/* Bottom row: Model selector, Personality selector, and Action buttons */}
+                <Stack direction="row" spacing={0.75} alignItems="center">
+                    {/* Model Selector */}
+                    {onSelectModel && (
+                        <Box sx={{ 
+                            flex: 1,
+                            minWidth: 200,
+                            maxWidth: 280,
+                            '& .MuiTextField-root': {
+                                minWidth: '200px !important',
+                                maxWidth: '280px !important',
+                            },
+                            '& .MuiInputBase-root': {
+                                height: 28,
+                                fontSize: '0.75rem',
+                                '& .MuiAutocomplete-endAdornment': {
+                                    right: 6,
+                                },
+                                '& .MuiAutocomplete-input': {
+                                    pr: '60px !important', // More space for clear button
+                                }
+                            },
+                            '& .MuiInputLabel-root': {
+                                fontSize: '0.75rem',
+                                transform: 'translate(12px, 6px) scale(1)',
+                            },
+                            '& .MuiInputLabel-shrink': {
+                                transform: 'translate(12px, -8px) scale(0.75)',
+                            }
+                        }}>
+                            <ModelSelector
+                                onSelect={onSelectModel}
+                                currentModel={currentModel}
+                            />
+                        </Box>
+                    )}
+
                     {/* Personality Selector */}
                     {setCurrentPersonality && (
                         <Tooltip 
@@ -169,18 +302,20 @@ function Composer2Component({
                             onOpen={() => setShowPersonalityTooltip(true)}
                             onClose={() => setShowPersonalityTooltip(false)}
                         >
-                            <FormControl size="small" sx={{ minWidth: 120 }}>
+                            <FormControl size="small" sx={{ minWidth: 100 }}>
                                 <Select
                                     value={currentPersonality}
                                     onChange={(e) => setCurrentPersonality(e.target.value)}
                                     displayEmpty
                                     variant="outlined"
-                                    startAdornment={<PersonRounded sx={{ mr: 0.5, fontSize: 18 }} />}
+                                    startAdornment={<PersonRounded sx={{ mr: 0.25, fontSize: 14 }} />}
                                     sx={{
-                                        height: 32,
-                                        borderRadius: 2,
+                                        height: 28,
+                                        borderRadius: 1.5,
+                                        fontSize: '0.75rem',
                                         '& .MuiSelect-select': {
-                                            py: 0.5,
+                                            py: 0.25,
+                                            px: 0.75,
                                             display: 'flex',
                                             alignItems: 'center',
                                         },
@@ -209,7 +344,7 @@ function Composer2Component({
                                             const config = personalities[key];
                                             return (
                                                 <MenuItem key={key} value={key}>
-                                                    <Typography variant="body2" fontWeight={500}>
+                                                    <Typography variant="caption" fontWeight={500}>
                                                         {config.name}
                                                     </Typography>
                                                 </MenuItem>
@@ -220,104 +355,11 @@ function Composer2Component({
                         </Tooltip>
                     )}
 
-                    {/* Attachment Chips */}
-                    {attachments.map((attachment, index) => (
-                        <Chip
-                            key={`${attachment}-${index}`}
-                            size="small"
-                            label={attachment.split('/').pop() || attachment}
-                            onDelete={onRemoveAttachment ? () => onRemoveAttachment(attachment) : undefined}
-                            deleteIcon={<CloseRounded fontSize="small" />}
-                            variant="outlined"
-                            sx={{
-                                maxWidth: 200,
-                                height: 32,
-                                borderRadius: 2,
-                                backgroundColor: 'rgba(25, 118, 210, 0.08)',
-                                borderColor: 'primary.main',
-                                color: 'primary.main',
-                                '& .MuiChip-label': {
-                                    px: 1.5,
-                                    fontWeight: 500,
-                                    fontSize: '0.75rem',
-                                },
-                                '& .MuiChip-deleteIcon': {
-                                    color: 'primary.main',
-                                    '&:hover': {
-                                        color: 'primary.dark',
-                                    }
-                                }
-                            }}
-                        />
-                    ))}
-                </Stack>
-
-                {/* Text Input Container */}
-                <Box sx={{ position: 'relative' }}>
-                    <TextField
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        inputRef={inputRef as any}
-                        onKeyDown={(e) => {
-                            if ((e as any).key === 'Enter' && !(e as any).shiftKey) {
-                                e.preventDefault();
-                                if (!busy && input.trim()) onSend();
-                            }
-                        }}
-                        placeholder="Ask Loom anything…"
-                        disabled={busy}
-                        multiline
-                        minRows={1}
-                        maxRows={12}
-                        fullWidth
-                        variant="outlined"
-                        sx={{
-                            '& .MuiOutlinedInput-root': {
-                                borderRadius: 2,
-                                backgroundColor: 'transparent',
-                                pr: 10, // Space for buttons
-                                '& fieldset': {
-                                    border: 'none',
-                                },
-                                '& textarea': {
-                                    resize: 'none',
-                                    scrollbarWidth: 'thin',
-                                    '&::-webkit-scrollbar': {
-                                        width: 6,
-                                    },
-                                    '&::-webkit-scrollbar-track': {
-                                        background: 'transparent',
-                                    },
-                                    '&::-webkit-scrollbar-thumb': {
-                                        background: 'rgba(255,255,255,0.2)',
-                                        borderRadius: 3,
-                                    },
-                                    '&::-webkit-scrollbar-thumb:hover': {
-                                        background: 'rgba(255,255,255,0.3)',
-                                    },
-                                }
-                            },
-                            '& .MuiInputBase-input': {
-                                fontSize: '0.95rem',
-                                lineHeight: 1.5,
-                                '&::placeholder': {
-                                    color: 'text.secondary',
-                                    opacity: 0.7,
-                                }
-                            }
-                        }}
-                    />
+                    {/* Spacer to push buttons to the right */}
+                    <Box sx={{ flex: 1 }} />
 
                     {/* Action Buttons */}
-                    <Box
-                        sx={{
-                            position: 'absolute',
-                            right: 8,
-                            bottom: 8,
-                            display: 'flex',
-                            gap: 0.5,
-                        }}
-                    >
+                    <Stack direction="row" spacing={0.25}>
                         {/* Attachment Button */}
                         <Tooltip title="Attach files" placement="top">
                             <IconButton
@@ -326,8 +368,8 @@ function Composer2Component({
                                 disabled={busy}
                                 size="small"
                                 sx={{
-                                    width: 36,
-                                    height: 36,
+                                    width: 28,
+                                    height: 28,
                                     backgroundColor: 'rgba(255,255,255,0.05)',
                                     backdropFilter: 'blur(8px)',
                                     border: '1px solid rgba(255,255,255,0.1)',
@@ -337,7 +379,7 @@ function Composer2Component({
                                         backgroundColor: 'rgba(255,255,255,0.08)',
                                         borderColor: 'primary.main',
                                         color: 'primary.main',
-                                        transform: 'translateY(-1px)',
+                                        transform: 'translateY(-0.5px)',
                                     },
                                     '&:disabled': {
                                         opacity: 0.5,
@@ -345,7 +387,7 @@ function Composer2Component({
                                     }
                                 }}
                             >
-                                <AttachFileRounded fontSize="small" />
+                                <AttachFileRounded sx={{ fontSize: 16 }} />
                             </IconButton>
                         </Tooltip>
 
@@ -356,15 +398,15 @@ function Composer2Component({
                                 disabled={busy ? false : !input.trim()}
                                 size="small"
                                 sx={{
-                                    width: 36,
-                                    height: 36,
+                                    width: 28,
+                                    height: 28,
                                     backgroundColor: busy ? 'error.main' : 'primary.main',
                                     color: busy ? 'error.contrastText' : 'primary.contrastText',
                                     transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                                     '&:hover': {
                                         backgroundColor: busy ? 'error.dark' : 'primary.dark',
-                                        transform: 'translateY(-1px)',
-                                        boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                                        transform: 'translateY(-0.5px)',
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
                                     },
                                     '&:disabled': {
                                         opacity: 0.4,
@@ -377,11 +419,11 @@ function Composer2Component({
                                     }
                                 }}
                             >
-                                {busy ? <StopRounded fontSize="small" /> : <SendRounded fontSize="small" />}
+                                {busy ? <StopRounded sx={{ fontSize: 16 }} /> : <SendRounded sx={{ fontSize: 16 }} />}
                             </IconButton>
                         </Tooltip>
-                    </Box>
-                </Box>
+                    </Stack>
+                </Stack>
             </Box>
         </Paper>
     );
@@ -396,6 +438,8 @@ export default React.memo(Composer2Component, (prev, next) => {
         prev.focusToken === next.focusToken &&
         prev.attachments === next.attachments &&
         prev.currentPersonality === next.currentPersonality &&
-        prev.personalities === next.personalities
+        prev.personalities === next.personalities &&
+        prev.currentModel === next.currentModel &&
+        prev.onSelectModel === next.onSelectModel
     );
 });

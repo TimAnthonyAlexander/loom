@@ -216,9 +216,9 @@ func addPersonality(b *strings.Builder, personalityKey string) {
 	}
 
 	b.WriteString("\n\nPERSONALITY:\n")
-	b.WriteString(fmt.Sprintf("You are: %s\n", personalityConfig.Name))
-	b.WriteString(fmt.Sprintf("Description: %s\n", personalityConfig.Description))
-	b.WriteString(fmt.Sprintf("Behavior: %s\n", personalityConfig.Prompt))
+	fmt.Fprintf(b, "You are: %s\n", personalityConfig.Name)
+	fmt.Fprintf(b, "Description: %s\n", personalityConfig.Description)
+	fmt.Fprintf(b, "Behavior: %s\n", personalityConfig.Prompt)
 }
 
 // Legacy compatibility functions - use the unified version internally
