@@ -177,28 +177,36 @@ function Composer2Component({
                             >
                                 <FormControl size="small" sx={{ minWidth: 100 }}>
                                     <Select
-                                        value={currentPersonality}
-                                        onChange={(e) => setCurrentPersonality(e.target.value)}
-                                        displayEmpty
-                                        variant="outlined"
-                                        startAdornment={<PersonRounded sx={{ mr: 0.5, fontSize: 16 }} />}
-                                        sx={{
-                                            height: 36,
-                                            borderRadius: 1.5,
-                                            fontSize: '0.875rem',
-                                            '& .MuiSelect-select': {
-                                                py: 0.5,
-                                                px: 1,
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                            },
-                                            '& .MuiOutlinedInput-notchedOutline': {
-                                                borderColor: 'rgba(255,255,255,0.1)',
-                                            },
-                                            '&:hover .MuiOutlinedInput-notchedOutline': {
-                                                borderColor: 'primary.main',
-                                            },
-                                        }}
+                                    value={currentPersonality}
+                                    onChange={(e) => setCurrentPersonality(e.target.value)}
+                                    displayEmpty
+                                    variant="outlined"
+                                    startAdornment={<PersonRounded sx={{ mr: 0.5, fontSize: 16 }} />}
+                                    sx={{
+                                        height: 36,
+                                        borderRadius: 1.5,
+                                        fontSize: '0.875rem',
+                                        backgroundColor: 'rgba(255,255,255,0.03)',
+                                        backdropFilter: 'blur(8px)',
+                                        '& .MuiSelect-select': {
+                                            py: 0.5,
+                                            px: 1,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                        },
+                                        '& .MuiOutlinedInput-notchedOutline': {
+                                            border: 'none',
+                                        },
+                                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                                            border: 'none',
+                                        },
+                                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                            border: 'none',
+                                        },
+                                        '&:hover': {
+                                            backgroundColor: 'rgba(255,255,255,0.06)',
+                                        },
+                                    }}
                                     >
                                         {[
                                             'coder',      // The Coder (default)
@@ -346,13 +354,6 @@ function Composer2Component({
                             '& .MuiAutocomplete-input': {
                                 pr: '0 !important',
                                 minWidth: '0 !important',
-                            },
-                            '& .MuiInputLabel-root': {
-                                fontSize: '0.875rem',
-                                transform: 'translate(12px, 10px) scale(1)',
-                            },
-                            '& .MuiInputLabel-shrink': {
-                                transform: 'translate(12px, -6px) scale(0.75)',
                             }
                         }}>
                             <ModelSelector

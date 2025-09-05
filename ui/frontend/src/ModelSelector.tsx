@@ -226,9 +226,22 @@ const ModelSelector = React.memo(function ModelSelector({ onSelect, currentModel
             renderInput={(params) => (
                 <TextField
                     {...params}
-                    label="Model"
                     placeholder="Select a model"
-                    sx={{ width: '100%', minWidth: 180 }}
+                    sx={{ 
+                        width: '100%', 
+                        minWidth: 180,
+                        '& .MuiOutlinedInput-root': {
+                            '& fieldset': {
+                                border: 'none',
+                            },
+                            '&:hover fieldset': {
+                                border: 'none',
+                            },
+                            '&.Mui-focused fieldset': {
+                                border: 'none',
+                            },
+                        },
+                    }}
                 />
             )}
             isOptionEqualToValue={(opt, val) => opt.id === val.id}
