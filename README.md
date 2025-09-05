@@ -11,24 +11,10 @@ Loom pairs a Go orchestrator and tooling layer with a modern React UI. It’s de
 - Streaming responses, reasoning snippets, and tool calls
 - Clean separation between engine, adapters, tools, and UI
 
-## Screenshots
-
-Some screenshots of the interface and Loom in action:
+## Screenshot
 
 General UI:
 ![Loom Screenshot](screenshot1.png)
-
-Different Personalities:
-![Loom Screenshot](screenshot2.png)
-
-Chat UI:
-![Loom Screenshot](screenshot3.png)
-
-Costs:
-![Loom Screenshot](screenshot4.png)
-
-Settings:
-![Loom Screenshot](screenshot5.png)
 
 ## Key features
 - Desktop app via Wails: native windowing, compact packaging, and system integration
@@ -339,5 +325,19 @@ Adapters convert engine messages to provider‑specific payloads and parse strea
 ## License
 See `LICENSE`.
 
+
+## More Screenshots
+
+Different Personalities:
+![Loom Screenshot](screenshot2.png)
+
+Chat UI:
+![Loom Screenshot](screenshot3.png)
+
+Costs:
+![Loom Screenshot](screenshot4.png)
+
+Settings:
+![Loom Screenshot](screenshot5.png)
 
 By Tim Anthony Alexander
