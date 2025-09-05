@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/loom/loom/internal/memory"
 	"github.com/loom/loom/internal/tool"
-	"github.com/loom/loom/internal/workflow"
 )
 
 // ToolExecutor handles tool execution and related approval flows.
@@ -18,7 +16,6 @@ type ToolExecutor struct {
 	bridge          UIBridge
 	tools           *tool.Registry
 	approvalHandler *ApprovalHandler
-	wf              *workflow.Store
 }
 
 // NewToolExecutor creates a new tool executor.
@@ -26,13 +23,11 @@ func NewToolExecutor(
 	bridge UIBridge,
 	tools *tool.Registry,
 	approvalHandler *ApprovalHandler,
-	wf *workflow.Store,
 ) *ToolExecutor {
 	return &ToolExecutor{
 		bridge:          bridge,
 		tools:           tools,
 		approvalHandler: approvalHandler,
-		wf:              wf,
 	}
 }
 
@@ -56,17 +51,7 @@ func (te *ToolExecutor) ExecuteToolCall(
 		te.bridge.SendChat("system", fmt.Sprintf("[debug] Tool executed: name=%s safe=%v diffLen=%d contentLen=%d", toolCall.Name, execResult.Safe, len(execResult.Diff), len(execResult.Content)))
 	}
 
-	// Record tool_result summary
-	if te.wf != nil {
-		_ = te.wf.ApplyEvent(ctx, map[string]any{
-			"ts":      time.Now().Unix(),
-			"type":    "tool_result",
-			"tool":    toolCall.Name,
-			"ok":      err == nil,
-			"summary": strings.TrimSpace(execResult.Content),
-			"id":      toolCall.ID,
-		})
-	}
+	// Workflow functionality removed
 
 	// If the tool was file-related, hint UI to open the file
 	te.notifyUIForFileTools(toolCall)
@@ -136,15 +121,7 @@ func (te *ToolExecutor) handleUnsafeTool(
 	convo *memory.Conversation,
 ) error {
 	approved := te.approvalHandler.UserApproved(toolCall, execResult.Diff)
-	if te.wf != nil {
-		_ = te.wf.ApplyEvent(ctx, map[string]any{
-			"ts":     time.Now().Unix(),
-			"type":   "approval",
-			"tool":   toolCall.Name,
-			"status": map[bool]string{true: "granted", false: "denied"}[approved],
-			"id":     toolCall.ID,
-		})
-	}
+	// Workflow functionality removed
 
 	payload := map[string]any{
 		"tool":     toolCall.Name,

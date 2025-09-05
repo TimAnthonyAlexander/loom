@@ -5,19 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/loom/loom/internal/engine"
 	"github.com/loom/loom/internal/memory"
 	"github.com/loom/loom/internal/tool"
-	"github.com/loom/loom/internal/workflow"
 )
 
-// ToolExecutor handles tool execution, approval, and workflow state
+// ToolExecutor handles tool execution and approval
 type ToolExecutor struct {
 	registry         *tool.Registry
 	bridge           engine.UIBridge
-	workflow         *workflow.Store
 	workspaceDir     string
 	autoApproveShell bool
 	autoApproveEdits bool
@@ -27,13 +24,11 @@ type ToolExecutor struct {
 func NewToolExecutor(
 	registry *tool.Registry,
 	bridge engine.UIBridge,
-	wf *workflow.Store,
 	workspaceDir string,
 ) *ToolExecutor {
 	return &ToolExecutor{
 		registry:     registry,
 		bridge:       bridge,
-		workflow:     wf,
 		workspaceDir: workspaceDir,
 	}
 }
@@ -58,16 +53,7 @@ func (te *ToolExecutor) ExecuteToolCall(
 	toolCall *tool.ToolCall,
 	convo *memory.Conversation,
 ) (*ExecuteResult, error) {
-	// Record tool_use event to workflow state
-	if te.workflow != nil {
-		_ = te.workflow.ApplyEvent(ctx, map[string]any{
-			"ts":   time.Now().Unix(),
-			"type": "tool_use",
-			"tool": toolCall.Name,
-			"args": string(toolCall.Args),
-			"id":   toolCall.ID,
-		})
-	}
+	// Workflow functionality removed
 
 	// Record the assistant tool_use in conversation for Anthropic
 	if convo != nil {
@@ -88,17 +74,7 @@ func (te *ToolExecutor) ExecuteToolCall(
 		return nil, err
 	}
 
-	// Record tool_result summary
-	if te.workflow != nil {
-		_ = te.workflow.ApplyEvent(ctx, map[string]any{
-			"ts":      time.Now().Unix(),
-			"type":    "tool_result",
-			"tool":    toolCall.Name,
-			"ok":      err == nil,
-			"summary": strings.TrimSpace(execResult.Content),
-			"id":      toolCall.ID,
-		})
-	}
+	// Workflow functionality removed
 
 	// Hint UI to open file if tool was file-related
 	te.hintUIFileOpen(toolCall)
@@ -208,15 +184,7 @@ func (te *ToolExecutor) handleToolApproval(
 	execResult *tool.ExecutionResult,
 ) bool {
 	approved := te.userApproved(toolCall, execResult.Diff)
-	if te.workflow != nil {
-		_ = te.workflow.ApplyEvent(ctx, map[string]any{
-			"ts":     time.Now().Unix(),
-			"type":   "approval",
-			"tool":   toolCall.Name,
-			"status": map[bool]string{true: "granted", false: "denied"}[approved],
-			"id":     toolCall.ID,
-		})
-	}
+	// Workflow functionality removed
 	return approved
 }
 

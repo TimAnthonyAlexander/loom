@@ -5,12 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/loom/loom/internal/engine"
 	"github.com/loom/loom/internal/memory"
 	"github.com/loom/loom/internal/tool"
-	"github.com/loom/loom/internal/workflow"
 )
 
 // ApprovalService handles user approvals for tools
@@ -24,7 +22,6 @@ type ApprovalService interface {
 type UnifiedToolExecutor struct {
 	registry         *tool.Registry
 	bridge           engine.UIBridge
-	workflow         *workflow.Store
 	approvals        ApprovalService
 	workspaceDir     string
 	autoApproveShell bool
@@ -35,14 +32,12 @@ type UnifiedToolExecutor struct {
 func NewUnifiedToolExecutor(
 	registry *tool.Registry,
 	bridge engine.UIBridge,
-	wf *workflow.Store,
 	approvals ApprovalService,
 	workspaceDir string,
 ) *UnifiedToolExecutor {
 	return &UnifiedToolExecutor{
 		registry:     registry,
 		bridge:       bridge,
-		workflow:     wf,
 		approvals:    approvals,
 		workspaceDir: workspaceDir,
 	}
@@ -69,16 +64,7 @@ func (ute *UnifiedToolExecutor) ExecuteToolCall(
 	toolCall *tool.ToolCall,
 	convo *memory.Conversation,
 ) (*ExecuteResult, error) {
-	// Record tool_use event to workflow state
-	if ute.workflow != nil {
-		_ = ute.workflow.ApplyEvent(ctx, map[string]any{
-			"ts":   time.Now().Unix(),
-			"type": "tool_use",
-			"tool": toolCall.Name,
-			"args": string(toolCall.Args),
-			"id":   toolCall.ID,
-		})
-	}
+	// Workflow functionality removed
 
 	// Record the assistant tool_use in conversation for Anthropic
 	if convo != nil {
@@ -99,17 +85,7 @@ func (ute *UnifiedToolExecutor) ExecuteToolCall(
 		return nil, err
 	}
 
-	// Record tool_result summary
-	if ute.workflow != nil {
-		_ = ute.workflow.ApplyEvent(ctx, map[string]any{
-			"ts":      time.Now().Unix(),
-			"type":    "tool_result",
-			"tool":    toolCall.Name,
-			"ok":      err == nil,
-			"summary": strings.TrimSpace(execResult.Content),
-			"id":      toolCall.ID,
-		})
-	}
+	// Workflow functionality removed
 
 	// Hint UI to open file if tool was file-related
 	ute.hintUIFileOpen(toolCall)
@@ -231,15 +207,7 @@ func (ute *UnifiedToolExecutor) handleToolApproval(
 		approved = ute.approvals.UserApproved(toolCall, execResult.Diff)
 	}
 
-	if ute.workflow != nil {
-		_ = ute.workflow.ApplyEvent(ctx, map[string]any{
-			"ts":     time.Now().Unix(),
-			"type":   "approval",
-			"tool":   toolCall.Name,
-			"status": map[bool]string{true: "granted", false: "denied"}[approved],
-			"id":     toolCall.ID,
-		})
-	}
+	// Workflow functionality removed
 	return approved
 }
 

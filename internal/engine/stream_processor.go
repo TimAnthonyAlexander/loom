@@ -12,7 +12,6 @@ import (
 	"github.com/loom/loom/internal/config"
 	"github.com/loom/loom/internal/memory"
 	"github.com/loom/loom/internal/tool"
-	"github.com/loom/loom/internal/workflow"
 )
 
 // StreamResult represents the result of processing a stream.
@@ -27,15 +26,13 @@ type StreamResult struct {
 type StreamProcessor struct {
 	bridge UIBridge
 	memory *memory.Project
-	wf     *workflow.Store
 }
 
 // NewStreamProcessor creates a new stream processor.
-func NewStreamProcessor(bridge UIBridge, memory *memory.Project, wf *workflow.Store) *StreamProcessor {
+func NewStreamProcessor(bridge UIBridge, memory *memory.Project) *StreamProcessor {
 	return &StreamProcessor{
 		bridge: bridge,
 		memory: memory,
-		wf:     wf,
 	}
 }
 
@@ -121,16 +118,7 @@ func (sp *StreamProcessor) processToolCall(ctx context.Context, toolCall *ToolCa
 		Args: toolCall.Args,
 	}
 
-	// Record tool_use event to workflow state
-	if sp.wf != nil {
-		_ = sp.wf.ApplyEvent(ctx, map[string]any{
-			"ts":   time.Now().Unix(),
-			"type": "tool_use",
-			"tool": toolCall.Name,
-			"args": string(toolCall.Args),
-			"id":   toolCall.ID,
-		})
-	}
+	// Workflow functionality removed
 
 	// Record the assistant tool_use in conversation for Anthropic
 	if convo != nil {

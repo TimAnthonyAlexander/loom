@@ -13,7 +13,6 @@ import (
 	"github.com/loom/loom/internal/config"
 	"github.com/loom/loom/internal/memory"
 	"github.com/loom/loom/internal/tool"
-	"github.com/loom/loom/internal/workflow"
 )
 
 // Message represents a single message in the chat.
@@ -91,9 +90,6 @@ type Engine struct {
 	// list of workspace-relative file paths attached by the user for extra context
 	attachedFiles []string
 
-	// workflow state store (feature-flagged)
-	wf *workflow.Store
-
 	// cancellation support for stopping LLM operations
 	currentCtx    context.Context
 	cancelCurrent context.CancelFunc
@@ -143,7 +139,7 @@ func (e *Engine) WithRegistry(registry *tool.Registry) *Engine {
 	}
 	// Initialize tool executor with registry
 	if e.approvalHandler != nil {
-		e.toolExecutor = NewToolExecutor(e.bridge, registry, e.approvalHandler, e.wf)
+		e.toolExecutor = NewToolExecutor(e.bridge, registry, e.approvalHandler)
 	}
 	return e
 }
@@ -155,7 +151,7 @@ func (e *Engine) WithMemory(project *memory.Project) *Engine {
 	e.conversationMgr = NewConversationManager(project)
 	// Update stream processor with memory
 	if e.streamProcessor != nil {
-		e.streamProcessor = NewStreamProcessor(e.bridge, project, e.wf)
+		e.streamProcessor = NewStreamProcessor(e.bridge, project)
 	}
 	return e
 }
@@ -179,14 +175,11 @@ func (e *Engine) ResetUsage() error {
 // WithWorkspace sets the workspace directory path for the engine.
 func (e *Engine) WithWorkspace(path string) *Engine {
 	e.workspaceDir = path
-	if strings.TrimSpace(path) != "" {
-		e.wf = workflow.NewStore(path)
-	}
-	// Initialize stream processor with updated workflow store
-	e.streamProcessor = NewStreamProcessor(e.bridge, e.memory, e.wf)
-	// Initialize tool executor with workflow store
+	// Initialize stream processor
+	e.streamProcessor = NewStreamProcessor(e.bridge, e.memory)
+	// Initialize tool executor
 	if e.tools != nil {
-		e.toolExecutor = NewToolExecutor(e.bridge, e.tools, e.approvalHandler, e.wf)
+		e.toolExecutor = NewToolExecutor(e.bridge, e.tools, e.approvalHandler)
 	}
 	return e
 }
@@ -211,9 +204,9 @@ func (e *Engine) SetBridge(bridge UIBridge) {
 	if e.approvalHandler != nil {
 		e.approvalHandler.SetBridge(bridge)
 	}
-	e.streamProcessor = NewStreamProcessor(bridge, e.memory, e.wf)
+	e.streamProcessor = NewStreamProcessor(bridge, e.memory)
 	if e.tools != nil {
-		e.toolExecutor = NewToolExecutor(bridge, e.tools, e.approvalHandler, e.wf)
+		e.toolExecutor = NewToolExecutor(bridge, e.tools, e.approvalHandler)
 	}
 }
 
