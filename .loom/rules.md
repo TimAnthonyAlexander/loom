@@ -47,9 +47,9 @@
 - `ui/frontend/src/types/ui.ts` (graph_central)
 - `ui/frontend/wailsjs/go/bridge/App.js` (graph_central, entrypoint)
 - `ui/frontend/wailsjs/runtime/runtime.js` (graph_central)
+- `ui/frontend/src/themes/themeConfig.ts` (graph_central, config)
 - `web/src/App.css` (graph_central)
 - `ui/frontend/src/components/diff/DiffViewer.tsx` ()
-- `ui/frontend/src/components/JohnBerry.tsx` ()
 
 
 ---
