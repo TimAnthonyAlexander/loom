@@ -18,9 +18,6 @@ type Props = {
     setAutoApproveEdits: (v: boolean) => void;
     currentTheme: string;
     setCurrentTheme: (v: string) => void;
-    currentPersonality: string;
-    setCurrentPersonality: (v: string) => void;
-    personalities: Record<string, { name: string; description: string; prompt: string }>;
     onSave: () => void;
     onClose: () => void;
 };
@@ -42,9 +39,6 @@ export default function SettingsDialog(props: Props) {
         setAutoApproveEdits,
         currentTheme,
         setCurrentTheme,
-        currentPersonality,
-        setCurrentPersonality,
-        personalities,
         onSave,
         onClose,
     } = props;

@@ -120,6 +120,58 @@ export namespace bridge {
 
 export namespace config {
 	
+	export class Tab {
+	    path: string;
+	    line?: number;
+	    column?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Tab(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.line = source["line"];
+	        this.column = source["column"];
+	    }
+	}
+	export class UILayout {
+	    sidebar_width?: number;
+	    chat_width?: number;
+	    open_tabs?: Tab[];
+	    active_tab?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UILayout(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sidebar_width = source["sidebar_width"];
+	        this.chat_width = source["chat_width"];
+	        this.open_tabs = this.convertValues(source["open_tabs"], Tab);
+	        this.active_tab = source["active_tab"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class Settings {
 	    openai_api_key: string;
 	    anthropic_api_key: string;
@@ -132,6 +184,7 @@ export namespace config {
 	    theme?: string;
 	    personality?: string;
 	    recent_workspaces?: string[];
+	    ui_layout?: UILayout;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -150,8 +203,28 @@ export namespace config {
 	        this.theme = source["theme"];
 	        this.personality = source["personality"];
 	        this.recent_workspaces = source["recent_workspaces"];
+	        this.ui_layout = this.convertValues(source["ui_layout"], UILayout);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
+	
 
 }
 

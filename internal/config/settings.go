@@ -26,6 +26,23 @@ type Settings struct {
 	Personality string `json:"personality,omitempty"`
 	// Recent workspaces (max 10, ordered from most recent)
 	RecentWorkspaces []string `json:"recent_workspaces,omitempty"`
+	// UI layout settings
+	UILayout UILayout `json:"ui_layout,omitempty"`
+}
+
+// UILayout stores the current UI state for restoration
+type UILayout struct {
+	SidebarWidth int    `json:"sidebar_width,omitempty"`
+	ChatWidth    int    `json:"chat_width,omitempty"`
+	OpenTabs     []Tab  `json:"open_tabs,omitempty"`
+	ActiveTab    string `json:"active_tab,omitempty"`
+}
+
+// Tab represents a persisted editor tab
+type Tab struct {
+	Path   string `json:"path"`
+	Line   int    `json:"line,omitempty"`
+	Column int    `json:"column,omitempty"`
 }
 
 // settingsFilePath returns the absolute path to the settings JSON file
