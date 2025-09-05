@@ -1,9 +1,8 @@
 import React from 'react';
-import { Box, Typography, IconButton, Tooltip, Paper, LinearProgress } from '@mui/material';
+import { Box, Typography, IconButton, Tooltip, LinearProgress } from '@mui/material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RuleIcon from '@mui/icons-material/Rule';
 import MemoryIcon from '@mui/icons-material/BookmarkBorder';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import { EventsOn } from '../../../wailsjs/runtime/runtime';
 import FileExplorer from './Files/FileExplorer';
 import ProfileDialog from '../dialogs/ProfileDialog';
@@ -82,15 +81,6 @@ function Sidebar(props: SidebarProps) {
             off();
         };
     }, [fetchSymbolsCount]);
-
-    const onReindex = React.useCallback(async () => {
-        try {
-            const anyWin: any = window as any;
-            await anyWin?.go?.bridge?.App?.ReindexSymbols?.();
-        } catch {
-            // ignore
-        }
-    }, []);
 
     return (
         <Box
