@@ -1,4 +1,13 @@
 import React from 'react';
+import {
+    Box,
+    List,
+    ListItemButton,
+    ListItemIcon,
+    ListItemText,
+    Typography
+} from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import ArchiveIcon from '@mui/icons-material/Archive';
 import MusicNoteIcon from '@mui/icons-material/MusicNote';
 import MovieIcon from '@mui/icons-material/Movie';
@@ -9,8 +18,6 @@ import CssIcon from '@mui/icons-material/Css';
 import JavascriptIcon from '@mui/icons-material/Javascript';
 import PhpIcon from '@mui/icons-material/Php';
 import StorageIcon from '@mui/icons-material/Storage';
-import { Box, List, ListItemButton, ListItemIcon, ListItemText, Typography } from '@mui/material';
-import { alpha } from '@mui/material/styles';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import FolderIcon from '@mui/icons-material/Folder';
@@ -32,7 +39,6 @@ type Props = {
 };
 
 function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOpenFile, rootPath = '' }: Props) {
-    // Build a flattened list of the visible items for rendering and keyboard navigation
     type VisibleItem = {
         type: 'entry' | 'loading';
         path: string;
@@ -41,12 +47,11 @@ function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOpenFile, rootPat
         depth: number;
     };
 
-    const sortEntries = (entries: UIFileEntry[]) => {
-        return [...entries].sort((a, b) => {
-            if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1; // Folders first
+    const sortEntries = (entries: UIFileEntry[]) =>
+        [...entries].sort((a, b) => {
+            if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;
             return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
         });
-    };
 
     const buildVisible = (startPath: string): { items: VisibleItem[]; pathToEntry: Record<string, UIFileEntry> } => {
         const items: VisibleItem[] = [];
@@ -62,8 +67,13 @@ function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOpenFile, rootPat
                     if (dirCache[entry.path]) {
                         walk(entry.path, depth + 1);
                     } else {
-                        // Loading placeholder when folder is expanded but children not yet loaded
-                        items.push({ type: 'loading', path: `${entry.path}__loading`, name: 'Loading…', isDir: false, depth: depth + 1 });
+                        items.push({
+                            type: 'loading',
+                            path: `${entry.path}__loading`,
+                            name: 'Loading…',
+                            isDir: false,
+                            depth: depth + 1
+                        });
                     }
                 }
             }
@@ -73,7 +83,10 @@ function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOpenFile, rootPat
         return { items, pathToEntry };
     };
 
-    const { items: visibleItems, pathToEntry } = React.useMemo(() => buildVisible(rootPath), [dirCache, expandedDirs, rootPath]);
+    const { items: visibleItems, pathToEntry } = React.useMemo(
+        () => buildVisible(rootPath),
+        [dirCache, expandedDirs, rootPath]
+    );
 
     const getParentPath = (fullPath: string) => {
         const idx = fullPath.lastIndexOf('/');
@@ -84,8 +97,6 @@ function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOpenFile, rootPat
     const getFileIcon = (name: string, isDir?: boolean) => {
         if (isDir) return FolderIcon;
         const lower = name.toLowerCase();
-
-        // Docs / text
         if (/(readme|license|changelog)(\.|$)/i.test(name)) return DescriptionIcon;
         if (lower.endsWith('.md') || lower.endsWith('.txt') || lower.endsWith('.rtf')) return DescriptionIcon;
         if (lower.endsWith('.pdf')) return PictureAsPdfIcon;
@@ -93,7 +104,6 @@ function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOpenFile, rootPat
         if (lower.endsWith('.xls') || lower.endsWith('.xlsx') || lower.endsWith('.ods') || lower.endsWith('.csv')) return TableChartIcon;
         if (lower.endsWith('.ppt') || lower.endsWith('.pptx') || lower.endsWith('.odp')) return DescriptionIcon;
 
-        // Code
         if (lower.endsWith('.ts') || lower.endsWith('.tsx')) return CodeIcon;
         if (lower.endsWith('.js') || lower.endsWith('.jsx')) return JavascriptIcon;
         if (lower.endsWith('.html') || lower.endsWith('.htm')) return HtmlIcon;
@@ -103,12 +113,10 @@ function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOpenFile, rootPat
         if (lower.endsWith('.sh') || lower.endsWith('.bat') || lower.endsWith('.ps1')) return TerminalIcon;
         if (lower.endsWith('.sql') || lower.endsWith('.db') || lower.endsWith('.sqlite')) return StorageIcon;
 
-        // Media
         if (lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.gif') || lower.endsWith('.svg') || lower.endsWith('.webp') || lower.endsWith('.bmp') || lower.endsWith('.tiff')) return ImageIcon;
         if (lower.endsWith('.mp3') || lower.endsWith('.wav') || lower.endsWith('.ogg') || lower.endsWith('.flac') || lower.endsWith('.aac')) return MusicNoteIcon;
         if (lower.endsWith('.mp4') || lower.endsWith('.avi') || lower.endsWith('.mkv') || lower.endsWith('.mov') || lower.endsWith('.webm')) return MovieIcon;
 
-        // Archives
         if (lower.endsWith('.zip') || lower.endsWith('.rar') || lower.endsWith('.7z') || lower.endsWith('.tar') || lower.endsWith('.gz') || lower.endsWith('.bz2')) return ArchiveIcon;
 
         return InsertDriveFileIcon;
@@ -141,7 +149,6 @@ function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOpenFile, rootPat
         }
         if (e.key === 'ArrowRight' || e.key === 'Enter') {
             e.preventDefault();
-            // If nothing selected, select first
             if (currentIndex === -1) {
                 const first = visibleItems.find((i) => i.type === 'entry');
                 if (first && first.type === 'entry') setSelectedPath(first.path);
@@ -154,7 +161,6 @@ function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOpenFile, rootPat
                     if (!expandedDirs[entry.path]) {
                         onToggleDir(entry.path);
                     } else if (e.key === 'ArrowRight') {
-                        // move to first child if any
                         const next = visibleItems[currentIndex + 1];
                         if (next && next.type === 'entry') setSelectedPath(next.path);
                     }
@@ -174,7 +180,6 @@ function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOpenFile, rootPat
                 onToggleDir(entry.path);
             } else {
                 const parent = getParentPath(entry.path);
-                // Find parent directory row
                 const parentIndex = visibleItems.findIndex((i) => i.type === 'entry' && i.path === parent);
                 if (parentIndex !== -1) setSelectedPath(parent);
             }
@@ -202,37 +207,36 @@ function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOpenFile, rootPat
                 flex: 1,
                 borderRadius: 1,
                 '&:focus': {
-                    boxShadow: (t) => `inset 0 0 0 1px ${alpha(t.palette.primary.main, 0.4)}`,
+                    boxShadow: (t) => `inset 0 0 0 1px ${alpha(t.palette.primary.main, 0.4)}`
                 },
+                overflowX: 'hidden',
             }}
         >
-            <Typography
-                variant="subtitle2"
-                fontWeight={600}
-                sx={{
-                    p: 1,
-                }}
-            >
+            <Typography variant="subtitle2" fontWeight={600} sx={{ p: 1 }}>
                 File Explorer
             </Typography>
+
             <List dense disablePadding>
                 {visibleItems.map((item) => {
                     if (item.type === 'loading') {
                         return (
                             <Box key={item.path} sx={{ pl: (item.depth + 2) * 1 }}>
-                                <Typography variant="caption" color="text.secondary">Loading…</Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    Loading…
+                                </Typography>
                             </Box>
                         );
                     }
+
                     const entry = pathToEntry[item.path];
                     const isOpen = item.isDir && !!expandedDirs[item.path];
                     const isSelected = selectedPath === item.path;
-                    const FileIcon = item.isDir
-                        ? (isOpen ? FolderOpenIcon : FolderIcon)
-                        : getFileIcon(item.name);
+
+                    const FileIcon = item.isDir ? (isOpen ? FolderOpenIcon : FolderIcon) : getFileIcon(item.name);
                     const Chevron = item.isDir ? (isOpen ? ExpandMoreIcon : ChevronRightIcon) : null;
                     const isIgnored = !!entry?.ignored;
                     const isHidden = !!entry?.hidden;
+
                     return (
                         <ListItemButton
                             key={item.path}
@@ -246,23 +250,44 @@ function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOpenFile, rootPat
                                 py: 0.25,
                                 pl: 0.5,
                                 pr: 1,
+                                minHeight: 30,
+                                gap: 0.5,
                                 opacity: isIgnored ? 0.65 : 1,
-                                '&.Mui-selected': {
-                                    bgcolor: (t) => alpha(t.palette.primary.main, 0.12),
-                                },
+                                transition: 'transform 120ms ease',
+                                '&:hover': { backgroundColor: 'transparent', transform: 'translateX(2px)' },
+                                '&.Mui-selected': { backgroundColor: 'transparent' },
+                                '&.Mui-selected:hover': { backgroundColor: 'transparent' }
                             }}
                             title={item.path}
                         >
-                            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', minWidth: 0 }}>
                                 <Box sx={{ width: (item.depth + 1) * 12, flex: '0 0 auto' }} />
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0, width: '100%' }}>
                                     <Box sx={{ width: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary' }}>
                                         {Chevron ? <Chevron fontSize="small" /> : <span style={{ width: 18 }} />}
                                     </Box>
-                                    <ListItemIcon sx={{ minWidth: 20, color: isIgnored ? 'text.disabled' : (item.isDir ? 'text.secondary' : 'text.disabled') }}>
+
+                                    <ListItemIcon
+                                        sx={{
+                                            minWidth: 20,
+                                            color: isIgnored ? 'text.disabled' : item.isDir ? 'text.secondary' : 'text.disabled'
+                                        }}
+                                    >
                                         <FileIcon fontSize="small" />
                                     </ListItemIcon>
+
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0, flex: 1 }}>
+                                        <Box
+                                            sx={{
+                                                width: 6,
+                                                height: 6,
+                                                borderRadius: '50%',
+                                                flexShrink: 0,
+                                                opacity: isSelected ? 1 : 0,
+                                                bgcolor: 'primary.main',
+                                                transition: 'opacity 120ms ease'
+                                            }}
+                                        />
                                         <ListItemText
                                             primaryTypographyProps={{
                                                 fontFamily: 'ui-monospace, Menlo, monospace',
@@ -270,10 +295,11 @@ function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOpenFile, rootPat
                                                 whiteSpace: 'nowrap',
                                                 overflow: 'hidden',
                                                 textOverflow: 'ellipsis',
-                                                color: isHidden && !isSelected ? 'text.secondary' : undefined,
+                                                color: isSelected ? 'primary.main' : isHidden ? 'text.secondary' : undefined
                                             }}
                                             primary={item.name}
                                         />
+
                                         {(isIgnored || isHidden) && (
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: '0 0 auto' }}>
                                                 {isIgnored && (
@@ -287,7 +313,7 @@ function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOpenFile, rootPat
                                                             color: 'warning.main',
                                                             border: (t) => `1px solid ${alpha(t.palette.warning.main, 0.3)}`,
                                                             fontWeight: 500,
-                                                            textTransform: 'none',
+                                                            textTransform: 'none'
                                                         }}
                                                     >
                                                         ignored
@@ -305,7 +331,7 @@ function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOpenFile, rootPat
                                                             border: 1,
                                                             borderColor: 'divider',
                                                             fontWeight: 500,
-                                                            textTransform: 'none',
+                                                            textTransform: 'none'
                                                         }}
                                                     >
                                                         hidden
@@ -325,5 +351,3 @@ function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOpenFile, rootPat
 }
 
 export default React.memo(FileExplorer);
-
-

@@ -6,11 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/loom/loom/internal/config"
 	"github.com/loom/loom/internal/memory"
@@ -76,16 +74,10 @@ type Engine struct {
 	messages     []Message
 	llm          LLM
 	mu           sync.RWMutex
-	approvals    map[string]chan bool
-	choices      map[string]chan int
-	approvalMu   sync.Mutex
 	tools        *tool.Registry
 	memory       *memory.Project
 	workspaceDir string
 	llmMu        sync.Mutex
-	// Settings-backed flags
-	autoApproveShell bool
-	autoApproveEdits bool
 	// AI personality setting
 	personality string
 	// model label like "openai:gpt-4o" for titling
@@ -106,6 +98,12 @@ type Engine struct {
 	currentCtx    context.Context
 	cancelCurrent context.CancelFunc
 	ctxMu         sync.Mutex
+
+	// extracted modules
+	conversationMgr *ConversationManager
+	approvalHandler *ApprovalHandler
+	streamProcessor *StreamProcessor
+	toolExecutor    *ToolExecutor
 }
 
 // LLM is an interface to abstract different language model providers.
@@ -126,13 +124,14 @@ type ToolSchema struct {
 
 // New creates a new Engine instance.
 func New(llm LLM, bridge UIBridge) *Engine {
-	return &Engine{
-		llm:       llm,
-		bridge:    bridge,
-		messages:  []Message{},
-		approvals: make(map[string]chan bool),
-		choices:   make(map[string]chan int),
+	e := &Engine{
+		llm:      llm,
+		bridge:   bridge,
+		messages: []Message{},
 	}
+	// Initialize modules
+	e.approvalHandler = NewApprovalHandler(bridge)
+	return e
 }
 
 // WithRegistry sets the tool registry for the engine.
@@ -142,12 +141,22 @@ func (e *Engine) WithRegistry(registry *tool.Registry) *Engine {
 	if e.bridge != nil {
 		registry.WithUI(e.bridge)
 	}
+	// Initialize tool executor with registry
+	if e.approvalHandler != nil {
+		e.toolExecutor = NewToolExecutor(e.bridge, registry, e.approvalHandler, e.wf)
+	}
 	return e
 }
 
 // WithMemory sets the project memory for the engine.
 func (e *Engine) WithMemory(project *memory.Project) *Engine {
 	e.memory = project
+	// Initialize conversation manager with memory
+	e.conversationMgr = NewConversationManager(project)
+	// Update stream processor with memory
+	if e.streamProcessor != nil {
+		e.streamProcessor = NewStreamProcessor(e.bridge, project, e.wf)
+	}
 	return e
 }
 
@@ -173,6 +182,12 @@ func (e *Engine) WithWorkspace(path string) *Engine {
 	if strings.TrimSpace(path) != "" {
 		e.wf = workflow.NewStore(path)
 	}
+	// Initialize stream processor with updated workflow store
+	e.streamProcessor = NewStreamProcessor(e.bridge, e.memory, e.wf)
+	// Initialize tool executor with workflow store
+	if e.tools != nil {
+		e.toolExecutor = NewToolExecutor(e.bridge, e.tools, e.approvalHandler, e.wf)
+	}
 	return e
 }
 
@@ -192,14 +207,21 @@ func (e *Engine) SetBridge(bridge UIBridge) {
 	if e.tools != nil && bridge != nil {
 		e.tools.WithUI(bridge)
 	}
+	// Update modules with new bridge
+	if e.approvalHandler != nil {
+		e.approvalHandler.SetBridge(bridge)
+	}
+	e.streamProcessor = NewStreamProcessor(bridge, e.memory, e.wf)
+	if e.tools != nil {
+		e.toolExecutor = NewToolExecutor(bridge, e.tools, e.approvalHandler, e.wf)
+	}
 }
 
 // SetAutoApprove toggles auto-approval behaviors based on settings
 func (e *Engine) SetAutoApprove(shell bool, edits bool) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	e.autoApproveShell = shell
-	e.autoApproveEdits = edits
+	if e.approvalHandler != nil {
+		e.approvalHandler.SetAutoApprove(shell, edits)
+	}
 }
 
 // SetPersonality sets the AI personality for system prompt injection
@@ -262,54 +284,42 @@ func (e *Engine) formatEditorContext() string {
 
 // ListConversations returns summaries for available conversations.
 func (e *Engine) ListConversations() ([]memory.ConversationSummary, error) {
-	if e.memory == nil {
-		return nil, errors.New("memory not initialized")
+	if e.conversationMgr == nil {
+		return nil, errors.New("conversation manager not initialized")
 	}
-	// Immediately remove any non-current empty conversations
-	e.memory.CleanupEmptyConversations(e.memory.CurrentConversationID())
-	return e.memory.ListConversationSummaries()
+	return e.conversationMgr.ListConversations()
 }
 
 // CurrentConversationID returns the active conversation id.
 func (e *Engine) CurrentConversationID() string {
-	if e.memory == nil {
+	if e.conversationMgr == nil {
 		return ""
 	}
-	return e.memory.CurrentConversationID()
+	return e.conversationMgr.CurrentConversationID()
 }
 
 // SetCurrentConversationID switches the active conversation id.
 func (e *Engine) SetCurrentConversationID(id string) error {
-	if e.memory == nil {
-		return errors.New("memory not initialized")
+	if e.conversationMgr == nil {
+		return errors.New("conversation manager not initialized")
 	}
-	return e.memory.SetCurrentConversationID(id)
+	return e.conversationMgr.SetCurrentConversationID(id)
 }
 
 // GetConversation returns the messages for the given conversation id.
 func (e *Engine) GetConversation(id string) ([]Message, error) {
-	if e.memory == nil {
-		return nil, errors.New("memory not initialized")
+	if e.conversationMgr == nil {
+		return nil, errors.New("conversation manager not initialized")
 	}
-	var memMsgs []memory.Message
-	if err := e.memory.Get("conversations/"+id, &memMsgs); err != nil {
-		return nil, err
-	}
-	msgs := make([]Message, 0, len(memMsgs))
-	for _, m := range memMsgs {
-		msgs = append(msgs, Message{Role: m.Role, Content: m.Content, Name: m.Name, ToolID: m.ToolID})
-	}
-	return msgs, nil
+	return e.conversationMgr.GetConversation(id)
 }
 
 // NewConversation creates and switches to a new conversation.
 func (e *Engine) NewConversation() string {
-	if e.memory == nil {
+	if e.conversationMgr == nil {
 		return ""
 	}
-	id := e.memory.CreateNewConversation()
-	// Immediately remove any non-current empty conversations
-	e.memory.CleanupEmptyConversations(id)
+	id := e.conversationMgr.NewConversation()
 	// Clear any attached files for the new conversation
 	e.mu.Lock()
 	e.attachedFiles = nil
@@ -319,10 +329,8 @@ func (e *Engine) NewConversation() string {
 
 // ClearConversation clears the current conversation history in memory and notifies the UI.
 func (e *Engine) ClearConversation() {
-	if e.memory != nil {
-		newID := e.memory.CreateNewConversation()
-		// Remove any non-current conversations with no user messages immediately
-		e.memory.CleanupEmptyConversations(newID)
+	if e.conversationMgr != nil {
+		e.conversationMgr.ClearConversation()
 	}
 	// Clearing the conversation should also clear composer attachments
 	e.mu.Lock()
@@ -368,72 +376,32 @@ func (e *Engine) Stop() {
 
 // ResolveApproval resolves a pending approval request.
 func (e *Engine) ResolveApproval(id string, approved bool) {
-	e.approvalMu.Lock()
-	defer e.approvalMu.Unlock()
-
-	if ch, ok := e.approvals[id]; ok {
-		ch <- approved
-		delete(e.approvals, id)
+	if e.approvalHandler != nil {
+		e.approvalHandler.ResolveApproval(id, approved)
 	}
 }
 
 // ResolveChoice resolves a pending choice request.
 func (e *Engine) ResolveChoice(id string, selectedIndex int) {
-	e.approvalMu.Lock()
-	defer e.approvalMu.Unlock()
-
-	if ch, ok := e.choices[id]; ok {
-		ch <- selectedIndex
-		delete(e.choices, id)
+	if e.approvalHandler != nil {
+		e.approvalHandler.ResolveChoice(id, selectedIndex)
 	}
 }
 
 // UserApproved prompts for approval and waits for the response.
 func (e *Engine) UserApproved(toolCall *tool.ToolCall, diff string) bool {
-	// Auto-approval rules
-	if toolCall != nil {
-		if (toolCall.Name == "run_shell" || toolCall.Name == "apply_shell") && e.autoApproveShell {
-			return true
-		}
-		if (toolCall.Name == "edit_file" || toolCall.Name == "apply_edit") && e.autoApproveEdits {
-			return true
-		}
+	if e.approvalHandler != nil {
+		return e.approvalHandler.UserApproved(toolCall, diff)
 	}
-
-	summary := fmt.Sprintf("Tool: %s", toolCall.Name)
-
-	// Create a channel for the response
-	responseCh := make(chan bool)
-
-	// Register the approval request
-	e.approvalMu.Lock()
-	e.approvals[toolCall.ID] = responseCh
-	e.approvalMu.Unlock()
-
-	// Ask the bridge for approval
-	e.bridge.PromptApproval(toolCall.ID, summary, diff)
-
-	// Wait for response
-	approved := <-responseCh
-	return approved
+	return false
 }
 
 // UserChoice prompts for a choice and waits for the response.
 func (e *Engine) UserChoice(toolCall *tool.ToolCall, question string, options []string) int {
-	// Create a channel for the response
-	responseCh := make(chan int)
-
-	// Register the choice request
-	e.approvalMu.Lock()
-	e.choices[toolCall.ID] = responseCh
-	e.approvalMu.Unlock()
-
-	// Ask the bridge for a choice (this will always return -1 for async handling)
-	e.bridge.PromptChoice(toolCall.ID, question, options)
-
-	// Wait for response
-	selected := <-responseCh
-	return selected
+	if e.approvalHandler != nil {
+		return e.approvalHandler.UserChoice(toolCall, question, options)
+	}
+	return -1
 }
 
 // processLoop is the main processing loop for the engine.
@@ -570,169 +538,19 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 			return err
 		}
 
-		// Process the LLM response
-		var currentContent string
-		var toolCallReceived *tool.ToolCall
-		streamEnded := false
-		reasoningAccumulated := false
-
-		// Process the stream; if slow, emit a one-time notice but do not break
-		slowTicker := time.NewTicker(20 * time.Second)
-		defer slowTicker.Stop()
-		slowNotified := false
-	StreamLoop:
-		for {
-			select {
-			case <-ctx.Done():
-				// Send cancellation message to UI
-				if e.bridge != nil {
-					e.bridge.SendChat("system", "Operation stopped by user.")
-				}
-				return ctx.Err()
-			case <-slowTicker.C:
-				if !slowNotified {
-					// e.bridge.SendChat("system", "Still working...")
-					slowNotified = true
-				}
-			case item, ok := <-stream:
-				if !ok {
-					// Stream ended
-					streamEnded = true
-					break StreamLoop
-				}
-				// Any activity observed; no action needed
-
-				if item.ToolCall != nil {
-					// Got a tool call; record it but continue reading the stream until completion so we can capture usage
-					// Guard against empty tool names from partial/ambiguous streams
-					if item.ToolCall.Name == "" {
-						if os.Getenv("LOOM_DEBUG_ENGINE") == "1" || strings.EqualFold(os.Getenv("LOOM_DEBUG_ENGINE"), "true") {
-							e.bridge.SendChat("system", "[debug] Received partial tool call with empty name; continuing to read stream")
-						}
-						continue
-					}
-					if toolCallReceived == nil {
-						if os.Getenv("LOOM_DEBUG_ENGINE") == "1" || strings.EqualFold(os.Getenv("LOOM_DEBUG_ENGINE"), "true") {
-							e.bridge.SendChat("system", fmt.Sprintf("[debug] Tool call received: id=%s name=%s argsLen=%d", item.ToolCall.ID, item.ToolCall.Name, len(item.ToolCall.Args)))
-						}
-						toolCallReceived = &tool.ToolCall{
-							ID:   item.ToolCall.ID,
-							Name: item.ToolCall.Name,
-							Args: item.ToolCall.Args,
-						}
-						// Record tool_use event to workflow state
-						if e.wf != nil {
-							_ = e.wf.ApplyEvent(ctx, map[string]any{
-								"ts":   time.Now().Unix(),
-								"type": "tool_use",
-								"tool": item.ToolCall.Name,
-								"args": string(item.ToolCall.Args),
-								"id":   item.ToolCall.ID,
-							})
-						}
-						// Record the assistant tool_use in conversation for Anthropic
-						if convo != nil {
-							convo.AddAssistantToolUse(toolCallReceived.Name, toolCallReceived.ID, string(toolCallReceived.Args))
-						}
-					}
-					continue
-				}
-
-				// Got a token
-				tok := item.Token
-				if strings.HasPrefix(tok, "[USAGE] ") {
-					// Parse provider/model/in/out from token and emit billing event
-					// Format: [USAGE] provider=xxx model=yyy in=N out=M
-					usage := strings.TrimPrefix(tok, "[USAGE] ")
-					var provider, model string
-					var inTok, outTok int64
-					fields := strings.Fields(usage)
-					for _, f := range fields {
-						if strings.HasPrefix(f, "provider=") {
-							provider = strings.TrimPrefix(f, "provider=")
-						} else if strings.HasPrefix(f, "model=") {
-							model = strings.TrimPrefix(f, "model=")
-						} else if strings.HasPrefix(f, "in=") {
-							if v, err := strconv.ParseInt(strings.TrimPrefix(f, "in="), 10, 64); err == nil {
-								inTok = v
-							}
-						} else if strings.HasPrefix(f, "out=") {
-							if v, err := strconv.ParseInt(strings.TrimPrefix(f, "out="), 10, 64); err == nil {
-								outTok = v
-							}
-						}
-					}
-					// Compute costs via config table
-					inUSD, outUSD, totalUSD := config.CostUSDParts(model, inTok, outTok)
-					if e.bridge != nil {
-						e.bridge.EmitBilling(provider, model, inTok, outTok, inUSD, outUSD, totalUSD)
-					}
-					// Persist usage to project memory per workspace and to global store
-					if e.memory != nil {
-						_ = e.memory.AddUsage(provider, model, inTok, outTok, inUSD, outUSD)
-					}
-					_ = config.AddGlobalUsage(provider, model, inTok, outTok, inUSD, outUSD)
-					// Do not append to assistant text
-					continue
-				}
-				if strings.HasPrefix(tok, "[REASONING] ") {
-					text := strings.TrimPrefix(tok, "[REASONING] ")
-					// Show incremental reasoning to the UI but do not persist until the block ends
-					e.bridge.EmitReasoning(text, false)
-					reasoningAccumulated = true
-					continue
-				}
-				if strings.HasPrefix(tok, "[REASONING_SIGNATURE] ") {
-					// Signature is captured in the final JSON event; ignore incremental signature token
-					continue
-				}
-				if strings.HasPrefix(tok, "[REASONING_JSON] ") {
-					raw := strings.TrimPrefix(tok, "[REASONING_JSON] ")
-					// Persist the full JSON so adapter can replay signature
-					if convo != nil {
-						// Try to parse and store; if parse fails, fall back to plain
-						var tmp map[string]string
-						if json.Unmarshal([]byte(raw), &tmp) == nil {
-							convo.AddAssistantThinkingSigned(tmp["thinking"], tmp["signature"])
-						}
-					}
-					continue
-				}
-				if strings.HasPrefix(tok, "[REASONING_RAW] ") {
-					text := strings.TrimPrefix(tok, "[REASONING_RAW] ")
-					// Show incremental reasoning to the UI but do not persist until the block ends
-					e.bridge.EmitReasoning(text, false)
-					reasoningAccumulated = true
-					continue
-				}
-				if strings.HasPrefix(tok, "[REASONING_DONE] ") {
-					text := strings.TrimPrefix(tok, "[REASONING_DONE] ")
-					if reasoningAccumulated {
-						e.bridge.EmitReasoning("", true)
-					} else if strings.TrimSpace(text) != "" {
-						e.bridge.EmitReasoning(text, true)
-					} else {
-						e.bridge.EmitReasoning("", true)
-					}
-					// No need to persist a separate DONE marker; thinking content is already stored.
-					// Do not add to assistant content
-					continue
-				}
-				if strings.HasPrefix(tok, "[REASONING_RAW_DONE] ") {
-					text := strings.TrimPrefix(tok, "[REASONING_RAW_DONE] ")
-					if reasoningAccumulated {
-						e.bridge.EmitReasoning("", true)
-					} else if strings.TrimSpace(text) != "" {
-						e.bridge.EmitReasoning(text, true)
-					} else {
-						e.bridge.EmitReasoning("", true)
-					}
-					continue
-				}
-				currentContent += tok
-				e.bridge.EmitAssistant(currentContent)
+		// Process the LLM response using stream processor
+		result := e.streamProcessor.ProcessStream(ctx, stream, convo)
+		if ctx.Err() != nil {
+			// Send cancellation message to UI
+			if e.bridge != nil {
+				e.bridge.SendChat("system", "Operation stopped by user.")
 			}
+			return ctx.Err()
 		}
+
+		currentContent := result.Content
+		toolCallReceived := result.ToolCall
+		streamEnded := result.StreamEnded
 
 		// If we got a tool call, execute it
 		if toolCallReceived != nil {
@@ -740,133 +558,10 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 			toolsUsed = true
 			// Reset empty response counter since we got a tool call
 			consecutiveEmptyAfterTools = 0
-			// Execute the tool
-			execResult, err := e.tools.InvokeToolCall(ctx, toolCallReceived)
-			if err != nil {
-				errorMsg := fmt.Sprintf("Error executing tool %s: %v", toolCallReceived.Name, err)
-				// Attach as tool_result with the same tool_use_id for Anthropic
-				convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, errorMsg)
-				e.bridge.SendChat("system", errorMsg)
+			// Execute the tool using the tool executor
+			if err := e.toolExecutor.ExecuteToolCall(ctx, toolCallReceived, convo); err != nil {
 				return err
 			}
-			if os.Getenv("LOOM_DEBUG_ENGINE") == "1" || strings.EqualFold(os.Getenv("LOOM_DEBUG_ENGINE"), "true") {
-				e.bridge.SendChat("system", fmt.Sprintf("[debug] Tool executed: name=%s safe=%v diffLen=%d contentLen=%d", toolCallReceived.Name, execResult.Safe, len(execResult.Diff), len(execResult.Content)))
-			}
-
-			// Record tool_result summary
-			if e.wf != nil {
-				_ = e.wf.ApplyEvent(ctx, map[string]any{
-					"ts":      time.Now().Unix(),
-					"type":    "tool_result",
-					"tool":    toolCallReceived.Name,
-					"ok":      err == nil,
-					"summary": strings.TrimSpace(execResult.Content),
-					"id":      toolCallReceived.ID,
-				})
-			}
-
-			// If the tool was file-related, hint UI to open the file
-			if e.bridge != nil {
-				// Try to extract a path field from args JSON for known tools
-				type pathArg struct {
-					Path string `json:"path"`
-				}
-				var pa pathArg
-				_ = json.Unmarshal(toolCallReceived.Args, &pa)
-				if pa.Path == "" {
-					// Some tools may use "file" key
-					var alt map[string]any
-					if json.Unmarshal(toolCallReceived.Args, &alt) == nil {
-						if v, ok := alt["file"].(string); ok && strings.TrimSpace(v) != "" {
-							pa.Path = v
-						}
-					}
-				}
-				if strings.TrimSpace(pa.Path) != "" && (toolCallReceived.Name == "read_file" || toolCallReceived.Name == "edit_file" || toolCallReceived.Name == "apply_edit") {
-					e.bridge.OpenFileInUI(pa.Path)
-				}
-			}
-
-			// Special handling for user_choice tool
-			if !execResult.Safe && toolCallReceived.Name == "user_choice" {
-				// Parse the tool args to extract question and options
-				type userChoiceArgs struct {
-					Question string   `json:"question"`
-					Options  []string `json:"options"`
-				}
-				var args userChoiceArgs
-				if err := json.Unmarshal(toolCallReceived.Args, &args); err == nil {
-					selectedIndex := e.UserChoice(toolCallReceived, args.Question, args.Options)
-					if selectedIndex >= 0 && selectedIndex < len(args.Options) {
-						selectedOption := args.Options[selectedIndex]
-						response := map[string]any{
-							"selected_option": selectedOption,
-							"selected_index":  selectedIndex,
-						}
-						responseJson, _ := json.Marshal(response)
-						convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, string(responseJson))
-					} else {
-						convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, "Invalid choice selection")
-					}
-				} else {
-					convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, "Error parsing choice arguments")
-				}
-			} else if !execResult.Safe {
-				// Regular approval path for other tools
-				approved := e.UserApproved(toolCallReceived, execResult.Diff)
-				if e.wf != nil {
-					_ = e.wf.ApplyEvent(ctx, map[string]any{
-						"ts":     time.Now().Unix(),
-						"type":   "approval",
-						"tool":   toolCallReceived.Name,
-						"status": map[bool]string{true: "granted", false: "denied"}[approved],
-						"id":     toolCallReceived.ID,
-					})
-				}
-				payload := map[string]any{
-					"tool":     toolCallReceived.Name,
-					"approved": approved,
-					"diff":     execResult.Diff,
-					"message":  execResult.Content,
-				}
-				b, _ := json.Marshal(payload)
-				convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, string(b))
-
-				// If edits are auto-approved and this was an edit proposal, immediately apply it
-				if approved && e.autoApproveEdits && toolCallReceived.Name == "edit_file" {
-					applyCall := &tool.ToolCall{ID: toolCallReceived.ID + ":apply", Name: "apply_edit", Args: toolCallReceived.Args}
-					applyResult, applyErr := e.tools.InvokeToolCall(ctx, applyCall)
-					if applyErr != nil {
-						errorMsg := fmt.Sprintf("Error executing tool %s: %v", applyCall.Name, applyErr)
-						e.bridge.SendChat("system", errorMsg)
-						// Do not add a tool_result with a synthetic tool ID; continue
-					} else {
-						// Hint UI to open the file if path present
-						if e.bridge != nil {
-							type pathArg struct {
-								Path string `json:"path"`
-							}
-							var pa pathArg
-							_ = json.Unmarshal(applyCall.Args, &pa)
-							if strings.TrimSpace(pa.Path) != "" {
-								e.bridge.OpenFileInUI(pa.Path)
-							}
-						}
-						// Inform via system chat; avoid emitting a tool_result with unmatched tool_use_id
-						if strings.TrimSpace(applyResult.Content) != "" {
-							e.bridge.SendChat("system", applyResult.Content)
-						}
-					}
-				}
-			} else {
-				// Safe tool: add to conversation and show in UI
-				convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, execResult.Content)
-				// Send tool result to UI for immediate display
-				if strings.TrimSpace(execResult.Content) != "" {
-					e.bridge.SendChat("tool", execResult.Content)
-				}
-			}
-
 			// Continue the loop to get the next assistant message
 			continue
 		}
@@ -874,8 +569,6 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 		// If we reach here with content but no tool call, record it
 		if currentContent != "" {
 			convo.AddAssistant(currentContent)
-			// Reset empty response counter since we got content
-			consecutiveEmptyAfterTools = 0
 			// Content received means conversation is complete, regardless of whether tools were used
 			return nil
 		}
@@ -908,109 +601,15 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 				}
 			}
 			if toolCallReceived != nil {
-				// Execute the tool and continue the depth loop
-				execResult, err := e.tools.InvokeToolCall(ctx, toolCallReceived)
-				if err != nil {
-					errorMsg := fmt.Sprintf("Error executing tool %s: %v", toolCallReceived.Name, err)
-					convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, errorMsg)
-					e.bridge.SendChat("system", errorMsg)
+				// Execute the tool using the tool executor
+				if err := e.toolExecutor.ExecuteToolCall(ctx, toolCallReceived, convo); err != nil {
 					return err
-				}
-				if os.Getenv("LOOM_DEBUG_ENGINE") == "1" || strings.EqualFold(os.Getenv("LOOM_DEBUG_ENGINE"), "true") {
-					e.bridge.SendChat("system", fmt.Sprintf("[debug] Non-stream tool executed: name=%s safe=%v diffLen=%d contentLen=%d", toolCallReceived.Name, execResult.Safe, len(execResult.Diff), len(execResult.Content)))
-				}
-				if e.bridge != nil {
-					type pathArg struct {
-						Path string `json:"path"`
-					}
-					var pa pathArg
-					_ = json.Unmarshal(toolCallReceived.Args, &pa)
-					if pa.Path == "" {
-						var alt map[string]any
-						if json.Unmarshal(toolCallReceived.Args, &alt) == nil {
-							if v, ok := alt["file"].(string); ok && strings.TrimSpace(v) != "" {
-								pa.Path = v
-							}
-						}
-					}
-					if strings.TrimSpace(pa.Path) != "" && (toolCallReceived.Name == "read_file" || toolCallReceived.Name == "edit_file" || toolCallReceived.Name == "apply_edit") {
-						e.bridge.OpenFileInUI(pa.Path)
-					}
-				}
-
-				if !execResult.Safe && toolCallReceived.Name == "user_choice" {
-					// Parse the tool args to extract question and options
-					type userChoiceArgs struct {
-						Question string   `json:"question"`
-						Options  []string `json:"options"`
-					}
-					var args userChoiceArgs
-					if err := json.Unmarshal(toolCallReceived.Args, &args); err == nil {
-						selectedIndex := e.UserChoice(toolCallReceived, args.Question, args.Options)
-						if selectedIndex >= 0 && selectedIndex < len(args.Options) {
-							selectedOption := args.Options[selectedIndex]
-							response := map[string]any{
-								"selected_option": selectedOption,
-								"selected_index":  selectedIndex,
-							}
-							responseJson, _ := json.Marshal(response)
-							convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, string(responseJson))
-						} else {
-							convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, "Invalid choice selection")
-						}
-					} else {
-						convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, "Error parsing choice arguments")
-					}
-				} else if !execResult.Safe {
-					approved := e.UserApproved(toolCallReceived, execResult.Diff)
-					payload := map[string]any{
-						"tool":     toolCallReceived.Name,
-						"approved": approved,
-						"diff":     execResult.Diff,
-						"message":  execResult.Content,
-					}
-					b, _ := json.Marshal(payload)
-					convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, string(b))
-
-					// Auto-apply on approval in non-stream path as well
-					if approved && e.autoApproveEdits && toolCallReceived.Name == "edit_file" {
-						applyCall := &tool.ToolCall{ID: toolCallReceived.ID + ":apply", Name: "apply_edit", Args: toolCallReceived.Args}
-						applyResult, applyErr := e.tools.InvokeToolCall(ctx, applyCall)
-						if applyErr != nil {
-							errorMsg := fmt.Sprintf("Error executing tool %s: %v", applyCall.Name, applyErr)
-							e.bridge.SendChat("system", errorMsg)
-							// Avoid emitting a tool_result with a synthetic tool ID; continue
-						} else {
-							if e.bridge != nil {
-								type pathArg struct {
-									Path string `json:"path"`
-								}
-								var pa pathArg
-								_ = json.Unmarshal(applyCall.Args, &pa)
-								if strings.TrimSpace(pa.Path) != "" {
-									e.bridge.OpenFileInUI(pa.Path)
-								}
-							}
-							if strings.TrimSpace(applyResult.Content) != "" {
-								e.bridge.SendChat("system", applyResult.Content)
-							}
-						}
-					}
-				} else {
-					// Safe tool: add to conversation and show in UI
-					convo.AddToolResult(toolCallReceived.Name, toolCallReceived.ID, execResult.Content)
-					// Send tool result to UI for immediate display
-					if strings.TrimSpace(execResult.Content) != "" {
-						e.bridge.SendChat("tool", execResult.Content)
-					}
 				}
 				continue
 			}
 			if currentContent != "" {
 				convo.AddAssistant(currentContent)
 				e.bridge.EmitAssistant(currentContent)
-				// Reset empty response counter since we got content
-				consecutiveEmptyAfterTools = 0
 				// Content received means conversation is complete, regardless of whether tools were used
 				return nil
 			}
@@ -1039,72 +638,10 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 	return errors.New("tool loop exceeded maximum depth")
 }
 
-// convertSchemas converts tool.Schema to ToolSchema
-func convertSchemas(schemas []tool.Schema) []ToolSchema {
-	result := make([]ToolSchema, len(schemas))
-	for i, schema := range schemas {
-		result[i] = ToolSchema{
-			Name:        schema.Name,
-			Description: schema.Description,
-			Schema:      schema.Parameters,
-		}
-	}
-	return result
-}
-
 // SetAttachedFiles stores the list of workspace-relative files attached by the user.
 // Paths are normalized to forward slashes and trimmed. Empty entries are ignored.
 func (e *Engine) SetAttachedFiles(paths []string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	normalized := make([]string, 0, len(paths))
-	for _, p := range paths {
-		s := strings.TrimSpace(p)
-		if s == "" {
-			continue
-		}
-		s = strings.ReplaceAll(s, "\\", "/")
-		// Remove any leading ./
-		for strings.HasPrefix(s, "./") {
-			s = strings.TrimPrefix(s, "./")
-		}
-		normalized = append(normalized, s)
-	}
-	e.attachedFiles = normalized
-}
-
-// loadUserMemoriesForPrompt reads ~/.loom/memories.json and returns entries for prompt injection.
-func loadUserMemoriesForPrompt() []MemoryEntry {
-	type mem struct {
-		ID   string `json:"id"`
-		Text string `json:"text"`
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil
-	}
-	path := filepath.Join(home, ".loom", "memories.json")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil
-	}
-	var list []mem
-	if json.Unmarshal(data, &list) == nil {
-		out := make([]MemoryEntry, 0, len(list))
-		for _, it := range list {
-			out = append(out, MemoryEntry{ID: strings.TrimSpace(it.ID), Text: strings.TrimSpace(it.Text)})
-		}
-		return out
-	}
-	var wrapper struct {
-		Memories []mem `json:"memories"`
-	}
-	if json.Unmarshal(data, &wrapper) == nil && wrapper.Memories != nil {
-		out := make([]MemoryEntry, 0, len(wrapper.Memories))
-		for _, it := range wrapper.Memories {
-			out = append(out, MemoryEntry{ID: strings.TrimSpace(it.ID), Text: strings.TrimSpace(it.Text)})
-		}
-		return out
-	}
-	return nil
+	e.attachedFiles = normalizeAttachedFiles(paths)
 }
