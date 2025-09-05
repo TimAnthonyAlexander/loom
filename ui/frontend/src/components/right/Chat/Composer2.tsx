@@ -200,10 +200,11 @@ function Composer2Component({
                                 >
                                     {[
                                         'coder',
+                                        'ask',
                                         'architect',
                                         'debugger',
-                                        'reviewer',
                                         'founder',
+                                        '------',
                                         'annoyed_girlfriend',
                                         'scientist',
                                         'waifu',
@@ -212,7 +213,7 @@ function Composer2Component({
                                         .map((key) => {
                                             const config = personalities[key];
                                             return (
-                                                <MenuItem key={key} value={key}>
+                                                <MenuItem key={key} value={key} disabled={key === '------'}>
                                                     <Tooltip
                                                         title={
                                                             <Box>
