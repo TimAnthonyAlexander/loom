@@ -26,6 +26,8 @@ type Settings struct {
 	Personality string `json:"personality,omitempty"`
 	// Recent workspaces (max 10, ordered from most recent)
 	RecentWorkspaces []string `json:"recent_workspaces,omitempty"`
+	// Selected models that should appear in the ModelSelector dropdown
+	SelectedModels []string `json:"selected_models,omitempty"`
 	// UI layout settings
 	UILayout UILayout `json:"ui_layout,omitempty"`
 }
@@ -133,6 +135,34 @@ func Save(s Settings) error {
 		return fmt.Errorf("failed to write settings: %w", err)
 	}
 	return nil
+}
+
+// GetDefaultSelectedModels returns a list of default models that should be selected
+func GetDefaultSelectedModels() []string {
+	return []string{
+		// Flagship models
+		"claude:claude-3-5-sonnet-20241022",
+		"openai:gpt-4o",
+		"claude:claude-3-5-haiku-20241022",
+
+		// Fast models
+		"claude:claude-3-haiku-20240307",
+		"openai:gpt-4o-mini",
+
+		// Local models
+		"ollama:llama3.1:8b",
+
+		// OpenRouter popular models
+		"openrouter:anthropic/claude-3.5-sonnet",
+		"openrouter:openai/gpt-4o-mini",
+	}
+}
+
+// EnsureSelectedModels ensures the SelectedModels field has default values if empty
+func (s *Settings) EnsureSelectedModels() {
+	if len(s.SelectedModels) == 0 {
+		s.SelectedModels = GetDefaultSelectedModels()
+	}
 }
 
 // AddRecentWorkspace adds a workspace path to the recent workspaces list.

@@ -43,6 +43,7 @@ type Props = {
     // Model integration
     currentModel?: string;
     onSelectModel?: (model: string) => void;
+    selectedModels?: string[];
 };
 
 function Composer2Component({
@@ -60,7 +61,8 @@ function Composer2Component({
     setCurrentPersonality,
     personalities = {},
     currentModel = '',
-    onSelectModel
+    onSelectModel,
+    selectedModels = []
 }: Props) {
     const inputRef = React.useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
     const attachBtnRef = React.useRef<HTMLButtonElement | null>(null);
@@ -369,6 +371,7 @@ function Composer2Component({
                             <ModelSelector
                                 onSelect={onSelectModel}
                                 currentModel={currentModel}
+                                selectedModels={selectedModels}
                             />
                         </Box>
                     )}

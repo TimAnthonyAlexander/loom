@@ -42,6 +42,10 @@ export function FindFiles(arg1, arg2, arg3) {
   return window['go']['bridge']['App']['FindFiles'](arg1, arg2, arg3);
 }
 
+export function GetAllAvailableModels() {
+  return window['go']['bridge']['App']['GetAllAvailableModels']();
+}
+
 export function GetConversations() {
   return window['go']['bridge']['App']['GetConversations']();
 }

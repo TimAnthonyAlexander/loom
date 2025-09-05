@@ -184,6 +184,7 @@ export namespace config {
 	    theme?: string;
 	    personality?: string;
 	    recent_workspaces?: string[];
+	    selected_models?: string[];
 	    ui_layout?: UILayout;
 	
 	    static createFrom(source: any = {}) {
@@ -203,6 +204,7 @@ export namespace config {
 	        this.theme = source["theme"];
 	        this.personality = source["personality"];
 	        this.recent_workspaces = source["recent_workspaces"];
+	        this.selected_models = source["selected_models"];
 	        this.ui_layout = this.convertValues(source["ui_layout"], UILayout);
 	    }
 	

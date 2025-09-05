@@ -28,6 +28,7 @@ type Props = {
     currentPersonality: string;
     setCurrentPersonality: (personality: string) => void;
     personalities: Record<string, { name: string; description: string; prompt: string }>;
+    selectedModels: string[];
 };
 
 function ChatPanelComponent(props: Props) {
@@ -50,6 +51,7 @@ function ChatPanelComponent(props: Props) {
         currentPersonality,
         setCurrentPersonality,
         personalities,
+        selectedModels,
     } = props;
 
     const focusTokenRef = React.useRef<number>(0);
@@ -464,6 +466,7 @@ function ChatPanelComponent(props: Props) {
                     personalities={personalities}
                     currentModel={currentModel}
                     onSelectModel={onSelectModel}
+                    selectedModels={selectedModels}
                 />
             </Box>
             <Popover

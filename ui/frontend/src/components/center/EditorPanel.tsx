@@ -28,6 +28,8 @@ type Props = {
     autoApproveEdits: boolean;
     setAutoApproveEdits: (v: boolean) => void;
     setCurrentTheme: (v: string) => void;
+    selectedModels: string[];
+    setSelectedModels: (v: string[]) => void;
     onSaveSettings: () => void;
 };
 
@@ -52,6 +54,8 @@ function EditorPanel({
     autoApproveEdits,
     setAutoApproveEdits,
     setCurrentTheme,
+    selectedModels,
+    setSelectedModels,
     onSaveSettings
 }: Props) {
     const tab = openTabs.find((t) => t.path === activeTab);
@@ -176,6 +180,8 @@ function EditorPanel({
                             setAutoApproveEdits={setAutoApproveEdits}
                             currentTheme={currentTheme}
                             setCurrentTheme={setCurrentTheme}
+                            selectedModels={selectedModels}
+                            setSelectedModels={setSelectedModels}
                             onSave={onSaveSettings}
                         />
                     ) : (

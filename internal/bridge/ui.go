@@ -210,6 +210,56 @@ func (a *App) GetPersonalities() map[string]interface{} {
 	return result
 }
 
+// GetAllAvailableModels returns all models available for selection in settings
+func (a *App) GetAllAvailableModels() []map[string]interface{} {
+	// Define all available models with their metadata
+	models := []map[string]interface{}{
+		// Flagship models
+		{"id": "claude:claude-opus-4-20250514", "name": "Claude Opus 4", "provider": "claude", "group": "Flagship"},
+		{"id": "claude:claude-sonnet-4-20250514", "name": "Claude Sonnet 4", "provider": "claude", "group": "Flagship"},
+		{"id": "openai:gpt-5", "name": "GPT 5", "provider": "openai", "group": "Flagship"},
+
+		// Reasoning models
+		{"id": "openai:o3", "name": "o3", "provider": "openai", "group": "Reasoning"},
+		{"id": "openai:o4-mini", "name": "o4-mini", "provider": "openai", "group": "Reasoning"},
+		{"id": "claude:claude-3-7-sonnet-20250219", "name": "Claude 3.7 Sonnet", "provider": "claude", "group": "Reasoning"},
+		{"id": "ollama:deepseek-r1:70b", "name": "DeepSeek R1 (70B)", "provider": "ollama", "group": "Reasoning"},
+
+		// Current Production models
+		{"id": "claude:claude-3-5-sonnet-20241022", "name": "Claude 3.5 Sonnet", "provider": "claude", "group": "Production"},
+		{"id": "claude:claude-3-5-haiku-20241022", "name": "Claude 3.5 Haiku", "provider": "claude", "group": "Production"},
+		{"id": "claude:claude-3-opus-20240229", "name": "Claude 3 Opus", "provider": "claude", "group": "Production"},
+		{"id": "claude:claude-3-sonnet-20240229", "name": "Claude 3 Sonnet", "provider": "claude", "group": "Production"},
+		{"id": "claude:claude-3-haiku-20240307", "name": "Claude 3 Haiku", "provider": "claude", "group": "Production"},
+
+		{"id": "openai:gpt-4o", "name": "GPT-4o", "provider": "openai", "group": "Production"},
+		{"id": "openai:gpt-4o-mini", "name": "GPT-4o Mini", "provider": "openai", "group": "Production"},
+		{"id": "openai:gpt-4.1", "name": "GPT-4.1", "provider": "openai", "group": "Production"},
+		{"id": "openai:gpt-4.1-mini", "name": "GPT-4.1-mini", "provider": "openai", "group": "Production"},
+		{"id": "openai:gpt-4.1-nano", "name": "GPT-4.1-nano", "provider": "openai", "group": "Production"},
+
+		// Local models (Ollama)
+		{"id": "ollama:llama3.1:8b", "name": "Llama 3.1 (8B)", "provider": "ollama", "group": "Local"},
+		{"id": "ollama:llama3:8b", "name": "Llama 3 (8B)", "provider": "ollama", "group": "Local"},
+		{"id": "ollama:mistral:7b", "name": "Mistral (7B)", "provider": "ollama", "group": "Local"},
+		{"id": "ollama:qwen3:8b", "name": "Qwen3 (8B)", "provider": "ollama", "group": "Local"},
+		{"id": "ollama:gemma3:12b", "name": "Gemma3 (12B)", "provider": "ollama", "group": "Local"},
+		{"id": "ollama:gpt-oss:20b", "name": "GPT-OSS (20B)", "provider": "ollama", "group": "Local"},
+
+		// OpenRouter models
+		{"id": "openrouter:anthropic/claude-3.5-sonnet", "name": "Claude 3.5 Sonnet", "provider": "openrouter", "group": "OpenRouter", "pricing": map[string]interface{}{"input": 3.0, "output": 15.0}},
+		{"id": "openrouter:openai/gpt-4o", "name": "GPT-4o", "provider": "openrouter", "group": "OpenRouter", "pricing": map[string]interface{}{"input": 5.0, "output": 15.0}},
+		{"id": "openrouter:openai/gpt-4o-mini", "name": "GPT-4o Mini", "provider": "openrouter", "group": "OpenRouter", "pricing": map[string]interface{}{"input": 0.15, "output": 0.6}},
+		{"id": "openrouter:anthropic/claude-3-haiku", "name": "Claude 3 Haiku", "provider": "openrouter", "group": "OpenRouter", "pricing": map[string]interface{}{"input": 0.25, "output": 1.25}},
+		{"id": "openrouter:meta-llama/llama-3.1-70b-instruct", "name": "Llama 3.1 70B", "provider": "openrouter", "group": "OpenRouter", "pricing": map[string]interface{}{"input": 0.9, "output": 0.9}},
+		{"id": "openrouter:deepseek/deepseek-chat", "name": "DeepSeek Chat", "provider": "openrouter", "group": "OpenRouter", "pricing": map[string]interface{}{"input": 0.14, "output": 0.28}},
+		{"id": "openrouter:google/gemini-pro", "name": "Gemini Pro", "provider": "openrouter", "group": "OpenRouter", "pricing": map[string]interface{}{"input": 1.25, "output": 5.0}},
+		{"id": "openrouter:mistralai/mistral-large", "name": "Mistral Large", "provider": "openrouter", "group": "OpenRouter", "pricing": map[string]interface{}{"input": 3.0, "output": 9.0}},
+	}
+
+	return models
+}
+
 // SetModel updates the model selection.
 func (a *App) SetModel(model string) {
 	// Parse the model string to get provider and model ID
@@ -390,9 +440,11 @@ func (a *App) EmitBilling(provider string, model string, inTokens int64, outToke
 }
 
 // GetSettings exposes persisted settings to the frontend.
-func (a *App) GetSettings() map[string]string {
+func (a *App) GetSettings() map[string]interface{} {
 	a.ensureSettingsLoaded()
 	s := a.settings
+	// Ensure selected models has defaults
+	s.EnsureSelectedModels()
 	// Fallback to engine workspace if settings don't have one yet
 	lastWorkspace := s.LastWorkspace
 	if lastWorkspace == "" && a.engine != nil {
@@ -402,7 +454,7 @@ func (a *App) GetSettings() map[string]string {
 	openaiKey := s.OpenAIAPIKey
 	anthropicKey := s.AnthropicAPIKey
 	openrouterKey := s.OpenRouterAPIKey
-	return map[string]string{
+	return map[string]interface{}{
 		"openai_api_key":     openaiKey,
 		"anthropic_api_key":  anthropicKey,
 		"openrouter_api_key": openrouterKey,
@@ -413,6 +465,7 @@ func (a *App) GetSettings() map[string]string {
 		"auto_approve_edits": boolToStr(s.AutoApproveEdits),
 		"theme":              s.Theme,
 		"personality":        s.Personality,
+		"selected_models":    s.SelectedModels,
 	}
 }
 
@@ -603,40 +656,49 @@ func (a *App) DeleteMemory(id string) bool {
 }
 
 // SaveSettings saves settings provided by the frontend.
-func (a *App) SaveSettings(settings map[string]string) {
+func (a *App) SaveSettings(settings map[string]interface{}) {
 	// Merge with existing settings to avoid wiping fields (e.g. last_workspace) when omitted by the UI
 	a.ensureSettingsLoaded()
 	s := a.settings
 
-	if v, ok := settings["openai_api_key"]; ok {
+	if v, ok := settings["openai_api_key"].(string); ok {
 		s.OpenAIAPIKey = v
 	}
-	if v, ok := settings["anthropic_api_key"]; ok {
+	if v, ok := settings["anthropic_api_key"].(string); ok {
 		s.AnthropicAPIKey = v
 	}
-	if v, ok := settings["openrouter_api_key"]; ok {
+	if v, ok := settings["openrouter_api_key"].(string); ok {
 		s.OpenRouterAPIKey = v
 	}
-	if v, ok := settings["ollama_endpoint"]; ok {
+	if v, ok := settings["ollama_endpoint"].(string); ok {
 		s.OllamaEndpoint = v
 	}
-	if v, ok := settings["last_workspace"]; ok && strings.TrimSpace(v) != "" {
+	if v, ok := settings["last_workspace"].(string); ok && strings.TrimSpace(v) != "" {
 		s.LastWorkspace = normalizeWorkspacePath(v)
 	}
-	if v, ok := settings["last_model"]; ok && v != "" {
+	if v, ok := settings["last_model"].(string); ok && v != "" {
 		s.LastModel = v
 	}
-	if v, ok := settings["auto_approve_shell"]; ok {
+	if v, ok := settings["auto_approve_shell"].(string); ok {
 		s.AutoApproveShell = strToBool(v)
 	}
-	if v, ok := settings["auto_approve_edits"]; ok {
+	if v, ok := settings["auto_approve_edits"].(string); ok {
 		s.AutoApproveEdits = strToBool(v)
 	}
-	if v, ok := settings["theme"]; ok {
+	if v, ok := settings["theme"].(string); ok {
 		s.Theme = v
 	}
-	if v, ok := settings["personality"]; ok {
+	if v, ok := settings["personality"].(string); ok {
 		s.Personality = v
+	}
+	if v, ok := settings["selected_models"].([]interface{}); ok {
+		selectedModels := make([]string, 0, len(v))
+		for _, item := range v {
+			if str, ok := item.(string); ok {
+				selectedModels = append(selectedModels, str)
+			}
+		}
+		s.SelectedModels = selectedModels
 	}
 
 	a.applyAndSaveSettings(s)

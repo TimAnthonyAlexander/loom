@@ -41,6 +41,7 @@ const App: React.FC = () => {
     const [currentTheme, setCurrentTheme] = useState<string>('catppuccin');
     const [currentPersonality, setCurrentPersonality] = useState<string>('coder');
     const [personalities, setPersonalities] = useState<Record<string, { name: string; description: string; prompt: string }>>({});
+    const [selectedModels, setSelectedModels] = useState<string[]>([]);
     const [rulesOpen, setRulesOpen] = useState<boolean>(false);
     const [memoriesOpen, setMemoriesOpen] = useState<boolean>(false);
     const [userRules, setUserRules] = useState<string[]>([]);
@@ -311,6 +312,7 @@ const App: React.FC = () => {
                 setAutoApproveEdits(String(s?.auto_approve_edits).toLowerCase() === 'true');
                 setCurrentTheme(s?.theme || 'catppuccin');
                 setCurrentPersonality(s?.personality || 'coder');
+                setSelectedModels(s?.selected_models || []);
                 setHasLoadedInitialSettings(true);
                 const last = s?.last_workspace || '';
                 if (last) {
@@ -1021,6 +1023,8 @@ const App: React.FC = () => {
                         autoApproveEdits={autoApproveEdits}
                         setAutoApproveEdits={setAutoApproveEdits}
                         setCurrentTheme={setCurrentTheme}
+                        selectedModels={selectedModels}
+                        setSelectedModels={setSelectedModels}
                         onSaveSettings={() => {
                             SaveSettings({
                                 openai_api_key: openaiKey,
@@ -1030,7 +1034,8 @@ const App: React.FC = () => {
                                 auto_approve_shell: String(autoApproveShell),
                                 auto_approve_edits: String(autoApproveEdits),
                                 theme: currentTheme,
-                                personality: currentPersonality
+                                personality: currentPersonality,
+                                selected_models: selectedModels
                             }).catch(() => {});
                         }}
                     />
@@ -1063,6 +1068,7 @@ const App: React.FC = () => {
                         currentPersonality={currentPersonality}
                         setCurrentPersonality={setCurrentPersonality}
                         personalities={personalities}
+                        selectedModels={selectedModels}
                     />
                 </Box>
 

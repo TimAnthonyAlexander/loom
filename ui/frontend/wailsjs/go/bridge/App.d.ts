@@ -28,6 +28,8 @@ export function EmitReasoning(arg1:string,arg2:boolean):Promise<void>;
 
 export function FindFiles(arg1:string,arg2:string,arg3:number):Promise<Array<string>>;
 
+export function GetAllAvailableModels():Promise<Array<Record<string, any>>>;
+
 export function GetConversations():Promise<Record<string, any>>;
 
 export function GetGlobalUsage():Promise<Record<string, any>>;
@@ -48,7 +50,7 @@ export function GetRecentWorkspaces():Promise<Array<string>>;
 
 export function GetRules():Promise<Record<string, Array<string>>>;
 
-export function GetSettings():Promise<Record<string, string>>;
+export function GetSettings():Promise<Record<string, any>>;
 
 export function GetSymbols(arg1:number,arg2:number):Promise<Record<string, any>>;
 
@@ -100,7 +102,7 @@ export function RunQuickProfiler():Promise<Record<string, any>>;
 
 export function SaveRules(arg1:Record<string, Array<string>>):Promise<void>;
 
-export function SaveSettings(arg1:Record<string, string>):Promise<void>;
+export function SaveSettings(arg1:Record<string, any>):Promise<void>;
 
 export function SaveUILayout(arg1:Record<string, any>):Promise<void>;
 
