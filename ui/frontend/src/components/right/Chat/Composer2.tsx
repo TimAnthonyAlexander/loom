@@ -1,23 +1,23 @@
 import React from 'react';
-import { 
-    Box, 
-    TextField, 
-    IconButton, 
-    Chip, 
-    FormControl, 
-    Select, 
-    MenuItem, 
+import {
+    Box,
+    TextField,
+    IconButton,
+    Chip,
+    FormControl,
+    Select,
+    MenuItem,
     Tooltip,
     Paper,
     Stack,
     Typography,
     Fade
 } from '@mui/material';
-import { 
-    SendRounded, 
-    StopRounded, 
-    AttachFileRounded, 
-    CloseRounded, 
+import {
+    SendRounded,
+    StopRounded,
+    AttachFileRounded,
+    CloseRounded,
     PersonRounded,
     DragIndicatorRounded
 } from '@mui/icons-material';
@@ -45,16 +45,16 @@ type Props = {
     onSelectModel?: (model: string) => void;
 };
 
-function Composer2Component({ 
-    input, 
-    setInput, 
-    busy, 
-    onSend, 
-    onStop, 
-    focusToken, 
-    attachments = [], 
-    onRemoveAttachment, 
-    onOpenAttach, 
+function Composer2Component({
+    input,
+    setInput,
+    busy,
+    onSend,
+    onStop,
+    focusToken,
+    attachments = [],
+    onRemoveAttachment,
+    onOpenAttach,
     onAttachButtonRef,
     currentPersonality = 'coder',
     setCurrentPersonality,
@@ -84,7 +84,7 @@ function Composer2Component({
     const handleDrop = React.useCallback((e: React.DragEvent) => {
         e.preventDefault();
         setIsDragOver(false);
-        
+
         const files = Array.from(e.dataTransfer.files);
         // For now, just add file names as attachments
         // In a real implementation, you'd handle file upload/processing
@@ -163,9 +163,72 @@ function Composer2Component({
             )}
 
             <Box sx={{ p: 1.25 }}>
-                {/* Top row: Attachment Chips only */}
-                {attachments.length > 0 && (
-                    <Stack direction="row" spacing={0.5} sx={{ mb: 0.75, flexWrap: 'wrap' }}>
+                {/* Top row: Personality selector and Attachment Chips */}
+                {(setCurrentPersonality || attachments.length > 0) && (
+                    <Stack direction="row" spacing={0.75} sx={{ mb: 0.75, flexWrap: 'wrap', alignItems: 'center' }}>
+                        {/* Personality Selector */}
+                        {setCurrentPersonality && (
+                            <Tooltip 
+                                title={personalityConfig ? personalityConfig.description : 'Select AI personality'} 
+                                placement="top"
+                                open={showPersonalityTooltip}
+                                onOpen={() => setShowPersonalityTooltip(true)}
+                                onClose={() => setShowPersonalityTooltip(false)}
+                            >
+                                <FormControl size="small" sx={{ minWidth: 100 }}>
+                                    <Select
+                                        value={currentPersonality}
+                                        onChange={(e) => setCurrentPersonality(e.target.value)}
+                                        displayEmpty
+                                        variant="outlined"
+                                        startAdornment={<PersonRounded sx={{ mr: 0.5, fontSize: 16 }} />}
+                                        sx={{
+                                            height: 36,
+                                            borderRadius: 1.5,
+                                            fontSize: '0.875rem',
+                                            '& .MuiSelect-select': {
+                                                py: 0.5,
+                                                px: 1,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                            },
+                                            '& .MuiOutlinedInput-notchedOutline': {
+                                                borderColor: 'rgba(255,255,255,0.1)',
+                                            },
+                                            '&:hover .MuiOutlinedInput-notchedOutline': {
+                                                borderColor: 'primary.main',
+                                            },
+                                        }}
+                                    >
+                                        {[
+                                            'coder',      // The Coder (default)
+                                            'architect',  // The Architect
+                                            'debugger',   // The Debugger
+                                            'reviewer',   // The Reviewer
+                                            'founder',    // The Founder
+                                            'scientist',  // Mad Scientist
+                                            'comedian',   // Stand-up Comedian
+                                            'pirate',     // Pirate Captain
+                                            'bavarian',   // The Bavarian Boy
+                                            'waifu',      // Anime Waifu
+                                        ]
+                                            .filter(key => personalities[key])
+                                            .map((key) => {
+                                                const config = personalities[key];
+                                                return (
+                                                    <MenuItem key={key} value={key}>
+                                                        <Typography variant="body2" fontWeight={500}>
+                                                            {config.name}
+                                                        </Typography>
+                                                    </MenuItem>
+                                                );
+                                            })}
+                                    </Select>
+                                </FormControl>
+                            </Tooltip>
+                        )}
+
+                        {/* Attachment Chips */}
                         {attachments.map((attachment, index) => (
                             <Chip
                                 key={`${attachment}-${index}`}
@@ -256,34 +319,40 @@ function Composer2Component({
                     />
                 </Box>
 
-                {/* Bottom row: Model selector, Personality selector, and Action buttons */}
+                {/* Bottom row: Model selector and Action buttons */}
                 <Stack direction="row" spacing={0.75} alignItems="center">
                     {/* Model Selector */}
                     {onSelectModel && (
-                        <Box sx={{ 
+                        <Box sx={{
                             flex: 1,
-                            minWidth: 200,
-                            maxWidth: 280,
+                            minWidth: 220,
+                            maxWidth: 320,
+                            '& .MuiAutocomplete-root': {
+                                width: '100% !important',
+                            },
                             '& .MuiTextField-root': {
-                                minWidth: '200px !important',
-                                maxWidth: '280px !important',
+                                width: '100% !important',
+                                minWidth: 'unset !important',
+                                maxWidth: 'unset !important',
                             },
                             '& .MuiInputBase-root': {
-                                height: 28,
-                                fontSize: '0.75rem',
-                                '& .MuiAutocomplete-endAdornment': {
-                                    right: 6,
-                                },
-                                '& .MuiAutocomplete-input': {
-                                    pr: '60px !important', // More space for clear button
-                                }
+                                height: 36,
+                                fontSize: '0.875rem',
+                                pr: '12px !important', // Less space needed without clear button
+                            },
+                            '& .MuiAutocomplete-endAdornment': {
+                                display: 'none', // Hide the endAdornment completely
+                            },
+                            '& .MuiAutocomplete-input': {
+                                pr: '0 !important',
+                                minWidth: '0 !important',
                             },
                             '& .MuiInputLabel-root': {
-                                fontSize: '0.75rem',
-                                transform: 'translate(12px, 6px) scale(1)',
+                                fontSize: '0.875rem',
+                                transform: 'translate(12px, 10px) scale(1)',
                             },
                             '& .MuiInputLabel-shrink': {
-                                transform: 'translate(12px, -8px) scale(0.75)',
+                                transform: 'translate(12px, -6px) scale(0.75)',
                             }
                         }}>
                             <ModelSelector
@@ -291,68 +360,6 @@ function Composer2Component({
                                 currentModel={currentModel}
                             />
                         </Box>
-                    )}
-
-                    {/* Personality Selector */}
-                    {setCurrentPersonality && (
-                        <Tooltip 
-                            title={personalityConfig ? personalityConfig.description : 'Select AI personality'} 
-                            placement="top"
-                            open={showPersonalityTooltip}
-                            onOpen={() => setShowPersonalityTooltip(true)}
-                            onClose={() => setShowPersonalityTooltip(false)}
-                        >
-                            <FormControl size="small" sx={{ minWidth: 100 }}>
-                                <Select
-                                    value={currentPersonality}
-                                    onChange={(e) => setCurrentPersonality(e.target.value)}
-                                    displayEmpty
-                                    variant="outlined"
-                                    startAdornment={<PersonRounded sx={{ mr: 0.25, fontSize: 14 }} />}
-                                    sx={{
-                                        height: 28,
-                                        borderRadius: 1.5,
-                                        fontSize: '0.75rem',
-                                        '& .MuiSelect-select': {
-                                            py: 0.25,
-                                            px: 0.75,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                        },
-                                        '& .MuiOutlinedInput-notchedOutline': {
-                                            borderColor: 'rgba(255,255,255,0.1)',
-                                        },
-                                        '&:hover .MuiOutlinedInput-notchedOutline': {
-                                            borderColor: 'primary.main',
-                                        },
-                                    }}
-                                >
-                                    {[
-                                        'coder',      // The Coder (default)
-                                        'architect',  // The Architect
-                                        'debugger',   // The Debugger
-                                        'reviewer',   // The Reviewer
-                                        'founder',    // The Founder
-                                        'scientist',  // Mad Scientist
-                                        'comedian',   // Stand-up Comedian
-                                        'pirate',     // Pirate Captain
-                                        'bavarian',   // The Bavarian Boy
-                                        'waifu',      // Anime Waifu
-                                    ]
-                                        .filter(key => personalities[key])
-                                        .map((key) => {
-                                            const config = personalities[key];
-                                            return (
-                                                <MenuItem key={key} value={key}>
-                                                    <Typography variant="caption" fontWeight={500}>
-                                                        {config.name}
-                                                    </Typography>
-                                                </MenuItem>
-                                            );
-                                        })}
-                                </Select>
-                            </FormControl>
-                        </Tooltip>
                     )}
 
                     {/* Spacer to push buttons to the right */}
@@ -368,8 +375,8 @@ function Composer2Component({
                                 disabled={busy}
                                 size="small"
                                 sx={{
-                                    width: 28,
-                                    height: 28,
+                                    width: 32,
+                                    height: 32,
                                     backgroundColor: 'rgba(255,255,255,0.05)',
                                     backdropFilter: 'blur(8px)',
                                     border: '1px solid rgba(255,255,255,0.1)',
@@ -387,7 +394,7 @@ function Composer2Component({
                                     }
                                 }}
                             >
-                                <AttachFileRounded sx={{ fontSize: 16 }} />
+                                <AttachFileRounded sx={{ fontSize: 18 }} />
                             </IconButton>
                         </Tooltip>
 
@@ -398,8 +405,8 @@ function Composer2Component({
                                 disabled={busy ? false : !input.trim()}
                                 size="small"
                                 sx={{
-                                    width: 28,
-                                    height: 28,
+                                    width: 32,
+                                    height: 32,
                                     backgroundColor: busy ? 'error.main' : 'primary.main',
                                     color: busy ? 'error.contrastText' : 'primary.contrastText',
                                     transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -419,7 +426,7 @@ function Composer2Component({
                                     }
                                 }}
                             >
-                                {busy ? <StopRounded sx={{ fontSize: 16 }} /> : <SendRounded sx={{ fontSize: 16 }} />}
+                                {busy ? <StopRounded sx={{ fontSize: 18 }} /> : <SendRounded sx={{ fontSize: 18 }} />}
                             </IconButton>
                         </Tooltip>
                     </Stack>

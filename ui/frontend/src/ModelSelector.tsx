@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Autocomplete, TextField, Chip, Box, Typography } from '@mui/material';
+import { Autocomplete, TextField, Box, Typography } from '@mui/material';
 
 interface ModelOption {
     id: string;
@@ -156,7 +156,7 @@ const ModelSelector = React.memo(function ModelSelector({ onSelect, currentModel
         if (currentModel) setSelected(currentModel)
     }, [currentModel])
 
-    const value = models.find((m) => m.id === selected) || null
+    const value = models.find((m) => m.id === selected) || undefined
 
     return (
         <Autocomplete
@@ -164,29 +164,72 @@ const ModelSelector = React.memo(function ModelSelector({ onSelect, currentModel
             options={models}
             value={value}
             onChange={(_, option) => {
-                const id = option?.id || ''
-                setSelected(id)
-                if (id) onSelect(id)
+                const id = option?.id || '';
+                setSelected(id);
+                if (id) onSelect(id);
             }}
             groupBy={(option) => option.group ?? option.provider}
             getOptionLabel={(option) => option.name}
+            disableClearable
+            forcePopupIcon={false}
             renderOption={(props, option) => (
-                <Box component="li" {...props} key={option.id} sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                    <Box sx={{ flex: 1 }}>
-                        <Typography variant="body2">
-                            {option.name}
+                <Box
+                    component="li"
+                    {...props}
+                    key={option.id}
+                    sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'flex-start',
+                        justifyContent: 'flex-start', // makes sure it's not centered vertically
+                        textAlign: 'left',            // forces left alignment for text
+                        width: '100%',
+                    }}
+                >
+                    <Typography
+                        variant="body2"
+                        sx={{ fontWeight: 500, textAlign: 'left', width: '100%' }}
+                    >
+                        {option.name}
+                    </Typography>
+                    {!option.pricing && option.provider &&
+                        <Typography
+                            variant="caption"
+                            sx={{
+                                color: 'text.secondary',
+                                fontSize: '0.65rem',
+                                textAlign: 'left',
+                                width: '100%',
+                                mt: 0.25,
+                            }}
+                        >
+                            Provider: {option.provider}
                         </Typography>
-                        {option.pricing && (
-                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                ${option.pricing.input?.toFixed(2)}/M in • ${option.pricing.output?.toFixed(2)}/M out
-                            </Typography>
-                        )}
-                    </Box>
-                    <Chip size="small" label={option.provider} variant="outlined" />
+                    }
+                    {option.pricing && (
+                        <Typography
+                            variant="caption"
+                            sx={{
+                                color: 'text.secondary',
+                                fontSize: '0.65rem',
+                                textAlign: 'left',
+                                width: '100%',
+                                mt: 0.25,
+                            }}
+                        >
+                            ${option.pricing.input?.toFixed(2)}/M in • $
+                            {option.pricing.output?.toFixed(2)}/M out
+                        </Typography>
+                    )}
                 </Box>
             )}
             renderInput={(params) => (
-                <TextField {...params} label="Model" placeholder="Select a model" sx={{ minWidth: 350, maxWidth: 500 }} />
+                <TextField
+                    {...params}
+                    label="Model"
+                    placeholder="Select a model"
+                    sx={{ width: '100%', minWidth: 180 }}
+                />
             )}
             isOptionEqualToValue={(opt, val) => opt.id === val.id}
         />
