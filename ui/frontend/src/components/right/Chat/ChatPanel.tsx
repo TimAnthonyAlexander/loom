@@ -248,7 +248,17 @@ function ChatPanelComponent(props: Props) {
                 }}
             >
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <Typography variant="h6" fontWeight={600} color="text.primary">
+                    <Typography 
+                        variant="h6" 
+                        fontWeight={600} 
+                        sx={{ 
+                            background: 'linear-gradient(45deg, currentColor, primary.main)',
+                            backgroundClip: 'text',
+                            WebkitBackgroundClip: 'text',
+                            color: 'transparent',
+                            fontWeight: 700
+                        }}
+                    >
                         Loom
                     </Typography>
                 </Box>
@@ -263,12 +273,26 @@ function ChatPanelComponent(props: Props) {
                     <IconButton
                         size="small"
                         onClick={onNewConversation}
+                        sx={{
+                            color: 'text.secondary',
+                            '&:hover': {
+                                color: 'primary.main',
+                                backgroundColor: 'primary.main'
+                            }
+                        }}
                     >
                         <AddRounded />
                     </IconButton>
                     <IconButton
                         size="small"
                         onClick={(e) => { setToolsAnchor(e.currentTarget); setToolsOpen(true); }}
+                        sx={{
+                            color: 'text.secondary',
+                            '&:hover': {
+                                color: 'primary.main',
+                                backgroundColor: 'primary.main'
+                            }
+                        }}
                     >
                         <SettingsSuggestRounded />
                     </IconButton>
@@ -289,9 +313,9 @@ function ChatPanelComponent(props: Props) {
                         sx={{
                             mt: 2,
                             borderRadius: 2,
-                            backgroundColor: 'grey.900',
+                            backgroundColor: 'background.paper',
                             border: '1px solid',
-                            borderColor: 'grey.700',
+                            borderColor: 'primary.main',
                             boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
                         }}
                     >

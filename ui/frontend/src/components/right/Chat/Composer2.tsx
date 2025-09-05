@@ -168,8 +168,8 @@ function Composer2Component({
                     <Stack direction="row" spacing={0.75} sx={{ mb: 0.75, flexWrap: 'wrap', alignItems: 'center' }}>
                         {/* Personality Selector */}
                         {setCurrentPersonality && (
-                            <Tooltip 
-                                title={personalityConfig ? personalityConfig.description : 'Select AI personality'} 
+                            <Tooltip
+                                title={personalityConfig ? personalityConfig.description : 'Select AI personality'}
                                 placement="top"
                                 open={showPersonalityTooltip}
                                 onOpen={() => setShowPersonalityTooltip(true)}
@@ -177,36 +177,46 @@ function Composer2Component({
                             >
                                 <FormControl size="small" sx={{ minWidth: 100 }}>
                                     <Select
-                                    value={currentPersonality}
-                                    onChange={(e) => setCurrentPersonality(e.target.value)}
-                                    displayEmpty
-                                    variant="outlined"
-                                    startAdornment={<PersonRounded sx={{ mr: 0.5, fontSize: 16 }} />}
-                                    sx={{
-                                        height: 36,
-                                        borderRadius: 1.5,
-                                        fontSize: '0.875rem',
-                                        backgroundColor: 'rgba(255,255,255,0.03)',
-                                        backdropFilter: 'blur(8px)',
-                                        '& .MuiSelect-select': {
-                                            py: 0.5,
-                                            px: 1,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                        },
-                                        '& .MuiOutlinedInput-notchedOutline': {
-                                            border: 'none',
-                                        },
-                                        '&:hover .MuiOutlinedInput-notchedOutline': {
-                                            border: 'none',
-                                        },
-                                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                                            border: 'none',
-                                        },
-                                        '&:hover': {
-                                            backgroundColor: 'rgba(255,255,255,0.06)',
-                                        },
-                                    }}
+                                        value={currentPersonality}
+                                        onChange={(e) => setCurrentPersonality(e.target.value)}
+                                        displayEmpty
+                                        variant="outlined"
+                                        startAdornment={<PersonRounded sx={{ mr: 0.5, fontSize: 16 }} />}
+                                        sx={{
+                                            height: 36,
+                                            borderRadius: 1.5,
+                                            fontSize: '0.875rem',
+                                            backgroundColor: 'rgba(255,255,255,0.03)',
+                                            backdropFilter: 'blur(8px)',
+                                            border: '1px solid transparent',
+                                            '& .MuiSelect-select': {
+                                                py: 0.5,
+                                                px: 1,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                            },
+                                            '& .MuiOutlinedInput-notchedOutline': {
+                                                border: 'none',
+                                            },
+                                            '&:hover .MuiOutlinedInput-notchedOutline': {
+                                                border: 'none',
+                                            },
+                                            '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                                border: 'none',
+                                            },
+                                            '&:hover': {
+                                                backgroundColor: 'rgba(255,255,255,0.06)',
+                                                borderColor: 'primary.main',
+                                            },
+                                            '&.Mui-focused': {
+                                                borderColor: 'primary.main',
+                                                backgroundColor: 'primary.main',
+                                                color: 'primary.contrastText',
+                                                '& .MuiSvgIcon-root': {
+                                                    color: 'primary.contrastText'
+                                                }
+                                            },
+                                        }}
                                     >
                                         {[
                                             'coder',      // The Coder (default)
@@ -293,8 +303,12 @@ function Composer2Component({
                             '& .MuiOutlinedInput-root': {
                                 borderRadius: 1.5,
                                 backgroundColor: 'transparent',
+                                transition: 'all 0.2s ease-in-out',
                                 '& fieldset': {
                                     border: 'none',
+                                },
+                                '&.Mui-focused': {
+                                    boxShadow: '0 0 0 1px rgba(var(--mui-palette-primary-mainChannel) / 0.2)',
                                 },
                                 '& textarea': {
                                     resize: 'none',
@@ -317,7 +331,7 @@ function Composer2Component({
                             '& .MuiInputBase-input': {
                                 fontSize: '0.875rem',
                                 lineHeight: 1.4,
-                                py: 0.75,
+                                py: 0,
                                 '&::placeholder': {
                                     color: 'text.secondary',
                                     opacity: 0.7,
@@ -384,10 +398,11 @@ function Composer2Component({
                                     color: 'text.secondary',
                                     transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                                     '&:hover': {
-                                        backgroundColor: 'rgba(255,255,255,0.08)',
+                                        backgroundColor: 'primary.main',
                                         borderColor: 'primary.main',
-                                        color: 'primary.main',
+                                        color: 'primary.contrastText',
                                         transform: 'translateY(-0.5px)',
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
                                     },
                                     '&:disabled': {
                                         opacity: 0.5,
