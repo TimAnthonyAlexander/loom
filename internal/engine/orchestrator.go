@@ -878,8 +878,10 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 
 		// If stream ended with no content and no tool call, retry once without streaming
 		if streamEnded && currentContent == "" {
-			// Retry non-streaming once
-			e.bridge.SendChat("system", "Retrying without streaming...")
+			// Only show retry message if no tools were used (to avoid user confusion after successful tool calls)
+			if !toolsUsed {
+				e.bridge.SendChat("system", "Retrying without streaming...")
+			}
 			fallbackStream, err := adapter.Chat(ctx, engineMessages, convertSchemas(tools), false)
 			if err != nil {
 				e.bridge.SendChat("system", "Error: "+err.Error())
@@ -1013,7 +1015,10 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 			if os.Getenv("LOOM_DEBUG_ENGINE") == "1" || strings.EqualFold(os.Getenv("LOOM_DEBUG_ENGINE"), "true") {
 				e.bridge.SendChat("system", "[debug] Fallback non-stream returned no content and no tool calls")
 			}
-			e.bridge.SendChat("system", "No response from model.")
+			// If tools were used in this turn, empty responses are acceptable
+			if !toolsUsed {
+				e.bridge.SendChat("system", "No response from model.")
+			}
 			return nil
 		}
 	}

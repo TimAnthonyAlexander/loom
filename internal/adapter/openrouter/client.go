@@ -111,15 +111,51 @@ func (c *Client) chatWithRetry(ctx context.Context, messages []engine.Message, t
 	// Try first attempt and track if we receive any content
 	contentReceived, toolCallReceived := c.attemptChat(ctx, messages, tools, stream, resultCh)
 
-	// If we got empty response, retry with opposite streaming mode
-	if !contentReceived && !toolCallReceived {
+	// Check if we should retry - don't retry if:
+	// 1. We received any content or tool calls
+	// 2. The conversation has recent tool activity (follow-up calls after tool execution may legitimately be empty)
+	shouldRetry := !contentReceived && !toolCallReceived && !hasRecentToolActivity(messages)
+
+	if shouldRetry {
 		select {
 		case <-ctx.Done():
 			return
-		case resultCh <- engine.TokenOrToolCall{Token: "Retrying due to empty response..."}:
+		case resultCh <- engine.TokenOrToolCall{Token: "Retrying with non-streaming mode..."}:
 		}
 		c.attemptChat(ctx, messages, tools, !stream, resultCh)
 	}
+}
+
+// hasRecentToolActivity checks if the conversation has recent tool calls and results
+// This helps avoid unnecessary retries after tool execution when empty responses are expected
+func hasRecentToolActivity(messages []engine.Message) bool {
+	// Look at the last few messages to see if there's recent tool activity
+	recentCount := 10
+	if len(messages) < recentCount {
+		recentCount = len(messages)
+	}
+
+	toolCallsSeen := 0
+	toolResultsSeen := 0
+
+	// Check recent messages for tool activity
+	for i := len(messages) - recentCount; i < len(messages); i++ {
+		msg := messages[i]
+		switch msg.Role {
+		case "assistant":
+			// Assistant message with tool call metadata
+			if msg.Name != "" && msg.ToolID != "" {
+				toolCallsSeen++
+			}
+		case "tool", "function":
+			// Tool result message
+			toolResultsSeen++
+		}
+	}
+
+	// If we have recent tool calls and results, this might be a follow-up call
+	// after tool execution, where empty responses are more acceptable
+	return toolCallsSeen > 0 && toolResultsSeen > 0
 }
 
 // attemptChat performs a single chat attempt and returns whether content/toolcalls were received
