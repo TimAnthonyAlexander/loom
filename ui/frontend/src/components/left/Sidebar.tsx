@@ -104,7 +104,12 @@ function Sidebar(props: SidebarProps) {
                 height: '100%',
             }}
         >
-            <Box sx={{ pt: 4 }}>
+            <Box
+                sx={{
+                    pt: 4,
+                    borderBottom: '0.1px solid #ccc',
+                }}
+            >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                     <Box component="img" src="/logo.png" alt="Loom" sx={{ width: 28, height: 28, borderRadius: 0.5 }} />
                     <Typography
@@ -114,7 +119,7 @@ function Sidebar(props: SidebarProps) {
                             background: 'linear-gradient(45deg, currentColor, primary.main)',
                             backgroundClip: 'text',
                             WebkitBackgroundClip: 'text',
-                            color: 'transparent',
+                            color: 'text.primary',
                         }}
                     >
                         Loom
@@ -220,33 +225,9 @@ function Sidebar(props: SidebarProps) {
                         }}
                         onClick={() => setProfileDialogOpen(true)}
                     >
-                        <Typography variant="caption" color="text.secondary">
-                            Symbols
-                        </Typography>
                         <Typography variant="caption" fontWeight={600}>
-                            {symbolsCount ?? '—'}
+                            {symbolsCount !== null ? 'Indexed' : 'Indexing'}
                         </Typography>
-                        <Box sx={{ flex: 1 }} />
-                        <Tooltip title="Reindex symbols">
-                            <IconButton
-                                size="small"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onReindex();
-                                }}
-                                sx={{
-                                    color: 'text.secondary',
-                                    '&:hover': {
-                                        backgroundColor: 'primary.main',
-                                        '& .MuiSvgIcon-root': {
-                                            color: 'primary.contrastText'
-                                        }
-                                    }
-                                }}
-                            >
-                                <RefreshIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
                     </Box>
                 </Tooltip>
             </Box>

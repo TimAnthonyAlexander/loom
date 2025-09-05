@@ -204,18 +204,12 @@ function FileExplorer({ dirCache, expandedDirs, onToggleDir, onOpenFile, rootPat
             onKeyDown={handleKeyDown}
             sx={{
                 outline: 'none',
+                px: 0.5,
                 flex: 1,
                 borderRadius: 1,
-                '&:focus': {
-                    boxShadow: (t) => `inset 0 0 0 1px ${alpha(t.palette.primary.main, 0.4)}`
-                },
                 overflowX: 'hidden',
             }}
         >
-            <Typography variant="subtitle2" fontWeight={600} sx={{ p: 1 }}>
-                File Explorer
-            </Typography>
-
             <List dense disablePadding>
                 {visibleItems.map((item) => {
                     if (item.type === 'loading') {
