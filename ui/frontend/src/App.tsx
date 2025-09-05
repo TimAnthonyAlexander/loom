@@ -28,7 +28,6 @@ const App: React.FC = () => {
     const [currentModel, setCurrentModel] = useState<string>('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const [busy, setBusy] = useState<boolean>(false);
-    const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
     const [workspaceOpen, setWorkspaceOpen] = useState<boolean>(false);
     const [workspacePath, setWorkspacePath] = useState<string>('');
     const [newProjectOpen, setNewProjectOpen] = useState<boolean>(false);
@@ -1089,25 +1088,6 @@ const App: React.FC = () => {
                     onClose={() => setRulesOpen(false)}
                 />
                 <MemoriesDialog open={memoriesOpen} onClose={() => setMemoriesOpen(false)} />
-                <SettingsDialog
-                    open={settingsOpen}
-                    openaiKey={openaiKey}
-                    setOpenaiKey={setOpenaiKey}
-                    anthropicKey={anthropicKey}
-                    setAnthropicKey={setAnthropicKey}
-                    openrouterKey={openrouterKey}
-                    setOpenrouterKey={setOpenrouterKey}
-                    ollamaEndpoint={ollamaEndpoint}
-                    setOllamaEndpoint={setOllamaEndpoint}
-                    autoApproveShell={autoApproveShell}
-                    setAutoApproveShell={setAutoApproveShell}
-                    autoApproveEdits={autoApproveEdits}
-                    setAutoApproveEdits={setAutoApproveEdits}
-                    currentTheme={currentTheme}
-                    setCurrentTheme={setCurrentTheme}
-                    onSave={() => { SaveSettings({ openai_api_key: openaiKey, anthropic_api_key: anthropicKey, openrouter_api_key: openrouterKey, ollama_endpoint: ollamaEndpoint, auto_approve_shell: String(autoApproveShell), auto_approve_edits: String(autoApproveEdits), theme: currentTheme, personality: currentPersonality }).finally(() => setSettingsOpen(false)); }}
-                    onClose={() => setSettingsOpen(false)}
-                />
                 <WorkspaceDialog
                     open={workspaceOpen}
                     workspacePath={workspacePath}
