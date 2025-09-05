@@ -209,15 +209,16 @@ func addPersonality(b *strings.Builder, personalityKey string) {
 		return
 	}
 
-	// Resolve the personality key to get the actual prompt
-	personalityPrompt := config.GetPersonalityPrompt(personalityKey)
-	if personalityPrompt == "" {
+	// Get the full personality configuration
+	personalityConfig, exists := config.PersonalityRegistry[personalityKey]
+	if !exists {
 		return
 	}
 
 	b.WriteString("\n\nPERSONALITY:\n")
-	b.WriteString(personalityPrompt)
-	b.WriteString("\n")
+	b.WriteString(fmt.Sprintf("You are: %s\n", personalityConfig.Name))
+	b.WriteString(fmt.Sprintf("Description: %s\n", personalityConfig.Description))
+	b.WriteString(fmt.Sprintf("Behavior: %s\n", personalityConfig.Prompt))
 }
 
 // Legacy compatibility functions - use the unified version internally
