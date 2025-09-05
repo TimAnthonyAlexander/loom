@@ -237,38 +237,13 @@ function ChatPanelComponent(props: Props) {
 
     return (
         <Box sx={{ minWidth: 450, width: '100%', display: 'flex', flexDirection: 'column', height: '100vh' }}>
-            <Box
-                sx={{
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    p: 2,
-                    boxSizing: 'border-box',
-                    borderBottom: 1,
-                    borderColor: 'divider',
-                }}
-            >
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <Typography 
-                        variant="h6" 
-                        fontWeight={600} 
-                        sx={{ 
-                            background: 'linear-gradient(45deg, currentColor, primary.main)',
-                            backgroundClip: 'text',
-                            WebkitBackgroundClip: 'text',
-                            color: 'transparent',
-                            fontWeight: 700
-                        }}
-                    >
-                        Loom
-                    </Typography>
-                </Box>
+            <Box sx={{ flex: 1, overflowY: 'auto', p: 2, minHeight: 0, boxSizing: 'border-box' }}>
                 <Box
                     sx={{
                         p: 1,
                         boxSizing: 'border-box',
                         display: 'flex',
+                        justifyContent: 'space-between',
                         gap: 1,
                     }}
                 >
@@ -303,8 +278,6 @@ function ChatPanelComponent(props: Props) {
                         <SettingsSuggestRounded />
                     </IconButton>
                 </Box>
-            </Box>
-            <Box sx={{ flex: 1, overflowY: 'auto', p: 2, minHeight: 0, boxSizing: 'border-box' }}>
                 <MessageList
                     messages={messages}
                     busy={busy}
