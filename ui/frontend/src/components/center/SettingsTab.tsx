@@ -77,6 +77,7 @@ export default function SettingsTab({
     const [modelLoadError, setModelLoadError] = React.useState<string | null>(null);
     const [modelSearchQuery, setModelSearchQuery] = React.useState<string>('');
     const [visibleCounts, setVisibleCounts] = React.useState<Record<string, number>>({});
+    const [activeSection, setActiveSection] = React.useState('Appearance');
 
     // Load all models including dynamic OpenRouter models
     React.useEffect(() => {
@@ -203,18 +204,36 @@ export default function SettingsTab({
         </InputAdornment>
     );
 
+    // Define navigation sections
+    const sections = [
+        { id: 'Appearance', label: 'Appearance', icon: '🎨' },
+        { id: 'Automation', label: 'Automation', icon: '⚡' },
+        { id: 'Available Models', label: 'Models', icon: '🤖' },
+        { id: 'API Keys', label: 'API Credentials', icon: '🔑' },
+        { id: 'Local Models', label: 'Ollama', icon: '💻' },
+    ];
+
     return (
         <Box sx={{
             height: '100%',
-            overflow: 'auto',
+            display: 'flex',
             bgcolor: 'background.default'
         }}>
-            <Box sx={{ p: 3, maxWidth: 800 }}>
+            {/* Navigation Sidebar */}
+            <Box sx={{
+                width: 280,
+                bgcolor: 'background.paper',
+                borderRight: 1,
+                borderColor: 'divider',
+                p: 3,
+                display: 'flex',
+                flexDirection: 'column'
+            }}>
                 <Typography
-                    variant="h4"
+                    variant="h5"
                     sx={{
                         fontWeight: 700,
-                        mb: 4,
+                        mb: 3,
                         background: 'linear-gradient(45deg, currentColor, primary.main)',
                         backgroundClip: 'text',
                         WebkitBackgroundClip: 'text',
@@ -224,7 +243,47 @@ export default function SettingsTab({
                     Settings
                 </Typography>
 
-                <Stack spacing={4}>
+                <Stack spacing={1}>
+                    {sections.map((section) => (
+                        <Box
+                            key={section.id}
+                            onClick={() => setActiveSection(section.id)}
+                            sx={{
+                                p: 2,
+                                borderRadius: 2,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 2,
+                                transition: 'all 0.2s ease',
+                                bgcolor: activeSection === section.id ? 'primary.main' : 'transparent',
+                                color: activeSection === section.id ? 'primary.contrastText' : 'text.primary',
+                                '&:hover': {
+                                    bgcolor: activeSection === section.id ? 'primary.main' : 'action.hover',
+                                    transform: 'translateX(4px)'
+                                }
+                            }}
+                        >
+                            <Typography sx={{ fontSize: '1.2rem', minWidth: 24 }}>
+                                {section.icon}
+                            </Typography>
+                            <Typography variant="body1" sx={{ fontWeight: activeSection === section.id ? 600 : 500 }}>
+                                {section.label}
+                            </Typography>
+                        </Box>
+                    ))}
+                </Stack>
+            </Box>
+
+            {/* Main Content Area */}
+            <Box sx={{
+                flex: 1,
+                height: '100%',
+                overflow: 'auto',
+                p: 3
+            }}>
+                {/* API Keys Section */}
+                {activeSection === 'API Keys' && (
                     <Paper elevation={0} sx={{ p: 3, border: 1, borderColor: 'divider', borderRadius: 2 }}>
                         <SectionTitle>API Keys</SectionTitle>
                         <Stack spacing={2.5}>
@@ -287,7 +346,10 @@ export default function SettingsTab({
                             />
                         </Stack>
                     </Paper>
+                )}
 
+                {/* Local Models Section */}
+                {activeSection === 'Local Models' && (
                     <Paper elevation={0} sx={{ p: 3, border: 1, borderColor: 'divider', borderRadius: 2 }}>
                         <SectionTitle>Local Models</SectionTitle>
                         <Stack spacing={2.5}>
@@ -299,23 +361,12 @@ export default function SettingsTab({
                                 fullWidth
                                 InputProps={{ sx: { fontFamily: 'ui-monospace, Menlo, monospace' } }}
                             />
-                            <Link
-                                component="button"
-                                underline="hover"
-                                onClick={() => OpenProjectDataDir()}
-                                sx={{
-                                    alignSelf: 'flex-start',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 0.5,
-                                    textAlign: 'left'
-                                }}
-                            >
-                                Open project data folder <LaunchIcon fontSize="small" />
-                            </Link>
                         </Stack>
                     </Paper>
+                )}
 
+                {/* Appearance Section */}
+                {activeSection === 'Appearance' && (
                     <Paper elevation={0} sx={{ p: 3, border: 1, borderColor: 'divider', borderRadius: 2 }}>
                         <SectionTitle>Appearance</SectionTitle>
                         <FormControl fullWidth>
@@ -334,7 +385,10 @@ export default function SettingsTab({
                             </Select>
                         </FormControl>
                     </Paper>
+                )}
 
+                {/* Available Models Section */}
+                {activeSection === 'Available Models' && (
                     <Paper elevation={0} sx={{ p: 3, border: 1, borderColor: 'divider', borderRadius: 2 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
                             <Typography variant="h6" sx={{
@@ -587,7 +641,10 @@ export default function SettingsTab({
                             </Typography>
                         </Stack>
                     </Paper>
+                )}
 
+                {/* Automation Section */}
+                {activeSection === 'Automation' && (
                     <Paper elevation={0} sx={{ p: 3, border: 1, borderColor: 'divider', borderRadius: 2 }}>
                         <SectionTitle>Automation</SectionTitle>
                         <Stack spacing={2}>
@@ -647,10 +704,25 @@ export default function SettingsTab({
                                     sx={{ alignItems: 'flex-start', m: 0 }}
                                 />
                             </Box>
+                            <Link
+                                component="button"
+                                underline="hover"
+                                onClick={() => OpenProjectDataDir()}
+                                sx={{
+                                    alignSelf: 'flex-start',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 0.5,
+                                    textAlign: 'left'
+                                }}
+                            >
+                                Open project data folder <LaunchIcon fontSize="small" />
+                            </Link>
                         </Stack>
                     </Paper>
-                </Stack>
+                )}
 
+                {/* Save Info */}
                 <Box sx={{ mt: 4, p: 2, bgcolor: 'info.main', color: 'info.contrastText', borderRadius: 2 }}>
                     <Typography variant="body2">
                         💡 Settings are automatically saved as you make changes
