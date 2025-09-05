@@ -168,82 +168,93 @@ function Composer2Component({
                     <Stack direction="row" spacing={0.75} sx={{ mb: 0.75, flexWrap: 'wrap', alignItems: 'center' }}>
                         {/* Personality Selector */}
                         {setCurrentPersonality && (
-                            <Tooltip
-                                title={personalityConfig ? personalityConfig.description : 'Select AI personality'}
-                                placement="top"
-                                open={showPersonalityTooltip}
-                                onOpen={() => setShowPersonalityTooltip(true)}
-                                onClose={() => setShowPersonalityTooltip(false)}
-                            >
-                                <FormControl size="small" sx={{ minWidth: 100 }}>
-                                    <Select
-                                        value={currentPersonality}
-                                        onChange={(e) => setCurrentPersonality(e.target.value)}
-                                        displayEmpty
-                                        variant="outlined"
-                                        startAdornment={<PersonRounded sx={{ mr: 0.5, fontSize: 16 }} />}
-                                        sx={{
-                                            height: 36,
-                                            borderRadius: 1.5,
-                                            fontSize: '0.875rem',
-                                            backgroundColor: 'rgba(255,255,255,0.03)',
-                                            backdropFilter: 'blur(8px)',
-                                            border: '1px solid transparent',
-                                            '& .MuiSelect-select': {
-                                                py: 0.5,
-                                                px: 1,
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                            },
-                                            '& .MuiOutlinedInput-notchedOutline': {
-                                                border: 'none',
-                                            },
-                                            '&:hover .MuiOutlinedInput-notchedOutline': {
-                                                border: 'none',
-                                            },
-                                            '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                                                border: 'none',
-                                            },
-                                            '&:hover': {
-                                                backgroundColor: 'rgba(255,255,255,0.06)',
-                                                borderColor: 'primary.main',
-                                            },
-                                            '&.Mui-focused': {
-                                                borderColor: 'primary.main',
-                                                backgroundColor: 'primary.main',
-                                                color: 'primary.contrastText',
-                                                '& .MuiSvgIcon-root': {
-                                                    color: 'primary.contrastText'
-                                                }
-                                            },
-                                        }}
-                                    >
-                                        {[
-                                            'coder',      // The Coder (default)
-                                            'architect',  // The Architect
-                                            'debugger',   // The Debugger
-                                            'reviewer',   // The Reviewer
-                                            'founder',    // The Founder
-                                            'scientist',  // Mad Scientist
-                                            'comedian',   // Stand-up Comedian
-                                            'pirate',     // Pirate Captain
-                                            'bavarian',   // The Bavarian Boy
-                                            'waifu',      // Anime Waifu
-                                        ]
-                                            .filter(key => personalities[key])
-                                            .map((key) => {
-                                                const config = personalities[key];
-                                                return (
+                            <FormControl size="small" sx={{ minWidth: 100 }}>
+                                <Select
+                                    value={currentPersonality}
+                                    onChange={(e) => setCurrentPersonality(e.target.value)}
+                                    displayEmpty
+                                    variant="outlined"
+                                    startAdornment={<PersonRounded sx={{ mr: 0.5, fontSize: 16 }} />}
+                                    sx={{
+                                        height: 36,
+                                        borderRadius: 1.5,
+                                        fontSize: '0.875rem',
+                                        backgroundColor: 'rgba(255,255,255,0.03)',
+                                        backdropFilter: 'blur(8px)',
+                                        border: '1px solid transparent',
+                                        '& .MuiSelect-select': {
+                                            py: 0.5,
+                                            px: 1,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                        },
+                                        '& .MuiOutlinedInput-notchedOutline': {
+                                            border: 'none',
+                                        },
+                                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                                            border: 'none',
+                                        },
+                                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                            border: 'none',
+                                        },
+                                        '&:hover': {
+                                            backgroundColor: 'rgba(255,255,255,0.06)',
+                                            borderColor: 'primary.main',
+                                        },
+                                        '&.Mui-focused': {
+                                            borderColor: 'primary.main',
+                                            backgroundColor: 'primary.main',
+                                            color: 'primary.contrastText',
+                                            '& .MuiSvgIcon-root': {
+                                                color: 'primary.contrastText'
+                                            }
+                                        },
+                                    }}
+                                >
+                                    {[
+                                        'coder',      // The Coder (default)
+                                        'architect',  // The Architect
+                                        'debugger',   // The Debugger
+                                        'reviewer',   // The Reviewer
+                                        'founder',    // The Founder
+                                        'scientist',  // Mad Scientist
+                                        'comedian',   // Stand-up Comedian
+                                        'pirate',     // Pirate Captain
+                                        'bavarian',   // The Bavarian Boy
+                                        'waifu',      // Anime Waifu
+                                    ]
+                                        .filter(key => personalities[key])
+                                        .map((key) => {
+                                            const config = personalities[key];
+                                            return (
+                                                <Tooltip
+                                                    key={key}
+                                                    title={
+                                                        <Box>
+                                                            <Typography variant="subtitle1" fontWeight="bold">
+                                                                {config.name}
+                                                            </Typography>
+                                                            <Typography variant="body2" sx={{ mt: 0.5 }}>
+                                                                {config.description}
+                                                            </Typography>
+                                                        </Box>
+                                                    }
+                                                    placement="top"
+                                                    arrow
+                                                    open={showPersonalityTooltip ? true : undefined}
+                                                    onOpen={() => setShowPersonalityTooltip(true)}
+                                                    onClose={() => setShowPersonalityTooltip(false)}
+                                                >
                                                     <MenuItem key={key} value={key}>
                                                         <Typography variant="body2" fontWeight={500}>
                                                             {config.name}
                                                         </Typography>
                                                     </MenuItem>
-                                                );
-                                            })}
-                                    </Select>
-                                </FormControl>
-                            </Tooltip>
+                                                </Tooltip>
+                                            );
+                                        })}
+                                </Select>
+                            </FormControl>
                         )}
 
                         {/* Attachment Chips */}
