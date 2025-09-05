@@ -429,35 +429,26 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 	// Start or load conversation
 	convo := e.memory.StartConversation() // load history & summaries
 
-	// Inject a system prompt once at the beginning of the conversation
-	hasSystem := false
-	for _, msg := range convo.History() {
-		if msg.Role == "system" && msg.Content != "" {
-			hasSystem = true
-			break
-		}
+	// Always update the system prompt to reflect current personality and context
+	// This allows personality changes to take effect mid-conversation
+	userRules, projectRules, _ := config.LoadRules(e.workspaceDir)
+	mems := loadUserMemoriesForPrompt()
+	e.mu.RLock()
+	currentPersonality := e.personality
+	e.mu.RUnlock()
+	base := GenerateSystemPromptUnified(SystemPromptOptions{
+		Tools:                 toolSchemas,
+		UserRules:             userRules,
+		ProjectRules:          projectRules,
+		Memories:              mems,
+		Personality:           currentPersonality,
+		WorkspaceRoot:         e.workspaceDir,
+		IncludeProjectContext: true,
+	})
+	if ui := strings.TrimSpace(e.formatEditorContext()); ui != "" {
+		base = strings.TrimSpace(base) + "\n\nUI Context:\n- " + ui
 	}
-	if !hasSystem {
-		// Load dynamic rules and inject into system prompt with project context
-		userRules, projectRules, _ := config.LoadRules(e.workspaceDir)
-		mems := loadUserMemoriesForPrompt()
-		e.mu.RLock()
-		currentPersonality := e.personality
-		e.mu.RUnlock()
-		base := GenerateSystemPromptUnified(SystemPromptOptions{
-			Tools:                 toolSchemas,
-			UserRules:             userRules,
-			ProjectRules:          projectRules,
-			Memories:              mems,
-			Personality:           currentPersonality,
-			WorkspaceRoot:         e.workspaceDir,
-			IncludeProjectContext: true,
-		})
-		if ui := strings.TrimSpace(e.formatEditorContext()); ui != "" {
-			base = strings.TrimSpace(base) + "\n\nUI Context:\n- " + ui
-		}
-		convo.AddSystem(base)
-	}
+	convo.UpdateSystemMessage(base)
 
 	// Add latest user message
 	convo.AddUser(userMsg)

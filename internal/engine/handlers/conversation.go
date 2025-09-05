@@ -32,30 +32,29 @@ func (ch *ConversationHandler) PrepareConversation(
 	toolSchemas []tool.Schema,
 	editorContext string,
 	modelLabel string,
+	personality string,
 ) (*memory.Conversation, error) {
 	// Start or load conversation
 	convo := ch.memory.StartConversation()
 
-	// Inject a system prompt once at the beginning of the conversation
-	hasSystem := false
-	for _, msg := range convo.History() {
-		if msg.Role == "system" && msg.Content != "" {
-			hasSystem = true
-			break
-		}
-	}
+	// Always update the system prompt to reflect current personality and context
+	// This allows personality changes to take effect mid-conversation
+	userRules, projectRules, _ := config.LoadRules(ch.workspaceDir)
+	mems := ch.loadUserMemoriesForPrompt()
+	base := engine.GenerateSystemPromptUnified(engine.SystemPromptOptions{
+		Tools:                 toolSchemas,
+		UserRules:             userRules,
+		ProjectRules:          projectRules,
+		Memories:              mems,
+		Personality:           personality,
+		WorkspaceRoot:         ch.workspaceDir,
+		IncludeProjectContext: true,
+	})
 
-	if !hasSystem {
-		// Load dynamic rules and inject into system prompt with project context
-		userRules, projectRules, _ := config.LoadRules(ch.workspaceDir)
-		mems := ch.loadUserMemoriesForPrompt()
-		base := engine.GenerateSystemPromptWithProjectContext(toolSchemas, userRules, projectRules, mems, ch.workspaceDir)
-
-		if ui := strings.TrimSpace(editorContext); ui != "" {
-			base = strings.TrimSpace(base) + "\n\nUI Context:\n- " + ui
-		}
-		convo.AddSystem(base)
+	if ui := strings.TrimSpace(editorContext); ui != "" {
+		base = strings.TrimSpace(base) + "\n\nUI Context:\n- " + ui
 	}
+	convo.UpdateSystemMessage(base)
 
 	// Add latest user message
 	convo.AddUser(userMsg)

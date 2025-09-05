@@ -150,6 +150,33 @@ func (c *Conversation) Clear() {
 	c.save()
 }
 
+// UpdateSystemMessage updates the first system message if it exists, otherwise adds a new one.
+// This is useful for updating personality or other system-level context mid-conversation.
+func (c *Conversation) UpdateSystemMessage(content string) {
+	// Find the first system message
+	for i, msg := range c.messages {
+		if msg.Role == "system" {
+			// Update existing system message
+			c.messages[i] = Message{
+				Role:      "system",
+				Content:   content,
+				Timestamp: time.Now(),
+			}
+			c.save()
+			return
+		}
+	}
+
+	// No system message found, add one at the beginning
+	newMsg := Message{
+		Role:      "system",
+		Content:   content,
+		Timestamp: time.Now(),
+	}
+	c.messages = append([]Message{newMsg}, c.messages...)
+	c.save()
+}
+
 // save stores the conversation to persistent storage.
 func (c *Conversation) save() {
 	if c.project != nil {
