@@ -49,6 +49,7 @@ func (ch *ConversationHandler) PrepareConversation(
 		Personality:           personality,
 		WorkspaceRoot:         ch.workspaceDir,
 		IncludeProjectContext: true,
+		ModelName:             modelLabel,
 	})
 
 	if ui := strings.TrimSpace(editorContext); ui != "" {

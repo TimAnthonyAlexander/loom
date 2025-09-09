@@ -437,6 +437,7 @@ func (e *Engine) processLoop(ctx context.Context, userMsg string) error {
 		Personality:           currentPersonality,
 		WorkspaceRoot:         e.workspaceDir,
 		IncludeProjectContext: true,
+		ModelName:             e.GetModelLabel(),
 	})
 	if ui := strings.TrimSpace(e.formatEditorContext()); ui != "" {
 		base = strings.TrimSpace(base) + "\n\nUI Context:\n- " + ui
