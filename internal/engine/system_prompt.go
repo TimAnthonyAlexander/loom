@@ -58,6 +58,10 @@ func GenerateSystemPromptUnified(opts SystemPromptOptions) string {
 		Here are the defined tools:
 		%s
 
+		When asked to implement something, first, devise a detailed implementation plan, then create a todo list using the todo tool, of the things you need to do to implement it.
+		After every step, check the todo list, mark as done and continue with the next step.
+		You can modify the todo list as you go.
+
 		Use multiple tools. Do not hesitate to use tools. Be enthusiastic about using tools.
 		These tools are incredibly powerful.
 		You can do 50 steps of tool use if the task requires it. Be thorough.
