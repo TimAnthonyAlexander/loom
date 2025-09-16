@@ -218,6 +218,7 @@ func (a *App) GetAllAvailableModels() []map[string]interface{} {
 		{"id": "claude:claude-opus-4-20250514", "name": "Claude Opus 4", "provider": "claude", "group": "Flagship"},
 		{"id": "claude:claude-sonnet-4-20250514", "name": "Claude Sonnet 4", "provider": "claude", "group": "Flagship"},
 		{"id": "openai:gpt-5", "name": "GPT 5", "provider": "openai", "group": "Flagship"},
+		{"id": "openai:gpt-5-codex", "name": "GPT 5 Codex", "provider": "openai", "group": "Flagship"},
 
 		// Reasoning models
 		{"id": "openai:o3", "name": "o3", "provider": "openai", "group": "Reasoning"},

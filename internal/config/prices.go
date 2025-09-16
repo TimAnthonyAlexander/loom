@@ -57,6 +57,7 @@ var PricePerToken = map[string]Price{
 
 	// OpenAI
 	"gpt-5":        {InPerToken: 1.25 / 1e6, OutPerToken: 10.0 / 1e6},
+	"gpt-5-codex":  {InPerToken: 1.25 / 1e6, OutPerToken: 10.0 / 1e6},
 	"gpt-4.1":      {InPerToken: 2.0 / 1e6, OutPerToken: 8.0 / 1e6},
 	"o4-mini":      {InPerToken: 1.10 / 1e6, OutPerToken: 4.40 / 1e6},
 	"o3":           {InPerToken: 2.0 / 1e6, OutPerToken: 8.0 / 1e6},

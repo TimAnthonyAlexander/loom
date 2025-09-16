@@ -264,9 +264,6 @@ export default function SettingsTab({
                                 }
                             }}
                         >
-                            <Typography sx={{ fontSize: '1.2rem', minWidth: 24 }}>
-                                {section.icon}
-                            </Typography>
                             <Typography variant="body1" sx={{ fontWeight: activeSection === section.id ? 600 : 500 }}>
                                 {section.label}
                             </Typography>
