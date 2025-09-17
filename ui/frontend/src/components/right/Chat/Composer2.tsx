@@ -291,7 +291,6 @@ function Composer2Component({
                             }
                         }}
                         placeholder="Ask Loom anything…"
-                        disabled={busy}
                         multiline
                         minRows={1}
                         maxRows={12}
